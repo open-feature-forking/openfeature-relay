@@ -1,6 +1,6 @@
 # Phase 1 plan: evaluator without telemetry, stdlib instead of x/exp, boundary rules
 
-Base: `spec` @ 2e18b57 (upstream branch point `b23f82e`). Revision 2: folds in Simon's decisions on Q1–Q4 and the seven findings in `phase-1-opposer.md`. Revision 3: corrects the OFREP rows after PR A's review, finding M1 (the span name is `POST`; the 304 does evaluate).
+Base: `spec` @ 2e18b57 (upstream branch point `b23f82e`). Revision 2: folds in the project lead's decisions on Q1–Q4 and the seven findings in `phase-1-opposer.md`. Revision 3: corrects the OFREP rows after PR A's review, finding M1 (the span name is `POST`; the 304 does evaluate).
 
 ## 1. Scope
 
@@ -21,7 +21,7 @@ Leaves out: the configuration format split (`SetState`, phase 2), telemetry prov
 
 The evaluator discards the context `Start` returns, so its spans never have children. otelconnect spans are untouched by this phase.
 
-### Decided (Simon, committed in 2e18b57)
+### Decided (project lead, committed in 2e18b57)
 
 - Q1: keep today's shape; FR-033 now reads "one evaluation span per evaluation request, a bulk request included".
 - Q2: `flagSync` moves unchanged into `updateAndEmit`; its final home comes later.
@@ -104,7 +104,7 @@ Run from the repository root, inside WSL with `GOTOOLCHAIN=go1.27.3`, after `mak
   - [open-feature/go-sdk-contrib#1013](https://github.com/open-feature/go-sdk-contrib/pull/1013) is open by #2070's author. It adds a provider option `WithTracerProvider` that feeds a `TracerProvider` into the in-process evaluator, so it breaks against C2.
   - Before opening C2, check go-sdk-contrib main and open PRs again for `WithTracerProvider`.
   - The C2 PR text must say that the option's goal, in-process providers emitting no evaluator spans, is now the default (UC-014 BR-003), and link #1013.
-  - Commenting on #1013 needs Simon's explicit yes.
+  - Commenting on #1013 needs the project lead's explicit yes.
 - **Go in-process provider** (`go-sdk-contrib/providers/flagd`, main pins core v0.17.0). It uses only `evaluator.NewJSON(log, store)`, `IEvaluator`, `SetState`, `Resolve*Value` and `AnyValue`, plus `logger`, `model`, `service`, `store`, `sync`, `sync/file`, `sync/grpc` and `sync/grpc/credentials`. None of their signatures change, so it compiles unchanged and stops emitting `jsonEvaluator/*` spans (FR-040 as intended). None of its tests assert on spans.
 - **Release window.** Images build with `go work init ./core ./flagd`, and `docs/installation.md` advises against `go install`. With the C1/C2 split, flagd built against any core ≥ v0.19.0 emits the same tree, so there's no duplicated-span window left.
 - **NFR-005.** depguard checks direct imports only; D2's `go list -deps` target covers the transitive case.

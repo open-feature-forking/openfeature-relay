@@ -21,7 +21,7 @@ Each phase runs plan → oppose → implement → review, one role per agent in 
 - The orchestrating session pushes the slice as `phase-<n>/pr-<x>-<topic>` and opens a pull request in this repository against `main` (or against the slice below it, stacked). Plans, reviews and spec changes go straight to `main`.
 - The reviewer reviews the pull request: it re-runs the gates and posts its verdict as a PR review comment. `ready` needs every named gate green in its own run and CI green.
 - On `ready` with green CI, the orchestrating session merges with a merge commit (keeping the signed-off commits) and deletes the branch. `ready after fixes` goes back to the implementer as new commits on the same branch, never an amend.
-- Simon approves each plan before implementation, and can stop or veto any PR; he is not a required approver for merges inside this repository.
+- The project lead approves each plan before implementation, and can stop or veto any PR; they are not a required approver for merges inside this repository.
 - The release-please and benchmark-pages workflows are disabled in this repository; do not enable them.
 
 ## Phases
@@ -59,10 +59,10 @@ A use case is done when its main success scenario and every alternative flow hav
 
 ## Gates
 
-Go and Docker work only inside WSL Ubuntu. The system Go there is 1.22 and cannot resolve `go 1.27` on its own, so pin the toolchain. Run Go gates from the repository root:
+On Windows, Go and Docker work only inside WSL Ubuntu. The system Go there is 1.22 and cannot resolve `go 1.27` on its own, so pin the toolchain. Run Go gates from the repository root; `wsl` starts in the translated Windows working directory:
 
 ```bash
-wsl -d Ubuntu -- bash -lc 'export GOTOOLCHAIN=go1.27.3; cd /mnt/c/Users/simon/openfeature/OpenFeature Relay && make workspace-init && make test-core test-flagd'
+wsl -d Ubuntu -- bash -lc 'export GOTOOLCHAIN=go1.27.3; make workspace-init && make test-core test-flagd'
 ```
 
 From Git Bash, prefix `wsl` calls with `MSYS_NO_PATHCONV=1`. The spec gate is Python and runs on Windows directly.
@@ -83,11 +83,11 @@ A red gate is reported with its output. If a gate fails on untouched code too, s
 
 ## Containment
 
-All work stays in this repository until Simon says otherwise. No pushes, branches, pull requests, issues or comments anywhere except `open-feature-forking/openfeature-relay`: not to `open-feature/flagd`, not to `open-feature-forking/flagd`, not to go-sdk-contrib or any other repository. Other checkouts (go-sdk-contrib, flagd) are read-only references. "Upstream PR" in a plan means a branch here, shaped so it could go upstream later. The `upstream` remote has pushing disabled.
+All work stays in this repository until the project lead says otherwise. No pushes, branches, pull requests, issues or comments anywhere except `open-feature-forking/openfeature-relay`: not to `open-feature/flagd`, not to `open-feature-forking/flagd`, not to go-sdk-contrib or any other repository. Other checkouts (go-sdk-contrib, flagd) are read-only references. "Upstream PR" in a plan means a branch here, shaped so it could go upstream later. The `upstream` remote has pushing disabled.
 
 ## Conventions
 
-- Conventional commits, `git commit -s` signed off as `simon.schrottner@flagsmith.com`; no AI co-author trailers.
+- Conventional commits, `git commit -s` signed off with the committer's own identity (DCO); no AI co-author trailers.
 - Stage files by name; parallel sessions share checkouts.
 - Code comments keep only facts a reader cannot derive; measurements and history go in the PR description.
 - Upstream PRs never include `.claude/`, `CLAUDE.md` or the spec files under `docs/` (`vision.md`, `requirements.md`, `glossary.md`, `use_cases*`).
