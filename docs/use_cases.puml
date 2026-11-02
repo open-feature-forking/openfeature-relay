@@ -11,6 +11,8 @@ actor "Go Toolchain" as go <<system>>
 actor "Container Registry" as registry <<system>>
 actor "GitHub Actions" as ci <<system>>
 actor "flagd Test Harness" as harness <<system>>
+actor "In-Process Provider" as inproc <<system>>
+actor "Vendor Flag Service" as vendor <<system>>
 
 rectangle "flagd Builder" {
     usecase "UC-001\nBuild Custom Distribution" as UC001
@@ -76,6 +78,11 @@ UC012 --> ci
 UC012 --> registry
 UC013 --> ci
 UC013 --> harness
+UC014 --> harness
+UC015 --> harness
+UC015 --> maintainer
+UC017 --> inproc
+UC019 --> vendor
 
 note right of UC016
   Deferred: FR-050, FR-051

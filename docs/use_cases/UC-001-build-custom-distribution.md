@@ -1,0 +1,201 @@
+# Use Case: Build Custom Distribution
+
+## Overview
+
+**Use Case ID:** UC-001  
+**Use Case Name:** Build Custom Distribution  
+**Primary Actor:** Distribution Builder  
+**Secondary Actors:** Go Toolchain  
+**Goal:** Turn a manifest into a runnable flagd binary that contains exactly the components the manifest selects, with its generated source available for inspection or commit.  
+**Trigger:** Distribution Builder needs a flagd with a set of components that no standard distribution offers  
+**Status:** Draft  
+
+**Requirements:** [FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007, FR-008, FR-017, FR-018, NFR-008, C-001](../requirements.md)
+
+## Preconditions
+
+- The Builder is installed for the Distribution Builder.
+- The Go Toolchain is installed in the Go version the core module declares.
+- Every component module the Distribution Builder intends to select is released with a version, or available as a local checkout.
+
+## Main Success Scenario
+
+1. Distribution Builder writes a manifest that names the distribution, its version and the output location.
+2. Distribution Builder lists in the manifest the components to compile in, grouped by component type (sync providers, configuration formats, evaluator, service endpoints, telemetry provider, middleware), each as a component module path with a version.
+3. Distribution Builder runs the Builder on the manifest.
+4. Builder validates the manifest.
+5. Builder generates the distribution source into the output location: an entry point that registers the factory of every listed component, and a module definition that requires every listed component module at its declared version.
+6. Builder asks the Go Toolchain to resolve the component modules and all their dependencies.
+7. Builder checks that every component module resolved at the version the manifest declares.
+8. Builder checks that every component a selected component needs is selected as well.
+9. Builder asks the Go Toolchain to compile the distribution source into a single flagd binary, stamped with the distribution version, the source revision and the build date.
+10. Builder reports the location of the distribution binary and of the distribution source; the custom distribution is ready to run.
+
+## Alternative Flows
+
+### A1: Invalid Manifest
+
+**Trigger:** The manifest is malformed, misses a mandatory entry, or breaks a rule of this use case (step 4)  
+**Flow:**
+
+1. Builder reports every faulty entry with its position in the manifest and the reason.
+2. Builder generates nothing and leaves the output location unchanged.
+3. Distribution Builder corrects the manifest.
+4. Use case continues at step 3.
+
+### A2: Build Against a Local Checkout
+
+**Trigger:** Distribution Builder wants to build against a local checkout of a component module instead of its released version (step 2)  
+**Flow:**
+
+1. Distribution Builder declares in the manifest a module replacement that maps the component module path to the local directory of the checkout.
+2. Builder carries the replacement into the generated module definition in step 5, and the Go Toolchain uses the local checkout in step 6.
+3. Builder skips the version check of step 7 for the replaced module.
+4. Use case continues at step 3.
+
+### A3: Generation Skipped
+
+**Trigger:** Distribution Builder requested to skip the generate step (step 5)  
+**Flow:**
+
+1. Builder leaves the distribution source in the output location as it is.
+2. Use case continues at step 6.
+
+### A4: No Distribution Source to Reuse
+
+**Trigger:** Distribution Builder requested to skip the generate step, and the output location holds no distribution source (step 5)  
+**Flow:**
+
+1. Builder reports that the output location holds no distribution source to build.
+2. Builder produces no binary.
+3. Use case ends.
+
+### A5: Module Resolution Skipped
+
+**Trigger:** Distribution Builder requested to skip the module resolution step (step 6)  
+**Flow:**
+
+1. Builder uses the module dependencies already recorded with the distribution source and does not ask the Go Toolchain to resolve them again.
+2. Builder skips the version check of step 7.
+3. Use case continues at step 8.
+
+### A6: Compilation Skipped
+
+**Trigger:** Distribution Builder requested to skip the compile step (step 9)  
+**Flow:**
+
+1. Builder produces no binary.
+2. Builder reports the location of the distribution source, ready for the Distribution Builder's own build pipeline.
+3. Use case ends.
+
+### A7: Component Module Cannot Be Resolved
+
+**Trigger:** The Go Toolchain cannot find a component module or its declared version, or cannot reach the module source (step 6)  
+**Flow:**
+
+1. Builder reports the component module, the declared version and the reason the Go Toolchain gave.
+2. Builder produces no binary.
+3. Use case ends.
+
+### A8: Resolved Version Differs From the Manifest
+
+**Trigger:** A component module resolved at a version other than the one the manifest declares, because another selected component module requires a newer version of it (step 7)  
+**Flow:**
+
+1. Builder reports the component module, the declared version, the resolved version and the component modules that require the resolved version.
+2. Builder produces no binary.
+3. Distribution Builder aligns the declared version in the manifest.
+4. Use case continues at step 3.
+
+### A9: Needed Component Not Selected
+
+**Trigger:** A selected component needs a component the manifest does not select, such as OFREP or flag evaluation without an evaluator, or an evaluator without its configuration format (step 8)  
+**Flow:**
+
+1. Builder reports every unmet need, naming the component that needs it and the component type or component that is missing.
+2. Builder produces no binary.
+3. Distribution Builder adds the missing component to the manifest or removes the component that needs it.
+4. Use case continues at step 3.
+
+### A10: Compilation Fails
+
+**Trigger:** The Go Toolchain cannot compile the distribution source, for example because a component module does not provide a factory of the component type it is listed under, or two component modules depend on incompatible versions of the core module (step 9)  
+**Flow:**
+
+1. Builder reports the Go Toolchain's failure together with the components it concerns.
+2. Builder produces no binary.
+3. Use case ends.
+
+## Postconditions
+
+### Success Postconditions
+
+- The output location holds the distribution source generated from the manifest.
+- Unless the compile step was skipped, the output location holds a flagd binary that contains exactly the components the manifest lists, each at its declared version or from its declared local checkout.
+- The distribution binary reports the distribution version, source revision and build date.
+- The manifest is unchanged.
+
+### Failure Postconditions
+
+- No binary is reported as built from the manifest.
+- A binary left in the output location by an earlier build is never presented as the result of this build.
+- The manifest is unchanged.
+- No file outside the output location is changed by the Builder.
+
+## Business Rules
+
+### BR-001: Mandatory Manifest Entries
+
+A manifest names the distribution, its version and its output location, and lists at least one component.
+
+### BR-002: Component Cardinality
+
+A distribution contains at least one sync provider, at least one configuration format, at least one service endpoint and exactly one telemetry provider (the noop telemetry provider counts). It contains at most one evaluator, and none when no selected component needs one, as in a configuration proxy. Middleware is optional.
+
+### BR-003: Same Reference for Every Component
+
+Every component, official or extension, is referenced the same way: by its component module path and an explicit version. A version range or a moving reference such as "latest" is invalid.
+
+### BR-004: Each Component Module Once
+
+A component module appears at most once in a manifest.
+
+### BR-005: Only Selected Components
+
+The distribution source registers exactly the components the manifest lists; no other component and no dependency that only an unlisted component needs is compiled in.
+
+### BR-006: Declared Versions Are Binding
+
+A distribution is built only when every component module resolves at the version the manifest declares, so that the manifest stays an exact record of the distribution's contents. Replaced modules (A2) and skipped module resolution (A5) are exempt.
+
+### BR-007: Local Replacement Target
+
+A module replacement maps a component module path to a local directory that contains that module; a replacement that points to a missing directory or to another module is invalid.
+
+### BR-008: Skippable Steps
+
+Each of the generate, module resolution and compile steps can be skipped on its own; the Builder runs the remaining steps in their usual order.
+
+### BR-009: Generated Files Only
+
+The Builder writes only the files it generates into the output location and overwrites them on every run; other files there are left untouched.
+
+### BR-010: Reproducible Source
+
+The same manifest generates the same distribution source on every run.
+
+### BR-011: Standard Go Build
+
+A distribution is one statically linked binary built with Go modules and the standard Go compiler; components are never loaded at run time.
+
+### BR-012: Build Duration
+
+With a warm module cache, generating and compiling flagd-full takes at most 3 minutes on a GitHub-hosted `ubuntu-latest` runner.
+
+### BR-013: Any Combination of Service Endpoints
+
+Any non-empty combination of service endpoints is valid, official or extension: OFREP alone, flag evaluation alone, flag sync alone, several of them, or all of them plus extensions, as long as BR-014 holds.
+
+### BR-014: Component Needs Are Met
+
+Each component states which component types or components it needs; a distribution is built only when every need of every selected component is met by another selected component. OFREP and flag evaluation need an evaluator; an evaluator needs the configuration format it evaluates; flag sync needs a configuration format but no evaluator.

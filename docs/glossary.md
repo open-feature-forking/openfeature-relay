@@ -4,8 +4,8 @@
 |-----------------------|---------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------|
 | Builder               | The flagd-builder CLI that turns a manifest into generated source and a compiled distribution.                                             | ocb, generator                |
 | Manifest              | The YAML file that names a distribution and lists the component modules, versions and replacements it is built from.                       | config, builder config        |
-| Distribution          | A flagd binary, and its image, built from one manifest; it contains exactly the components the manifest selects.                          | flavour, variant              |
-| Standard Distribution | A distribution whose manifest the Maintainers publish with every release: flagd-minimal, flagd-cloud, flagd-kubernetes or flagd-full.      |                               |
+| Distribution          | A flagd binary, and its image, built from one manifest; it contains exactly the components the manifest selects.                          | flavour                       |
+| Standard Distribution | A distribution whose manifest the Maintainers publish with every release: flagd-minimal, flagd-cloud, flagd-kubernetes, flagd-proxy or flagd-full.      |                               |
 | flagd-full            | The standard distribution with every official component; it behaves exactly like flagd before the builder.                               | monolith                      |
 | Custom Distribution   | A distribution built from a manifest that is not a standard distribution.                                                                   |                               |
 | Component             | A selectable unit compiled into a distribution, exposed by a component module through a factory.                                          |                               |
@@ -21,9 +21,14 @@
 | Flag Configuration    | The flags a sync provider delivers from a source, with variants and targeting, written in one configuration format.                                          | flag config, flag definitions |
 | Configuration Format  | A component type that parses and validates flag configurations of one format (flagd's JSON schema, a vendor's format) into the store.    | parser                        |
 | Configuration Proxy   | A distribution with sync providers, a configuration format and the flag sync endpoint but no evaluator; it forwards validated flag configurations to in-process providers. | relay                         |
-| Evaluator             | The component type that resolves a flag for an evaluation context; the JsonLogic evaluator is the one in-process providers embed.       | engine, resolver              |
+| Evaluator             | The component type that resolves a flag for an evaluation context; the JsonLogic evaluator is the one in-process providers embed.       | resolver                      |
 | Telemetry Provider    | A component type that supplies tracing, metrics and HTTP instrumentation to service endpoints and middleware.                            |                               |
 | Middleware            | A component type that wraps a service endpoint's HTTP handler with cross-cutting behaviour.                                               | interceptor, filter           |
+| Store                 | The in-memory holder of the flags parsed from all sources, queried by the evaluator and watched by the flag sync endpoint.               | memdb                         |
+| Selector              | An expression a client sends to restrict a query or a flag sync subscription to the flags of certain sources or flag sets.                |                               |
+| OFREP                 | The OpenFeature Remote Evaluation Protocol, an HTTP API for evaluating flags; one of flagd's service endpoints.                          |                               |
+| Vendor Flag Service   | Another vendor's hosted flag management service that a vendor distribution syncs flag configurations from, such as Flagsmith.        |                               |
+| Edge Proxy            | A vendor's own process that caches and evaluates flags close to applications; a vendor distribution can take its place.              |                               |
 | Event Bus             | The publish/subscribe channel through which the runtime announces events, such as flag changes, to service endpoints.                  |                               |
 | Runtime               | The part of a distribution that starts sync providers, feeds the store and evaluator, and starts service endpoints.                     |                               |
 | In-Process Provider   | An OpenFeature provider that embeds the evaluator and evaluates flags locally instead of calling a service endpoint.                    | embedded provider             |
