@@ -97,7 +97,7 @@
 
 - Every module released has a release tag and a GitHub release with its changelog, and manifests can pin that version.
 - With a new flagd version, all five standard distributions are published under that version: manifest, standard and FIPS binary archives for the platform matrix, software bill of materials, and signed standard and FIPS images for `linux/amd64` and `linux/arm64`.
-- Every standard distribution is published under the image name of BR-012; flagd-full keeps the image tags and archive names of flagd before the builder.
+- Every standard distribution is published under the image and archive names of BR-012, which for flagd-full are those of flagd before the builder.
 - The release state records the new version of every released module.
 
 ### Failure Postconditions
@@ -153,9 +153,15 @@ A released version is never moved, deleted or republished with different content
 
 The release pull request and its commits carry a DCO sign-off.
 
-### BR-012: Image Names
+### BR-012: Image and Archive Names
 
-flagd-full is published as `ghcr.io/open-feature/flagd`. Every other standard distribution is published as `ghcr.io/open-feature/flagd-<distribution>`, e.g. `ghcr.io/open-feature/flagd-minimal` and `ghcr.io/open-feature/flagd-relay`. The FIPS build of each adds `-fips` to its image tags, as today.
+The name of a standard distribution is `flagd` for flagd-full and `flagd-<distribution>` for every other one (e.g. `flagd-minimal`, `flagd-relay`).
+
+- Image: `ghcr.io/open-feature/<name>`, tagged `latest` and `v<version>`; the FIPS image is tagged `latest-fips` and `v<version>-fips`.
+- Binary archive: `<name>_<version>_<OS>_<arch>.tar.gz`, and `.zip` for Windows; the FIPS archive is `<name>-fips_<version>_<OS>_<arch>` with the same extension.
+- `<version>` has no `v` prefix, `<OS>` is `Darwin`, `Linux` or `Windows`, and `<arch>` is `arm64`, `x86_64` or `i386`, as in today's release (e.g. `flagd_0.19.0_Linux_x86_64.tar.gz`, `flagd-relay-fips_0.19.0_Windows_x86_64.zip`).
+
+For flagd-full this rule yields exactly today's image and archive names.
 
 ### BR-013: flagd-proxy Stays a Separate Release
 

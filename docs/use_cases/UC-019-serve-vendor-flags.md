@@ -10,13 +10,13 @@
 **Trigger:** Operator decides to replace the vendor's edge proxy of a deployment with flagd  
 **Status:** Draft  
 
-**Requirements:** [FR-027, FR-014, FR-019, FR-017, FR-018, FR-022, FR-028, FR-029](../requirements.md)
+**Requirements:** [FR-027, FR-014, FR-019, FR-017, FR-018, FR-022, FR-028, FR-029, FR-035](../requirements.md)
 
 ## Preconditions
 
 - A vendor distribution is available whose manifest selects the vendor's sync provider (UC-003), configuration format (UC-018) and evaluator (UC-007) and the OFREP service endpoint, built in UC-001. For Flagsmith these are a sync provider that fetches the environment document, a configuration format for the environment document and an evaluator built on the Flagsmith engine.
 - Operator has the address of the Vendor Flag Service and a credential for the environment the edge proxy serves today.
-- The deployment's clients evaluate flags as OpenFeature clients through OFREP.
+- The deployment's clients reach the edge proxy as OpenFeature clients through OFREP, or through the vendor's own client interface.
 
 ## Main Success Scenario
 
@@ -48,9 +48,9 @@
 **Trigger:** The Vendor Flag Service refuses the credential (step 4)  
 **Flow:**
 
-1. The sync provider stops reading the source and does not retry, as it would for a flag configuration that is invalid.
-2. System logs an error naming the source, without the credential, and the vendor distribution does not reach readiness.
-3. Operator corrects the credential in the environment variable or file and restarts the vendor distribution.
+1. The sync provider ends with an error naming the source, without the credential, because it can never deliver with this credential (UC-003 BR-006).
+2. System stops the vendor distribution.
+3. Operator corrects the credential in the environment variable or file.
 4. Use case continues at step 1.
 
 ### A3: Vendor Flag Service Unavailable
@@ -114,28 +114,32 @@
 
 ### BR-001: Vendor Components as One Set
 
-The vendor's evaluator needs the vendor's configuration format, and the builder rejects a manifest that selects one without the other (FR-018). A distribution contains at most one evaluator, so a vendor distribution evaluates no flagd flag configurations alongside the vendor's.
+The vendor's evaluator needs the vendor's configuration format, and the builder rejects a manifest that selects one without the other (FR-018). A distribution has one evaluator per configuration format, so a vendor distribution may also contain flagd's configuration format and evaluator and serve flagd flags alongside the vendor's.
 
-### BR-002: The Vendor's Own Evaluation Logic
+### BR-002: Each Flag Resolved by Its Format's Evaluator
+
+The OFREP service endpoint resolves each flag with the evaluator of the configuration format whose documents hold it. A flag key held by documents of two sources is resolved from the source with the higher precedence, as today (FR-035).
+
+### BR-003: The Vendor's Own Evaluation Logic
 
 The vendor's evaluator is built on the vendor's own evaluation logic, for Flagsmith the Flagsmith engine, not on a re-implementation of it. Results match the edge proxy because the same logic produces them.
 
-### BR-003: OpenFeature Results
+### BR-004: OpenFeature Results
 
-The OFREP service endpoint returns the vendor's results with the reasons and error codes of the OpenFeature specification (UC-007 BR-005).
+The OFREP service endpoint returns the vendor's results with the reasons and error codes of the OpenFeature specification (UC-007 BR-007).
 
-### BR-004: Evaluation Context Mapping
+### BR-005: Evaluation Context Mapping
 
 The vendor's evaluator maps the evaluation context onto the vendor's own notions: for Flagsmith the targeting key becomes the identity and the remaining attributes become its traits. An evaluation context without a targeting key evaluates at environment level.
 
-### BR-005: Credentials Through Environment Variables or Files
+### BR-006: Credentials Through Environment Variables or Files
 
 The credential of the Vendor Flag Service reaches the sync provider through an environment variable or a file, never through the manifest or the command line (FR-028). Only the vendor's sync provider uses it; no service endpoint returns it and no log contains it.
 
-### BR-006: Owned by the Vendor
+### BR-007: Owned by the Vendor
 
 The vendor's sync provider, configuration format and evaluator are extensions in component modules the vendor owns. flagd-full and the other standard distributions do not contain them.
 
-### BR-007: Scope Is OpenFeature Clients
+### BR-008: Scope Is OpenFeature Clients
 
 A vendor distribution replaces the edge proxy for OpenFeature clients that evaluate through OFREP. Clients of the vendor's own client interface need a service endpoint extension that serves it.

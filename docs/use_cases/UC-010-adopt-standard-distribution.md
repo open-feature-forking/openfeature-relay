@@ -88,7 +88,7 @@
 
 - The deployment runs a standard distribution that contains a component for every source, setting and service endpoint it uses.
 - Every evaluation returns the same result as flagd-full returns for the same request; flagd-relay forwards the same flag configurations as flagd-full's flag sync endpoint.
-- The deployment's start command, configuration file and environment variables are unchanged.
+- The deployment's start command, configuration file and environment variables are unchanged, except for removed settings of components the deployment does not use.
 
 ### Failure Postconditions
 
@@ -103,7 +103,7 @@ A distribution started with a source whose scheme it does not support stops befo
 
 ### BR-002: Same Configuration Surface
 
-Every standard distribution, flagd-relay included, uses the CLI flags, configuration file keys and environment variables of flagd-full; only the components behind them differ.
+Every standard distribution, flagd-relay included, accepts flagd-full's CLI flags, configuration file keys and environment variables for the components it contains, with the same names and defaults. A setting of a component it lacks stops startup (BR-001), so a flagd-full command works unchanged only on a distribution that contains every component the command configures.
 
 ### BR-003: Telemetry Is a Component
 
@@ -113,9 +113,9 @@ A distribution with the noop telemetry provider contains no observability code a
 
 flagd-minimal is at most 50% of the size of flagd-full for the same OS and architecture (NFR-003), and its module graph contains no module under `k8s.io`, `cloud.google.com`, `github.com/aws`, `github.com/Azure` or `go.opentelemetry.io/otel/sdk` (NFR-004).
 
-### BR-005: Image Names
+### BR-005: Release Names
 
-A standard distribution's image is `ghcr.io/open-feature/flagd-<distribution>`; flagd-full keeps `ghcr.io/open-feature/flagd`. The FIPS build of a standard distribution adds the `-fips` suffix and keeps the crypto boundary of today's FIPS build of flagd (C-009).
+A standard distribution's image is `ghcr.io/open-feature/flagd-<distribution>` and its binary archives are `flagd-<distribution>_<version>_<OS>_<arch>`; flagd-full keeps `ghcr.io/open-feature/flagd` and `flagd_<version>_<OS>_<arch>` (UC-009 BR-007). The FIPS build of a standard distribution adds `-fips` to its image tags and to the product name of its archives, e.g. `flagd-relay-fips_<version>_<OS>_<arch>`, and keeps the crypto boundary of today's FIPS build of flagd (C-009).
 
 ### BR-006: Same Evaluation Results
 

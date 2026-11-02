@@ -9,7 +9,7 @@
 **Trigger:** Extension Author needs flags evaluated in a way the JsonLogic evaluator does not support  
 **Status:** Draft  
 
-**Requirements:** [FR-014, FR-015, FR-018, FR-027, FR-033, FR-040, FR-003, FR-008, NFR-005](../requirements.md)
+**Requirements:** [FR-014, FR-015, FR-018, FR-027, FR-033, FR-035, FR-040, FR-003, FR-008, NFR-005](../requirements.md)
 
 ## Preconditions
 
@@ -80,9 +80,9 @@
 
 ## Business Rules
 
-### BR-001: At Most One Evaluator per Distribution
+### BR-001: One Evaluator per Configuration Format
 
-A distribution contains at most one evaluator. A distribution without an evaluator, such as a configuration proxy, serves no flag evaluation.
+A distribution contains at most one evaluator per configuration format, so flagd's and a vendor's evaluator can run side by side. The flag evaluation and OFREP service endpoints resolve each flag with the evaluator of the configuration format holding it, following today's source precedence when two formats hold the same key (FR-035). A distribution without an evaluator, such as a configuration proxy, serves no flag evaluation.
 
 ### BR-002: Paired With One Configuration Format
 
@@ -98,7 +98,7 @@ The evaluator contract cases that do not depend on a format, such as reasons, er
 
 ### BR-005: No Telemetry
 
-The evaluator factory injects no telemetry provider, and an evaluator emits no telemetry. In flagd-full the service endpoints record the evaluation span (FR-033); in-process providers observe evaluations through hooks.
+The evaluator factory injects no telemetry provider, and an evaluator emits no telemetry. The flag evaluation and OFREP service endpoints record the evaluation span whenever the distribution has an OpenTelemetry telemetry provider (FR-033); in-process providers observe evaluations through hooks.
 
 ### BR-006: Dependency Boundary
 

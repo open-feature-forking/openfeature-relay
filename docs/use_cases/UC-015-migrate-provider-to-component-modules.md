@@ -10,7 +10,7 @@
 **Trigger:** The Maintainers publish a core release that moves Go import paths under `core/`  
 **Status:** Draft  
 
-**Requirements:** [FR-043, C-004, C-005](../requirements.md)
+**Requirements:** [FR-043, FR-044, C-004, C-005](../requirements.md)
 
 ## Preconditions
 
@@ -100,7 +100,7 @@ The migration guide covers every exported import path under `core/` that moves o
 
 ### BR-002: Paths Move, Behaviour Does Not
 
-A core release that moves import paths changes no evaluation result, flag configuration format or sync behaviour. The migration changes the provider's import paths, identifiers and dependency versions only.
+A core release that moves import paths changes no evaluation result, flag configuration format or sync behaviour. The migration changes the provider's import paths, identifiers and dependency versions only. The provider's flag sync request needs no change: a request that names no configuration format still receives flagd's (FR-044).
 
 ### BR-003: Moves Ship in a Major or Minor Release
 

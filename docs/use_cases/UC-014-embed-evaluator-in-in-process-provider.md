@@ -10,7 +10,7 @@
 **Trigger:** Provider Author decides to add in-process evaluation to a provider  
 **Status:** Draft  
 
-**Requirements:** [FR-040, FR-041, FR-042, NFR-005, C-010](../requirements.md)
+**Requirements:** [FR-040, FR-041, FR-042, FR-044, NFR-005, C-010](../requirements.md)
 
 ## Preconditions
 
@@ -23,7 +23,7 @@
 2. System adds the configuration format, the evaluator and the core module to the provider without any telemetry provider, service endpoint, transport or sync provider code (BR-001).
 3. Provider Author adds the sync provider component module for each scheme the provider supports, for example the file sync provider and the gRPC sync provider, which receives flag configurations from flagd-full or from a configuration proxy such as flagd-relay.
 4. System adds only the selected sync providers to the provider (BR-004).
-5. Provider Author creates an empty store, then the flagd configuration format and its paired evaluator over that same store, and connects the output of the sync provider to the configuration format.
+5. Provider Author creates an empty store, then the flagd configuration format and its paired evaluator over that same store, and connects the output of the sync provider to the configuration format; a flag sync request of the gRPC sync provider names the flagd configuration format or leaves it to the default (BR-007).
 6. System parses and validates every flag configuration the sync provider emits with the configuration format, keeps it in the store as that configuration format's documents and reports which flags changed (BR-006).
 7. Provider Author routes the provider's boolean, string, integer, float and object flag resolutions to the evaluator.
 8. System resolves each flag for the evaluation context and returns value, variant, reason and flag metadata exactly as remote evaluation does for the same flag configuration (BR-002).
@@ -59,7 +59,16 @@
 2. Provider surfaces the error through its logger and its OpenFeature provider events.
 3. Use case continues at step 7.
 
-### A4: Flag Cannot Be Resolved
+### A4: Requested Configuration Format Not Served
+
+**Trigger:** flagd-full or flagd-relay holds no documents of the configuration format the flag sync request names (step 6)  
+**Flow:**
+
+1. The gRPC sync provider receives no flag configurations, and System reports to the provider that the source does not serve the requested configuration format.
+2. Provider Author changes the flag sync request to a configuration format the source serves, or leaves it to the default.
+3. Use case continues at step 6.
+
+### A5: Flag Cannot Be Resolved
 
 **Trigger:** The flag is unknown, disabled, or its variant does not match the requested type (step 8)  
 **Flow:**
@@ -68,7 +77,7 @@
 2. Provider returns the caller's default value with that error code and reason.
 3. Use case continues at step 9.
 
-### A5: No Observability Needed
+### A6: No Observability Needed
 
 **Trigger:** The provider's users do not need traces or metrics (step 9)  
 **Flow:**
@@ -76,7 +85,7 @@
 1. Provider Author registers no hooks.
 2. Use case continues at step 10.
 
-### A6: Test Harness Scenario Fails
+### A7: Test Harness Scenario Fails
 
 **Trigger:** flagd Test Harness reports a failing scenario (step 11)  
 **Flow:**
@@ -125,3 +134,7 @@ An in-process provider counts as evaluating like flagd when it passes the flagd 
 ### BR-006: One Validation
 
 The flagd configuration format is the code flagd-full and flagd-relay validate flag configurations with. A flag configuration the provider rejects is one flagd-full and flagd-relay reject as well (FR-026).
+
+### BR-007: Requested Configuration Format
+
+A flag sync request may name the configuration format whose documents the provider reads; when it names none, flagd's configuration format applies (FR-044). The provider only receives documents of the named configuration format, so a provider written before FR-044 keeps working without a change.

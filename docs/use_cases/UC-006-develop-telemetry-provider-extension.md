@@ -84,7 +84,7 @@ A telemetry provider serves service endpoints and middleware only. The evaluator
 
 ### BR-004: Evaluation Spans Come From Service Endpoints
 
-flagd-full's service endpoints record one evaluation span per flag evaluation through the telemetry provider, with the shape today's evaluator gives it (FR-033). A telemetry provider extension receives these spans like any other and needs no knowledge of the evaluator.
+In every distribution with an OpenTelemetry telemetry provider, the flag evaluation and OFREP service endpoints record one evaluation span per flag evaluation, with the shape today's evaluator gives it (FR-033). A telemetry provider extension receives the instrumentation of these service endpoints like any other and needs no knowledge of the evaluator.
 
 ### BR-005: Same Signals in flagd-full
 

@@ -36,7 +36,7 @@
 **Trigger:** The current deployment runs the FIPS build of flagd (step 1)  
 **Flow:**
 
-1. Operator selects the FIPS build of flagd-full: the binary archive `flagd-fips_<version>_…` or the image tag with the `-fips` suffix.
+1. Operator selects the FIPS build of flagd-full under the names of BR-007: the binary archive `flagd-fips_<version>_<OS>_<arch>` or the image `ghcr.io/open-feature/flagd` with the `-fips` tag suffix.
 2. Use case continues at step 2.
 
 ### A2: Source With Unrecognized Scheme
@@ -111,4 +111,8 @@ flagd-full reaches readiness within 10% of the time the previous flagd needs wit
 
 ### BR-006: Same Trace Shape
 
-flagd-full's service endpoints record one evaluation span per flag evaluation, as the previous flagd's evaluator did, so that an Operator's traces keep their shape after the upgrade (FR-033).
+The flag evaluation and OFREP service endpoints record one evaluation span per flag evaluation in every distribution with an OpenTelemetry telemetry provider, flagd-full included, so that an Operator's traces keep the shape the previous flagd's evaluator gave them (FR-033).
+
+### BR-007: Release Names
+
+Binary archives follow today's release pattern with the distribution name in the product position, and FIPS builds add `-fips` to it: flagd-full keeps `flagd_<version>_<OS>_<arch>` and `flagd-fips_<version>_<OS>_<arch>`; every other standard distribution is `flagd-<distribution>_<version>_<OS>_<arch>` and `flagd-<distribution>-fips_<version>_<OS>_<arch>`, e.g. `flagd-relay-fips_<version>_Linux_x86_64`. flagd-full's image stays `ghcr.io/open-feature/flagd`, the others are `ghcr.io/open-feature/flagd-<distribution>`, and FIPS images add `-fips` to their tags (UC-012).

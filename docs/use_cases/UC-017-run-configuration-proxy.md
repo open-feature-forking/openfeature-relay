@@ -10,27 +10,27 @@
 **Trigger:** Operator decides that in-process providers receive their flag configurations from a configuration proxy instead of reading the sources themselves  
 **Status:** Draft  
 
-**Requirements:** [FR-025, FR-026, FR-022, FR-029, NFR-011, C-005](../requirements.md)
+**Requirements:** [FR-025, FR-026, FR-022, FR-029, FR-044, NFR-011, C-005](../requirements.md)
 
 ## Preconditions
 
 - A configuration proxy is available as a binary or image: the flagd-relay standard distribution (UC-012) or a custom distribution without an evaluator (UC-001).
-- Operator has the sources that hold the deployment's flag configurations and the start command, configuration file and environment variables flagd-full would use for them.
+- Operator has the sources that hold the deployment's flag configurations and the settings, as flagd-full's CLI flags, configuration file keys or environment variables, for the components a configuration proxy contains: sources, the flag sync endpoint and the management port.
 - The in-process providers of the deployment support the flag sync endpoint as their source.
 
 ## Main Success Scenario
 
-1. Operator starts the configuration proxy with the deployment's sources, each naming its configuration format or leaving flagd's as the default.
-2. System checks the scheme of every source against the sync providers, and the configuration format of every source against the configuration formats, compiled into the configuration proxy.
+1. Operator starts the configuration proxy with the deployment's sources, each naming its configuration format or leaving flagd's as the default, and the settings of its components.
+2. System checks every setting against the components compiled into the configuration proxy, the scheme of every source against its sync providers and the configuration format of every source against its configuration formats.
 3. System starts a sync provider for each source and the flag sync endpoint.
 4. Each sync provider delivers the flag configuration of its source.
 5. System parses and validates each flag configuration with the configuration format of its source and keeps the accepted flag configuration in the store as that configuration format's documents.
 6. System reports readiness on the management port once every configured source has delivered a flag configuration its configuration format accepted.
 7. Operator configures the in-process providers of the deployment with the address of the configuration proxy's flag sync endpoint, each with the selector of the flags it needs.
-8. In-Process Provider subscribes to the flag sync endpoint.
-9. System sends the In-Process Provider the documents in the store that match its selector, unchanged and tagged with their configuration format.
+8. In-Process Provider subscribes to the flag sync endpoint with its selector, naming the configuration format it reads or none for flagd's.
+9. System sends the In-Process Provider the documents of the requested configuration format in the store that match its selector, unchanged.
 10. A source changes and its sync provider delivers the new flag configuration.
-11. System validates the new flag configuration, updates the store and sends the changed documents to every subscribed In-Process Provider whose selector they match.
+11. System validates the new flag configuration, updates the store and sends the changed documents to every subscribed In-Process Provider whose configuration format and selector they match.
 12. In-Process Provider evaluates flags locally with the flag configuration it received; the deployment's in-process providers get their flag configurations from one place while the configuration proxy evaluates nothing.
 
 ## Alternative Flows
@@ -43,7 +43,16 @@
 1. System refuses to start and names the source, its scheme or configuration format, and the schemes and configuration formats the configuration proxy supports.
 2. Use case ends.
 
-### A2: Initial Flag Configuration Rejected
+### A2: Setting for an Absent Component
+
+**Trigger:** A setting of the start command, configuration file or environment variables belongs to a component the configuration proxy does not contain, such as an OFREP port or an OpenTelemetry collector address (step 2)
+**Flow:**
+
+1. System refuses to start and names each such setting and the component it belongs to.
+2. Operator removes the settings, or runs flagd-full where the deployment needs those components.
+3. Use case continues at step 1.
+
+### A3: Initial Flag Configuration Rejected
 
 **Trigger:** The configuration format rejects the first flag configuration of a source (step 5)  
 **Flow:**
@@ -52,7 +61,7 @@
 2. Operator corrects the flag configuration in the source.
 3. Use case continues at step 4.
 
-### A3: Source Unavailable
+### A4: Source Unavailable
 
 **Trigger:** A sync provider cannot read its source (step 4)  
 **Flow:**
@@ -60,7 +69,7 @@
 1. System logs an error naming the source and keeps retrying it; the configuration proxy does not reach readiness until the source has delivered a flag configuration its configuration format accepted.
 2. Use case continues at step 4.
 
-### A4: Changed Flag Configuration Rejected
+### A5: Changed Flag Configuration Rejected
 
 **Trigger:** The configuration format rejects the new flag configuration of a source (step 11)  
 **Flow:**
@@ -69,7 +78,7 @@
 2. Operator corrects the flag configuration in the source.
 3. Use case continues at step 10.
 
-### A5: In-Process Provider Reconnects
+### A6: In-Process Provider Reconnects
 
 **Trigger:** An In-Process Provider loses its subscription, for example because the configuration proxy restarted (step 11)  
 **Flow:**
@@ -77,7 +86,7 @@
 1. In-Process Provider keeps evaluating with the last flag configuration it received and subscribes again.
 2. Use case continues at step 9.
 
-### A6: Evaluation Requested From the Proxy
+### A7: Evaluation Requested From the Proxy
 
 **Trigger:** A client is configured for remote evaluation against the configuration proxy instead of the flag sync endpoint (step 7)  
 **Flow:**
@@ -104,7 +113,7 @@
 
 ### BR-001: No Evaluator
 
-A configuration proxy contains sync providers, configuration formats and the flag sync endpoint, and no evaluator. The flagd-relay module graph contains no evaluator module and no `github.com/diegoholiveira/jsonlogic` module (NFR-011). Without an evaluator it contains neither the flag evaluation nor the OFREP service endpoint (UC-007 BR-001).
+A configuration proxy contains sync providers, configuration formats and the flag sync endpoint, and no evaluator. The flagd-relay module graph contains no evaluator module and no `github.com/diegoholiveira/jsonlogic` module (NFR-011). Without an evaluator it contains neither the flag evaluation nor the OFREP service endpoint (FR-018).
 
 ### BR-002: Same Validation as flagd-full
 
@@ -114,14 +123,18 @@ A configuration proxy validates flag configurations with the same configuration 
 
 The flag sync endpoint sends only documents that are in the store, and the store holds only flag configurations their configuration format accepted. A flag configuration is accepted or rejected as a whole; a part of it is never forwarded.
 
-### BR-004: Forwarded As-Is, Tagged With the Format
+### BR-004: Documents of the Requested Format, Unchanged
 
-The flag sync endpoint forwards a configuration format's documents unchanged and tagged with that configuration format; it never converts them into another configuration format or into the flag model. An In-Process Provider uses only documents of configuration formats it can read.
+A flag sync request may name the configuration format it reads; a request that names none reads flagd's (FR-044). The flag sync endpoint sends only documents of that configuration format, unchanged; it never converts them into another configuration format or into the flag model. Today's in-process providers name no format and receive only flagd documents.
 
 ### BR-005: Same Flag Sync Contract as flagd-full
 
-The flag sync endpoint of a configuration proxy is the same component as in flagd-full: same protocol, same selectors and the same merging of several sources by their order of precedence. For flagd's configuration format an In-Process Provider cannot tell from its subscription whether it talks to a configuration proxy or to flagd-full, and needs no change to switch between them (C-005).
+The flag sync endpoint of a configuration proxy is the same component as in flagd-full: same protocol, same selectors, the same default to flagd's configuration format and the same merging of several sources by their order of precedence. For flagd's configuration format an In-Process Provider cannot tell from its subscription whether it talks to a configuration proxy or to flagd-full, and needs no change to switch between them (C-005).
 
-### BR-006: Sources Are Fixed at Startup
+### BR-006: Settings Only for Contained Components
+
+A configuration proxy accepts flagd-full's CLI flags, configuration file keys and environment variables for the components it contains, with the same meaning. It refuses to start on a setting for a component it lacks; it does not accept flagd-full's whole start command.
+
+### BR-007: Sources Are Fixed at Startup
 
 The sources a configuration proxy reads are given on the command line or in the configuration file when it starts. A selector chooses among the flags of these sources; it never makes the configuration proxy read a new source. Starting a sync for a source on a subscriber's request is what today's flagd-proxy does; it stays a separate program and is not a configuration proxy.
