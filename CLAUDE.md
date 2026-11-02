@@ -1,6 +1,6 @@
 # flagd-builder
 
-Incubator for an OpenTelemetry Collector Builder-style modular flagd. This repository carries flagd's full history but is not a GitHub fork: upstream pull requests go to `open-feature/flagd` from `open-feature-forking/flagd`. `main` mirrors upstream; work happens on branches cut from `spec`.
+Incubator for an OpenTelemetry Collector Builder-style modular flagd. This repository carries flagd's full history but is not a GitHub fork. `main` is upstream flagd plus this work: every slice lands on `main` through a pull request in this repository. Upstream changes come in by merging `upstream/main` into `main`.
 
 The specification is the contract: `docs/vision.md`, `docs/requirements.md`, `docs/glossary.md`, `docs/use_cases.puml`, `docs/use_cases/`. Use glossary terms in code, commits and PR text. A behaviour the spec does not state is a question, not a decision.
 
@@ -17,9 +17,12 @@ Each phase runs plan → oppose → implement → review, one role per agent in 
 | reviewer    | opus   | no          | re-run gates, findings, verdict                |
 
 - A plan with an open `blocker` from the opposer goes back to the planner.
-- The implementer works on its own branch or worktree; it never pushes. The orchestrating session pushes each slice to this repository as `phase-<n>/pr-<x>-<topic>` (for example `phase-1/pr-a-span-tests`), and plan artifacts to `spec`.
-- The reviewer's verdict, not the implementer's report, decides whether a slice is done. `ready` needs every named gate green in the reviewer's own run.
-- Simon approves each plan and each upstream PR.
+- The implementer works on its own worktree, cut from `main` (or from the slice it builds on); it never pushes.
+- The orchestrating session pushes the slice as `phase-<n>/pr-<x>-<topic>` and opens a pull request in this repository against `main` (or against the slice below it, stacked). Plans, reviews and spec changes go straight to `main`.
+- The reviewer reviews the pull request: it re-runs the gates and posts its verdict as a PR review comment. `ready` needs every named gate green in its own run and CI green.
+- On `ready` with green CI, the orchestrating session merges with a merge commit (keeping the signed-off commits) and deletes the branch. `ready after fixes` goes back to the implementer as new commits on the same branch, never an amend.
+- Simon approves each plan before implementation, and can stop or veto any PR; he is not a required approver for merges inside this repository.
+- The release-please and benchmark-pages workflows are disabled in this repository; do not enable them.
 
 ## Phases
 
