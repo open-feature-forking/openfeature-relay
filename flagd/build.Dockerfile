@@ -24,12 +24,12 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=bind,source=./core/go.sum,target=./core/go.sum \
     --mount=type=bind,source=./sync/file/go.mod,target=./sync/file/go.mod \
     --mount=type=bind,source=./sync/file/go.sum,target=./sync/file/go.sum \
-    --mount=type=bind,source=./sync/grpc/go.mod,target=./sync/grpc/go.mod \
-    --mount=type=bind,source=./sync/grpc/go.sum,target=./sync/grpc/go.sum \
+    --mount=type=bind,source=./sync/flagd-grpc/go.mod,target=./sync/flagd-grpc/go.mod \
+    --mount=type=bind,source=./sync/flagd-grpc/go.sum,target=./sync/flagd-grpc/go.sum \
     --mount=type=bind,source=./sync/http/go.mod,target=./sync/http/go.mod \
     --mount=type=bind,source=./sync/http/go.sum,target=./sync/http/go.sum \
-    --mount=type=bind,source=./sync/kubernetes/go.mod,target=./sync/kubernetes/go.mod \
-    --mount=type=bind,source=./sync/kubernetes/go.sum,target=./sync/kubernetes/go.sum \
+    --mount=type=bind,source=./sync/openfeature-operator/go.mod,target=./sync/openfeature-operator/go.mod \
+    --mount=type=bind,source=./sync/openfeature-operator/go.sum,target=./sync/openfeature-operator/go.sum \
     --mount=type=bind,source=./sync/blob/go.mod,target=./sync/blob/go.mod \
     --mount=type=bind,source=./sync/blob/go.sum,target=./sync/blob/go.sum \
     --mount=type=bind,source=./sync/gcs/go.mod,target=./sync/gcs/go.mod \
@@ -44,7 +44,7 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=bind,source=./telemetry/otel/go.sum,target=./telemetry/otel/go.sum \
     --mount=type=bind,source=./flagd/go.mod,target=./flagd/go.mod \
     --mount=type=bind,source=./flagd/go.sum,target=./flagd/go.sum \
-    go work init ./core ./sync/file ./sync/grpc ./sync/http ./sync/kubernetes ./sync/blob ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel ./flagd && go mod download
+    go work init ./core ./sync/file ./sync/flagd-grpc ./sync/http ./sync/openfeature-operator ./sync/blob ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel ./flagd && go mod download
 
 # Build the application.
 # Leverage a cache mount to /go/pkg/mod/ to speed up subsequent builds.

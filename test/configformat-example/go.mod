@@ -108,10 +108,10 @@ require (
 	github.com/open-feature-forking/openfeature-relay/sync/blob v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/builder v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/file v0.1.0 // indirect
+	github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/gcs v0.1.0 // indirect
-	github.com/open-feature-forking/openfeature-relay/sync/grpc v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/http v0.1.0 // indirect
-	github.com/open-feature-forking/openfeature-relay/sync/kubernetes v0.1.0 // indirect
+	github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/s3 v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/telemetry/otel v0.1.0 // indirect
 	github.com/open-feature/flagd-schemas v0.2.15 // indirect
@@ -203,10 +203,10 @@ replace (
 	github.com/open-feature-forking/openfeature-relay/sync/blob => ../../sync/blob
 	github.com/open-feature-forking/openfeature-relay/sync/builder => ../../sync/builder
 	github.com/open-feature-forking/openfeature-relay/sync/file => ../../sync/file
+	github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc => ../../sync/flagd-grpc
 	github.com/open-feature-forking/openfeature-relay/sync/gcs => ../../sync/gcs
-	github.com/open-feature-forking/openfeature-relay/sync/grpc => ../../sync/grpc
 	github.com/open-feature-forking/openfeature-relay/sync/http => ../../sync/http
-	github.com/open-feature-forking/openfeature-relay/sync/kubernetes => ../../sync/kubernetes
+	github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator => ../../sync/openfeature-operator
 	github.com/open-feature-forking/openfeature-relay/sync/s3 => ../../sync/s3
 	github.com/open-feature-forking/openfeature-relay/telemetry/otel => ../../telemetry/otel
 )

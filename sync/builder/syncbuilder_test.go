@@ -9,9 +9,9 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/sync/blob"
 	buildermock "github.com/open-feature-forking/openfeature-relay/sync/builder/mock"
 	"github.com/open-feature-forking/openfeature-relay/sync/file"
-	"github.com/open-feature-forking/openfeature-relay/sync/grpc"
+	flagdgrpc "github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc"
 	"github.com/open-feature-forking/openfeature-relay/sync/http"
-	"github.com/open-feature-forking/openfeature-relay/sync/kubernetes"
+	ofoperator "github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -42,7 +42,7 @@ func TestSyncBuilder_SyncFromURI(t *testing.T) {
 
 				builder.k8sClientBuilder = mockClientBuilder
 			},
-			want:    &kubernetes.Sync{},
+			want:    &ofoperator.Sync{},
 			wantErr: false,
 		},
 		{
@@ -170,7 +170,7 @@ func Test_SyncsFromFromConfig(t *testing.T) {
 				},
 			},
 			wantSyncs: []sync.ISync{
-				&grpc.Sync{},
+				&flagdgrpc.Sync{},
 			},
 			wantErr: false,
 		},
@@ -190,7 +190,7 @@ func Test_SyncsFromFromConfig(t *testing.T) {
 				},
 			},
 			wantSyncs: []sync.ISync{
-				&grpc.Sync{},
+				&flagdgrpc.Sync{},
 			},
 			wantErr: false,
 		},
@@ -244,10 +244,10 @@ func Test_SyncsFromFromConfig(t *testing.T) {
 				},
 			},
 			wantSyncs: []sync.ISync{
-				&grpc.Sync{},
+				&flagdgrpc.Sync{},
 				&http.Sync{},
 				&file.Sync{},
-				&kubernetes.Sync{},
+				&ofoperator.Sync{},
 				&blob.Sync{},
 				&blob.Sync{},
 				&blob.Sync{},
@@ -290,7 +290,7 @@ func Test_GrpcIncrementalUpdates(t *testing.T) {
 	}, lg)
 	require.NoError(t, err)
 	require.Len(t, syncs, 1)
-	grpcSync, ok := syncs[0].(*grpc.Sync)
+	grpcSync, ok := syncs[0].(*flagdgrpc.Sync)
 	require.True(t, ok)
-	require.True(t, grpcSync.IncrementalUpdates, "IncrementalUpdates should be propagated from SourceConfig to grpc.Sync")
+	require.True(t, grpcSync.IncrementalUpdates, "IncrementalUpdates should be propagated from SourceConfig to flagdgrpc.Sync")
 }

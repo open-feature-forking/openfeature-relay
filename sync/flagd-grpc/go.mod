@@ -1,4 +1,4 @@
-module github.com/open-feature-forking/openfeature-relay/sync/grpc
+module github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc
 
 go 1.26.0
 
@@ -29,7 +29,7 @@ replace (
 	github.com/open-feature-forking/openfeature-relay/sync/file => ../file
 	github.com/open-feature-forking/openfeature-relay/sync/gcs => ../gcs
 	github.com/open-feature-forking/openfeature-relay/sync/http => ../http
-	github.com/open-feature-forking/openfeature-relay/sync/kubernetes => ../kubernetes
+	github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator => ../openfeature-operator
 	github.com/open-feature-forking/openfeature-relay/sync/s3 => ../s3
 	github.com/open-feature-forking/openfeature-relay/telemetry/otel => ../../telemetry/otel
 )

@@ -11,10 +11,10 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/sync/azblob"
 	"github.com/open-feature-forking/openfeature-relay/sync/file"
 	"github.com/open-feature-forking/openfeature-relay/sync/gcs"
-	"github.com/open-feature-forking/openfeature-relay/sync/grpc"
-	"github.com/open-feature-forking/openfeature-relay/sync/grpc/credentials"
+	flagdgrpc "github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc"
+	"github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc/credentials"
 	httpSync "github.com/open-feature-forking/openfeature-relay/sync/http"
-	"github.com/open-feature-forking/openfeature-relay/sync/kubernetes"
+	ofoperator "github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator"
 	"github.com/open-feature-forking/openfeature-relay/sync/s3"
 	"go.uber.org/zap"
 	googlegrpc "google.golang.org/grpc"
@@ -47,9 +47,9 @@ var (
 func init() {
 	regCrd = regexp.MustCompile("^core.openfeature.dev/")
 	regURL = regexp.MustCompile("^https?://")
-	regGRPC = regexp.MustCompile("^" + grpc.Prefix)
-	regGRPCSecure = regexp.MustCompile("^" + grpc.PrefixSecure)
-	regGRPCCustomResolver = regexp.MustCompile("^" + grpc.SupportedScheme)
+	regGRPC = regexp.MustCompile("^" + flagdgrpc.Prefix)
+	regGRPCSecure = regexp.MustCompile("^" + flagdgrpc.PrefixSecure)
+	regGRPCCustomResolver = regexp.MustCompile("^" + flagdgrpc.SupportedScheme)
 	regFile = regexp.MustCompile("^file:")
 }
 
@@ -66,7 +66,7 @@ type SyncBuilder struct {
 	SyncMetricsRecorder sync.MetricsRecorder
 
 	// StreamMetricsRecorder, when non-nil, is passed to gRPC sync providers to record their stream lifecycle.
-	StreamMetricsRecorder grpc.StreamMetricsRecorder
+	StreamMetricsRecorder flagdgrpc.StreamMetricsRecorder
 
 	// GRPCDialOptions are passed to gRPC sync providers as client connection options.
 	GRPCDialOptions []googlegrpc.DialOption
@@ -180,13 +180,13 @@ func (sb *SyncBuilder) newFileInfo(uri string, logger *logger.Logger) *file.Sync
 	return s
 }
 
-func (sb *SyncBuilder) newK8s(uri string, logger *logger.Logger) (*kubernetes.Sync, error) {
+func (sb *SyncBuilder) newK8s(uri string, logger *logger.Logger) (*ofoperator.Sync, error) {
 	dynamicClient, err := sb.k8sClientBuilder.GetK8sClient()
 	if err != nil {
 		return nil, fmt.Errorf("error creating kubernetes clients: %w", err)
 	}
 
-	s := kubernetes.NewK8sSync(
+	s := ofoperator.NewK8sSync(
 		logger.WithFields(
 			zap.String("component", "sync"),
 			zap.String("sync", "kubernetes"),
@@ -198,8 +198,8 @@ func (sb *SyncBuilder) newK8s(uri string, logger *logger.Logger) (*kubernetes.Sy
 	return s, nil
 }
 
-func (sb *SyncBuilder) newGRPC(config sync.SourceConfig, logger *logger.Logger) *grpc.Sync {
-	return &grpc.Sync{
+func (sb *SyncBuilder) newGRPC(config sync.SourceConfig, logger *logger.Logger) *flagdgrpc.Sync {
+	return &flagdgrpc.Sync{
 		URI: config.URI,
 		Logger: logger.WithFields(
 			zap.String("component", "sync"),

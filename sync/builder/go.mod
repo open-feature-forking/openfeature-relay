@@ -7,10 +7,10 @@ require (
 	github.com/open-feature-forking/openfeature-relay/sync/azblob v0.1.0
 	github.com/open-feature-forking/openfeature-relay/sync/blob v0.1.0
 	github.com/open-feature-forking/openfeature-relay/sync/file v0.1.0
+	github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc v0.1.0
 	github.com/open-feature-forking/openfeature-relay/sync/gcs v0.1.0
-	github.com/open-feature-forking/openfeature-relay/sync/grpc v0.1.0
 	github.com/open-feature-forking/openfeature-relay/sync/http v0.1.0
-	github.com/open-feature-forking/openfeature-relay/sync/kubernetes v0.1.0
+	github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator v0.1.0
 	github.com/open-feature-forking/openfeature-relay/sync/s3 v0.1.0
 )
 
@@ -159,10 +159,10 @@ replace (
 	github.com/open-feature-forking/openfeature-relay/sync/azblob => ../azblob
 	github.com/open-feature-forking/openfeature-relay/sync/blob => ../blob
 	github.com/open-feature-forking/openfeature-relay/sync/file => ../file
+	github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc => ../flagd-grpc
 	github.com/open-feature-forking/openfeature-relay/sync/gcs => ../gcs
-	github.com/open-feature-forking/openfeature-relay/sync/grpc => ../grpc
 	github.com/open-feature-forking/openfeature-relay/sync/http => ../http
-	github.com/open-feature-forking/openfeature-relay/sync/kubernetes => ../kubernetes
+	github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator => ../openfeature-operator
 	github.com/open-feature-forking/openfeature-relay/sync/s3 => ../s3
 	github.com/open-feature-forking/openfeature-relay/telemetry/otel => ../../telemetry/otel
 )

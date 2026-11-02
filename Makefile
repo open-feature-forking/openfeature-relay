@@ -5,7 +5,7 @@ ALL_GO_MOD_DIRS := $(shell find . \( -path ./test/integration -o -path ./.claude
 
 # The library modules: what embedders import. Tests, the FIPS tests and the benchmarks run on exactly
 # these (plus the binaries), and testdata/go-packages.txt pins the packages they contain.
-GO_LIB_MODULE_DIRS := ./core ./sync/file ./sync/grpc ./sync/http ./sync/kubernetes ./sync/blob ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel
+GO_LIB_MODULE_DIRS := ./core ./sync/file ./sync/flagd-grpc ./sync/http ./sync/openfeature-operator ./sync/blob ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel
 
 # The FIPS variant builds against the CMVP-certified Go Cryptographic Module
 # v1.0.0 (certificate #5247). The literal version is required; the
@@ -157,8 +157,8 @@ install-mockgen:
 	go install go.uber.org/mock/mockgen@v0.4.0
 mockgen: install-mockgen
 	cd sync/http; mockgen -source=http_sync.go -destination=mock/http.go -package=syncmock
-	cd sync/grpc; mockgen -source=grpc_sync.go -destination=mock/grpc.go -package=grpcmock
-	cd sync/grpc; mockgen -source=credentials/builder.go -destination=credentials/mock/builder.go -package=credendialsmock
+	cd sync/flagd-grpc; mockgen -source=grpc_sync.go -destination=mock/grpc.go -package=grpcmock
+	cd sync/flagd-grpc; mockgen -source=credentials/builder.go -destination=credentials/mock/builder.go -package=credendialsmock
 	cd core; mockgen -source=pkg/evaluator/ievaluator.go -destination=pkg/evaluator/mock/ievaluator.go -package=evalmock
 	cd sync/builder; mockgen -source=syncbuilder.go -destination=mock/syncbuilder.go -package=middlewaremocksyncbuildermock
 	cd flagd; mockgen -source=pkg/service/middleware/interface.go -destination=pkg/service/middleware/mock/interface.go -package=middlewaremock

@@ -1,4 +1,4 @@
-package kubernetes
+package ofoperator
 
 type INotify interface {
 	GetEvent() Event[DefaultEventType]

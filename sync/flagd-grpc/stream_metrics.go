@@ -1,4 +1,4 @@
-package grpc
+package flagdgrpc
 
 import "context"
 

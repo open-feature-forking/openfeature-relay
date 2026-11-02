@@ -1,4 +1,4 @@
-package kubernetes
+package ofoperator
 
 type DefaultEventType int32
 

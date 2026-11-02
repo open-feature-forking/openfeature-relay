@@ -84,9 +84,9 @@ replace (
 	github.com/open-feature-forking/openfeature-relay/sync/blob => ../blob
 	github.com/open-feature-forking/openfeature-relay/sync/builder => ../builder
 	github.com/open-feature-forking/openfeature-relay/sync/file => ../file
-	github.com/open-feature-forking/openfeature-relay/sync/grpc => ../grpc
+	github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc => ../flagd-grpc
 	github.com/open-feature-forking/openfeature-relay/sync/http => ../http
-	github.com/open-feature-forking/openfeature-relay/sync/kubernetes => ../kubernetes
+	github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator => ../openfeature-operator
 	github.com/open-feature-forking/openfeature-relay/sync/s3 => ../s3
 	github.com/open-feature-forking/openfeature-relay/telemetry/otel => ../../telemetry/otel
 )

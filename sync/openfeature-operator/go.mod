@@ -1,4 +1,4 @@
-module github.com/open-feature-forking/openfeature-relay/sync/kubernetes
+module github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator
 
 go 1.26.0
 
@@ -71,8 +71,8 @@ replace (
 	github.com/open-feature-forking/openfeature-relay/sync/blob => ../blob
 	github.com/open-feature-forking/openfeature-relay/sync/builder => ../builder
 	github.com/open-feature-forking/openfeature-relay/sync/file => ../file
+	github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc => ../flagd-grpc
 	github.com/open-feature-forking/openfeature-relay/sync/gcs => ../gcs
-	github.com/open-feature-forking/openfeature-relay/sync/grpc => ../grpc
 	github.com/open-feature-forking/openfeature-relay/sync/http => ../http
 	github.com/open-feature-forking/openfeature-relay/sync/s3 => ../s3
 	github.com/open-feature-forking/openfeature-relay/telemetry/otel => ../../telemetry/otel
