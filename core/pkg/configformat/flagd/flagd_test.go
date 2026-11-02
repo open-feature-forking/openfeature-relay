@@ -88,3 +88,65 @@ func TestFlagdFormatReportsChanges(t *testing.T) {
 		t.Fatalf("a full delivery drops the documents of flag sets it doesn't name, got %d", len(got))
 	}
 }
+
+func newTestFormat(t *testing.T, sources ...string) (*Format, *store.Store) {
+	t.Helper()
+	log := logger.NewLogger(nil, false)
+	st, err := store.NewStore(log, sources)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return NewFormat(st, log), st
+}
+
+func TestFlagdFormatSetMetadataChangeIsAnUpdate(t *testing.T) {
+	format, st := newTestFormat(t, "src")
+	accept := func(owner string) configformat.DocumentReport {
+		t.Helper()
+		res, err := format.Accept(context.Background(), configformat.Input{
+			Source: "src",
+			Data:   `{"metadata":{"flagSetId":"s","owner":"` + owner + `"},"flags":{"f":{` + flagBody + `}}}`,
+		})
+		if err != nil || len(res.Documents) != 1 {
+			t.Fatalf("want one document, got %+v, %v", res.Documents, err)
+		}
+		return res.Documents[0]
+	}
+
+	before := accept("x")
+	after := accept("y")
+
+	if before.Version == after.Version {
+		t.Fatalf("a changed set-level metadata must change the version, both are %s", before.Version)
+	}
+	if !reflect.DeepEqual(after.Updated, []string{"f"}) {
+		t.Fatalf("flags whose metadata changed are updated, got %v", after.Updated)
+	}
+	flags, _, err := st.GetAll(context.Background(), &store.Selector{})
+	if err != nil || len(flags) != 1 || flags[0].Metadata["owner"] != "y" {
+		t.Fatalf("the store holds the new metadata, got %+v, %v", flags, err)
+	}
+}
+
+func TestFlagdFormatIncrementalDocumentsAgreeWithFlags(t *testing.T) {
+	format, st := newTestFormat(t, "src")
+	accept := func(data string) {
+		t.Helper()
+		if _, err := format.Accept(context.Background(), configformat.Input{Source: "src", Data: data, IncrementalUpdate: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	accept(`{"flags":{"u":{` + flagBody + `}}}`)
+	// the set names no flag set, and its only flag moves to s2: the unnamed flag set is not part of this delivery
+	accept(`{"metadata":{"flagSetId":""},"flags":{"g":{` + flagBody + `,"metadata":{"flagSetId":"s2"}}}}`)
+
+	got := map[string][]string{}
+	for _, d := range st.Documents(Type, "src") {
+		got[d.FlagSet] = d.FlagKeys
+	}
+	want := map[string][]string{"": {"u"}, "s2": {"g"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("documents must agree with the flags table\nwant: %v\n got: %v", want, got)
+	}
+}
