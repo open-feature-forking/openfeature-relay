@@ -1,3 +1,5 @@
+//go:build unix
+
 // Package fromconfig_test builds runtimes through runtime.FromConfig. FromConfig installs a global
 // trace provider, which the span tests in package runtime must not lose, so these tests live in a
 // test binary of their own.

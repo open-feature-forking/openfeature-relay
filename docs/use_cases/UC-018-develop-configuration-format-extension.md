@@ -7,7 +7,7 @@
 **Primary Actor:** Extension Author  
 **Goal:** Publish a configuration format in the Extension Author's own component module, verified against the configuration format contract, so that a distribution reads flag configurations written in another vendor's format, such as Flagsmith's, and keeps them as documents for its paired evaluator and the flag sync endpoint.  
 **Trigger:** Extension Author needs flagd to accept flag configurations in a format flagd's own configuration format does not support  
-**Status:** Draft  
+**Status:** Implemented  
 
 **Requirements:** [FR-019, FR-015, FR-018, FR-029, FR-044, FR-048, FR-049, FR-003, FR-008](../requirements.md)
 
@@ -149,3 +149,16 @@ A source that names a configuration format the distribution does not contain is 
 - A2: the client half (step 3, a client receiving evaluation results of the paired evaluator or documents through the flag sync endpoint) is tested with UC-007 and UC-017.
 - A5: the evaluator half is tested with UC-007.
 - A4: has no system behaviour to test.
+
+## Delivered by Later Use Cases
+
+This use case is `Implemented` for the configuration format side: the interface, the store's documents, flagd's own format, sources naming a format, the contract and an example format. These parts are delivered by the use cases named here, and are accepted gaps of this one:
+
+- Main scenario steps 8–9 and BR-007 (tag and publish the module, select it in a manifest by module path and version): UC-001 Build Custom Distribution and UC-012.
+- BR-002, flag sync half (the flag sync endpoint sends documents only to a request that names the format, FR-044): UC-017.
+- BR-009 and FR-049 beyond JSON (the core decodes YAML and TOML before the format sees them): a later slice of the core, not yet assigned to a use case; YAML is converted where it is today.
+- BR-008, consumers of the reported facts: the evaluation router routes by flag keys and flag set (UC-007), the OFREP endpoint derives ETags and event stream events from document versions and the runtime publishes configuration change events (UC-004).
+
+- BR-003 for the Kubernetes sync provider, which shapes the flag configuration from the FeatureFlag CRD instead of delivering it unchanged: UC-003.
+- Shadowed keys: a document's flag keys list what its source delivered, even where a higher-priority source wins the key in the flags table; how the router treats them: UC-007.
+- The module split: the `configformat` packages stay in the core module for now: UC-014 and phase 4.
