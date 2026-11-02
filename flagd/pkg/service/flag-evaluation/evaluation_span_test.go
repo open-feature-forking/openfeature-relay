@@ -44,8 +44,8 @@ const (
 	invalidSelector = "invalid=selector"
 )
 
-// Tracers are fetched when a service is built and never again, so the provider has to be in place
-// before any test constructs one. It cannot be restored afterwards; tests reset the recorder instead.
+// Tracers may be fetched when components are built, so the provider is installed before any test
+// builds one. A global provider cannot be restored; tests reset the recorder instead.
 var spanRecorder = tracetest.NewSpanRecorder()
 
 func TestMain(m *testing.M) {
@@ -238,8 +238,8 @@ func TestEvaluationSpans(t *testing.T) {
 		{call: "legacy/Object", key: "object-flag", selector: "", wantErr: false, want: "flagEvaluationService/resolveObject[server]{feature_flag.key=object-flag,feature_flag.provider.name=flagd,feature_flag.result.variant=a}\n  jsonEvaluator/resolveObject[internal]{}\n"},
 		{call: "legacy/Object", key: "missing", selector: "", wantErr: true, want: "flagEvaluationService/resolveObject[server]{feature_flag.key=missing,feature_flag.provider.name=flagd,feature_flag.result.variant=} status=Error(\"error evaluating flag with key missing\") event=exception\n  jsonEvaluator/resolveObject[internal]{}\n"},
 		{call: "legacy/All", key: "", selector: "", wantErr: false, want: "flagEvaluationService/resolveAll[server]{feature_flag.count=5}\n  jsonEvaluator/resolveAll[internal]{}\n"},
-		{call: "legacy/Boolean", key: "bool-flag", selector: "invalid=selector", wantErr: true, want: "flagEvaluationService/resolveBoolean[server]{} status=Error(\"invalid_argument: invalid selector key \\\"invalid\\\", valid keys: \\\"flagSetId\\\", \\\"source\\\"\") event=exception\n"},
-		{call: "legacy/All", key: "", selector: "invalid=selector", wantErr: true, want: "flagEvaluationService/resolveAll[server]{} status=Error(\"invalid_argument: invalid selector key \\\"invalid\\\", valid keys: \\\"flagSetId\\\", \\\"source\\\"\") event=exception\n"},
+		{call: "legacy/Boolean", key: "bool-flag", selector: invalidSelector, wantErr: true, want: "flagEvaluationService/resolveBoolean[server]{} status=Error(\"invalid_argument: invalid selector key \\\"invalid\\\", valid keys: \\\"flagSetId\\\", \\\"source\\\"\") event=exception\n"},
+		{call: "legacy/All", key: "", selector: invalidSelector, wantErr: true, want: "flagEvaluationService/resolveAll[server]{} status=Error(\"invalid_argument: invalid selector key \\\"invalid\\\", valid keys: \\\"flagSetId\\\", \\\"source\\\"\") event=exception\n"},
 		{call: "v1/Boolean", key: "bool-flag", selector: "", wantErr: false, want: "flagd.evaluation.v1/resolveBoolean[server]{feature_flag.key=bool-flag,feature_flag.provider.name=flagd,feature_flag.result.variant=on}\n  jsonEvaluator/resolveBoolean[internal]{}\n"},
 		{call: "v1/Boolean", key: "missing", selector: "", wantErr: true, want: "flagd.evaluation.v1/resolveBoolean[server]{feature_flag.key=missing,feature_flag.provider.name=flagd,feature_flag.result.variant=} status=Error(\"error evaluating flag with key missing\") event=exception\n  jsonEvaluator/resolveBoolean[internal]{}\n"},
 		{call: "v1/String", key: "string-flag", selector: "", wantErr: false, want: "flagd.evaluation.v1/resolveString[server]{feature_flag.key=string-flag,feature_flag.provider.name=flagd,feature_flag.result.variant=a}\n  jsonEvaluator/resolveString[internal]{}\n"},
@@ -251,8 +251,8 @@ func TestEvaluationSpans(t *testing.T) {
 		{call: "v1/Object", key: "object-flag", selector: "", wantErr: false, want: "flagd.evaluation.v1/resolveObject[server]{feature_flag.key=object-flag,feature_flag.provider.name=flagd,feature_flag.result.variant=a}\n  jsonEvaluator/resolveObject[internal]{}\n"},
 		{call: "v1/Object", key: "missing", selector: "", wantErr: true, want: "flagd.evaluation.v1/resolveObject[server]{feature_flag.key=missing,feature_flag.provider.name=flagd,feature_flag.result.variant=} status=Error(\"error evaluating flag with key missing\") event=exception\n  jsonEvaluator/resolveObject[internal]{}\n"},
 		{call: "v1/All", key: "", selector: "", wantErr: false, want: "flagd.evaluation.v1/resolveAll[server]{feature_flag.count=5}\n  jsonEvaluator/resolveAll[internal]{}\n"},
-		{call: "v1/Boolean", key: "bool-flag", selector: "invalid=selector", wantErr: true, want: "flagd.evaluation.v1/resolveBoolean[server]{} status=Error(\"invalid_argument: invalid selector key \\\"invalid\\\", valid keys: \\\"flagSetId\\\", \\\"source\\\"\") event=exception\n"},
-		{call: "v1/All", key: "", selector: "invalid=selector", wantErr: true, want: "flagd.evaluation.v1/resolveAll[server]{} status=Error(\"invalid_argument: invalid selector key \\\"invalid\\\", valid keys: \\\"flagSetId\\\", \\\"source\\\"\") event=exception\n"},
+		{call: "v1/Boolean", key: "bool-flag", selector: invalidSelector, wantErr: true, want: "flagd.evaluation.v1/resolveBoolean[server]{} status=Error(\"invalid_argument: invalid selector key \\\"invalid\\\", valid keys: \\\"flagSetId\\\", \\\"source\\\"\") event=exception\n"},
+		{call: "v1/All", key: "", selector: invalidSelector, wantErr: true, want: "flagd.evaluation.v1/resolveAll[server]{} status=Error(\"invalid_argument: invalid selector key \\\"invalid\\\", valid keys: \\\"flagSetId\\\", \\\"source\\\"\") event=exception\n"},
 		{call: "v2/Boolean", key: "bool-flag", selector: "", wantErr: false, want: "flagd.evaluation.v2/resolveBoolean[server]{feature_flag.key=bool-flag,feature_flag.provider.name=flagd,feature_flag.result.variant=on}\n  jsonEvaluator/resolveBoolean[internal]{}\n"},
 		{call: "v2/Boolean", key: "missing", selector: "", wantErr: true, want: "flagd.evaluation.v2/resolveBoolean[server]{feature_flag.key=missing,feature_flag.provider.name=flagd,feature_flag.result.variant=} status=Error(\"error evaluating flag with key missing\") event=exception\n  jsonEvaluator/resolveBoolean[internal]{}\n"},
 		{call: "v2/String", key: "string-flag", selector: "", wantErr: false, want: "flagd.evaluation.v2/resolveString[server]{feature_flag.key=string-flag,feature_flag.provider.name=flagd,feature_flag.result.variant=a}\n  jsonEvaluator/resolveString[internal]{}\n"},
@@ -263,11 +263,11 @@ func TestEvaluationSpans(t *testing.T) {
 		{call: "v2/Float", key: "missing", selector: "", wantErr: true, want: "flagd.evaluation.v2/resolveFloat[server]{feature_flag.key=missing,feature_flag.provider.name=flagd,feature_flag.result.variant=} status=Error(\"error evaluating flag with key missing\") event=exception\n  jsonEvaluator/resolveFloat[internal]{}\n"},
 		{call: "v2/Object", key: "object-flag", selector: "", wantErr: false, want: "flagd.evaluation.v2/resolveObject[server]{feature_flag.key=object-flag,feature_flag.provider.name=flagd,feature_flag.result.variant=a}\n  jsonEvaluator/resolveObject[internal]{}\n"},
 		{call: "v2/Object", key: "missing", selector: "", wantErr: true, want: "flagd.evaluation.v2/resolveObject[server]{feature_flag.key=missing,feature_flag.provider.name=flagd,feature_flag.result.variant=} status=Error(\"error evaluating flag with key missing\") event=exception\n  jsonEvaluator/resolveObject[internal]{}\n"},
-		{call: "v2/Boolean", key: "bool-flag", selector: "invalid=selector", wantErr: true, want: "flagd.evaluation.v2/resolveBoolean[server]{} status=Error(\"invalid_argument: invalid selector key \\\"invalid\\\", valid keys: \\\"flagSetId\\\", \\\"source\\\"\") event=exception\n"},
+		{call: "v2/Boolean", key: "bool-flag", selector: invalidSelector, wantErr: true, want: "flagd.evaluation.v2/resolveBoolean[server]{} status=Error(\"invalid_argument: invalid selector key \\\"invalid\\\", valid keys: \\\"flagSetId\\\", \\\"source\\\"\") event=exception\n"},
 	}
 
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("%s %s %s", tt.call, tt.key, tt.selector), func(t *testing.T) {
+		t.Run(subtestName(tt.call, tt.key, tt.selector), func(t *testing.T) {
 			spanRecorder.Reset()
 
 			err := evaluationCalls[tt.call](t.Context(), clients, tt.key, tt.selector)
@@ -280,4 +280,15 @@ func TestEvaluationSpans(t *testing.T) {
 			require.Equal(t, tt.want, renderSpanTree(spanRecorder.Ended()))
 		})
 	}
+}
+
+// subtestName joins the non-empty parts with underscores; a slash would nest the subtest.
+func subtestName(parts ...string) string {
+	var named []string
+	for _, p := range parts {
+		if p != "" {
+			named = append(named, strings.ReplaceAll(p, "/", "_"))
+		}
+	}
+	return strings.Join(named, "_")
 }

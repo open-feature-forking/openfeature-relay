@@ -20,9 +20,8 @@ import (
 
 const spanTestSource = "test-source"
 
-// The evaluator fetches its tracer when it is built and never again, so the provider has to be in
-// place before any test constructs one. It cannot be restored afterwards; tests reset the recorder
-// instead.
+// Tracers may be fetched when components are built, so the provider is installed before any test
+// builds one. A global provider cannot be restored; tests reset the recorder instead.
 var spanRecorder = tracetest.NewSpanRecorder()
 
 func TestMain(m *testing.M) {
