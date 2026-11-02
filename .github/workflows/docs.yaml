@@ -9,24 +9,21 @@ on:
       - "mkdocs.yml"
       - "requirements.txt"
       - ".github/workflows/docs.yaml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "requirements.txt"
+      - ".github/workflows/docs.yaml"
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
 
 jobs:
-  deploy:
-    # The site is this repository's; upstream flagd publishes flagd.dev from Netlify.
-    if: github.repository == 'open-feature-forking/openfeature-relay'
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -36,12 +33,29 @@ jobs:
           python3 -m venv .venv
           .venv/bin/pip install -r requirements.txt
           .venv/bin/mkdocs build --strict
-      - name: Setup Pages
-        uses: actions/configure-pages@1f0c5cde4bc74cd7e1254d0cb4de8d49e9068c7d # v4
       - name: Upload artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@0252fc4ba7626f0298f0cf00902a25c6afc77fa8 # v3
         with:
           path: site
+
+  deploy:
+    # The site is this repository's; upstream flagd publishes flagd.dev from Netlify.
+    if: github.event_name != 'pull_request' && github.repository == 'open-feature-forking/openfeature-relay'
+    needs: build
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Pages
+        uses: actions/configure-pages@1f0c5cde4bc74cd7e1254d0cb4de8d49e9068c7d # v4
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@87c3283f01cd6fe19a0ab93a23b2f6fcba5a8e42 # v4
