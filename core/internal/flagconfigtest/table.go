@@ -35,12 +35,12 @@ type Row struct {
 // exact error text of the last one, empty if it is accepted. Where flagd wraps a message of the Go
 // JSON decoder, which differs between Go versions, WantErrPrefix names flagd's part of the text.
 type Case struct {
-	Name       string
-	Sources    []string // priority order, highest first
-	Deliveries []sync.DataSync
-	WantErr    string
+	Name          string
+	Sources       []string // priority order, highest first
+	Deliveries    []sync.DataSync
+	WantErr       string
 	WantErrPrefix string
-	WantRows   []Row
+	WantRows      []Row
 }
 
 // Run applies every case to a fresh store and compares error text and resulting rows.
