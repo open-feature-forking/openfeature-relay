@@ -46,6 +46,12 @@ func NewStore(logger *logger.Logger, sources []string) (*Store, error) {
 	// we maybe want to generate these dynamically in the future to support more robust querying, but for now we will hardcode the ones we need
 	schema := &memdb.DBSchema{
 		Tables: map[string]*memdb.TableSchema{
+			documentsTable: {
+				Name: documentsTable,
+				Indexes: map[string]*memdb.IndexSchema{
+					idIndex: {Name: idIndex, Unique: true, Indexer: documentIndexer{}},
+				},
+			},
 			flagsTable: {
 				Name: flagsTable,
 				Indexes: map[string]*memdb.IndexSchema{
@@ -225,6 +231,30 @@ func (s *Store) Update(
 	metadata model.Metadata,
 	incrementalUpdate bool,
 ) {
+	if flags == nil {
+		flags = []model.Flag{}
+	}
+	_ = s.Apply(ApplyRequest{Source: source, Flags: flags, SetMetadata: metadata, Incremental: incrementalUpdate})
+}
+
+// ApplyRequest is one source's delivery to the store.
+type ApplyRequest struct {
+	// Format names the configuration format that owns Documents; it is empty when there are none.
+	Format string
+	Source string
+	// Flags are written to the flags table. A nil slice leaves the flags table untouched, a
+	// non-nil empty slice removes the source's flags.
+	Flags       []model.Flag
+	SetMetadata model.Metadata
+	Documents   []Document
+	// Incremental scopes replacement to the flag sets named in the request.
+	Incremental bool
+}
+
+// Apply writes the flags and the documents of one delivery in a single transaction. On error the
+// store is unchanged. Callers serialize Apply per source.
+func (s *Store) Apply(req ApplyRequest) error {
+	source, flags, metadata, incrementalUpdate := req.Source, req.Flags, req.SetMetadata, req.Incremental
 	if source == "" {
 		panic("source cannot be empty")
 	}
@@ -246,13 +276,7 @@ func (s *Store) Update(
 		newFlag.Priority = priority
 		newFlag.Metadata = patchMetadata(metadata, newFlag.Metadata)
 
-		// flagSetId defaults to a UUID generated at startup to make our queries isomorphic
-		flagSetId := nilFlagSetId
-		// flagSetId is inherited from the set, but can be overridden by the flag
-		setFlagSetId, ok := newFlag.Metadata["flagSetId"].(string)
-		if ok {
-			flagSetId = setFlagSetId
-		}
+		flagSetId := internalFlagSetID(FlagSetID(newFlag, metadata))
 		newFlag.FlagSetId = flagSetId
 		newFlags[flagIdentifier{flagSetId: newFlag.FlagSetId, key: newFlag.Key}] = newFlag
 	}
@@ -260,88 +284,96 @@ func (s *Store) Update(
 	txn := s.db.Txn(true)
 	defer txn.Abort()
 
-	// When incrementalUpdate is enabled, scope deletion to only the flagSetIds touched
-	// by this payload (metadata-level + flag-level overrides). This allows per-flagSetId
-	// updates (e.g., from per-project stream messages) to accumulate without deleting
-	// flags from unrelated flagSetIds. Otherwise, replace all flags for the source.
-	var oldFlags []model.Flag
-	if incrementalUpdate {
-		seenFlagSetIds := make(map[string]struct{})
-		if fsi, ok := metadata["flagSetId"].(string); ok && fsi != "" {
-			seenFlagSetIds[fsi] = struct{}{}
-		}
-		for id := range newFlags {
-			seenFlagSetIds[id.flagSetId] = struct{}{}
-		}
-		for fsi := range seenFlagSetIds {
-			sel := Selector{}.WithFlagSetId(fsi).WithSource(source)
+	if flags != nil {
+		// When incrementalUpdate is enabled, scope deletion to only the flagSetIds touched
+		// by this payload (metadata-level + flag-level overrides). This allows per-flagSetId
+		// updates (e.g., from per-project stream messages) to accumulate without deleting
+		// flags from unrelated flagSetIds. Otherwise, replace all flags for the source.
+		var oldFlags []model.Flag
+		if incrementalUpdate {
+			seenFlagSetIds := make(map[string]struct{})
+			if fsi, ok := metadata["flagSetId"].(string); ok && fsi != "" {
+				seenFlagSetIds[fsi] = struct{}{}
+			}
+			for id := range newFlags {
+				seenFlagSetIds[id.flagSetId] = struct{}{}
+			}
+			for fsi := range seenFlagSetIds {
+				sel := Selector{}.WithFlagSetId(fsi).WithSource(source)
+				indexId, constraints := sel.ToQuery()
+				it, err := txn.Get(flagsTable, indexId, constraints...)
+				if err != nil {
+					s.logger.Error(fmt.Sprintf("unable to query flags for flagSetId %s: %v", fsi, err))
+					return err
+				}
+				oldFlags = append(oldFlags, s.collect(it)...)
+			}
+		} else {
+			sel := Selector{}.WithSource(source)
 			indexId, constraints := sel.ToQuery()
 			it, err := txn.Get(flagsTable, indexId, constraints...)
 			if err != nil {
-				s.logger.Error(fmt.Sprintf("unable to query flags for flagSetId %s: %v", fsi, err))
-				return
+				s.logger.Error(fmt.Sprintf("unable to query flags for source %s: %v", source, err))
+				return err
 			}
-			oldFlags = append(oldFlags, s.collect(it)...)
+			oldFlags = s.collect(it)
 		}
-	} else {
-		sel := Selector{}.WithSource(source)
-		indexId, constraints := sel.ToQuery()
-		it, err := txn.Get(flagsTable, indexId, constraints...)
-		if err != nil {
-			s.logger.Error(fmt.Sprintf("unable to query flags for source %s: %v", source, err))
-			return
-		}
-		oldFlags = s.collect(it)
-	}
 
-	for _, oldFlag := range oldFlags {
-		if _, ok := newFlags[flagIdentifier{flagSetId: oldFlag.FlagSetId, key: oldFlag.Key}]; !ok {
-			// flag has been deleted
-			s.logger.Debug(fmt.Sprintf("flag '%s' and flagSetId '%s' has been deleted from source '%s'", oldFlag.Key, oldFlag.FlagSetId, source))
+		for _, oldFlag := range oldFlags {
+			if _, ok := newFlags[flagIdentifier{flagSetId: oldFlag.FlagSetId, key: oldFlag.Key}]; !ok {
+				// flag has been deleted
+				s.logger.Debug(fmt.Sprintf("flag '%s' and flagSetId '%s' has been deleted from source '%s'", oldFlag.Key, oldFlag.FlagSetId, source))
 
-			count, err := txn.DeleteAll(flagsTable, flagSetIdKeySourceCompoundIndex, oldFlag.FlagSetId, oldFlag.Key, source)
-			s.logger.Debug(fmt.Sprintf(
-				"deleted %d flags with key '%s' and flagSetId '%s' from source '%s'",
-				count,
-				oldFlag.Key,
-				oldFlag.FlagSetId,
-				source,
-			))
+				count, err := txn.DeleteAll(flagsTable, flagSetIdKeySourceCompoundIndex, oldFlag.FlagSetId, oldFlag.Key, source)
+				s.logger.Debug(fmt.Sprintf(
+					"deleted %d flags with key '%s' and flagSetId '%s' from source '%s'",
+					count,
+					oldFlag.Key,
+					oldFlag.FlagSetId,
+					source,
+				))
 
-			if err != nil {
-				s.logger.Error(fmt.Sprintf("error deleting flag: %s, %v", oldFlag.Key, err))
-			}
-			continue
-		}
-	}
-
-	for _, newFlag := range newFlags {
-		raw, err := txn.First(flagsTable, idIndex, newFlag.FlagSetId, newFlag.Key)
-		if err != nil {
-			s.logger.Error(fmt.Sprintf("unable to get flag %s from source %s: %v", newFlag.Key, newFlag.FlagSetId, err))
-			continue
-		}
-		oldFlag, ok := raw.(model.Flag)
-		// If we already have a flag with the same key and source, we need to check if it has the same flagSetId
-		if ok {
-			if oldFlag.Priority > newFlag.Priority {
-				// if the old flag has a higher prio, we should not try to write it
-				s.logger.Error(fmt.Sprintf("unable to delete flags with key %s and flagSetId %s: %v", oldFlag.Key, oldFlag.FlagSetId, err))
+				if err != nil {
+					s.logger.Error(fmt.Sprintf("error deleting flag: %s, %v", oldFlag.Key, err))
+				}
 				continue
 			}
 		}
 
-		// Store the new version of the flag
-		s.logger.Debug(fmt.Sprintf("storing flag: %v", newFlag))
+		for _, newFlag := range newFlags {
+			raw, err := txn.First(flagsTable, idIndex, newFlag.FlagSetId, newFlag.Key)
+			if err != nil {
+				s.logger.Error(fmt.Sprintf("unable to get flag %s from source %s: %v", newFlag.Key, newFlag.FlagSetId, err))
+				continue
+			}
+			oldFlag, ok := raw.(model.Flag)
+			// If we already have a flag with the same key and source, we need to check if it has the same flagSetId
+			if ok {
+				if oldFlag.Priority > newFlag.Priority {
+					// if the old flag has a higher prio, we should not try to write it
+					s.logger.Error(fmt.Sprintf("unable to delete flags with key %s and flagSetId %s: %v", oldFlag.Key, oldFlag.FlagSetId, err))
+					continue
+				}
+			}
 
-		err = txn.Insert(flagsTable, newFlag)
-		if err != nil {
-			s.logger.Error(fmt.Sprintf("unable to insert flag %s: %v", newFlag.Key, err))
-			continue
+			// Store the new version of the flag
+			s.logger.Debug(fmt.Sprintf("storing flag: %v", newFlag))
+
+			err = txn.Insert(flagsTable, newFlag)
+			if err != nil {
+				s.logger.Error(fmt.Sprintf("unable to insert flag %s: %v", newFlag.Key, err))
+				continue
+			}
 		}
+
+	}
+
+	if err := applyDocuments(txn, req); err != nil {
+		return err
 	}
 
 	txn.Commit()
+	return nil
 }
 
 // Watch the result-set of a selector for changes, sending updates to the watcher channel.
