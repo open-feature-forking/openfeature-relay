@@ -46,6 +46,7 @@ exclude_docs: |
   /glossary.md
   /use_cases.puml
   /use_cases/
+  /research/
   /test_cases/
   /processes/
   /entity_model.md
