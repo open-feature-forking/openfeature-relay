@@ -34,6 +34,10 @@ Each phase runs plan → oppose → implement → review, one role per agent in 
 6. Standard distributions, images, CI (FR-021, FR-030..FR-032, NFR-003, NFR-009, NFR-011).
 7. Contract tests, example extension, migration guide (FR-015, FR-043, NFR-010).
 
+## Issues
+
+Every use case has an issue titled `UC-0XX: <name>` (label `use-case`); the pinned roadmap issue lists them in PoC order. Every PR starts its description with `Part of #<issue>`. The orchestrating session keeps the use case issue's PR list and definition-of-done checkboxes current, adds the `in progress` label when planning starts, and closes the issue when the use case is done. Work outside the use cases (docs, public readiness) has its own issue.
+
 ## PoC: one use case after the other
 
 After phase 1 (C1, C2, D), work proceeds one use case at a time, in this order. Each runs the same loop and lands as one or more PRs against `main`; phases 2–7 above are covered by the use cases that need them.
