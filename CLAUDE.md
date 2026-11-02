@@ -83,7 +83,7 @@ A red gate is reported with its output. If a gate fails on untouched code too, s
 
 ## Containment
 
-All work stays in this repository until Simon says otherwise. No pushes, branches, pull requests, issues or comments anywhere except `open-feature-forking/flagd-builder`: not to `open-feature/flagd`, not to `open-feature-forking/flagd`, not to go-sdk-contrib or any other repository. Other checkouts (go-sdk-contrib, flagd) are read-only references. "Upstream PR" in a plan means a branch here, shaped so it could go upstream later. The `upstream` remote has pushing disabled.
+All work stays in this repository until Simon says otherwise. No pushes, branches, pull requests, issues or comments anywhere except `open-feature-forking/openfeature-relay`: not to `open-feature/flagd`, not to `open-feature-forking/flagd`, not to go-sdk-contrib or any other repository. Other checkouts (go-sdk-contrib, flagd) are read-only references. "Upstream PR" in a plan means a branch here, shaped so it could go upstream later. The `upstream` remote has pushing disabled.
 
 ## Conventions
 
