@@ -47,7 +47,7 @@
 | Tracking Event | An OpenFeature tracking event relayed to event sinks. |  |
 | Engine Module | A component module that provides a configuration format and the evaluator paired with it, as vendors ship their engines. |  |
 | Fetching Sync Provider | A sync provider that only fetches a source on request; the core's poller schedules it, sends conditional requests and refetches on a trigger. | retriever |
-| Encoding | The serialization of a flag configuration (JSON, YAML, TOML), decoded by the core before its configuration format validates it; independent of the configuration format. | file format |
+| Encoding | The serialization of a flag configuration (JSON, YAML, TOML), decoded by the core before its configuration format validates it; independent of the configuration format. |  |
 | Document Version | An opaque value a configuration format reports for each document, such as a hash or the vendor's update time; service endpoints derive ETags and event stream events from it. |  |
 | Event Stream | The OFREP server-sent event stream that announces configuration changes for a selector, advertised in OFREP bulk responses. | SSE endpoint |
 | Context Enrichment | Values flagd adds to an evaluation context before resolution: static values, header mappings, and per-selector values. |  |

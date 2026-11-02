@@ -9,7 +9,7 @@
 **Trigger:** Extension Author needs flagd to accept flag configurations in a format flagd's own configuration format does not support  
 **Status:** Draft  
 
-**Requirements:** [FR-019, FR-015, FR-018, FR-029, FR-044, FR-003, FR-008](../requirements.md)
+**Requirements:** [FR-019, FR-015, FR-018, FR-029, FR-044, FR-048, FR-049, FR-003, FR-008](../requirements.md)
 
 ## Preconditions
 
@@ -21,57 +21,67 @@
 
 1. Extension Author adds the core module as a dependency of their component module.
 2. Extension Author names the configuration format's type, by which a source names it.
-3. Extension Author implements the configuration format: it parses a flag configuration in the vendor's format, validates it against the vendor's rules and keeps it in the store as its own documents, or rejects it as a whole with an error naming the faulty entry.
-4. Extension Author implements the factory that creates the configuration format from the dependencies a distribution injects: the store, configuration and logger.
-5. Extension Author runs the configuration format contract tests with the sample flag configurations (include UC-008 Run Contract Tests).
-6. System reports that the configuration format meets every case of the configuration format contract.
-7. Extension Author tags and publishes the component module under its Go module path and version.
-8. The configuration format is available as an extension that a Distribution Builder selects in a manifest by module path and version, alone in a configuration proxy or together with its paired evaluator, exactly like an official configuration format.
+3. Extension Author implements the configuration format: it validates a flag configuration in the vendor's format, which the core has already decoded from its encoding, against the vendor's rules and keeps it in the store as its own documents, or rejects it with an error naming the faulty entry.
+4. Extension Author makes the configuration format report, for each document it keeps, its flag keys, its flag set, its document version and its changes against the previous document of the same source.
+5. Extension Author implements the factory that creates the configuration format from the dependencies a distribution injects: the store, configuration and logger.
+6. Extension Author runs the configuration format contract tests with the sample flag configurations (include UC-008 Run Contract Tests).
+7. System reports that the configuration format meets every case of the configuration format contract.
+8. Extension Author tags and publishes the component module under its Go module path and version.
+9. The configuration format is available as an extension that a Distribution Builder selects in a manifest by module path and version, alone in a configuration proxy or together with its paired evaluator, exactly like an official configuration format.
 
 ## Alternative Flows
 
 ### A1: Contract Case Fails
 
-**Trigger:** At least one case of the configuration format contract fails, for example a valid sample that is rejected, an invalid sample that is accepted, a rejection that does not name the faulty entry, or a rejection that changes the store (step 6)  
+**Trigger:** At least one case of the configuration format contract fails, for example a valid sample that is rejected, an invalid sample that is accepted, a rejection or dropped entry that is not named, a rejection that changes the store, or flag keys, flag set, document version or changes that are reported wrongly (step 7)  
 **Flow:**
 
 1. System reports each failed case with its expected and its observed behaviour.
 2. Extension Author corrects the configuration format or its factory.
-3. Use case continues at step 5.
+3. Use case continues at step 6.
 
 ### A2: Try Extension in a Distribution Before Publishing
 
-**Trigger:** Extension Author wants to see the extension running in flagd before releasing it (step 7)  
+**Trigger:** Extension Author wants to see the extension running in flagd before releasing it (step 8)  
 **Flow:**
 
 1. Extension Author builds a custom distribution whose manifest names the configuration format, with its paired evaluator or with the flag sync endpoint alone, and replaces the configuration format's component module with the local checkout (UC-001 Build Custom Distribution).
 2. Extension Author starts the distribution with a source that holds a flag configuration in the vendor's format and names the configuration format.
 3. Extension Author confirms that a client receives the flags as the vendor's flag configuration defines them, as evaluation results of the paired evaluator or as documents through a flag sync request that names the configuration format.
-4. Use case continues at step 7.
+4. Use case continues at step 8.
 
 ### A3: Source Does Not Name the Configuration Format
 
-**Trigger:** While trying the extension, the source names no configuration format, so flagd's configuration format reads the vendor's flag configuration and rejects it (step 7)  
+**Trigger:** While trying the extension, the source names no configuration format, so flagd's configuration format reads the vendor's flag configuration and rejects it (step 8)  
 **Flow:**
 
 1. System logs an error naming the source and the faulty entry, and keeps nothing of that flag configuration in the store.
 2. Extension Author names the configuration format on the source and restarts the same distribution; no rebuild is needed.
-3. Use case continues at step 7.
+3. Use case continues at step 8.
 
 ### A4: Extension Author Abandons the Extension
 
-**Trigger:** Extension Author stops before the component module is published (step 7)  
+**Trigger:** Extension Author stops before the component module is published (step 8)  
 **Flow:**
 
 1. Extension Author leaves the component module unpublished.
 2. Use case ends.
+
+### A5: Vendor Engine Holds Format and Evaluator
+
+**Trigger:** The vendor's engine contains the configuration format and the evaluator in one Go module, such as the Flagsmith engine or GO Feature Flag's evaluation module (step 1)
+**Flow:**
+
+1. Extension Author makes the component module an engine module that provides the configuration format and its paired evaluator, each through its own factory (FR-048).
+2. Extension Author develops the evaluator in the same component module (UC-007 Develop Evaluator Extension).
+3. Use case continues at step 2.
 
 ## Postconditions
 
 ### Success Postconditions
 
 - A tagged version of the component module exists under the Extension Author's Go module path.
-- The component module provides exactly one configuration format through a factory of the configuration format component type.
+- The component module provides exactly one configuration format through a factory of the configuration format component type and, as an engine module, also the evaluator paired with it.
 - That version of the configuration format passes every case of the configuration format contract of the core module version it depends on.
 
 ### Failure Postconditions
@@ -81,17 +91,17 @@
 
 ## Business Rules
 
-### BR-001: Accept or Reject as a Whole
+### BR-001: Accept, Reject, or Drop Reported Entries
 
-A configuration format accepts a flag configuration of a source as a whole or rejects it as a whole. On rejection the store keeps the last flag configuration it accepted from that source.
+A configuration format accepts a flag configuration of a source as a whole, rejects it as a whole, or accepts it without the entries it drops, as GO Feature Flag drops invalid flags one by one. It drops an entry only when it reports each dropped entry with the source and the reason. On rejection the store keeps the last flag configuration it accepted from that source.
 
 ### BR-002: Own Documents, Read Only by the Paired Evaluator
 
 A configuration format keeps the flag configurations it accepted in the store as its own documents. Only the evaluator paired with it reads them; flagd's flag model and its JsonLogic evaluator never see them. The flag sync endpoint sends them unchanged, and only to a flag sync request that names this configuration format (FR-044, UC-017 BR-004).
 
-### BR-003: Parsing and Validation Belong to the Configuration Format
+### BR-003: Validation Belongs to the Configuration Format
 
-Only the configuration format parses and validates flag configurations; sync providers deliver them unchanged (UC-003 BR-008), and evaluators and service endpoints read only what the configuration format kept in the store (UC-007 BR-003). The same configuration format therefore serves a distribution with an evaluator and a configuration proxy alike.
+Only the configuration format validates flag configurations and turns them into its documents; sync providers deliver them unchanged (UC-003 BR-008), and evaluators and service endpoints read only what the configuration format kept in the store (UC-007 BR-003). The same configuration format therefore serves a distribution with an evaluator and a configuration proxy alike.
 
 ### BR-004: A Source Names Its Configuration Format
 
@@ -99,7 +109,7 @@ Each source names the configuration format that reads it; a source that names no
 
 ### BR-005: Dependency Boundary
 
-A configuration format module depends on no telemetry provider, service endpoint, sync provider or evaluator module, so that an in-process provider or a configuration proxy can contain it without them.
+A configuration format module depends on no telemetry provider, service endpoint or sync provider module, so that an in-process provider or a configuration proxy can contain it without them. It depends on no evaluator module either, unless it is an engine module that holds its own paired evaluator (FR-048); flagd's configuration format stays free of any evaluator (NFR-011).
 
 ### BR-006: Rejections Name the Faulty Entry
 
@@ -108,3 +118,11 @@ A rejection names the source and the faulty entry of the flag configuration, so 
 ### BR-007: Same Selection as Official Components
 
 A Distribution Builder selects the extension in a manifest by Go module path and version exactly like an official configuration format, and may replace it with a local checkout (FR-003, FR-008).
+
+### BR-008: Reported Document Facts
+
+For each document it keeps, a configuration format reports its flag keys, its flag set, its document version and its changes against the previous document of the same source (FR-019). The evaluation router routes by selector and flag key with the flag keys and flag set, the OFREP service endpoint derives ETags and event stream events from the document version, and the runtime publishes configuration change events from the changes. How documents map to flag sets is the configuration format's decision: flagd by `flagSetId` metadata, Flagsmith by environment, GO Feature Flag by flag set name.
+
+### BR-009: Decoding Belongs to the Core
+
+The core decodes JSON, YAML and TOML flag configurations before the configuration format sees them (FR-049). A configuration format handles only its schema, and the same configuration format reads a flag configuration in any encoding the core decodes.

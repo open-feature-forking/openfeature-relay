@@ -9,7 +9,7 @@
 **Trigger:** Extension Author asks to verify a component against the contract of its component type  
 **Status:** Draft  
 
-**Requirements:** [FR-015, NFR-010, C-001](../requirements.md)
+**Requirements:** [FR-015, FR-014, FR-036, FR-045, NFR-010, NFR-013, C-001](../requirements.md)
 
 ## Preconditions
 
@@ -94,11 +94,13 @@ Each set covers what the runtime relies on for that component type; the extensio
 | Component Type     | The contract cases verify that the component …                                                                                                                                          |
 |--------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Sync Provider      | delivers the source's complete flag configuration first, delivers a change of the source, delivers the complete flag configuration again on request, names its source, delivers the flag configuration unchanged, reports readiness, stops on shutdown (UC-003) |
-| Configuration Format | accepts a valid flag configuration into the store as its own documents, rejects an invalid one naming the faulty entry, leaves the store unchanged after a rejection, replaces only the delivering source's flags, or only the flag sets of an incremental update (UC-018) |
-| Service Endpoint   | starts and stops with the distribution, resolves each flag with the evaluator of the configuration format holding it, serves only the documents of the configuration format a client requests, runs without evaluators when it declares no need for them, reacts to a flag change announced on the event bus, stops on shutdown (UC-004) |
+| Sync Provider, fetching | returns the flag configuration with a document version, reports "not changed" when given the current document version, returns a new document version after the source changed, reports a failed fetch without returning a flag configuration, abandons a fetch on shutdown (UC-003 A1) |
+| Configuration Format | accepts a valid flag configuration into the store as its own documents, reports each document's flag keys, flag set and document version and the added, updated and removed flag keys against the previous document, rejects an invalid one naming the faulty entry, leaves the store unchanged after a rejection, replaces only the delivering source's flags, or only the flag sets of an incremental update (UC-018) |
+| Service Endpoint   | starts and stops with the distribution, resolves flags only through the evaluation router for the request's selector, publishes one evaluation event per resolved flag, serves only the documents of the configuration format a client requests, derives cache validators and change announcements from document versions, runs without evaluators when it declares no need for them, reacts to a configuration change event, stops on shutdown (UC-004) |
 | Middleware         | passes requests to the wrapped handler and returns its responses unchanged unless the middleware's own behaviour applies, and does so under concurrent requests (UC-005) |
 | Telemetry Provider | supplies tracing, metrics and HTTP instrumentation that service endpoints and middleware can use without further setup, never blocks a request, works under concurrent use and returns from shutdown (UC-006) |
-| Evaluator          | resolves each flag type with the value, variant, reason and error the OpenFeature specification defines, resolves concurrently while the store changes without seeing a half-updated store, and, when paired with flagd's configuration format, resolves as the flagd test-harness evaluation suite expects (UC-007) |
+| Evaluator          | resolves one, several or all flags of a selector in one request and returns an untyped result per flag, with no value where the caller's default applies; the core's typed adapter turns these results into correct typed resolutions; every reason is an OpenFeature reason or a vendor reason without parameters, and every error code is one of OpenFeature's; it resolves concurrently while the store changes without seeing a half-updated store, and, when paired with flagd's configuration format, resolves as the flagd test-harness evaluation suite expects (UC-007) |
+| Event Sink         | receives the events it subscribed to, delivers them to its external system in batches, drops and counts events when its buffer is full instead of blocking the publisher, flushes buffered events on shutdown and returns from shutdown (UC-020) |
 
 ### BR-003: Only Injected Dependencies
 

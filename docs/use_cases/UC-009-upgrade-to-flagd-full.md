@@ -9,7 +9,7 @@
 **Trigger:** Operator decides to move a flagd deployment to the first release built as flagd-full  
 **Status:** Draft  
 
-**Requirements:** [FR-020, FR-033, FR-034, NFR-002, NFR-007, C-003](../requirements.md)
+**Requirements:** [FR-020, FR-033, FR-034, FR-052, NFR-002, NFR-007, C-003](../requirements.md)
 
 ## Preconditions
 
@@ -24,7 +24,7 @@
 4. System recognizes the scheme of every source and starts a sync provider for each one.
 5. System merges the flag configurations of all sources so that a later source overrides flag keys of an earlier one.
 6. System starts the flag evaluation, OFREP and flag sync service endpoints and the management port on the configured ports.
-7. System reports readiness on the management port once every source has delivered a flag configuration that its configuration format accepted, as before.
+7. System reports readiness on the management port once every source has delivered a flag configuration that its configuration format accepted, as before; no staleness limit applies unless the Operator configures one.
 8. Operator checks with `flagd version` that the running binary names flagd-full, its manifest version and the target release.
 9. Operator sends evaluation requests that the previous deployment answered and receives the same results.
 10. Operator retires the previous flagd; the deployment now runs flagd-full with no change to its configuration.
@@ -116,3 +116,7 @@ The flag evaluation and OFREP service endpoints record one evaluation span per f
 ### BR-007: Release Names
 
 Binary archives follow today's release pattern with the distribution name in the product position, and FIPS builds add `-fips` to it: flagd-full keeps `flagd_<version>_<OS>_<arch>` and `flagd-fips_<version>_<OS>_<arch>`; every other standard distribution is `flagd-<distribution>_<version>_<OS>_<arch>` and `flagd-<distribution>-fips_<version>_<OS>_<arch>`, e.g. `flagd-relay-fips_<version>_Linux_x86_64`. flagd-full's image stays `ghcr.io/open-feature/flagd`, the others are `ghcr.io/open-feature/flagd-<distribution>`, and FIPS images add `-fips` to their tags (UC-012).
+
+### BR-008: No Staleness Limit by Default
+
+flagd-full applies no staleness limit unless the Operator configures one, so readiness behaves as before the upgrade (C-003). With a configured limit, readiness fails while a source has not delivered within it (FR-052).

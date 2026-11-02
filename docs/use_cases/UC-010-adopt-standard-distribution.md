@@ -9,7 +9,7 @@
 **Trigger:** Operator decides to replace flagd-full with a smaller standard distribution for a deployment  
 **Status:** Draft  
 
-**Requirements:** [FR-021, FR-022, FR-023, FR-024, FR-034, NFR-003, NFR-004, NFR-011, C-009](../requirements.md)
+**Requirements:** [FR-021, FR-022, FR-023, FR-024, FR-034, FR-052, NFR-003, NFR-004, NFR-011, C-009](../requirements.md)
 
 ## Preconditions
 
@@ -24,7 +24,7 @@
 4. Operator starts the selected distribution with the unchanged start command, configuration file and environment variables.
 5. System checks every setting and the scheme of every source against the components compiled into the distribution.
 6. System starts a sync provider for each source and the service endpoints the distribution contains.
-7. System reports readiness on the management port once every source has delivered a flag configuration that its configuration format accepted.
+7. System reports readiness on the management port once every source has delivered a flag configuration that its configuration format accepted and none is stale.
 8. Operator checks with `flagd version` that the running binary names the selected distribution and its manifest version.
 9. Operator sends evaluation requests and receives the same results as from flagd-full.
 10. Operator keeps the selected distribution for the deployment; it runs with only the components the deployment uses.

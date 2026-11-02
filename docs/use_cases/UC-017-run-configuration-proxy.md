@@ -10,11 +10,11 @@
 **Trigger:** Operator decides that in-process providers receive their flag configurations from a configuration proxy instead of reading the sources themselves  
 **Status:** Draft  
 
-**Requirements:** [FR-025, FR-026, FR-022, FR-029, FR-044, NFR-011, C-005](../requirements.md)
+**Requirements:** [FR-025, FR-026, FR-022, FR-029, FR-044, FR-048, NFR-011, C-005](../requirements.md)
 
 ## Preconditions
 
-- A configuration proxy is available as a binary or image: the flagd-relay standard distribution (UC-012) or a custom distribution without an evaluator (UC-001).
+- A configuration proxy is available as a binary or image: the flagd-relay standard distribution (UC-012), or a custom distribution without evaluation service endpoints (UC-001), such as a vendor configuration proxy built from a vendor's engine module.
 - Operator has the sources that hold the deployment's flag configurations and the settings, as flagd-full's CLI flags, configuration file keys or environment variables, for the components a configuration proxy contains: sources, the flag sync endpoint and the management port.
 - The in-process providers of the deployment support the flag sync endpoint as their source.
 
@@ -45,7 +45,7 @@
 
 ### A2: Setting for an Absent Component
 
-**Trigger:** A setting of the start command, configuration file or environment variables belongs to a component the configuration proxy does not contain, such as an OFREP port or an OpenTelemetry collector address (step 2)
+**Trigger:** A setting of the start command, configuration file or environment variables belongs to a component the configuration proxy does not contain, such as an OFREP port or an OpenTelemetry collector address (step 2)  
 **Flow:**
 
 1. System refuses to start and names each such setting and the component it belongs to.
@@ -86,7 +86,18 @@
 1. In-Process Provider keeps evaluating with the last flag configuration it received and subscribes again.
 2. Use case continues at step 9.
 
-### A7: Evaluation Requested From the Proxy
+### A7: In-Process Providers of a Vendor
+
+**Trigger:** The in-process providers read the vendor's flag configurations through the vendor's own sync protocol, such as Flagsmith's environment document endpoint or GO Feature Flag's flag configuration endpoint, instead of the flag sync endpoint (step 7)  
+**Flow:**
+
+1. Operator runs a vendor configuration proxy that also contains a service endpoint extension serving the vendor's sync protocol (UC-004).
+2. Operator configures the vendor's in-process providers with the address of that service endpoint.
+3. In-Process Provider requests the flag configuration through the vendor's sync protocol.
+4. System answers with the vendor's documents in the store that match the request's selector, unchanged, and answers a repeated request with no change when their document versions are unchanged.
+5. Use case continues at step 10.
+
+### A8: Evaluation Requested From the Proxy
 
 **Trigger:** A client is configured for remote evaluation against the configuration proxy instead of the flag sync endpoint (step 7)  
 **Flow:**
@@ -101,7 +112,7 @@
 
 - The configuration proxy holds in its store the accepted flag configuration of every source, as documents of that source's configuration format.
 - Every subscribed In-Process Provider holds the flag configuration that matches its selector, as of the last change the configuration proxy accepted.
-- The configuration proxy contains no evaluator and has evaluated no flag.
+- The configuration proxy serves no flag evaluation and has evaluated no flag.
 
 ### Failure Postconditions
 
@@ -111,9 +122,9 @@
 
 ## Business Rules
 
-### BR-001: No Evaluator
+### BR-001: No Evaluation
 
-A configuration proxy contains sync providers, configuration formats and the flag sync endpoint, and no evaluator. The flagd-relay module graph contains no evaluator module and no `github.com/diegoholiveira/jsonlogic` module (NFR-011). Without an evaluator it contains neither the flag evaluation nor the OFREP service endpoint (FR-018).
+A configuration proxy contains sync providers, configuration formats and service endpoints that forward flag configurations, and neither the flag evaluation nor the OFREP service endpoint; it resolves no flag. The flagd-relay module graph contains no evaluator module and no `github.com/diegoholiveira/jsonlogic` module (NFR-011). A vendor configuration proxy carries the vendor's engine module, which holds the vendor's evaluator next to its configuration format (FR-048); that evaluator is compiled in but never resolves a flag.
 
 ### BR-002: Same Validation as flagd-full
 
@@ -121,7 +132,7 @@ A configuration proxy validates flag configurations with the same configuration 
 
 ### BR-003: Only Accepted Flag Configurations Are Forwarded
 
-The flag sync endpoint sends only documents that are in the store, and the store holds only flag configurations their configuration format accepted. A flag configuration is accepted or rejected as a whole; a part of it is never forwarded.
+The flag sync endpoint sends only documents that are in the store, and the store holds only flag configurations their configuration format accepted. A configuration format accepts a flag configuration as a whole, rejects it as a whole, or accepts it without entries it drops and reports one by one (UC-018 BR-001); a rejected or dropped entry is never forwarded.
 
 ### BR-004: Documents of the Requested Format, Unchanged
 
@@ -138,3 +149,7 @@ A configuration proxy accepts flagd-full's CLI flags, configuration file keys an
 ### BR-007: Sources Are Fixed at Startup
 
 The sources a configuration proxy reads are given on the command line or in the configuration file when it starts. A selector chooses among the flags of these sources; it never makes the configuration proxy read a new source. Starting a sync for a source on a subscriber's request is what today's flagd-proxy does; it stays a separate program and is not a configuration proxy.
+
+### BR-008: Vendor Sync Protocols Are Service Endpoint Extensions
+
+A vendor's own sync protocol for its in-process providers, such as Flagsmith's environment document endpoint or GO Feature Flag's flag configuration endpoint, is a service endpoint extension. It reads the vendor's documents and their document versions from the same store as the flag sync endpoint and forwards them unchanged; the configuration proxy's validation applies to it alike.

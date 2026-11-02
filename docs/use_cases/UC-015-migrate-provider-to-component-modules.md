@@ -22,9 +22,9 @@
 
 1. Provider Author opens the migration guide for the target core release.
 2. System lists every moved import path under `core/` with its new component module and import path, and every renamed or removed identifier with its replacement.
-3. Provider Author lists the core import paths the provider uses today: evaluator, store, model, sync, logger, service, the file sync provider, the gRPC sync provider and its credentials, and the evaluator's combined loading of flag configurations.
+3. Provider Author lists the core import paths the provider uses today: evaluator, store, model, sync, logger, service, the file sync provider, the gRPC sync provider and its credentials, the evaluator's combined loading of flag configurations, and its typed resolution per flag type.
 4. Provider Author finds each listed path in the migration guide (BR-001).
-5. Provider Author replaces each old import path and identifier with the one the guide names, hands the loading of flag configurations to the flagd configuration format (BR-005), and pins the new core module and component module versions.
+5. Provider Author replaces each old import path and identifier with the one the guide names, hands the loading of flag configurations to the flagd configuration format (BR-005), routes typed resolutions through the core module's typed adapter (BR-006), and pins the new core module and component module versions.
 6. System builds the provider against the new modules, with no reference to the old core version left in the provider's module graph.
 7. Provider Author runs the provider's tests and the flagd Test Harness in-process and remote evaluation suites.
 8. flagd Test Harness reports the same results as on the old core version.
@@ -113,3 +113,7 @@ The generated protobuf packages for flag evaluation and flag sync keep their lay
 ### BR-005: Loading and Evaluation Are Split
 
 Today `evaluator.SetState` parses, validates and loads a flag configuration into the store in one call. After the migration the flagd configuration format parses and validates the flag configuration and keeps it in the store as its own documents, and its paired evaluator only reads those documents. The migration guide maps `SetState` to this split, including where validation errors are now reported, and the provider adds the configuration format component module to its dependencies.
+
+### BR-006: Typed Resolution Moves to Core
+
+Today the provider calls the evaluator's typed methods (`ResolveBooleanValue`, `ResolveStringValue`, `ResolveIntValue`, `ResolveFloatValue`, `ResolveObjectValue`) through `evaluator.IEvaluator`. After the migration the evaluator returns untyped results, and the provider calls the core module's typed adapter, which checks and converts the value as every service endpoint does (FR-014). The migration guide maps each typed method and its return values to the adapter, so the provider returns the same value, variant, reason, error code and flag metadata as before.
