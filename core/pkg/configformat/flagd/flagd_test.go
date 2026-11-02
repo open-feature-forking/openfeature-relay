@@ -6,12 +6,12 @@ import (
 	"reflect"
 	"testing"
 
-	flagconfigtest "github.com/open-feature/flagd/core/pkg/configformat/flagd/flagdtest"
-	"github.com/open-feature/flagd/core/pkg/configformat"
-	"github.com/open-feature/flagd/core/pkg/configformat/formattest"
-	"github.com/open-feature/flagd/core/pkg/logger"
-	"github.com/open-feature/flagd/core/pkg/store"
-	"github.com/open-feature/flagd/core/pkg/sync"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
+	flagconfigtest "github.com/open-feature-forking/openfeature-relay/core/pkg/configformat/flagd/flagdtest"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat/formattest"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 )
 
 const flagBody = `"state":"ENABLED","defaultVariant":"on","variants":{"on":true,"off":false}`

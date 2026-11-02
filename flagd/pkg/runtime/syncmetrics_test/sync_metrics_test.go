@@ -18,8 +18,8 @@ import (
 
 	"buf.build/gen/go/open-feature/flagd/grpc/go/flagd/sync/v1/syncv1grpc"
 	v1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/sync/v1"
-	"github.com/open-feature/flagd/core/pkg/logger"
-	coresync "github.com/open-feature/flagd/core/pkg/sync"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature/flagd/flagd/pkg/runtime"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"

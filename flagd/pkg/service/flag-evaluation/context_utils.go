@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"connectrpc.com/connect"
-	"github.com/open-feature/flagd/core/pkg/store"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	flagdService "github.com/open-feature/flagd/flagd/pkg/service"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"

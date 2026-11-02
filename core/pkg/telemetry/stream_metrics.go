@@ -3,7 +3,7 @@ package telemetry
 import (
 	"context"
 
-	coresync "github.com/open-feature/flagd/core/pkg/sync"
+	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"

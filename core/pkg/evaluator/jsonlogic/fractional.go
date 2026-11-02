@@ -6,7 +6,7 @@ import (
 	"math"
 
 	"github.com/fxamacker/cbor/v2"
-	"github.com/open-feature/flagd/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/twmb/murmur3"
 	"go.uber.org/zap"
 )

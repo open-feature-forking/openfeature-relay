@@ -13,9 +13,9 @@ import (
 	context "context"
 	reflect "reflect"
 
-	evaluator "github.com/open-feature/flagd/core/pkg/evaluator"
-	model "github.com/open-feature/flagd/core/pkg/model"
-	sync "github.com/open-feature/flagd/core/pkg/sync"
+	evaluator "github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
+	model "github.com/open-feature-forking/openfeature-relay/core/pkg/model"
+	sync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	gomock "go.uber.org/mock/gomock"
 )
 

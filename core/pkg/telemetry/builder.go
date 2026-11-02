@@ -8,7 +8,7 @@ import (
 
 	"connectrpc.com/connect"
 	"connectrpc.com/otelconnect"
-	"github.com/open-feature/flagd/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"go.opentelemetry.io/contrib/exporters/autoexport"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/prometheus"
@@ -110,7 +110,7 @@ func BuildConnectOptions(_ Config) ([]connect.HandlerOption, error) {
 	// Always add interceptor - autoexport will handle whether traces are enabled
 	interceptor, err := otelconnect.NewInterceptor(
 		otelconnect.WithTrustRemote(),
-        // this option prevents a cardinality explosion in OTel due to remote peer and ephemeral port attributes
+		// this option prevents a cardinality explosion in OTel due to remote peer and ephemeral port attributes
 		otelconnect.WithoutServerPeerAttributes(),
 	)
 	if err != nil {

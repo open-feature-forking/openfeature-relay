@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/open-feature/flagd/core/pkg/logger"
-	"github.com/open-feature/flagd/core/pkg/service"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature/flagd/flagd-proxy/pkg/service/subscriptions"
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc"

@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/open-feature/flagd/core/pkg/logger"
-	"github.com/open-feature/flagd/core/pkg/sync"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature/open-feature-operator/api/core/v1beta1"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zapcore"

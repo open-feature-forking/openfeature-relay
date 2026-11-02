@@ -8,15 +8,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/open-feature/flagd/core/pkg/configformat"
-	"github.com/open-feature/flagd/core/pkg/evaluator/jsonlogic"
-	"github.com/open-feature/flagd/core/pkg/logger"
-	"github.com/open-feature/flagd/core/pkg/service"
-	"github.com/open-feature/flagd/core/pkg/store"
-	"github.com/open-feature/flagd/core/pkg/sync"
-	syncbuilder "github.com/open-feature/flagd/core/pkg/sync/builder"
-	"github.com/open-feature/flagd/core/pkg/sync/grpc"
-	"github.com/open-feature/flagd/core/pkg/telemetry"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator/jsonlogic"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	syncbuilder "github.com/open-feature-forking/openfeature-relay/core/pkg/sync/builder"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/grpc"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	"github.com/open-feature/flagd/flagd/pkg/evaluation"
 	flageval "github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation"
 	"github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation/ofrep"
@@ -61,7 +61,7 @@ type Config struct {
 	SyncProviders []sync.SourceConfig
 	// ConfigurationFormats are the formats, besides flagd's own, that sources may name.
 	ConfigurationFormats []configformat.Factory
-	CORS          []string
+	CORS                 []string
 
 	ContextValues              map[string]any
 	HeaderToContextKeyMappings map[string]string

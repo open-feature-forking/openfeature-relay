@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/open-feature/flagd/core/pkg/logger"
-	"github.com/open-feature/flagd/core/pkg/store"
-	"github.com/open-feature/flagd/core/pkg/telemetry"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )

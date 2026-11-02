@@ -15,7 +15,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.34.0"
 
-	"github.com/open-feature/flagd/core/pkg/model"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 )
 
 const (

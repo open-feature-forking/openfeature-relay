@@ -16,12 +16,12 @@ import (
 
 	keyvalue "github.com/open-feature/flagd/test/configformat-example"
 
-	"github.com/open-feature/flagd/core/pkg/configformat"
-	"github.com/open-feature/flagd/core/pkg/configformat/flagd"
-	"github.com/open-feature/flagd/core/pkg/configformat/formattest"
-	"github.com/open-feature/flagd/core/pkg/logger"
-	"github.com/open-feature/flagd/core/pkg/store"
-	coresync "github.com/open-feature/flagd/core/pkg/sync"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat/flagd"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat/formattest"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
+	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature/flagd/flagd/pkg/runtime"
 	"github.com/stretchr/testify/require"
 )

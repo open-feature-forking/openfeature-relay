@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/open-feature/flagd/core/pkg/configformat"
-	"github.com/open-feature/flagd/core/pkg/store"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 )
 
 // Type is the name by which a source selects this configuration format.

@@ -3,7 +3,7 @@ package sse
 import (
 	"net/http"
 
-	"github.com/open-feature/flagd/core/pkg/store"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 )
 
 // channelPathVar is the path wildcard carrying the selector expression the client wants change

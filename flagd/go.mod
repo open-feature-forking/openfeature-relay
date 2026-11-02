@@ -12,7 +12,7 @@ require (
 	github.com/klauspost/compress v1.19.1
 	github.com/launchdarkly/eventsource v1.11.0
 	github.com/mattn/go-colorable v0.1.14
-	github.com/open-feature/flagd/core v0.19.0
+	github.com/open-feature-forking/openfeature-relay/core v0.20.0
 	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/client_model v0.6.3
 	github.com/rs/cors v1.11.1
@@ -201,4 +201,4 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-replace github.com/open-feature/flagd/core => ../core
+replace github.com/open-feature-forking/openfeature-relay/core => ../core

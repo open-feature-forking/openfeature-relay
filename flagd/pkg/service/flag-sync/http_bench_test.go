@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/open-feature/flagd/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 )
 
 func BenchmarkServeFlags(b *testing.B) {

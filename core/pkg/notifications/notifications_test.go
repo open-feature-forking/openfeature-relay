@@ -3,7 +3,7 @@ package notifications
 import (
 	"testing"
 
-	"github.com/open-feature/flagd/core/pkg/model"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/stretchr/testify/assert"
 )
 
