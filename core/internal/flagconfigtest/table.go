@@ -84,7 +84,10 @@ func Run(t *testing.T, newStore func(sources []string) store.IStore, apply func(
 
 // unnamedSetID asks a scratch store for the id it gives to flags without a flagSetId.
 func unnamedSetID() string {
-	probe := store.NewFlags()
+	probe, err := store.NewStore(logger.NewLogger(nil, false), []string{"probe"})
+	if err != nil {
+		panic(err)
+	}
 	probe.Update("probe", []model.Flag{{Key: "probe"}}, nil, false)
 	flags, _, err := probe.GetAll(context.Background(), &store.Selector{})
 	if err != nil || len(flags) != 1 {
