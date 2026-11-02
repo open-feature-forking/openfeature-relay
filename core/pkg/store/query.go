@@ -170,20 +170,26 @@ func (s *Selector) ToLogString() string {
 	return "'" + strings.Join(parts, ",") + "'"
 }
 
-// FlagSetID returns the flag set a flag belongs to: its own flagSetId metadata, else the set's.
-// The unnamed flag set is "".
+// FlagSetID returns the flag set a flag belongs to: its own flagSetId metadata, or the set's when
+// the flag has none. A flagSetId that is not a string names no flag set. The unnamed flag set is "".
 func FlagSetID(flag model.Flag, setMetadata model.Metadata) string {
-	if id, ok := flag.Metadata["flagSetId"].(string); ok {
-		return id
+	raw, ok := flag.Metadata["flagSetId"]
+	if !ok {
+		raw = setMetadata["flagSetId"]
 	}
-	id, _ := setMetadata["flagSetId"].(string)
+	id, _ := raw.(string)
 	return id
 }
 
-// internalFlagSetID maps the unnamed flag set to the per-process id the flags table indexes it under.
-func internalFlagSetID(id string) string {
-	if id == "" {
-		return nilFlagSetId
+// flagsTableSetID is the flag set id the flags table indexes a flag under: a flag without a string
+// flagSetId gets the per-process id of the unnamed flag set.
+func flagsTableSetID(flag model.Flag, setMetadata model.Metadata) string {
+	raw, ok := flag.Metadata["flagSetId"]
+	if !ok {
+		raw = setMetadata["flagSetId"]
 	}
-	return id
+	if id, ok := raw.(string); ok {
+		return id
+	}
+	return nilFlagSetId
 }
