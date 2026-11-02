@@ -59,7 +59,7 @@ After phase 1 (C1, C2, D), work proceeds one use case at a time, in this order. 
 
 UC-016 stays Deferred.
 
-A use case is done when its main success scenario and every alternative flow have an automated test, the reviewer's verdict is `ready`, the PR is merged, and its `**Status:**` line moves to `Implemented` (to `Tested` once a test case under `docs/test_cases/` covers it). This is a proof of concept: upstream reviewability (C-006) is a preference, not a gate.
+A use case is done when its main success scenario and every alternative flow have an automated test, the reviewer's verdict is `ready`, the PR is merged, and its `**Status:**` line moves to `Implemented` (to `Tested` once a test case under `docs/test_cases/` covers it). This is a proof of concept: upstream reviewability (C-006) is a preference, not a gate. When a later use case delivers part of it, the use case still moves to `Implemented` once its own scope is done, provided every such step and rule is listed as an accepted gap naming the use case that delivers it, and the requirements it shares move to `In Progress` so the spec lint shows no drift.
 
 ## Gates
 
