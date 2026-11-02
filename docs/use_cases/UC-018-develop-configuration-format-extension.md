@@ -149,3 +149,12 @@ A source that names a configuration format the distribution does not contain is 
 - A2: the client half (step 3, a client receiving evaluation results of the paired evaluator or documents through the flag sync endpoint) is tested with UC-007 and UC-017.
 - A5: the evaluator half is tested with UC-007.
 - A4: has no system behaviour to test.
+
+## Delivered by Later Use Cases
+
+This use case is `Implemented` for the configuration format side: the interface, the store's documents, flagd's own format, sources naming a format, the contract and an example format. These parts are delivered by the use cases named here, and are accepted gaps of this one:
+
+- Main scenario steps 8–9 and BR-007 (tag and publish the module, select it in a manifest by module path and version): UC-001 Build Custom Distribution and UC-012.
+- BR-002, flag sync half (the flag sync endpoint sends documents only to a request that names the format, FR-044): UC-017.
+- BR-009 and FR-049 beyond JSON (the core decodes YAML and TOML before the format sees them): a later slice of the core, not yet assigned to a use case; YAML is converted where it is today.
+- BR-008, consumers of the reported facts: the evaluation router routes by flag keys and flag set (UC-007), the OFREP endpoint derives ETags and event stream events from document versions and the runtime publishes configuration change events (UC-004).
