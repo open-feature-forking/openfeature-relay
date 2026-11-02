@@ -28,7 +28,7 @@ ignores:
   - "docs/playground"        # auto-generated
   - "docs/providers/*.md"    # auto-generated
   - "schemas"                # submodule
-  # flagd-builder only: agent definitions, plans and the AI Unified Process spec (checked by spec_lint)
+  # OpenFeature Relay only: agent definitions, plans and the AI Unified Process spec (checked by spec_lint)
   - ".claude"
   - "CLAUDE.md"
   - "docs/vision.md"

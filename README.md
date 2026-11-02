@@ -83,7 +83,7 @@ Proof of concept. The specification is complete enough to build against; the cod
 | **Next** | Dependency-free evaluator and format modules for in-process providers; the untyped bulk evaluator and evaluation router; sync, service and other factories with the event bus; contract tests; the module split, builder CLI and manifest; flagd-full built by the builder passing the flagd test harness; a Flagsmith engine module as the cross-vendor proof. |
 
 What you can run today is flagd-full — that is, flagd built from this tree.
-The full order is in [CLAUDE.md](CLAUDE.md#poc-one-use-case-after-the-other); each use case's `Status` line in [docs/use_cases/](docs/use_cases/) says where it stands.
+The full order is in [Status and roadmap](docs/relay/status.md); each use case's `Status` line in [docs/use_cases/](docs/use_cases/) says where it stands.
 
 ## Try it
 
@@ -118,7 +118,7 @@ On Windows, use WSL for Go and Docker.
 ## flagd
 
 Everything flagd does, flagd-full does.
-flagd's documentation lives in [docs/](docs/index.md) in this repository and, for released flagd, at [flagd.dev](https://flagd.dev).
+flagd's documentation lives in [docs/](docs/flagd/index.md) in this repository and, for released flagd, at [flagd.dev](https://flagd.dev).
 flagd itself is developed at [open-feature/flagd](https://github.com/open-feature/flagd) by [its contributors](https://github.com/open-feature/flagd/graphs/contributors); this repository merges upstream regularly.
 For production use, use [released flagd](https://flagd.dev/installation/), not this repository.
 
