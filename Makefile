@@ -114,7 +114,8 @@ lint-fix:
 	rc=0; $(foreach module, $(ALL_GO_MOD_DIRS), ${GOPATH}/bin/golangci-lint run --fix $(module)/... || rc=1;) exit $$rc
 .PHONY: check-evaluator-boundary
 check-evaluator-boundary:
-	@if cd core && go list -deps ./pkg/evaluator | grep -E 'opentelemetry|grpc|connectrpc|k8s.io|gocloud'; then \
+	@deps=$$(cd core && go list -deps ./pkg/evaluator) || exit 1; \
+	if echo "$$deps" | grep -E 'opentelemetry|grpc|connectrpc|k8s.io|gocloud'; then \
 		echo "core/pkg/evaluator must not depend on the packages listed above"; exit 1; \
 	fi
 install-mockgen:
