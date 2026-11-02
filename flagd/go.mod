@@ -13,6 +13,9 @@ require (
 	github.com/launchdarkly/eventsource v1.11.0
 	github.com/mattn/go-colorable v0.1.14
 	github.com/open-feature-forking/openfeature-relay/core v0.20.0
+	github.com/open-feature-forking/openfeature-relay/sync/builder v0.1.0
+	github.com/open-feature-forking/openfeature-relay/sync/grpc v0.1.0
+	github.com/open-feature-forking/openfeature-relay/telemetry/otel v0.1.0
 	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/client_model v0.6.3
 	github.com/rs/cors v1.11.1
@@ -129,6 +132,13 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/open-feature-forking/openfeature-relay/sync/azblob v0.1.0 // indirect
+	github.com/open-feature-forking/openfeature-relay/sync/blob v0.1.0 // indirect
+	github.com/open-feature-forking/openfeature-relay/sync/file v0.1.0 // indirect
+	github.com/open-feature-forking/openfeature-relay/sync/gcs v0.1.0 // indirect
+	github.com/open-feature-forking/openfeature-relay/sync/http v0.1.0 // indirect
+	github.com/open-feature-forking/openfeature-relay/sync/kubernetes v0.1.0 // indirect
+	github.com/open-feature-forking/openfeature-relay/sync/s3 v0.1.0 // indirect
 	github.com/open-feature/flagd-schemas v0.2.15 // indirect
 	github.com/open-feature/open-feature-operator/api v0.2.47 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
@@ -201,4 +211,16 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-replace github.com/open-feature-forking/openfeature-relay/core => ../core
+replace (
+	github.com/open-feature-forking/openfeature-relay/core => ../core
+	github.com/open-feature-forking/openfeature-relay/sync/azblob => ../sync/azblob
+	github.com/open-feature-forking/openfeature-relay/sync/blob => ../sync/blob
+	github.com/open-feature-forking/openfeature-relay/sync/builder => ../sync/builder
+	github.com/open-feature-forking/openfeature-relay/sync/file => ../sync/file
+	github.com/open-feature-forking/openfeature-relay/sync/gcs => ../sync/gcs
+	github.com/open-feature-forking/openfeature-relay/sync/grpc => ../sync/grpc
+	github.com/open-feature-forking/openfeature-relay/sync/http => ../sync/http
+	github.com/open-feature-forking/openfeature-relay/sync/kubernetes => ../sync/kubernetes
+	github.com/open-feature-forking/openfeature-relay/sync/s3 => ../sync/s3
+	github.com/open-feature-forking/openfeature-relay/telemetry/otel => ../telemetry/otel
+)

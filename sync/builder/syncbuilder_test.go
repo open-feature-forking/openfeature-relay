@@ -6,12 +6,12 @@ import (
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/blob"
-	buildermock "github.com/open-feature-forking/openfeature-relay/core/pkg/sync/builder/mock"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/file"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/grpc"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/http"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/kubernetes"
+	"github.com/open-feature-forking/openfeature-relay/sync/blob"
+	buildermock "github.com/open-feature-forking/openfeature-relay/sync/builder/mock"
+	"github.com/open-feature-forking/openfeature-relay/sync/file"
+	"github.com/open-feature-forking/openfeature-relay/sync/grpc"
+	"github.com/open-feature-forking/openfeature-relay/sync/http"
+	"github.com/open-feature-forking/openfeature-relay/sync/kubernetes"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )

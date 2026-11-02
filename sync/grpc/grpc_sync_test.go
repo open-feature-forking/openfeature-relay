@@ -17,7 +17,7 @@ import (
 	v1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/sync/v1"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	credendialsmock "github.com/open-feature-forking/openfeature-relay/core/pkg/sync/grpc/credentials/mock"
+	credendialsmock "github.com/open-feature-forking/openfeature-relay/sync/grpc/credentials/mock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"

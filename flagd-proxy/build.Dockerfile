@@ -22,11 +22,31 @@ ARG FIPS=off
 RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=bind,source=./core/go.mod,target=./core/go.mod \
     --mount=type=bind,source=./core/go.sum,target=./core/go.sum \
+    --mount=type=bind,source=./sync/file/go.mod,target=./sync/file/go.mod \
+    --mount=type=bind,source=./sync/file/go.sum,target=./sync/file/go.sum \
+    --mount=type=bind,source=./sync/grpc/go.mod,target=./sync/grpc/go.mod \
+    --mount=type=bind,source=./sync/grpc/go.sum,target=./sync/grpc/go.sum \
+    --mount=type=bind,source=./sync/http/go.mod,target=./sync/http/go.mod \
+    --mount=type=bind,source=./sync/http/go.sum,target=./sync/http/go.sum \
+    --mount=type=bind,source=./sync/kubernetes/go.mod,target=./sync/kubernetes/go.mod \
+    --mount=type=bind,source=./sync/kubernetes/go.sum,target=./sync/kubernetes/go.sum \
+    --mount=type=bind,source=./sync/blob/go.mod,target=./sync/blob/go.mod \
+    --mount=type=bind,source=./sync/blob/go.sum,target=./sync/blob/go.sum \
+    --mount=type=bind,source=./sync/gcs/go.mod,target=./sync/gcs/go.mod \
+    --mount=type=bind,source=./sync/gcs/go.sum,target=./sync/gcs/go.sum \
+    --mount=type=bind,source=./sync/azblob/go.mod,target=./sync/azblob/go.mod \
+    --mount=type=bind,source=./sync/azblob/go.sum,target=./sync/azblob/go.sum \
+    --mount=type=bind,source=./sync/s3/go.mod,target=./sync/s3/go.mod \
+    --mount=type=bind,source=./sync/s3/go.sum,target=./sync/s3/go.sum \
+    --mount=type=bind,source=./sync/builder/go.mod,target=./sync/builder/go.mod \
+    --mount=type=bind,source=./sync/builder/go.sum,target=./sync/builder/go.sum \
+    --mount=type=bind,source=./telemetry/otel/go.mod,target=./telemetry/otel/go.mod \
+    --mount=type=bind,source=./telemetry/otel/go.sum,target=./telemetry/otel/go.sum \
     --mount=type=bind,source=./flagd/go.mod,target=./flagd/go.mod \
     --mount=type=bind,source=./flagd/go.sum,target=./flagd/go.sum \
     --mount=type=bind,source=./flagd-proxy/go.mod,target=./flagd-proxy/go.mod \
     --mount=type=bind,source=./flagd-proxy/go.sum,target=./flagd-proxy/go.sum \
-    go work init ./core ./flagd ./flagd-proxy && go mod download
+    go work init ./core ./sync/file ./sync/grpc ./sync/http ./sync/kubernetes ./sync/blob ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel ./flagd ./flagd-proxy && go mod download
 
 # Build the application.
 # Leverage a cache mount to /go/pkg/mod/ to speed up subsequent builds.
@@ -35,6 +55,8 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
 RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=bind,source=./core,target=./core \
+    --mount=type=bind,source=./sync,target=./sync \
+    --mount=type=bind,source=./telemetry,target=./telemetry \
     --mount=type=bind,source=./flagd,target=./flagd \
     --mount=type=bind,source=./flagd-proxy,target=./flagd-proxy \
     if [ "${FIPS}" = on ]; then export GOFIPS140=v1.0.0 TAGS=fips140; else TAGS=; fi; \

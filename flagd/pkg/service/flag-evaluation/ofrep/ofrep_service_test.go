@@ -13,7 +13,7 @@ import (
 	mock "github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator/mock"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
+	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/sync/errgroup"
 )

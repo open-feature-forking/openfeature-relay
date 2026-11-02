@@ -12,9 +12,9 @@ import (
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/blob/bloburi"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/polling"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/utils"
+	"github.com/open-feature-forking/openfeature-relay/sync/blob/bloburi"
 	"go.uber.org/zap"
 	"gocloud.dev/blob"
 )

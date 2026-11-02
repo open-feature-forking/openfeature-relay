@@ -1,0 +1,7 @@
+# <module dir>:<forbidden module path regexp>
+# The module graph of core carries no telemetry, transport, platform client or other library module.
+core:opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|cloud.google.com|github.com/Azure|github.com/aws|openfeature-relay/(sync|telemetry)/
+# The file sync provider carries none of the other sync providers, telemetry, transport or platform clients.
+sync/file:opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|openfeature-relay/(telemetry|sync/(grpc|http|kubernetes|blob|gcs|azblob|s3|builder))
+# gRPC is the transport of sync/grpc; it carries no other sync provider.
+sync/grpc:openfeature-relay/(telemetry|sync/(file|http|kubernetes|blob|gcs|azblob|s3|builder))

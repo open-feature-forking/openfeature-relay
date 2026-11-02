@@ -23,7 +23,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	iservice "github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
+	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	middlewaremock "github.com/open-feature/flagd/flagd/pkg/service/middleware/mock"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"

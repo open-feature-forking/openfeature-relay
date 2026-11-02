@@ -5,7 +5,7 @@ import (
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/blob"
+	"github.com/open-feature-forking/openfeature-relay/sync/blob"
 	"github.com/stretchr/testify/require"
 )
 

@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
+	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"go.opentelemetry.io/otel/attribute"
 )
 

@@ -16,8 +16,8 @@ import (
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	syncmock "github.com/open-feature-forking/openfeature-relay/core/pkg/sync/http/mock"
 	synctesting "github.com/open-feature-forking/openfeature-relay/core/pkg/sync/testing"
+	syncmock "github.com/open-feature-forking/openfeature-relay/sync/http/mock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/oauth2"

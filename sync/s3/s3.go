@@ -7,7 +7,7 @@ import (
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/blob"
+	"github.com/open-feature-forking/openfeature-relay/sync/blob"
 	gocloud "gocloud.dev/blob"
 	_ "gocloud.dev/blob/s3blob" // needed to initialize s3 driver
 )

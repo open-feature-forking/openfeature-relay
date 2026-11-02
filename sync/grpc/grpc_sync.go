@@ -11,8 +11,8 @@ import (
 	v1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/sync/v1"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	grpccredential "github.com/open-feature-forking/openfeature-relay/core/pkg/sync/grpc/credentials"
-	_ "github.com/open-feature-forking/openfeature-relay/core/pkg/sync/grpc/nameresolvers" // initialize custom resolvers e.g. envoy.Init()
+	grpccredential "github.com/open-feature-forking/openfeature-relay/sync/grpc/credentials"
+	_ "github.com/open-feature-forking/openfeature-relay/sync/grpc/nameresolvers" // initialize custom resolvers e.g. envoy.Init()
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
