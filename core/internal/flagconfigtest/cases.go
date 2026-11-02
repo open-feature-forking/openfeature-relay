@@ -218,17 +218,18 @@ var Cases = []Case{
 		Deliveries: []sync.DataSync{del(hi, doc("", `{"f1":{`+flag("")+`}}`), false), del(hi, `{"flags":null}`, false)},
 	},
 	{
-		Name:    "set level empty flagSetId drops the flags",
+		Name:    "set level empty flagSetId is the unnamed set",
 		Sources: []string{hi},
 		Deliveries: []sync.DataSync{del(hi,
 			doc(`{"flagSetId":""}`, `{"f1":{`+flag("")+`}}`), false)},
+		WantRows: []Row{r("f1", hi, UnnamedSet, 0, `{"flagSetId":""}`)},
 	},
 	{
-		Name:    "flag level empty flagSetId drops that flag",
+		Name:    "flag level empty flagSetId is the unnamed set",
 		Sources: []string{hi},
 		Deliveries: []sync.DataSync{del(hi,
 			doc("", `{"f1":{`+flag(meta(`{"flagSetId":""}`))+`},"f2":{`+flag("")+`}}`), false)},
-		WantRows: []Row{r("f2", hi, UnnamedSet, 0, "null")},
+		WantRows: []Row{r("f1", hi, UnnamedSet, 0, `{"flagSetId":""}`), r("f2", hi, UnnamedSet, 0, "null")},
 	},
 	{
 		Name:    "flag level flagSetId that is not a string keeps the unnamed set",
