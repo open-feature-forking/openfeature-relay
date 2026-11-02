@@ -48,7 +48,7 @@ From Git Bash, prefix `wsl` calls with `MSYS_NO_PATHCONV=1`. The spec gate is Py
 | Boundary        | `cd core && go list -deps ./pkg/evaluator \| grep -E 'opentelemetry\|grpc\|connectrpc\|k8s.io\|gocloud'` must print nothing | NFR-005 |
 | Benchmarks      | `make flagd-benchmark-test`, compare allocs/op with the branch point                    | NFR-001         |
 | Acceptance      | `make flagd-integration-test` (builds flagd from source, runs the test-harness Gherkin suites in Docker; slow) | NFR-007, C-010 |
-| Dependencies    | `grep -rn 'golang.org/x/exp' --include=go.mod .` must print nothing                    | NFR-012         |
+| Dependencies    | `grep -rln 'golang.org/x/exp' --include=*.go .` and `grep -rn 'golang.org/x/exp' --include=go.mod . \| grep -v indirect` must both print nothing | NFR-012 |
 | Spec (Windows)  | `python ~/.claude/plugins/cache/ai-unified-process-marketplace/aiup-core/*/skills/spec-review/scripts/spec_lint.py --docs docs` | spec changes |
 
 A red gate is reported with its output. If a gate fails on untouched code too, say so; it is the environment, not the change.
