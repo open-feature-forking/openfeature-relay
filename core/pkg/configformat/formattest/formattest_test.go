@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/open-feature/flagd/core/pkg/configformat"
+	"github.com/open-feature/flagd/core/pkg/model"
 	"github.com/open-feature/flagd/core/pkg/store"
 )
 
@@ -24,11 +25,19 @@ type kvFormat struct {
 	mutateOnReject bool
 	skipAdded      bool
 	unstable       *int
+	leakFlag       bool
+	staleVersion   bool
+	factoryType    string
 }
 
 type kvFactory struct{ kvFormat }
 
-func (kvFactory) Type() string { return "kv" }
+func (f kvFactory) Type() string {
+	if f.factoryType != "" {
+		return f.factoryType
+	}
+	return "kv"
+}
 
 func (f kvFactory) Create(s configformat.Settings) (configformat.ConfigurationFormat, error) {
 	k := f.kvFormat
@@ -59,6 +68,9 @@ func (k *kvFormat) Accept(_ context.Context, in configformat.Input) (configforma
 				_ = k.st.Apply(store.ApplyRequest{Format: "kv", Source: in.Source, Documents: []store.Document{
 					{Format: "kv", Source: in.Source, FlagSet: "leak", Version: "x"},
 				}})
+			}
+			if k.leakFlag {
+				_ = k.st.Apply(store.ApplyRequest{Source: in.Source, Flags: []model.Flag{{Key: "leak"}}})
 			}
 			return configformat.Result{}, k.reject(in.Source, key, "value is null")
 		}
@@ -97,10 +109,14 @@ func (k *kvFormat) Accept(_ context.Context, in configformat.Input) (configforma
 		rep.Version = fmt.Sprint(*k.unstable)
 	}
 	res.Documents = []configformat.DocumentReport{rep}
+	stored := rep.Version
+	if k.staleVersion {
+		stored = "stale"
+	}
 
 	err := k.st.Apply(store.ApplyRequest{
 		Format: "kv", Source: in.Source, Incremental: in.IncrementalUpdate,
-		Documents: []store.Document{{Format: "kv", Source: in.Source, FlagSet: raw.Environment, Version: rep.Version, FlagKeys: rep.FlagKeys, Value: values}},
+		Documents: []store.Document{{Format: "kv", Source: in.Source, FlagSet: raw.Environment, Version: stored, FlagKeys: rep.FlagKeys, Value: values}},
 	})
 	return res, err
 }
@@ -157,6 +173,9 @@ func TestContractReportsExpectedAndObserved(t *testing.T) {
 		{"unnamed rejection", kvFormat{plainRejection: true}, "expected a configformat.Rejection naming source and entry\nobserved: *errors.errorString"},
 		{"mutates store on reject", kvFormat{mutateOnReject: true}, "documents after a rejected delivery\nexpected:"},
 		{"wrong Added", kvFormat{skipAdded: true}, "keys added by the first delivery of flag set \"prod\"\nexpected: [a b c]\nobserved: []"},
+		{"leaks a flag on reject", kvFormat{leakFlag: true}, "flags of the source after a rejected delivery\nexpected:"},
+		{"stores another version than it reports", kvFormat{staleVersion: true}, "versions the store holds against the versions reported\nexpected: map[prod:"},
+		{"factory and format disagree on the type", kvFormat{factoryType: "other"}, "type of the format the factory created\nexpected: other\nobserved: kv"},
 		{"unstable version", kvFormat{unstable: &counter}, "version of flag set \"prod\" after the same input"},
 	}
 	for _, tt := range tests {

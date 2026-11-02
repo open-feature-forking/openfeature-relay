@@ -12,6 +12,7 @@ import (
 
 	"github.com/open-feature/flagd/core/pkg/configformat"
 	"github.com/open-feature/flagd/core/pkg/logger"
+	"github.com/open-feature/flagd/core/pkg/model"
 	"github.com/open-feature/flagd/core/pkg/store"
 )
 
@@ -110,6 +111,17 @@ func deliver(t testing.TB, format configformat.ConfigurationFormat, source, data
 	return res, true
 }
 
+// flagRows returns the flags the store holds for a source.
+func flagRows(t testing.TB, st *store.Store, source string) []model.Flag {
+	t.Helper()
+	sel := store.Selector{}.WithSource(source)
+	flags, _, err := st.GetAll(context.Background(), &sel)
+	if err != nil {
+		t.Errorf("cannot read the flags of source %q: %v", source, err)
+	}
+	return flags
+}
+
 func keys(k []string) []string {
 	out := append([]string{}, k...)
 	sort.Strings(out)
@@ -159,6 +171,7 @@ func checkAcceptsValid(t testing.TB, f configformat.Factory, s Samples) {
 	if format == nil {
 		return
 	}
+	expect(t, "type of the format the factory created", f.Type(), format.Type())
 	res, ok := deliver(t, format, sourceA, s.Valid.Data, false)
 	if !ok {
 		return
@@ -166,6 +179,17 @@ func checkAcceptsValid(t testing.TB, f configformat.Factory, s Samples) {
 	checkReport(t, res, s.Valid.Sets)
 
 	stored := st.Documents(format.Type(), sourceA)
+	reported := map[string]string{}
+	for _, d := range res.Documents {
+		reported[d.FlagSet] = d.Version
+	}
+	storedVersions := map[string]string{}
+	for _, d := range stored {
+		storedVersions[d.FlagSet] = d.Version
+		expect(t, fmt.Sprintf("format and source of the stored document of flag set %q", d.FlagSet),
+			[2]string{format.Type(), sourceA}, [2]string{d.Format, d.Source})
+	}
+	expect(t, "versions the store holds against the versions reported", reported, storedVersions)
 	var storedSets []Set
 	for _, d := range stored {
 		storedSets = append(storedSets, Set{FlagSet: d.FlagSet, Keys: keys(d.FlagKeys)})
@@ -274,11 +298,13 @@ func checkRejectionKeepsStore(t testing.TB, f configformat.Factory, s Samples) {
 		return
 	}
 	before := st.Documents(format.Type(), sourceA)
+	flagsBefore := flagRows(t, st, sourceA)
 	if _, err := format.Accept(context.Background(), configformat.Input{Source: sourceA, Data: s.Invalid.Data}); err == nil {
 		t.Errorf("expected the invalid delivery to be rejected\nobserved: accepted")
 		return
 	}
 	expect(t, "documents after a rejected delivery", before, st.Documents(format.Type(), sourceA))
+	expect(t, "flags of the source after a rejected delivery", flagsBefore, flagRows(t, st, sourceA))
 }
 
 func checkOnlyDeliveringSource(t testing.TB, f configformat.Factory, s Samples) {
@@ -293,10 +319,12 @@ func checkOnlyDeliveringSource(t testing.TB, f configformat.Factory, s Samples) 
 		}
 	}
 	before := st.Documents(format.Type(), sourceB)
+	flagsBefore := flagRows(t, st, sourceB)
 	if _, ok := deliver(t, format, sourceA, s.Changed.Data, false); !ok {
 		return
 	}
 	expect(t, fmt.Sprintf("documents of source %q after source %q delivered", sourceB, sourceA), before, st.Documents(format.Type(), sourceB))
+	expect(t, fmt.Sprintf("flags of source %q after source %q delivered", sourceB, sourceA), flagsBefore, flagRows(t, st, sourceB))
 }
 
 func checkIncremental(t testing.TB, f configformat.Factory, s Samples) {
