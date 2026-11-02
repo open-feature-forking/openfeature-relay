@@ -68,6 +68,7 @@ func serve(t *testing.T, addr string) (*grpc.Server, string) {
 // series is one Prometheus time series, rendered as name{labels} for comparison.
 type series struct {
 	name   string
+	help   string
 	typ    string
 	labels map[string]string
 	value  float64
@@ -85,7 +86,7 @@ func gather(t *testing.T) []series {
 			for _, l := range m.GetLabel() {
 				labels[l.GetName()] = l.GetValue()
 			}
-			s := series{name: f.GetName(), typ: f.GetType().String(), labels: labels}
+			s := series{name: f.GetName(), help: f.GetHelp(), typ: f.GetType().String(), labels: labels}
 			switch f.GetType() {
 			case dto.MetricType_COUNTER:
 				s.value = m.GetCounter().GetValue()
@@ -136,9 +137,9 @@ func TestSyncMetricsCharacterization(t *testing.T) {
 	}
 
 	// every payload is on its way through the channel once these counters are in place
-	require.Eventually(t, func() bool { return strings.Contains(render(pick(gather(t)), filePath), "stream_active") }, 10*time.Second, 100*time.Millisecond)
+	require.Eventually(t, func() bool { return strings.Contains(render(pick(gather(t)), filePath), "stream_active GAUGE") }, 10*time.Second, 100*time.Millisecond)
 	require.Eventually(t, func() bool {
-		return strings.Count(render(pick(gather(t)), filePath), "flag_config_received_total") == 2
+		return strings.Count(render(pick(gather(t)), filePath), "flag_config_received_total COUNTER") == 2
 	}, 10*time.Second, 100*time.Millisecond)
 	require.Equal(t, strings.Join(wantBefore, "\n"), render(pick(gather(t)), filePath))
 
@@ -147,7 +148,7 @@ func TestSyncMetricsCharacterization(t *testing.T) {
 	server.Stop()
 	server, _ = serve(t, addr)
 	require.Eventually(t, func() bool {
-		return strings.Contains(render(pick(gather(t)), filePath), "stream_reconnects_total")
+		return strings.Contains(render(pick(gather(t)), filePath), "stream_reconnects_total COUNTER")
 	}, 20*time.Second, 200*time.Millisecond, "the stream reconnects")
 	require.Equal(t, strings.Join(wantAfter, "\n"), render(pick(gather(t)), filePath))
 }
@@ -159,9 +160,20 @@ const (
 	streamScope = "otel_scope_name=" + grpcScope
 )
 
+const (
+	helpTimestamp  = "# HELP feature_flag_flagd_sync_client_flag_config_last_received_timestamp_seconds Unix timestamp (seconds) of the most recent flag-configuration payload received from a sync source. Query staleness as time() - <value>."
+	helpReceived   = "# HELP feature_flag_flagd_sync_client_flag_config_received_total Total number of flag-configuration payloads received from a sync source and handed off downstream. Does not imply the payload was successfully applied to the evaluator's store — see the runtime-level apply metric for that."
+	helpActive     = "# HELP feature_flag_flagd_sync_client_stream_active Number of currently open flagd -> flag-server gRPC sync streams (1 while a SyncFlags stream is open, 0 when disconnected)."
+	helpReconnects = "# HELP feature_flag_flagd_sync_client_stream_reconnects_total Total number of successful sync stream reconnections after an initial failure. Steady growth indicates upstream flapping."
+	rpcLabels      = "otel_scope_name=go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc,rpc_method=flagd.sync.v1.FlagSyncService/SyncFlags"
+)
+
 // The sync client URI of a gRPC source is recorded sanitized, so it is empty for a host:port target.
 // Values of timestamps and of the rpc_client_* series vary and are not rendered.
 var wantBefore = []string{
+	helpTimestamp,
+	helpReceived,
+	helpActive,
 	"feature_flag_flagd_sync_client_flag_config_last_received_timestamp_seconds GAUGE {" + fileLabels + "," + syncScope + "} -",
 	"feature_flag_flagd_sync_client_flag_config_last_received_timestamp_seconds GAUGE {" + grpcLabels + "," + syncScope + "} -",
 	"feature_flag_flagd_sync_client_flag_config_received_total COUNTER {" + fileLabels + "," + syncScope + "} 1",
@@ -170,13 +182,17 @@ var wantBefore = []string{
 }
 
 var wantAfter = []string{
+	helpTimestamp,
+	helpReceived,
+	helpActive,
+	helpReconnects,
 	"feature_flag_flagd_sync_client_flag_config_last_received_timestamp_seconds GAUGE {" + fileLabels + "," + syncScope + "} -",
 	"feature_flag_flagd_sync_client_flag_config_last_received_timestamp_seconds GAUGE {" + grpcLabels + "," + syncScope + "} -",
 	"feature_flag_flagd_sync_client_flag_config_received_total COUNTER {" + fileLabels + "," + syncScope + "} 1",
 	"feature_flag_flagd_sync_client_flag_config_received_total COUNTER {" + grpcLabels + "," + syncScope + "} 2",
 	"feature_flag_flagd_sync_client_stream_active GAUGE {" + grpcLabels + "," + streamScope + "} 1",
 	"feature_flag_flagd_sync_client_stream_reconnects_total COUNTER {" + grpcLabels + "," + streamScope + "} 1",
-	"rpc_client_call_duration_seconds HISTOGRAM {otelgrpc} -",
+	"rpc_client_call_duration_seconds HISTOGRAM {" + rpcLabels + "} -",
 }
 
 func pick(all []series) []series {
@@ -190,13 +206,25 @@ func pick(all []series) []series {
 	return out
 }
 
-// render gives a stable text for the selected series: sorted, without scope versions and schema
-// URLs, with the file source's path replaced, and one line per rpc_client_* family.
+// render gives a stable text for the selected series: one HELP line per flagd family (the rpc_client_*
+// help texts belong to otelgrpc), then the series sorted,
+// without scope versions and schema URLs, with the file source's path replaced. The rpc_client_*
+// series are reduced to their stable labels.
 func render(all []series, filePath string) string {
 	lines := map[string]bool{}
 	for _, s := range all {
+		if !strings.HasPrefix(s.name, "rpc_client") {
+			lines["# HELP "+s.name+" "+s.help] = true
+		}
 		if strings.HasPrefix(s.name, "rpc_client") {
-			lines[fmt.Sprintf("%s %s {otelgrpc} -", s.name, s.typ)] = true
+			// the stable labels only, when the library sets them: the others carry ports, status and versions
+			var stable []string
+			for _, k := range []string{"otel_scope_name", "rpc_method", "rpc_service", "rpc_system"} {
+				if v := s.labels[k]; v != "" {
+					stable = append(stable, k+"="+v)
+				}
+			}
+			lines[fmt.Sprintf("%s %s {%s} -", s.name, s.typ, strings.Join(stable, ","))] = true
 			continue
 		}
 		var ls []string
