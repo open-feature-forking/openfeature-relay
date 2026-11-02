@@ -1,9 +1,14 @@
-# Welcome
+# Contributing
 
-There are a few things to consider before contributing to flagd.
-
-Firstly, there's [a code of conduct](https://github.com/open-feature/.github/blob/main/CODE_OF_CONDUCT.md).
+OpenFeature Relay is a proof of concept that starts from flagd's code.
+It is not an official OpenFeature project, but we follow the [OpenFeature code of conduct](https://github.com/open-feature/.github/blob/main/CODE_OF_CONDUCT.md).
 TLDR: be respectful.
+
+Right now the most useful contributions are questions, ideas and criticism of the approach: open an issue.
+For code, open an issue first so the change can be planned against the specification in `docs/` (vision, requirements, glossary, use cases).
+Behaviour the specification does not state is a question, not a decision.
+
+Changes to flagd's behaviour belong upstream in [open-feature/flagd](https://github.com/open-feature/flagd); this repository merges upstream regularly.
 
 Any contributions are expected to include unit tests.
 These can be validated with `make test` or the automated github workflow will run them on PR creation.
@@ -39,6 +44,25 @@ The project uses remote buf packages, changing the remote generation source will
 ```shell
 export GOPRIVATE=buf.build/gen/go
 ```
+
+### Gates
+
+Every pull request has to keep these green. Run them from the repository root.
+
+| Gate | Command |
+|------|---------|
+| Unit tests | `make test-core test-flagd test-flagd-proxy` |
+| Lint (includes `depguard`) | `make lint` |
+| Evaluator boundary | `make check-evaluator-boundary` |
+| Benchmarks | `make flagd-benchmark-test`, compare allocs/op with the branch point |
+| Acceptance | `make flagd-integration-test` (builds flagd, runs the flagd test harness in Docker; slow) |
+| Docs | `mkdocs build --strict` (see `requirements.txt`) and `make markdownlint` |
+
+`make lint` needs `GOPATH` set (`export GOPATH=$(go env GOPATH)`).
+If your Go is older than the version in `flagd/go.mod`, set `GOTOOLCHAIN` to that version.
+In a git worktree nested inside another checkout, export `GOWORK=$PWD/go.work` before `make workspace-init`, or `go work init` finds the outer checkout's `go.work`.
+
+On Windows, run Go and Docker inside WSL; mixed Windows/WSL file systems do not work with Docker volume mounts.
 
 ### Manual testing
 
@@ -137,7 +161,7 @@ Here are the steps to sign your work:
 
        If you work on multiple projects that require a DCO sign-off, you can
        configure your git client to use these settings globally instead of only
-       for Brigade:
+       for this repository:
 
        ```shell
        git config --global user.name <legal name>
