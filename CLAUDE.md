@@ -17,7 +17,7 @@ Each phase runs plan → oppose → implement → review, one role per agent in 
 | reviewer    | opus   | no          | re-run gates, findings, verdict                |
 
 - A plan with an open `blocker` from the opposer goes back to the planner.
-- The implementer works on its own branch or worktree; it never pushes.
+- The implementer works on its own branch or worktree; it never pushes. The orchestrating session pushes each slice to this repository as `phase-<n>/pr-<x>-<topic>` (for example `phase-1/pr-a-span-tests`), and plan artifacts to `spec`.
 - The reviewer's verdict, not the implementer's report, decides whether a slice is done. `ready` needs every named gate green in the reviewer's own run.
 - Simon approves each plan and each upstream PR.
 
