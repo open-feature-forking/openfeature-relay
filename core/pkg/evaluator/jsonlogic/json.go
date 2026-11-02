@@ -1,4 +1,4 @@
-package evaluator
+package jsonlogic
 
 import (
 	"bytes"
@@ -11,9 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/diegoholiveira/jsonlogic/v3"
+	jl "github.com/diegoholiveira/jsonlogic/v3"
 	"github.com/open-feature/flagd/core/pkg/configformat"
 	"github.com/open-feature/flagd/core/pkg/configformat/flagd"
+	"github.com/open-feature/flagd/core/pkg/evaluator"
 	"github.com/open-feature/flagd/core/pkg/logger"
 	"github.com/open-feature/flagd/core/pkg/model"
 	"github.com/open-feature/flagd/core/pkg/store"
@@ -22,13 +23,11 @@ import (
 )
 
 const (
-	SelectorMetadataKey = "scope"
 	flagdPropertiesKey  = "$flagd"
 	// targetingKeyKey is used to extract the targetingKey to bucket on in fractional
 	// evaluation if the user did not supply the optional bucketing property.
 	targetingKeyKey = "targetingKey"
 	Disabled        = "DISABLED"
-	ProtoVersionKey = "__flagd.protoVersion__" // used to mark if the request is coming from an older proto source, which has different fallback behavior
 )
 
 type constraints interface {
@@ -48,7 +47,7 @@ type variantEvaluator func(context.Context, string, string, map[string]any) (
 // Deprecated - this will be remove in the next release
 func WithEvaluator(name string, evalFunc func(interface{}, interface{}) interface{}) JSONEvaluatorOption {
 	return func(_ *JSON) {
-		jsonlogic.AddOperator(name, evalFunc)
+		jl.AddOperator(name, evalFunc)
 	}
 }
 
@@ -128,15 +127,15 @@ type Resolver struct {
 
 func NewResolver(store store.IStore, logger *logger.Logger) Resolver {
 	// register supported json logic custom operator implementations
-	jsonlogic.AddOperator(FractionEvaluationName, NewFractional(logger).Evaluate)
-	jsonlogic.AddOperator(StartsWithEvaluationName, NewStringComparisonEvaluator(logger).StartsWithEvaluation)
-	jsonlogic.AddOperator(EndsWithEvaluationName, NewStringComparisonEvaluator(logger).EndsWithEvaluation)
-	jsonlogic.AddOperator(SemVerEvaluationName, NewSemVerComparison(logger).SemVerEvaluation)
+	jl.AddOperator(FractionEvaluationName, NewFractional(logger).Evaluate)
+	jl.AddOperator(StartsWithEvaluationName, NewStringComparisonEvaluator(logger).StartsWithEvaluation)
+	jl.AddOperator(EndsWithEvaluationName, NewStringComparisonEvaluator(logger).EndsWithEvaluation)
+	jl.AddOperator(SemVerEvaluationName, NewSemVerComparison(logger).SemVerEvaluation)
 
 	return Resolver{store: store, Logger: logger}
 }
 
-func (je *Resolver) ResolveAllValues(ctx context.Context, reqID string, context map[string]any) ([]AnyValue,
+func (je *Resolver) ResolveAllValues(ctx context.Context, reqID string, context map[string]any) ([]evaluator.AnyValue,
 	model.Metadata, error,
 ) {
 
@@ -150,7 +149,7 @@ func (je *Resolver) ResolveAllValues(ctx context.Context, reqID string, context 
 		return nil, flagSetMetadata, fmt.Errorf("error retreiving flags from the store: %w", err)
 	}
 
-	values := []AnyValue{}
+	values := []evaluator.AnyValue{}
 	var value interface{}
 	var variant string
 	var reason string
@@ -168,7 +167,7 @@ func (je *Resolver) ResolveAllValues(ctx context.Context, reqID string, context 
 		case map[string]any:
 			value, variant, reason, metadata, err = resolve[map[string]any](ctx, reqID, flag.Key, context, je.evaluateVariant)
 		default:
-			if ctx.Value(ProtoVersionKey) == nil {
+			if ctx.Value(evaluator.ProtoVersionKey) == nil {
 				value, variant, reason, metadata, err = resolve[interface{}](ctx, reqID, flag.Key, context, je.evaluateVariant)
 			} else {
 				// old proto version behavior
@@ -178,7 +177,7 @@ func (je *Resolver) ResolveAllValues(ctx context.Context, reqID string, context 
 		if err != nil {
 			je.Logger.ErrorWithID(reqID, fmt.Sprintf("bulk evaluation: key: %s returned error: %s", flag.Key, err.Error()))
 		}
-		values = append(values, NewAnyValue(value, variant, reason, flag.Key, metadata, err))
+		values = append(values, evaluator.NewAnyValue(value, variant, reason, flag.Key, metadata, err))
 	}
 
 	return values, flagSetMetadata, nil
@@ -305,11 +304,11 @@ func (je *Resolver) ResolveAsAnyValue(
 	reqID string,
 	flagKey string,
 	context map[string]any,
-) AnyValue {
+) evaluator.AnyValue {
 
 	je.Logger.DebugWithID(reqID, fmt.Sprintf("evaluating flag `%s` as a generic flag", flagKey))
 	value, variant, reason, meta, err := resolve[interface{}](ctx, reqID, flagKey, context, je.evaluateVariant)
-	return NewAnyValue(value, variant, reason, flagKey, meta, err)
+	return evaluator.NewAnyValue(value, variant, reason, flagKey, meta, err)
 }
 
 // resolve is a helper for generic flag resolving
@@ -392,7 +391,7 @@ func (je *Resolver) evaluateVariant(ctx context.Context, reqID string, flagKey s
 
 		var result bytes.Buffer
 		// evaluate JsonLogic rules to determine the variant
-		err = jsonlogic.Apply(bytes.NewReader(targetingBytes), bytes.NewReader(b), &result)
+		err = jl.Apply(bytes.NewReader(targetingBytes), bytes.NewReader(b), &result)
 		if err != nil {
 			je.Logger.ErrorWithID(reqID, fmt.Sprintf("error applying targeting rules: %s", err))
 			return "", flag.Variants, model.ErrorReason, metadata, errors.New(model.ParseErrorCode)
@@ -403,7 +402,7 @@ func (je *Resolver) evaluateVariant(ctx context.Context, reqID string, flagKey s
 
 		if trimmed == "null" {
 			if flag.DefaultVariant == "" {
-				if ctx.Value(ProtoVersionKey) != nil {
+				if ctx.Value(evaluator.ProtoVersionKey) != nil {
 					// old proto version behavior
 					return "", flag.Variants, model.ErrorReason, metadata, errors.New(model.FlagNotFoundErrorCode)
 				}
@@ -427,7 +426,7 @@ func (je *Resolver) evaluateVariant(ctx context.Context, reqID string, flagKey s
 	}
 
 	if flag.DefaultVariant == "" {
-		if ctx.Value(ProtoVersionKey) != nil {
+		if ctx.Value(evaluator.ProtoVersionKey) != nil {
 			// old proto version behavior
 			return "", flag.Variants, model.ErrorReason, metadata, errors.New(model.FlagNotFoundErrorCode)
 		}

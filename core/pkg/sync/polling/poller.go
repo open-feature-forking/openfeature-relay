@@ -111,3 +111,19 @@ func (p *CronPoller) Start(ctx context.Context, callback func()) {
 	<-ctx.Done()
 	<-p.cr.Stop().Done()
 }
+
+// DefaultInterval is the polling interval, in seconds, of a source that configures none.
+const DefaultInterval uint32 = 5
+
+// NewSourcePoller returns the interval of a source, DefaultInterval if it configures none, with a
+// poller for it. It fails for an interval beyond MaxInterval.
+func NewSourcePoller(interval uint32, intervalSeed string) (uint32, *CronPoller, error) {
+	if interval == 0 {
+		interval = DefaultInterval
+	}
+	poller, err := NewCronPoller(interval, intervalSeed)
+	if err != nil {
+		return 0, nil, err
+	}
+	return interval, poller, nil
+}

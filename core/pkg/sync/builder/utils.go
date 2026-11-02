@@ -6,6 +6,9 @@ import (
 	"fmt"
 
 	"github.com/open-feature/flagd/core/pkg/sync"
+	"github.com/open-feature/flagd/core/pkg/sync/azblob"
+	"github.com/open-feature/flagd/core/pkg/sync/gcs"
+	"github.com/open-feature/flagd/core/pkg/sync/s3"
 )
 
 // ParseSources parse a json formatted SourceConfig array string and performs validations on the content
@@ -64,17 +67,17 @@ func ParseSyncProviderURIs(uris []string) ([]sync.SourceConfig, error) {
 				URI:      uri,
 				Provider: syncProviderGrpc,
 			})
-		case regGcs.Match(uriB):
+		case gcs.Matches(uri):
 			syncProvidersParsed = append(syncProvidersParsed, sync.SourceConfig{
 				URI:      uri,
 				Provider: syncProviderGcs,
 			})
-		case regAzblob.Match(uriB):
+		case azblob.Matches(uri):
 			syncProvidersParsed = append(syncProvidersParsed, sync.SourceConfig{
 				URI:      uri,
 				Provider: syncProviderAzblob,
 			})
-		case regS3.Match(uriB):
+		case s3.Matches(uri):
 			syncProvidersParsed = append(syncProvidersParsed, sync.SourceConfig{
 				URI:      uri,
 				Provider: syncProviderS3,

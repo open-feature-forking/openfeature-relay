@@ -9,12 +9,14 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"slices"
 	"sync"
 	"time"
 
 	evaluationV1 "buf.build/gen/go/open-feature/flagd/connectrpc/go/flagd/evaluation/v1/evaluationv1connect"
 	evaluationV2 "buf.build/gen/go/open-feature/flagd/connectrpc/go/flagd/evaluation/v2/evaluationv2connect"
 	schemaConnectV1 "buf.build/gen/go/open-feature/flagd/connectrpc/go/schema/v1/schemav1connect"
+	"connectrpc.com/connect"
 	evalV1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/evaluation/v1"
 	evalV2 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/evaluation/v2"
 	schemaV1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/schema/v1"
@@ -101,6 +103,7 @@ type ConnectService struct {
 	eval                  evaluator.IEvaluator
 	metrics               telemetry.IMetricsRecorder
 	eventingConfiguration IEvents
+	handlerOptions        []connect.HandlerOption
 
 	server        *http.Server
 	metricsServer *http.Server
@@ -109,13 +112,16 @@ type ConnectService struct {
 }
 
 // NewConnectService creates a ConnectService with provided parameters
+// NewConnectService creates the connect service; handlerOptions are applied to each of its handlers.
 func NewConnectService(
 	logger *logger.Logger, evaluator evaluator.IEvaluator, store store.IStore, mRecorder telemetry.IMetricsRecorder,
+	handlerOptions ...connect.HandlerOption,
 ) *ConnectService {
 	cs := &ConnectService{
-		logger:  logger,
-		eval:    TraceEvaluations(evaluator),
-		metrics: &telemetry.NoopMetricsRecorder{},
+		logger:         logger,
+		eval:           TraceEvaluations(evaluator),
+		metrics:        &telemetry.NoopMetricsRecorder{},
+		handlerOptions: handlerOptions,
 		eventingConfiguration: &eventingConfiguration{
 			subs:   make(map[interface{}]*subscription),
 			mu:     &sync.RWMutex{},
@@ -188,7 +194,7 @@ func (s *ConnectService) setupHandler(svcConf service.Configuration) {
 		protojson.UnmarshalOptions{DiscardUnknown: true},
 	)
 
-	_, oldHandler := schemaConnectV1.NewServiceHandler(fes, append(svcConf.Options, marshalOpts)...)
+	_, oldHandler := schemaConnectV1.NewServiceHandler(fes, append(slices.Clone(s.handlerOptions), marshalOpts)...)
 
 	// register handler for new flag evaluation schema (v1)
 
@@ -201,7 +207,7 @@ func (s *ConnectService) setupHandler(svcConf service.Configuration) {
 		svcConf.StreamDeadline,
 	)
 
-	_, v1Handler := evaluationV1.NewServiceHandler(v1Fes, append(svcConf.Options, marshalOpts)...)
+	_, v1Handler := evaluationV1.NewServiceHandler(v1Fes, append(slices.Clone(s.handlerOptions), marshalOpts)...)
 
 	// register handler for evaluation v2 schema (with optional value and variant)
 
@@ -214,7 +220,7 @@ func (s *ConnectService) setupHandler(svcConf service.Configuration) {
 		svcConf.StreamDeadline,
 	)
 
-	_, v2Handler := evaluationV2.NewServiceHandler(v2Fes, append(svcConf.Options, marshalOpts)...)
+	_, v2Handler := evaluationV2.NewServiceHandler(v2Fes, append(slices.Clone(s.handlerOptions), marshalOpts)...)
 
 	bs := bufSwitchHandler{
 		old: oldHandler,

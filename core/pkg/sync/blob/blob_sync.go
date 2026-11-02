@@ -6,19 +6,53 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"regexp"
 	stdsync "sync"
 	"time"
 
 	"github.com/open-feature/flagd/core/pkg/logger"
 	"github.com/open-feature/flagd/core/pkg/sync"
-	"github.com/open-feature/flagd/core/pkg/sync/internal/bloburi"
-	"github.com/open-feature/flagd/core/pkg/sync/internal/polling"
+	"github.com/open-feature/flagd/core/pkg/sync/blob/bloburi"
+	"github.com/open-feature/flagd/core/pkg/sync/polling"
 	"github.com/open-feature/flagd/core/pkg/utils"
+	"go.uber.org/zap"
 	"gocloud.dev/blob"
-	_ "gocloud.dev/blob/azureblob" // needed to initialize Azure Blob Storage driver
-	_ "gocloud.dev/blob/gcsblob"   // needed to initialize GCS driver
-	_ "gocloud.dev/blob/s3blob"    // needed to initialize s3 driver
 )
+
+// NewSync builds the sync of a blob source from its configuration. kind names the cloud ("gcs",
+// "azblob", "s3") in logs and errors, and scheme matches through the first "/" after the scheme of the
+// source URI ("^s3://.+?/"). The mux must have the cloud's driver registered; each cloud package
+// passes the default mux after registering its own driver.
+func NewSync(
+	kind string, scheme *regexp.Regexp, config sync.SourceConfig, log *logger.Logger,
+	recorder sync.MetricsRecorder, mux *blob.URLMux,
+) (*Sync, error) {
+	// Extract bucket uri and object name from the full URI:
+	// <scheme>://bucket/path/to/object results in <scheme>://bucket/ as bucketUri and
+	// path/to/object as an object name. Any query string is moved onto the bucket URL so the
+	// driver reads its options from there.
+	bucketURI, objectName := bloburi.Split(config.URI, scheme)
+
+	interval, poller, err := polling.NewSourcePoller(config.Interval, config.IntervalSeed)
+	if err != nil {
+		return nil, fmt.Errorf("invalid %s sync configuration: %w", kind, err)
+	}
+
+	return &Sync{
+		Bucket: bucketURI,
+		Object: objectName,
+
+		BlobURLMux: mux,
+
+		Logger: log.WithFields(
+			zap.String("component", "sync"),
+			zap.String("sync", kind),
+		),
+		Interval:            interval,
+		Poller:              poller,
+		SyncMetricsRecorder: recorder,
+	}, nil
+}
 
 type Sync struct {
 	Bucket      string

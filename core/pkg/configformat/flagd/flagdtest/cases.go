@@ -1,4 +1,4 @@
-package flagconfigtest
+package flagdtest
 
 import (
 	"fmt"

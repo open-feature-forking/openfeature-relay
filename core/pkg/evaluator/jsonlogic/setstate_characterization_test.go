@@ -1,9 +1,9 @@
-package evaluator
+package jsonlogic
 
 import (
 	"testing"
 
-	"github.com/open-feature/flagd/core/internal/flagconfigtest"
+	flagconfigtest "github.com/open-feature/flagd/core/pkg/configformat/flagd/flagdtest"
 	"github.com/open-feature/flagd/core/pkg/logger"
 	"github.com/open-feature/flagd/core/pkg/store"
 	"github.com/open-feature/flagd/core/pkg/sync"
