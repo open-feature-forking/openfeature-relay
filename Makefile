@@ -59,7 +59,9 @@ build-flagd-fips:
 test: test-core test-flagd test-flagd-proxy test-configformat-example
 test-core: test-modules
 test-modules:
-	@rc=0; for m in $(GO_LIB_MODULE_DIRS); do 		go test -race -covermode=atomic -cover -short $$m/... -coverprofile=$$(echo $$m | sed 's#^\./##; s#/#-#g')-coverage.out || rc=1; 	done; exit $$rc
+	@rc=0; for m in $(GO_LIB_MODULE_DIRS); do \
+		go test -race -covermode=atomic -cover -short $$m/... -coverprofile=$$(echo $$m | sed 's#^\./##; s#/#-#g')-coverage.out || rc=1; \
+	done; exit $$rc
 test-flagd:
 	go test -race -covermode=atomic -cover -short ./flagd/pkg/... -coverprofile=flagd-coverage.out
 test-configformat-example:
@@ -122,13 +124,24 @@ lint-fix:
 # The packages of the library modules must not change unnoticed, so that a move cannot drop a package from the test run.
 .PHONY: check-package-coverage
 check-package-coverage:
-	@for m in $(GO_LIB_MODULE_DIRS); do (cd $$m && go list ./...) || exit 1; done | sort > .go-packages.tmp; 	if ! diff -u testdata/go-packages.txt .go-packages.tmp; then rm -f .go-packages.tmp; 		echo "the packages of the library modules differ from testdata/go-packages.txt"; exit 1; fi; 	rm -f .go-packages.tmp
+	@for m in $(GO_LIB_MODULE_DIRS); do (cd $$m && go list ./...) || exit 1; done | sort > .go-packages.tmp; \
+	tr -d '\r' < testdata/go-packages.txt > .go-packages.want; \
+	if ! diff -u .go-packages.want .go-packages.tmp; then rm -f .go-packages.tmp .go-packages.want; \
+		echo "the packages of the library modules differ from testdata/go-packages.txt"; exit 1; fi; \
+	rm -f .go-packages.tmp .go-packages.want
 
 # testdata/module-boundaries.txt lists <module dir>:<packages>:<forbidden import path regexp>; no package of
 # <packages>, nor anything it imports, may match.
 .PHONY: check-module-boundary check-evaluator-boundary
 check-module-boundary:
-	@while IFS=: read -r dir pkgs forbidden; do 		case "$$dir" in ''|'#'*) continue;; esac; 		deps=$$(cd $$dir && go list -deps $$pkgs) || exit 1; 		if echo "$$deps" | grep -E "$$forbidden"; then 			echo "$$dir $$pkgs must not depend on the packages listed above"; exit 1; 		fi; 	done < testdata/module-boundaries.txt
+	@while IFS=: read -r dir pkgs forbidden; do \
+		forbidden=$$(printf '%s' "$$forbidden" | tr -d '\r'); \
+		case "$$dir" in ''|'#'*) continue;; esac; \
+		deps=$$(cd $$dir && go list -deps $$pkgs) || exit 1; \
+		if echo "$$deps" | grep -E "$$forbidden"; then \
+			echo "$$dir $$pkgs must not depend on the packages listed above"; exit 1; \
+		fi; \
+	done < testdata/module-boundaries.txt
 check-evaluator-boundary: check-module-boundary
 install-mockgen:
 	go install go.uber.org/mock/mockgen@v0.4.0
