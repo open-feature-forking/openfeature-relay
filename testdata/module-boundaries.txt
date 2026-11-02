@@ -19,3 +19,7 @@ sync/blob:./...:cloud.google.com|github.com/Azure|github.com/aws|openfeature-rel
 sync/gcs:./...:github.com/Azure|github.com/aws|openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|openfeature-operator|azblob|s3|builder))
 sync/azblob:./...:cloud.google.com/go/storage|github.com/aws|openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|openfeature-operator|gcs|s3|builder))
 sync/s3:./...:cloud.google.com|github.com/Azure|openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|openfeature-operator|gcs|azblob|builder))
+# The sync builder dispatches to the sync modules and knows no telemetry module.
+sync/builder:./...:openfeature-relay/telemetry/
+# The telemetry module imports core only: no sync module and no platform client.
+telemetry/otel:./...:openfeature-relay/sync/|k8s.io|gocloud|cloud.google.com|github.com/Azure|github.com/aws
