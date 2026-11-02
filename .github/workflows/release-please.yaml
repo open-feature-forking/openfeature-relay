@@ -23,6 +23,8 @@ jobs:
   release-please:
     name: Release Please
     runs-on: ubuntu-latest
+    # Releases and benchmark pages are upstream flagd's; inert in this repository and in forks.
+    if: github.repository == 'open-feature/flagd'
     # Release-please creates a PR that tracks all changes
     steps:
       - name: Get current date

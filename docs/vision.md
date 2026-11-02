@@ -66,7 +66,7 @@ Out of scope:
 ## Way of working
 
 OpenFeature Relay incubates the work with flagd's full history.
-Every piece lands on this repository's `main` through a pull request in this repository; nothing goes to `open-feature/flagd` or any other repository until Simon decides to take it upstream.
+Every piece lands on this repository's `main` through a pull request in this repository; nothing goes to `open-feature/flagd` or any other repository until the project lead decides to take it upstream.
 The specification in this folder follows the AI Unified Process: vision, requirements, use cases, entity model, test cases.
 
 ## Success

@@ -83,7 +83,7 @@ Plan: `.claude/plans/uc-018.md`. Code: `main` = `origin/main` @ 722a83d (phase 1
   - The glossary says a Document is "the parsed, validated form of one source's flag configuration" (glossary.md:41), which means one per source.
   - The plan's Q1 makes a document one flag set of one source. BR-008 allows formats to map documents to flag sets but doesn't change the definition of a document.
   - Store (glossary.md:28) says evaluators read *documents*. In the plan, flagd's `Document.Value` holds a fingerprint map, while its flags stay in the flags table.
-- **Fix:** if Simon picks Q1's first option, change the glossary first (Document, Store) as a spec commit on `main`, and run the spec gate. Otherwise the code drifts from the contract on the first PR.
+- **Fix:** if the project lead picks Q1's first option, change the glossary first (Document, Store) as a spec commit on `main`, and run the spec gate. Otherwise the code drifts from the contract on the first PR.
 
 ### 9. minor: documents claim keys that priority shadows, and one priority case isn't pinned
 

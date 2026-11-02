@@ -1,4 +1,4 @@
-# Requirements: flagd Builder
+# Requirements: OpenFeature Relay
 
 Derived from [vision.md](vision.md). Terms follow [glossary.md](glossary.md).
 

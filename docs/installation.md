@@ -4,6 +4,11 @@ description: installing flagd
 
 # Installation
 
+!!! note "These are upstream flagd's releases"
+
+    The binaries, images and packages below are released flagd from [open-feature/flagd](https://github.com/open-feature/flagd); flagd-full keeps their behaviour.
+    OpenFeature Relay publishes no releases yet; to run this repository's code, [build it from source](relay/try-it.md).
+
 ## Docker
 
 :octicons-terminal-24: Install from the command line:

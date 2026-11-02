@@ -50,7 +50,7 @@ Reviewer run on 2026-11-02. Commits `95ff313..caee1ea` on `claude/p1-pr-a-span-t
 | OFREP single and bulk × found/not found; 304; invalid selector on single and on bulk | met, plus an extra "bulk selecting no flags" case |
 | Normalized tree comparison, no timestamps or IDs, one literal per case | met |
 | Tests only, no production change | met |
-| Commits: conventional, DCO `Signed-off-by: simon.schrottner@flagsmith.com`, no AI trailer, nothing from `.claude/` or spec docs | met |
+| Commits: conventional, DCO sign-off, no AI trailer, nothing from `.claude/` or spec docs | met |
 
 ## Findings
 
@@ -64,7 +64,7 @@ Reviewer run on 2026-11-02. Commits `95ff313..caee1ea` on `claude/p1-pr-a-span-t
 The tests are right to pin reality, so this needs no code change. Two things do need to happen:
 
 - The planner corrects §1 and A2 before C1 starts, because C1's "A1–A3 unchanged" depends on the same facts.
-- The PR description states both facts. Neither commit message mentions the deviation, so Simon should acknowledge it explicitly.
+- The PR description states both facts. Neither commit message mentions the deviation, so the project lead should acknowledge it explicitly.
 
 ### Minor
 
@@ -104,6 +104,6 @@ Both would be worth a line in CLAUDE.md's Gates section.
 
 1. m1: reword the three `TestMain` comments so they don't describe the evaluator's tracer (needed now because of the byte-identical rule).
 2. m2: use `invalidSelector` in the table or remove the constant.
-3. M1: the planner corrects §1 and A2 of `phase-1.md` (span name `POST`; 304 includes `jsonEvaluator/resolveAll`), and the PR A description states both facts for Simon's approval. No test change.
+3. M1: the planner corrects §1 and A2 of `phase-1.md` (span name `POST`; 304 includes `jsonEvaluator/resolveAll`), and the PR A description states both facts for the project lead's approval. No test change.
 
 m3 and the nits are optional.

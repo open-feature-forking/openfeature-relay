@@ -1,5 +1,7 @@
 # Changelog
 
+This is upstream flagd's early changelog, kept with its history; current component changelogs are in each module's directory.
+
 ## [0.4.2](https://github.com/open-feature/flagd/compare/v0.4.1...v0.4.2) (2023-03-09)
 
 
