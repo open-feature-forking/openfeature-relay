@@ -17,7 +17,8 @@ const DefaultType = "flagd"
 // ConfigurationFormat accepts the flag configuration of sources.
 //
 // Accept applies all documents of the delivery to the store, or none: on error the store is
-// unchanged. Callers serialize Accept per store.
+// unchanged. Accept reads the source's previous documents before it applies the new ones, so
+// callers serialize Accept per store.
 type ConfigurationFormat interface {
 	Type() string
 	Accept(ctx context.Context, in Input) (Result, error)

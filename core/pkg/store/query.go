@@ -170,13 +170,15 @@ func (s *Selector) ToLogString() string {
 	return "'" + strings.Join(parts, ",") + "'"
 }
 
-// FlagSetID returns the flag set a flag belongs to: its own flagSetId metadata, else the set's.
-// The unnamed flag set is "".
+// FlagSetID returns the flag set a flag belongs to: its own flagSetId metadata, or the set's when
+// the flag has none. A flagSetId that is empty or not a string names no flag set; the unnamed flag
+// set is "".
 func FlagSetID(flag model.Flag, setMetadata model.Metadata) string {
-	if id, ok := flag.Metadata["flagSetId"].(string); ok {
-		return id
+	raw, ok := flag.Metadata["flagSetId"]
+	if !ok {
+		raw = setMetadata["flagSetId"]
 	}
-	id, _ := setMetadata["flagSetId"].(string)
+	id, _ := raw.(string)
 	return id
 }
 

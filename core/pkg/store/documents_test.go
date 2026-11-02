@@ -47,6 +47,8 @@ func TestFlagSetID(t *testing.T) {
 		{"set", model.Flag{}, model.Metadata{"flagSetId": "s1"}, "s1"},
 		{"flag overrides set", model.Flag{Metadata: model.Metadata{"flagSetId": "s2"}}, model.Metadata{"flagSetId": "s1"}, "s2"},
 		{"not a string", model.Flag{}, model.Metadata{"flagSetId": 5}, ""},
+		{"flag level not a string does not fall back to the set", model.Flag{Metadata: model.Metadata{"flagSetId": 5}}, model.Metadata{"flagSetId": "s1"}, ""},
+		{"flag level empty does not fall back to the set", model.Flag{Metadata: model.Metadata{"flagSetId": ""}}, model.Metadata{"flagSetId": "s1"}, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

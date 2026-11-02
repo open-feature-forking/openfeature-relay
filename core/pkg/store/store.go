@@ -252,7 +252,10 @@ type ApplyRequest struct {
 }
 
 // Apply writes the flags and the documents of one delivery in a single transaction. On error the
-// store is unchanged. Callers serialize Apply per source.
+// store is unchanged, except that failing to insert or delete an individual flag is logged and
+// skipped, as in Update. Write transactions are serialized by the database, so Apply is safe for
+// concurrent use; a caller that reads Documents to prepare a delivery serializes those
+// read-then-Apply sequences itself.
 func (s *Store) Apply(req ApplyRequest) error {
 	source, flags, metadata, incrementalUpdate := req.Source, req.Flags, req.SetMetadata, req.Incremental
 	if source == "" {
