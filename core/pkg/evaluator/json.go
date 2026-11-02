@@ -18,10 +18,6 @@ import (
 	"github.com/open-feature/flagd/core/pkg/store"
 	"github.com/open-feature/flagd/core/pkg/sync"
 	"github.com/santhosh-tekuri/jsonschema/v6"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -30,10 +26,9 @@ const (
 	flagdPropertiesKey  = "$flagd"
 	// targetingKeyKey is used to extract the targetingKey to bucket on in fractional
 	// evaluation if the user did not supply the optional bucketing property.
-	targetingKeyKey         = "targetingKey"
-	Disabled                = "DISABLED"
-	ProtoVersionKey         = "__flagd.protoVersion__" // used to mark if the request is coming from an older proto source, which has different fallback behavior
-	jsonEvaluatorTracerName = "jsonEvaluator"
+	targetingKeyKey = "targetingKey"
+	Disabled        = "DISABLED"
+	ProtoVersionKey = "__flagd.protoVersion__" // used to mark if the request is coming from an older proto source, which has different fallback behavior
 )
 
 func addSchemaResource(compiler *jsonschema.Compiler, url string, schemaData string) error {
@@ -77,22 +72,11 @@ func WithStrictNumericRange() JSONEvaluatorOption {
 	}
 }
 
-// WithTracerProvider configures the evaluator (and its resolver) to create spans using the given TracerProvider
-// instead of the global one.
-func WithTracerProvider(tp trace.TracerProvider) JSONEvaluatorOption {
-	return func(je *JSON) {
-		tracer := tp.Tracer(jsonEvaluatorTracerName)
-		je.jsonEvalTracer = tracer
-		je.tracer = tracer
-	}
-}
-
 // JSON evaluator
 type JSON struct {
-	store          store.IStore
-	Logger         *logger.Logger
-	jsonEvalTracer trace.Tracer
-	jsonSchema     *jsonschema.Schema
+	store      store.IStore
+	Logger     *logger.Logger
+	jsonSchema *jsonschema.Schema
 	Resolver
 }
 
@@ -101,7 +85,6 @@ func NewJSON(logger *logger.Logger, s store.IStore, opts ...JSONEvaluatorOption)
 		zap.String("component", "evaluator"),
 		zap.String("evaluator", "json"),
 	)
-	tracer := otel.Tracer(jsonEvaluatorTracerName)
 
 	// Create a new JSON Schema compiler
 	compiler := jsonschema.NewCompiler()
@@ -121,11 +104,10 @@ func NewJSON(logger *logger.Logger, s store.IStore, opts ...JSONEvaluatorOption)
 		logger.Fatal("Failed to compile schema", zap.Error(err))
 	}
 	ev := JSON{
-		store:          s,
-		Logger:         logger,
-		jsonEvalTracer: tracer,
-		jsonSchema:     jsonSchema,
-		Resolver:       NewResolver(s, logger, tracer),
+		store:      s,
+		Logger:     logger,
+		jsonSchema: jsonSchema,
+		Resolver:   NewResolver(s, logger),
 	}
 
 	for _, o := range opts {
@@ -136,18 +118,10 @@ func NewJSON(logger *logger.Logger, s store.IStore, opts ...JSONEvaluatorOption)
 }
 
 func (je *JSON) SetState(payload sync.DataSync) error {
-	_, span := je.jsonEvalTracer.Start(
-		context.Background(),
-		"flagSync",
-		trace.WithAttributes(attribute.String("feature_flag.source", payload.Source)))
-	defer span.End()
-
 	var definition Definition
 
 	err := je.configToFlagDefinition(payload.FlagData, &definition)
 	if err != nil {
-		span.SetStatus(codes.Error, "flagSync error")
-		span.RecordError(err)
 		return err
 	}
 
@@ -160,25 +134,22 @@ func (je *JSON) SetState(payload sync.DataSync) error {
 type Resolver struct {
 	store              store.IStore
 	Logger             *logger.Logger
-	tracer             trace.Tracer
 	strictNumericRange bool // TODO(#2101): remove
 }
 
-func NewResolver(store store.IStore, logger *logger.Logger, jsonEvalTracer trace.Tracer) Resolver {
+func NewResolver(store store.IStore, logger *logger.Logger) Resolver {
 	// register supported json logic custom operator implementations
 	jsonlogic.AddOperator(FractionEvaluationName, NewFractional(logger).Evaluate)
 	jsonlogic.AddOperator(StartsWithEvaluationName, NewStringComparisonEvaluator(logger).StartsWithEvaluation)
 	jsonlogic.AddOperator(EndsWithEvaluationName, NewStringComparisonEvaluator(logger).EndsWithEvaluation)
 	jsonlogic.AddOperator(SemVerEvaluationName, NewSemVerComparison(logger).SemVerEvaluation)
 
-	return Resolver{store: store, Logger: logger, tracer: jsonEvalTracer}
+	return Resolver{store: store, Logger: logger}
 }
 
 func (je *Resolver) ResolveAllValues(ctx context.Context, reqID string, context map[string]any) ([]AnyValue,
 	model.Metadata, error,
 ) {
-	_, span := je.tracer.Start(ctx, "resolveAll")
-	defer span.End()
 
 	var selector store.Selector
 	s := ctx.Value(store.SelectorContextKey{})
@@ -232,8 +203,6 @@ func (je *Resolver) ResolveBooleanValue(
 	metadata map[string]interface{},
 	err error,
 ) {
-	_, span := je.tracer.Start(ctx, "resolveBoolean")
-	defer span.End()
 
 	je.Logger.DebugWithID(reqID, fmt.Sprintf("evaluating boolean flag: %s", flagKey))
 	return resolve[bool](ctx, reqID, flagKey, context, je.evaluateVariant)
@@ -247,8 +216,6 @@ func (je *Resolver) ResolveStringValue(
 	metadata map[string]interface{},
 	err error,
 ) {
-	_, span := je.tracer.Start(ctx, "resolveString")
-	defer span.End()
 
 	je.Logger.DebugWithID(reqID, fmt.Sprintf("evaluating string flag: %s", flagKey))
 	return resolve[string](ctx, reqID, flagKey, context, je.evaluateVariant)
@@ -262,8 +229,6 @@ func (je *Resolver) ResolveFloatValue(
 	metadata map[string]interface{},
 	err error,
 ) {
-	_, span := je.tracer.Start(ctx, "resolveFloat")
-	defer span.End()
 
 	je.Logger.DebugWithID(reqID, fmt.Sprintf("evaluating float flag: %s", flagKey))
 	value, variant, reason, metadata, err = resolve[float64](ctx, reqID, flagKey, context, je.evaluateVariant)
@@ -289,8 +254,6 @@ func (je *Resolver) ResolveIntValue(ctx context.Context, reqID string, flagKey s
 	metadata map[string]interface{},
 	err error,
 ) {
-	_, span := je.tracer.Start(ctx, "resolveInt")
-	defer span.End()
 
 	je.Logger.DebugWithID(reqID, fmt.Sprintf("evaluating int flag: %s", flagKey))
 	var val float64
@@ -343,8 +306,6 @@ func (je *Resolver) ResolveObjectValue(
 	metadata map[string]interface{},
 	err error,
 ) {
-	_, span := je.tracer.Start(ctx, "resolveObject")
-	defer span.End()
 
 	je.Logger.DebugWithID(reqID, fmt.Sprintf("evaluating object flag: %s", flagKey))
 	return resolve[map[string]any](ctx, reqID, flagKey, context, je.evaluateVariant)
@@ -356,8 +317,6 @@ func (je *Resolver) ResolveAsAnyValue(
 	flagKey string,
 	context map[string]any,
 ) AnyValue {
-	_, span := je.tracer.Start(ctx, "resolveAnyValue")
-	defer span.End()
 
 	je.Logger.DebugWithID(reqID, fmt.Sprintf("evaluating flag `%s` as a generic flag", flagKey))
 	value, variant, reason, meta, err := resolve[interface{}](ctx, reqID, flagKey, context, je.evaluateVariant)
