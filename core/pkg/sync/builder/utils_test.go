@@ -309,3 +309,13 @@ func TestParseOAuth(t *testing.T) {
 		})
 	}
 }
+
+func TestParseSourcesReadsFormat(t *testing.T) {
+	sources, err := ParseSources(`[{"uri":"a.json","provider":"file","format":"vendor"},{"uri":"b.json","provider":"file"}]`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sources) != 2 || sources[0].Format != "vendor" || sources[1].Format != "" {
+		t.Fatalf("want formats vendor and empty, got %+v", sources)
+	}
+}

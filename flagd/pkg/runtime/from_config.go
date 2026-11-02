@@ -3,8 +3,12 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"slices"
+	"sort"
+	"strings"
 	"time"
 
+	"github.com/open-feature/flagd/core/pkg/configformat"
 	"github.com/open-feature/flagd/core/pkg/evaluator"
 	"github.com/open-feature/flagd/core/pkg/logger"
 	"github.com/open-feature/flagd/core/pkg/service"
@@ -54,6 +58,8 @@ type Config struct {
 	KeepAlivePermitWithoutStream bool
 
 	SyncProviders []sync.SourceConfig
+	// ConfigurationFormats are the formats, besides flagd's own, that sources may name.
+	ConfigurationFormats []configformat.Factory
 	CORS          []string
 
 	ContextValues              map[string]any
@@ -112,12 +118,13 @@ func FromConfig(logger *logger.Logger, version string, config Config) (*Runtime,
 		logger.Error(fmt.Sprintf("error building metrics recorder: %v", err))
 	}
 
+	syncProviders := sourcesWithKnownFormat(logger, config.SyncProviders, config.ConfigurationFormats)
 	sources := []string{}
 
 	// URIs are registered verbatim (including any blob query string like
 	// s3://bucket/key?use_path_style=true); the sync implementation must
 	// emit DataSync.Source matching this exact string. See flagd#1973.
-	for _, provider := range config.SyncProviders {
+	for _, provider := range syncProviders {
 		sources = append(sources, provider.URI)
 	}
 	sourceReadiness := make(map[string]bool, len(sources))
@@ -129,6 +136,11 @@ func FromConfig(logger *logger.Logger, version string, config Config) (*Runtime,
 	store, err := store.NewStore(logger, sources)
 	if err != nil {
 		return nil, fmt.Errorf("error creating flag store: %w", err)
+	}
+
+	formats, err := configurationFormats(logger, store, syncProviders, config.ConfigurationFormats)
+	if err != nil {
+		return nil, err
 	}
 
 	// derive evaluator
@@ -203,7 +215,7 @@ func FromConfig(logger *logger.Logger, version string, config Config) (*Runtime,
 	// metrics into the same reader as the rest of flagd's telemetry.
 	syncLogger := logger.WithFields(zap.String("component", "sync"))
 	syncMetricsRecorder := syncmetrics.NewRecorder(nil)
-	iSyncs, err := syncProvidersFromConfig(syncLogger, config.SyncProviders, syncMetricsRecorder)
+	iSyncs, err := syncProvidersFromConfig(syncLogger, syncProviders, syncMetricsRecorder)
 	if err != nil {
 		return nil, err
 	}
@@ -230,6 +242,7 @@ func FromConfig(logger *logger.Logger, version string, config Config) (*Runtime,
 			MaxRequestHeaderBytes:      config.MaxRequestHeaderBytes,
 		},
 		Syncs:           iSyncs,
+		Formats:         formats,
 		sourceReadiness: sourceReadiness,
 	}, nil
 }
@@ -250,4 +263,57 @@ func syncProvidersFromConfig(
 	}
 
 	return syncs, nil
+}
+
+func usesDefaultFormat(provider sync.SourceConfig) bool {
+	return provider.Format == "" || provider.Format == configformat.DefaultType
+}
+
+// sourcesWithKnownFormat drops the sources that name a configuration format this distribution
+// doesn't contain. They get no sync provider, no store registration and no readiness entry.
+func sourcesWithKnownFormat(
+	logger *logger.Logger, providers []sync.SourceConfig, factories []configformat.Factory,
+) []sync.SourceConfig {
+	available := []string{configformat.DefaultType}
+	for _, f := range factories {
+		available = append(available, f.Type())
+	}
+	sort.Strings(available)
+
+	kept := make([]sync.SourceConfig, 0, len(providers))
+	for _, provider := range providers {
+		if !usesDefaultFormat(provider) && !slices.Contains(available, provider.Format) {
+			logger.Error(fmt.Sprintf(
+				"skipping source %q: configuration format %q is not available, available formats: %s",
+				provider.URI, provider.Format, strings.Join(available, ", ")))
+			continue
+		}
+		kept = append(kept, provider)
+	}
+	return kept
+}
+
+// configurationFormats creates the format of every source that names one other than flagd's.
+func configurationFormats(
+	logger *logger.Logger, st *store.Store, providers []sync.SourceConfig, factories []configformat.Factory,
+) (map[string]configformat.ConfigurationFormat, error) {
+	formats := map[string]configformat.ConfigurationFormat{}
+	for _, provider := range providers {
+		if usesDefaultFormat(provider) {
+			continue
+		}
+		var factory configformat.Factory
+		for _, f := range factories {
+			if f.Type() == provider.Format {
+				factory = f
+			}
+		}
+		format, err := factory.Create(configformat.Settings{Store: st, Logger: logger})
+		if err != nil {
+			return nil, fmt.Errorf("error creating configuration format %q for source %q: %w",
+				provider.Format, provider.URI, err)
+		}
+		formats[provider.URI] = format
+	}
+	return formats, nil
 }

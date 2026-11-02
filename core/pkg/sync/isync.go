@@ -44,6 +44,8 @@ type DataSync struct {
 type SourceConfig struct {
 	URI      string `json:"uri"`
 	Provider string `json:"provider"`
+	// Format names the configuration format of the source's flag configuration; empty is flagd's own.
+	Format string `json:"format,omitempty"`
 
 	AuthHeader   string `json:"authHeader,omitempty"`
 	CertPath     string `json:"certPath,omitempty"`
