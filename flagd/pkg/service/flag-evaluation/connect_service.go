@@ -114,7 +114,7 @@ func NewConnectService(
 ) *ConnectService {
 	cs := &ConnectService{
 		logger:  logger,
-		eval:    evaluator,
+		eval:    TraceEvaluations(evaluator),
 		metrics: &telemetry.NoopMetricsRecorder{},
 		eventingConfiguration: &eventingConfiguration{
 			subs:   make(map[interface{}]*subscription),

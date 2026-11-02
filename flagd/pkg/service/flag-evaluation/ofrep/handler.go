@@ -75,7 +75,7 @@ func NewOfrepHandler(
 ) http.Handler {
 	h := handler{
 		Logger:                     logger,
-		evaluator:                  evaluator,
+		evaluator:                  evalservice.TraceEvaluations(evaluator),
 		contextValues:              contextValues,
 		headerToContextKeyMappings: headerToContextKeyMappings,
 		metricsRecorder:            metricsRecorder,

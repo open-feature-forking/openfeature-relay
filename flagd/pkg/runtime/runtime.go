@@ -16,6 +16,10 @@ import (
 	"github.com/open-feature/flagd/core/pkg/sync"
 	"github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation/ofrep"
 	flagsync "github.com/open-feature/flagd/flagd/pkg/service/flag-sync"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -136,7 +140,16 @@ func (r *Runtime) updateAndEmit(payload sync.DataSync) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	_, span := otel.Tracer("jsonEvaluator").Start(
+		context.Background(),
+		"flagSync",
+		trace.WithAttributes(attribute.String("feature_flag.source", payload.Source)))
 	err := r.Evaluator.SetState(payload)
+	if err != nil {
+		span.SetStatus(codes.Error, "flagSync error")
+		span.RecordError(err)
+	}
+	span.End()
 	if err != nil {
 		r.Logger.Error(fmt.Sprintf("error setting state: %v", err))
 		return
