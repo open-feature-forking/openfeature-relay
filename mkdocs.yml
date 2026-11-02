@@ -1,5 +1,5 @@
-site_name: flagd
-site_description: A feature flag daemon with a Unix philosophy
+site_name: OpenFeature Relay
+site_description: A builder and runtime for flag relays, with flagd as the reference distribution
 theme:
   name: material
   palette: 
@@ -39,19 +39,11 @@ extra_css:
   - assets/extra.css
 
 docs_dir: docs
-# flagd-builder specification (AI Unified Process), not part of the site
+# The PlantUML source is linked from the use cases, not rendered
 exclude_docs: |
-  /vision.md
-  /requirements.md
-  /glossary.md
   /use_cases.puml
-  /use_cases/
-  /research/
-  /test_cases/
-  /processes/
-  /entity_model.md
-repo_url: https://github.com/open-feature/flagd
-repo_name: open-feature/flagd
+repo_url: https://github.com/open-feature-forking/openfeature-relay
+repo_name: open-feature-forking/openfeature-relay
 edit_uri: edit/main/docs/
 markdown_extensions:
   - pymdownx.highlight:
@@ -82,59 +74,114 @@ markdown_extensions:
       emoji_generator: !!python/name:material.extensions.emoji.to_svg
 
 nav:
-  - 'Introduction': 'index.md'
-  - 'Quick start': 'quick-start.md'
-  - 'Installation': 'installation.md'
-  - 'Playground': 'playground/index.md'
-  - 'Concepts':
-    - 'Feature Flagging': 'concepts/feature-flagging.md'
-    - 'Syncs': 'concepts/syncs.md'
-    - 'Selectors': 'concepts/selectors.md'
-    - 'Metadata': 'concepts/metadata.md'
-  - 'Architecture': 'architecture.md'
-  - 'Guides':
-    - 'Migrating to Flag Sets': 'guides/migrating-to-flag-sets.md'
-    - 'Running A/B Experiments': 'guides/experimentation.md'
-  - 'OpenFeature Providers':
-    - 'providers/index.md'
-    - 'Go': 'providers/go.md'
-    - 'Java': 'providers/java.md'
-    - 'Node.JS': 'providers/nodejs.md'
-    - 'PHP': 'providers/php.md'
-    - '.NET': 'providers/dotnet.md'
-    - 'Python': 'providers/python.md'
-    - 'Rust': 'providers/rust.md'
-    - 'Web': 'providers/web.md'
-  - 'Reference':
-    - 'Cheat sheet': 'reference/cheat-sheet.md'
-    - 'CLI':
-      - 'Overview': 'reference/flagd-cli/flagd.md'
-      - 'Start': 'reference/flagd-cli/flagd_start.md'
-      - 'Version': 'reference/flagd-cli/flagd_version.md'
-    - 'Sync Configuration': 'reference/sync-configuration.md'
-    - 'Selector Syntax': 'reference/selector-syntax.md'
-    - 'gRPC sync service': 'reference/grpc-sync-service.md'
-    - 'OFREP service': 'reference/flagd-ofrep.md'
-    - 'Flag Definitions':
-      - 'Definition Overview': 'reference/flag-definitions.md'
-      - 'Custom Operations':
-        - 'Fractional': 'reference/custom-operations/fractional-operation.md'
-        - 'Semantic Version': 'reference/custom-operations/semver-operation.md'
-        - 'String Comparison': 'reference/custom-operations/string-comparison-operation.md'
-      - 'Schema': 'reference/schema.md'
-    - 'Monitoring': 'reference/monitoring.md'
-    - 'FIPS 140-3': 'reference/fips-140-3.md'
-    - 'Specifications':
-      - 'Providers': 'reference/specifications/providers.md'
-      - 'Protobuf Schemas': 'reference/specifications/protos.md' 
-      - 'Custom Operations':
-        - 'Fractional Specification': 'reference/specifications/custom-operations/fractional-operation-spec.md'
-        - 'Semantic Version Specification': 'reference/specifications/custom-operations/semver-operation-spec.md'
-        - 'String Comparison Specification': 'reference/specifications/custom-operations/string-comparison-operation-spec.md'
-    - 'OpenFeature Operator': 'reference/openfeature-operator/overview.md'
-    - 'Naming': 'reference/naming.md'
-  - 'FAQ': 'faq.md'
-  - 'Troubleshooting': 'troubleshooting.md'
+  - 'Home': 'index.md'
+  - 'Why OpenFeature Relay': 'relay/why.md'
+  - 'Concepts': 'relay/concepts.md'
+  - 'Architecture': 'relay/architecture.md'
+  - 'Distributions': 'relay/distributions.md'
+  - 'Status and roadmap': 'relay/status.md'
+  - 'Try it': 'relay/try-it.md'
+  - 'Design':
+    - 'Vision': 'vision.md'
+    - 'Requirements': 'requirements.md'
+    - 'Glossary': 'glossary.md'
+    - 'Use cases':
+      - 'UC-001 Build Custom Distribution': 'use_cases/UC-001-build-custom-distribution.md'
+      - 'UC-002 Package Distribution as Image': 'use_cases/UC-002-package-distribution-as-image.md'
+      - 'UC-003 Develop Sync Provider Extension': 'use_cases/UC-003-develop-sync-provider-extension.md'
+      - 'UC-004 Develop Service Endpoint Extension': 'use_cases/UC-004-develop-service-endpoint-extension.md'
+      - 'UC-005 Develop Middleware Extension': 'use_cases/UC-005-develop-middleware-extension.md'
+      - 'UC-006 Develop Telemetry Provider Extension': 'use_cases/UC-006-develop-telemetry-provider-extension.md'
+      - 'UC-007 Develop Evaluator Extension': 'use_cases/UC-007-develop-evaluator-extension.md'
+      - 'UC-008 Run Contract Tests': 'use_cases/UC-008-run-contract-tests.md'
+      - 'UC-009 Upgrade to flagd-full': 'use_cases/UC-009-upgrade-to-flagd-full.md'
+      - 'UC-010 Adopt Standard Distribution': 'use_cases/UC-010-adopt-standard-distribution.md'
+      - 'UC-011 Inspect Distribution Components': 'use_cases/UC-011-inspect-distribution-components.md'
+      - 'UC-012 Release Distributions and Component Modules': 'use_cases/UC-012-release-distributions-and-component-modules.md'
+      - 'UC-013 Verify Change Against Distributions': 'use_cases/UC-013-verify-change-against-distributions.md'
+      - 'UC-014 Embed Evaluator in In-Process Provider': 'use_cases/UC-014-embed-evaluator-in-in-process-provider.md'
+      - 'UC-015 Migrate Provider to Component Modules': 'use_cases/UC-015-migrate-provider-to-component-modules.md'
+      - 'UC-016 Recover From Snapshot': 'use_cases/UC-016-recover-from-snapshot.md'
+      - 'UC-017 Run Configuration Proxy': 'use_cases/UC-017-run-configuration-proxy.md'
+      - 'UC-018 Develop Configuration Format Extension': 'use_cases/UC-018-develop-configuration-format-extension.md'
+      - 'UC-019 Serve Vendor Flags': 'use_cases/UC-019-serve-vendor-flags.md'
+      - 'UC-020 Develop Event Sink Extension': 'use_cases/UC-020-develop-event-sink-extension.md'
+      - 'UC-021 Export Evaluation Data': 'use_cases/UC-021-export-evaluation-data.md'
+    - 'Research: cross-vendor evaluation': 'research/cross-vendor-evaluation.md'
+    - 'How it''s built': 'relay/how-its-built.md'
+  - 'flagd (reference distribution)':
+    - 'Introduction': 'flagd/index.md'
+    - 'Quick start': 'quick-start.md'
+    - 'Installation': 'installation.md'
+    - 'Playground': 'playground/index.md'
+    - 'Concepts':
+      - 'Feature Flagging': 'concepts/feature-flagging.md'
+      - 'Syncs': 'concepts/syncs.md'
+      - 'Selectors': 'concepts/selectors.md'
+      - 'Metadata': 'concepts/metadata.md'
+    - 'Architecture': 'architecture.md'
+    - 'Guides':
+      - 'Migrating to Flag Sets': 'guides/migrating-to-flag-sets.md'
+      - 'Running A/B Experiments': 'guides/experimentation.md'
+    - 'OpenFeature Providers':
+      - 'providers/index.md'
+      - 'Go': 'providers/go.md'
+      - 'Java': 'providers/java.md'
+      - 'Node.JS': 'providers/nodejs.md'
+      - 'PHP': 'providers/php.md'
+      - '.NET': 'providers/dotnet.md'
+      - 'Python': 'providers/python.md'
+      - 'Rust': 'providers/rust.md'
+      - 'Web': 'providers/web.md'
+    - 'Reference':
+      - 'Cheat sheet': 'reference/cheat-sheet.md'
+      - 'CLI':
+        - 'Overview': 'reference/flagd-cli/flagd.md'
+        - 'Start': 'reference/flagd-cli/flagd_start.md'
+        - 'Version': 'reference/flagd-cli/flagd_version.md'
+      - 'Sync Configuration': 'reference/sync-configuration.md'
+      - 'Selector Syntax': 'reference/selector-syntax.md'
+      - 'gRPC sync service': 'reference/grpc-sync-service.md'
+      - 'OFREP service': 'reference/flagd-ofrep.md'
+      - 'Flag Definitions':
+        - 'Definition Overview': 'reference/flag-definitions.md'
+        - 'Custom Operations':
+          - 'Fractional': 'reference/custom-operations/fractional-operation.md'
+          - 'Semantic Version': 'reference/custom-operations/semver-operation.md'
+          - 'String Comparison': 'reference/custom-operations/string-comparison-operation.md'
+        - 'Schema': 'reference/schema.md'
+      - 'Monitoring': 'reference/monitoring.md'
+      - 'FIPS 140-3': 'reference/fips-140-3.md'
+      - 'Specifications':
+        - 'Providers': 'reference/specifications/providers.md'
+        - 'Protobuf Schemas': 'reference/specifications/protos.md' 
+        - 'Custom Operations':
+          - 'Fractional Specification': 'reference/specifications/custom-operations/fractional-operation-spec.md'
+          - 'Semantic Version Specification': 'reference/specifications/custom-operations/semver-operation-spec.md'
+          - 'String Comparison Specification': 'reference/specifications/custom-operations/string-comparison-operation-spec.md'
+      - 'OpenFeature Operator': 'reference/openfeature-operator/overview.md'
+      - 'Naming': 'reference/naming.md'
+    - 'FAQ': 'faq.md'
+    - 'Troubleshooting': 'troubleshooting.md'
+    - 'Architecture decisions':
+      - 'architecture-decisions/cucumber-gherkin-test-suite.md'
+      - 'architecture-decisions/decouple-flag-source-and-set.md'
+      - 'architecture-decisions/disabled-flag-evaluation.md'
+      - 'architecture-decisions/duplicate-flag-keys.md'
+      - 'architecture-decisions/flag-configuration.md'
+      - 'architecture-decisions/fractional-non-string-rand-units.md'
+      - 'architecture-decisions/fractional.md'
+      - 'architecture-decisions/high-precision-fractional-bucketing.md'
+      - 'architecture-decisions/multiple-flag-set-support(rejected).md'
+      - 'architecture-decisions/multiple-sync-sources.md'
+      - 'architecture-decisions/numeric-coercion.md'
+      - 'architecture-decisions/rollout-operator.md'
+      - 'architecture-decisions/semantic-versioning-policy.md'
+      - 'architecture-decisions/static-and-dynamic-context.md'
+      - 'architecture-decisions/support-code-default.md'
+      - 'architecture-decisions/supported-languages.md'
+      - 'architecture-decisions/sync-server-keepalive-enforcement.md'
+      - 'architecture-decisions/targeting-variant-metadata.md'
 plugins:
   # Disabling social until https://github.com/squidfunk/mkdocs-material/issues/6983 is resolved
   # - social

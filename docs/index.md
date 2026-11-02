@@ -1,40 +1,37 @@
-# Introduction
+---
+description: OpenFeature Relay, a builder and runtime for flag relays, with flagd as the reference implementation
+---
 
-## What is flagd?
+# OpenFeature Relay
 
-_flagd_ is a _feature flag evaluation engine_.
-Think of it as a ready-made, open source, OpenFeature-compliant feature flag backend system.
+**Build the flag relay you need, from components — with flagd as the reference implementation.**
 
-With flagd, you can:
+!!! warning "Proof of concept, not an official OpenFeature project"
 
-* modify flags in real-time
-* define flags of various types (boolean, string, number, JSON)
-* use context-sensitive rules to target specific users or user traits
-* perform pseudorandom assignments for experimentation
-* perform progressive roll-outs of new features
-* aggregate flag definitions from multiple sources
-* expose aggregated flags as a [gRPC stream](./reference/grpc-sync-service.md) to be used by in-process providers
-* expose [OFREP service](./reference/flagd-ofrep.md) for configured flags
+    OpenFeature Relay is an independent incubator by a flagd maintainer.
+    It is **not** an official OpenFeature or CNCF project, and nothing here is endorsed by the OpenFeature Technical Committee.
+    There are no releases and no images yet; build from source.
+    For production, use [released flagd](https://flagd.dev/installation/).
 
-It doesn't include a UI, management console or a persistence layer.
-It's configurable entirely via a [POSIX-style CLI](./reference/flagd-cli/flagd.md).
-Thanks to its minimalism, it's _extremely flexible_; you can leverage flagd as a sidecar alongside your application, an engine running in your application process, or as a central service evaluating thousands of flags per second.
+A **flag relay** is a process that syncs flag configurations, keeps them, evaluates them and serves them to OpenFeature clients over OFREP, flag evaluation, flag sync or other service endpoints.
+flagd is one; so are a vendor's edge proxy and relay proxy.
 
-## How do I deploy flagd?
+OpenFeature Relay is a **runtime and a builder** for flag relays, the way the [OpenTelemetry Collector Builder](https://opentelemetry.io/docs/collector/custom-collector/) is for collectors:
+you list the components you want in a **manifest**, and the **builder** compiles a **distribution** that contains exactly those components.
+Anyone can write a component in their own Go module and build it in, without forking.
 
-flagd is designed to fit well into a variety of infrastructures and can run on various architectures.
-It runs as a separate process or directly in your application (see [architecture](./architecture.md)).
-It's distributed as a binary, container image, and various libraries (see [installation](./installation.md)).
-If you're already leveraging containers in your infrastructure, you can extend the docker image with your required configuration.
-You can also run flagd as a service on a VM or a "bare-metal" host.
-If you'd prefer not to run an additional process at all, you can run the flagd evaluation engine directly in your application.
-No matter how you run flagd, you will need to supply it with feature flags.
-The [flag definitions](./reference/flag-definitions.md) supplied to flagd are monitored for changes which will be immediately reflected in flagd's evaluations.
-Currently supported sources include files, HTTP endpoints, Kubernetes custom resources, and proto-compliant gRPC services (see [syncs](./concepts/syncs.md), [sync configuration](./reference/sync-configuration.md)).
+flagd is the reference implementation, and the code starts from flagd's.
+Today's flagd becomes the **flagd-full** distribution: same CLI, configuration, ports, endpoints and behaviour.
+Its documentation is preserved under [flagd](flagd/index.md).
 
-## How do I use flagd?
+## Where to go next
 
-flagd is fully [OpenFeature compliant](./concepts/feature-flagging.md#openfeature-compliance).
-To leverage it in your application you must use the OpenFeature SDK and flagd provider for your language.
-You can configure the provider to connect to a flagd instance you deployed earlier (evaluating flags over gRPC) or use the in-process evaluation engine to do flag evaluations directly in your application.
-Once you've configured the OpenFeature SDK, you can start evaluating the feature flags configured in your flagd definitions.
+| If you want to… | Read |
+|-----------------|------|
+| know what problem this solves | [Why OpenFeature Relay](relay/why.md) |
+| learn the moving parts | [Concepts](relay/concepts.md) and [Architecture](relay/architecture.md) |
+| see what can be built | [Distributions](relay/distributions.md) |
+| know what works today | [Status and roadmap](relay/status.md) |
+| run it | [Try it](relay/try-it.md) |
+| read the contract | [Vision](vision.md), [Requirements](requirements.md), [Glossary](glossary.md), [Use cases](use_cases/UC-001-build-custom-distribution.md) |
+| see how it is built | [How it's built](relay/how-its-built.md) |
