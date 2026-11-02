@@ -37,13 +37,17 @@
 | Management Port       | The port on which flagd serves health, readiness and metrics, separate from the service endpoints. | |
 | Contract Test         | A reusable test the Maintainers ship per component type that checks a component behaves as the runtime expects. | |
 | FIPS Build            | A distribution compiled in FIPS 140-3 mode, with the crypto boundary described in docs/reference/fips-140-3.md. | |
+| Document              | The parsed, validated form of one source's flag configuration, owned by the configuration format that accepted it and kept in the store. | |
+| Contract Case         | One check within a contract test, such as rejecting an invalid flag configuration without changing the store. | |
+| Release Tag           | The git tag `<module path>/v<version>` that releases one component module, or the flagd release a standard distribution follows. | |
+| flagd Test Harness    | The Gherkin acceptance suites and test bed (open-feature/flagd-testbed) that flagd and its providers run to prove evaluation and sync behaviour. | |
 | Event Bus             | The publish/subscribe channel through which the runtime announces events, such as flag changes, to service endpoints.                  |                               |
 | Runtime | The part of a distribution that starts sync providers, hands their flag configurations to configuration formats, publishes events on the event bus and starts service endpoints. |  |
 | Image Build Environment | The container build tooling (for example Docker Buildx) that turns a compiled distribution and a Dockerfile into an image. | |
 | In-Process Provider | An OpenFeature provider that embeds the flagd configuration format and the evaluator and evaluates flags locally instead of calling a service endpoint. | embedded provider |
 | Remote Evaluation     | Evaluation performed by a running flagd and returned over a service endpoint, as opposed to in-process evaluation.                      | RPC mode                      |
 | Hook                  | An OpenFeature hook; for in-process providers, the only place observability is added.                                                    |                               |
-| Snapshot              | A local file holding the last known flag state, written on every change and read at startup as the lowest-precedence source.            |                               |
+| Snapshot | A local file holding the last accepted documents of every configuration format, written on every change and read at startup as the lowest-precedence source. |  |
 | Operator              | A person who runs a flagd binary or image.                                                                                                 | admin                         |
 | Distribution Builder  | A person who composes a custom distribution from a manifest.                                                                               |                               |
 | Extension Author      | A person who writes an extension in their own Go module.                                                                                   | contributor                   |
