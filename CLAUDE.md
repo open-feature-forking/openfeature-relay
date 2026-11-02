@@ -34,6 +34,29 @@ Each phase runs plan → oppose → implement → review, one role per agent in 
 6. Standard distributions, images, CI (FR-021, FR-030..FR-032, NFR-003, NFR-009, NFR-011).
 7. Contract tests, example extension, migration guide (FR-015, FR-043, NFR-010).
 
+## PoC: one use case after the other
+
+After phase 1 (C1, C2, D), work proceeds one use case at a time, in this order. Each runs the same loop and lands as one or more PRs against `main`; phases 2–7 above are covered by the use cases that need them.
+
+| # | Use case | Brings in |
+|---|----------|-----------|
+| 1 | UC-018 Develop Configuration Format Extension | configuration format split out of `SetState`, document versions (phase 2) |
+| 2 | UC-014 Embed Evaluator in In-Process Provider | evaluator and flagd configuration format as dependency-free modules |
+| 3 | UC-007 Develop Evaluator Extension | untyped bulk evaluator, typed adapter, evaluation router, engine modules |
+| 4 | UC-003 Develop Sync Provider Extension | sync factory, fetching sync providers and the shared poller |
+| 5 | UC-004 Develop Service Endpoint Extension | service factory, event bus, runtime registry (phase 3) |
+| 6 | UC-005, UC-006, UC-020 | middleware, telemetry provider and event sink factories |
+| 7 | UC-008 Run Contract Tests | contract tests for every component type, grown with 3–6 |
+| 8 | UC-001 Build Custom Distribution | module split (phase 4), builder CLI and manifest (phase 5) |
+| 9 | UC-009 Upgrade to flagd-full | flagd-full built by the builder, test-harness suites green |
+| 10 | UC-011, UC-010, UC-017, UC-021 | components command, standard distributions, flagd-relay, event export |
+| 11 | UC-019 Serve Vendor Flags | a Flagsmith engine module as the cross-vendor proof |
+| 12 | UC-002, UC-012, UC-013, UC-015 | image, release, CI verification, migration guide |
+
+UC-016 stays Deferred.
+
+A use case is done when its main success scenario and every alternative flow have an automated test, the reviewer's verdict is `ready`, the PR is merged, and its `**Status:**` line moves to `Implemented` (to `Tested` once a test case under `docs/test_cases/` covers it). This is a proof of concept: upstream reviewability (C-006) is a preference, not a gate.
+
 ## Gates
 
 Go and Docker work only inside WSL Ubuntu. The system Go there is 1.22 and cannot resolve `go 1.27` on its own, so pin the toolchain. Run Go gates from the repository root:
