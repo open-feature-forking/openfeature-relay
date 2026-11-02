@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/open-feature/flagd/core/pkg/logger"
-	sourceSync "github.com/open-feature/flagd/core/pkg/sync"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	sourceSync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 )
 
 // multiplexer distributes updates for a target to all of its subscribers

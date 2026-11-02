@@ -9,10 +9,10 @@ import (
 
 	"buf.build/gen/go/open-feature/flagd/grpc/go/flagd/sync/v1/syncv1grpc"
 	v1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/sync/v1"
-	"github.com/open-feature/flagd/core/pkg/logger"
-	"github.com/open-feature/flagd/core/pkg/sync"
-	grpccredential "github.com/open-feature/flagd/core/pkg/sync/grpc/credentials"
-	_ "github.com/open-feature/flagd/core/pkg/sync/grpc/nameresolvers" // initialize custom resolvers e.g. envoy.Init()
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	grpccredential "github.com/open-feature-forking/openfeature-relay/core/pkg/sync/grpc/credentials"
+	_ "github.com/open-feature-forking/openfeature-relay/core/pkg/sync/grpc/nameresolvers" // initialize custom resolvers e.g. envoy.Init()
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
@@ -67,8 +67,8 @@ type Sync struct {
 	// the override path. A distribution passes its client instrumentation (a stats handler) here.
 	DialOptions []grpc.DialOption
 
-	client        FlagSyncServiceClient
-	ready         atomic.Bool
+	client FlagSyncServiceClient
+	ready  atomic.Bool
 }
 
 func (g *Sync) Init(_ context.Context) error {

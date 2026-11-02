@@ -8,8 +8,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/open-feature/flagd/core/pkg/logger"
-	"github.com/open-feature/flagd/core/pkg/telemetry"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.opentelemetry.io/otel/sdk/resource"

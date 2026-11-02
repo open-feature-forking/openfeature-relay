@@ -7,15 +7,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/open-feature/flagd/core/pkg/model"
-	"github.com/open-feature/flagd/core/pkg/store"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	"buf.build/gen/go/open-feature/flagd/grpc/go/flagd/sync/v1/syncv1grpc"
 	v1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/sync/v1"
-	"github.com/open-feature/flagd/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )

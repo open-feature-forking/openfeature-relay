@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/open-feature/flagd/core/pkg/evaluator"
-	mock "github.com/open-feature/flagd/core/pkg/evaluator/mock"
-	"github.com/open-feature/flagd/core/pkg/logger"
-	"github.com/open-feature/flagd/core/pkg/model"
-	"github.com/open-feature/flagd/core/pkg/telemetry"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
+	mock "github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator/mock"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/sync/errgroup"
 )

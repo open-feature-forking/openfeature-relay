@@ -4,14 +4,14 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/open-feature/flagd/core/pkg/logger"
-	"github.com/open-feature/flagd/core/pkg/sync"
-	"github.com/open-feature/flagd/core/pkg/sync/blob"
-	buildermock "github.com/open-feature/flagd/core/pkg/sync/builder/mock"
-	"github.com/open-feature/flagd/core/pkg/sync/file"
-	"github.com/open-feature/flagd/core/pkg/sync/grpc"
-	"github.com/open-feature/flagd/core/pkg/sync/http"
-	"github.com/open-feature/flagd/core/pkg/sync/kubernetes"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/blob"
+	buildermock "github.com/open-feature-forking/openfeature-relay/core/pkg/sync/builder/mock"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/file"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/grpc"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/http"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/kubernetes"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -294,4 +294,3 @@ func Test_GrpcIncrementalUpdates(t *testing.T) {
 	require.True(t, ok)
 	require.True(t, grpcSync.IncrementalUpdates, "IncrementalUpdates should be propagated from SourceConfig to grpc.Sync")
 }
-

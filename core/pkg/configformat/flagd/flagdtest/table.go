@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/open-feature/flagd/core/pkg/logger"
-	"github.com/open-feature/flagd/core/pkg/model"
-	"github.com/open-feature/flagd/core/pkg/store"
-	"github.com/open-feature/flagd/core/pkg/sync"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 )
 
 // UnnamedSet stands for the per-process flag set id of flags without a flagSetId.

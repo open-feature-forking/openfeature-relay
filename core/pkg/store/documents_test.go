@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/open-feature/flagd/core/pkg/logger"
-	"github.com/open-feature/flagd/core/pkg/model"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 )
 
 func newDocumentsStore(t *testing.T, sources ...string) *Store {

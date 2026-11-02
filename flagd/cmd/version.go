@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"runtime/debug"
 
-	"github.com/open-feature/flagd/core/pkg/fips"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/fips"
 	"github.com/spf13/cobra"
 )
 

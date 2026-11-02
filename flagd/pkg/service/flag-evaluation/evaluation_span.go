@@ -3,8 +3,8 @@ package service
 import (
 	"context"
 
-	"github.com/open-feature/flagd/core/pkg/evaluator"
-	"github.com/open-feature/flagd/core/pkg/model"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 )

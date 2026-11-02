@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/open-feature/flagd/core/pkg/logger"
-	"github.com/open-feature/flagd/core/pkg/telemetry"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 )
 

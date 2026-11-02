@@ -2,10 +2,10 @@
 package evaluation
 
 import (
-	"github.com/open-feature/flagd/core/pkg/evaluator"
-	"github.com/open-feature/flagd/core/pkg/evaluator/jsonlogic"
-	"github.com/open-feature/flagd/core/pkg/logger"
-	"github.com/open-feature/flagd/core/pkg/store"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator/jsonlogic"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 )
 
 // NewEvaluator builds the evaluator over the given store.

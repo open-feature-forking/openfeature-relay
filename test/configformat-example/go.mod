@@ -3,7 +3,7 @@ module github.com/open-feature/flagd/test/configformat-example
 go 1.27
 
 require (
-	github.com/open-feature/flagd/core v0.19.0
+	github.com/open-feature-forking/openfeature-relay/core v0.20.0
 	github.com/open-feature/flagd/flagd v0.0.0
 	github.com/stretchr/testify v1.12.1
 )
@@ -186,6 +186,6 @@ require (
 )
 
 replace (
-	github.com/open-feature/flagd/core => ../../core
+	github.com/open-feature-forking/openfeature-relay/core => ../../core
 	github.com/open-feature/flagd/flagd => ../../flagd
 )

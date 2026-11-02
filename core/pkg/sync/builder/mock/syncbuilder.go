@@ -12,8 +12,8 @@ package middlewaremocksyncbuildermock
 import (
 	reflect "reflect"
 
-	logger "github.com/open-feature/flagd/core/pkg/logger"
-	sync "github.com/open-feature/flagd/core/pkg/sync"
+	logger "github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	sync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	gomock "go.uber.org/mock/gomock"
 	dynamic "k8s.io/client-go/dynamic"
 )

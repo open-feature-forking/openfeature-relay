@@ -44,11 +44,11 @@ linters:
           files:
             - "**/core/pkg/configformat/**"
           deny:
-            - pkg: github.com/open-feature/flagd/core/pkg/evaluator
+            - pkg: github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator
               desc: a configuration format knows no evaluator; evaluators read the documents formats store
             - pkg: github.com/diegoholiveira/jsonlogic
               desc: a configuration format knows no evaluator engine
-            - pkg: github.com/open-feature/flagd/core/pkg/sync/
+            - pkg: github.com/open-feature-forking/openfeature-relay/core/pkg/sync/
               desc: a configuration format knows no sync provider
         stable-dependencies:
           deny:

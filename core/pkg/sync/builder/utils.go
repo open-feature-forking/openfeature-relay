@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/open-feature/flagd/core/pkg/sync"
-	"github.com/open-feature/flagd/core/pkg/sync/azblob"
-	"github.com/open-feature/flagd/core/pkg/sync/gcs"
-	"github.com/open-feature/flagd/core/pkg/sync/s3"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/azblob"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/gcs"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/s3"
 )
 
 // ParseSources parse a json formatted SourceConfig array string and performs validations on the content

@@ -8,8 +8,8 @@ import (
 	"sort"
 
 	"github.com/hashicorp/go-memdb"
-	"github.com/open-feature/flagd/core/pkg/logger"
-	"github.com/open-feature/flagd/core/pkg/model"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"go.uber.org/zap"
 )
 

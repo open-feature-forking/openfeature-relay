@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	uuid "github.com/google/uuid"
-	"github.com/open-feature/flagd/core/pkg/model"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 )
 
 // flags table and index constants

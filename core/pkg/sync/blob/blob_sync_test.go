@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/open-feature/flagd/core/pkg/logger"
-	"github.com/open-feature/flagd/core/pkg/sync"
-	synctesting "github.com/open-feature/flagd/core/pkg/sync/testing"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	synctesting "github.com/open-feature-forking/openfeature-relay/core/pkg/sync/testing"
 )
 
 func TestBlobSync(t *testing.T) {

@@ -12,18 +12,18 @@ import (
 	"time"
 
 	jl "github.com/diegoholiveira/jsonlogic/v3"
-	"github.com/open-feature/flagd/core/pkg/configformat"
-	"github.com/open-feature/flagd/core/pkg/configformat/flagd"
-	"github.com/open-feature/flagd/core/pkg/evaluator"
-	"github.com/open-feature/flagd/core/pkg/logger"
-	"github.com/open-feature/flagd/core/pkg/model"
-	"github.com/open-feature/flagd/core/pkg/store"
-	"github.com/open-feature/flagd/core/pkg/sync"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat/flagd"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"go.uber.org/zap"
 )
 
 const (
-	flagdPropertiesKey  = "$flagd"
+	flagdPropertiesKey = "$flagd"
 	// targetingKeyKey is used to extract the targetingKey to bucket on in fractional
 	// evaluation if the user did not supply the optional bucketing property.
 	targetingKeyKey = "targetingKey"
@@ -474,4 +474,3 @@ func getFlagdProperties(context map[string]any) (flagdProperties, bool) {
 
 	return p, true
 }
-

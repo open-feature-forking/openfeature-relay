@@ -8,8 +8,8 @@ import (
 	rpc "buf.build/gen/go/open-feature/flagd/grpc/go/sync/v1/syncv1grpc"
 	syncv12 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/sync/v1"
 	syncv1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/sync/v1"
-	"github.com/open-feature/flagd/core/pkg/logger"
-	"github.com/open-feature/flagd/core/pkg/sync"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature/flagd/flagd-proxy/pkg/service/subscriptions"
 )
 

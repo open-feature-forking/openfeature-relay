@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/open-feature/flagd/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 )
 
 // Implements file.Watcher using a timer and os.FileInfo

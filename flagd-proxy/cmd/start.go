@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/open-feature/flagd/core/pkg/fips"
-	"github.com/open-feature/flagd/core/pkg/logger"
-	iService "github.com/open-feature/flagd/core/pkg/service"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/fips"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	iService "github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature/flagd/flagd-proxy/pkg/service"
 	"github.com/open-feature/flagd/flagd-proxy/pkg/service/subscriptions"
 	"github.com/spf13/cobra"

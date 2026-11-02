@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/open-feature/flagd/core/pkg/logger"
-	"github.com/open-feature/flagd/core/pkg/store"
-	"github.com/open-feature/flagd/core/pkg/sync"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 )
 
 // BenchmarkSetState applies 1,000 flags spread over 3 flag sets.

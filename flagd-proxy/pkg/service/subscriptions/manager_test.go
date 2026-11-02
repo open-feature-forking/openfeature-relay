@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/open-feature/flagd/core/pkg/logger"
-	isync "github.com/open-feature/flagd/core/pkg/sync"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	isync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 )
 
 type syncMock struct {

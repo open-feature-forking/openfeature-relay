@@ -3,10 +3,10 @@ package jsonlogic
 import (
 	"testing"
 
-	flagconfigtest "github.com/open-feature/flagd/core/pkg/configformat/flagd/flagdtest"
-	"github.com/open-feature/flagd/core/pkg/logger"
-	"github.com/open-feature/flagd/core/pkg/store"
-	"github.com/open-feature/flagd/core/pkg/sync"
+	flagconfigtest "github.com/open-feature-forking/openfeature-relay/core/pkg/configformat/flagd/flagdtest"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 )
 
 func TestSetStateCharacterization(t *testing.T) {

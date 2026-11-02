@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	coresync "github.com/open-feature/flagd/core/pkg/sync"
+	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
 	msdk "go.opentelemetry.io/otel/sdk/metric"

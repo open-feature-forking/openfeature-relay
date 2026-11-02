@@ -10,11 +10,11 @@ import (
 	stdsync "sync"
 	"time"
 
-	"github.com/open-feature/flagd/core/pkg/logger"
-	"github.com/open-feature/flagd/core/pkg/sync"
-	"github.com/open-feature/flagd/core/pkg/sync/blob/bloburi"
-	"github.com/open-feature/flagd/core/pkg/sync/polling"
-	"github.com/open-feature/flagd/core/pkg/utils"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/blob/bloburi"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/polling"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/utils"
 	"go.uber.org/zap"
 	"gocloud.dev/blob"
 )

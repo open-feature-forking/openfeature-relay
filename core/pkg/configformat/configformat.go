@@ -7,8 +7,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/open-feature/flagd/core/pkg/logger"
-	"github.com/open-feature/flagd/core/pkg/store"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 )
 
 // DefaultType is the configuration format of sources that name none: flagd's own.

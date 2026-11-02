@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/open-feature/flagd/core/pkg/logger"
-	isync "github.com/open-feature/flagd/core/pkg/sync"
-	syncbuilder "github.com/open-feature/flagd/core/pkg/sync/builder"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	isync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	syncbuilder "github.com/open-feature-forking/openfeature-relay/core/pkg/sync/builder"
 )
 
 // Manager defines the interface for the subscription management

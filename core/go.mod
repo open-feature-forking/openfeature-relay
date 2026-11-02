@@ -1,4 +1,4 @@
-module github.com/open-feature/flagd/core
+module github.com/open-feature-forking/openfeature-relay/core
 
 go 1.26.0
 
