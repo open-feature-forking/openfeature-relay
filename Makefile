@@ -124,16 +124,12 @@ lint-fix:
 check-package-coverage:
 	@for m in $(GO_LIB_MODULE_DIRS); do (cd $$m && go list ./...) || exit 1; done | sort > .go-packages.tmp; 	if ! diff -u testdata/go-packages.txt .go-packages.tmp; then rm -f .go-packages.tmp; 		echo "the packages of the library modules differ from testdata/go-packages.txt"; exit 1; fi; 	rm -f .go-packages.tmp
 
-.PHONY: check-evaluator-boundary
-check-evaluator-boundary:
-	@deps=$$(cd core && go list -deps ./pkg/evaluator) || exit 1; \
-	if echo "$$deps" | grep -E 'opentelemetry|grpc|connectrpc|k8s.io|gocloud'; then \
-		echo "core/pkg/evaluator must not depend on the packages listed above"; exit 1; \
-	fi; \
-	deps=$$(cd core && go list -deps ./pkg/configformat/...) || exit 1; \
-	if echo "$$deps" | grep -E 'opentelemetry|grpc|connectrpc|k8s.io|gocloud|jsonlogic|core/pkg/evaluator|core/pkg/sync/'; then \
-		echo "core/pkg/configformat must not depend on the packages listed above"; exit 1; \
-	fi
+# testdata/module-boundaries.txt lists <module dir>:<packages>:<forbidden import path regexp>; no package of
+# <packages>, nor anything it imports, may match.
+.PHONY: check-module-boundary check-evaluator-boundary
+check-module-boundary:
+	@while IFS=: read -r dir pkgs forbidden; do 		case "$$dir" in ''|'#'*) continue;; esac; 		deps=$$(cd $$dir && go list -deps $$pkgs) || exit 1; 		if echo "$$deps" | grep -E "$$forbidden"; then 			echo "$$dir $$pkgs must not depend on the packages listed above"; exit 1; 		fi; 	done < testdata/module-boundaries.txt
+check-evaluator-boundary: check-module-boundary
 install-mockgen:
 	go install go.uber.org/mock/mockgen@v0.4.0
 mockgen: install-mockgen
