@@ -18,13 +18,13 @@ flagd becomes a set of components assembled into a distribution, the way the Ope
 - **Powerful**: sync providers, configuration formats, evaluators, service endpoints, telemetry and middleware are all selectable component types behind factory interfaces. Any combination of service endpoints is possible: OFREP alone, flag evaluation alone, both, or extensions.
 - **Backward compatible**: the `flagd-full` distribution behaves exactly like today's flagd — same CLI, configuration, ports, endpoints and images.
 - **Easy to extend**: anyone can write a component in their own Go module and build it into a distribution without forking flagd.
-- **Embeddable**: the evaluator is a dependency-free module and the single entry point for in-process providers; their observability comes from OpenFeature hooks.
+- **Embeddable**: the evaluator and the flagd configuration format are dependency-free modules and the entry point for in-process providers; their observability comes from OpenFeature hooks, while flagd-full's service endpoints keep recording evaluation spans.
 
 Three distributions show the range:
 
 - **flagd-full**: today's flagd, unchanged.
-- **Configuration proxy**: sync providers, a configuration format and the flag sync endpoint, no evaluator; in-process providers get validated flag configurations from one place. Parsing and validating flag configurations therefore moves out of the evaluator into the configuration format.
-- **Vendor distribution**: another vendor's sync provider, configuration format and evaluator behind OFREP, for example the Flagsmith engine, so flagd can stand in for that vendor's edge proxy.
+- **Configuration proxy** (flagd-relay): sync providers, a configuration format and the flag sync endpoint, no evaluator; in-process providers get validated flag configurations from one place. Parsing and validating flag configurations therefore moves out of the evaluator into the configuration format. Today's flagd-proxy stays a separate program.
+- **Vendor distribution**: another vendor's sync provider, configuration format and evaluator behind OFREP, for example the Flagsmith engine, so flagd can stand in for that vendor's edge proxy for OpenFeature clients. Each configuration format keeps its own documents in the store, so flagd's flag model stays unchanged; a source names its format, flagd's being the default.
 
 ## Roles
 
@@ -42,7 +42,7 @@ In scope for the first release:
 - factory interfaces for sync providers, configuration formats, evaluators, service endpoints, telemetry and middleware
 - splitting `core` into a lightweight core module and component modules
 - an event bus replacing the runtime's typed calls into services
-- standard distributions: minimal, cloud, Kubernetes, proxy, full
+- standard distributions: minimal, cloud, Kubernetes, relay, full
 - the evaluator as an embeddable module without telemetry, transport or sync dependencies
 
 Enabled by the architecture, planned for a later release:
