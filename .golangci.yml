@@ -23,11 +23,12 @@ linters:
               desc: DES/3DES is not an approved algorithm
             - pkg: crypto/rc4
               desc: RC4 is not an approved algorithm
-        # The evaluator stays free of transport, telemetry and platform dependencies (NFR-005).
-        # The check-evaluator-boundary make target covers transitive imports.
+        # The evaluator and the configuration formats stay free of transport, telemetry and platform
+        # dependencies (NFR-005). The check-evaluator-boundary make target covers transitive imports.
         evaluator-boundary:
           files:
             - "**/core/pkg/evaluator/**"
+            - "**/core/pkg/configformat/**"
           deny:
             - pkg: go.opentelemetry.io
               desc: the evaluator imports no telemetry; flagd records spans around it
@@ -39,6 +40,16 @@ linters:
               desc: the evaluator imports no platform clients
             - pkg: gocloud.dev
               desc: the evaluator imports no platform clients
+        configformat-no-evaluator:
+          files:
+            - "**/core/pkg/configformat/**"
+          deny:
+            - pkg: github.com/open-feature/flagd/core/pkg/evaluator
+              desc: a configuration format knows no evaluator; evaluators read the documents formats store
+            - pkg: github.com/diegoholiveira/jsonlogic
+              desc: a configuration format knows no evaluator engine
+            - pkg: github.com/open-feature/flagd/core/pkg/sync/
+              desc: a configuration format knows no sync provider
         stable-dependencies:
           deny:
             - pkg: golang.org/x/exp

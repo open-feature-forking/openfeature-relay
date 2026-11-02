@@ -117,6 +117,10 @@ check-evaluator-boundary:
 	@deps=$$(cd core && go list -deps ./pkg/evaluator) || exit 1; \
 	if echo "$$deps" | grep -E 'opentelemetry|grpc|connectrpc|k8s.io|gocloud'; then \
 		echo "core/pkg/evaluator must not depend on the packages listed above"; exit 1; \
+	fi; \
+	deps=$$(cd core && go list -deps ./pkg/configformat/...) || exit 1; \
+	if echo "$$deps" | grep -E 'opentelemetry|grpc|connectrpc|k8s.io|gocloud|jsonlogic|core/pkg/evaluator|core/pkg/sync/'; then \
+		echo "core/pkg/configformat must not depend on the packages listed above"; exit 1; \
 	fi
 install-mockgen:
 	go install go.uber.org/mock/mockgen@v0.4.0
