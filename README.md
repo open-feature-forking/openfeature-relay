@@ -1,154 +1,149 @@
-<!-- markdownlint-disable MD033 -->
-<h1 align="center">
-  <img src="images/flagD.png" width="350px;" >
-</h1>
+# OpenFeature Relay
 
-<h2 align="center">A feature flag daemon with a Unix philosophy.</h2>
+**Build the flag relay you need, from components — with flagd as the reference implementation.**
 
-<p align="center">
-  <a href="https://github.com/open-feature/flagd/actions">
-    <img src="https://github.com/open-feature/flagd/actions/workflows/build.yaml/badge.svg" alt="Github Actions">
-  </a>
-  <a href="https://goreportcard.com/report/github.com/open-feature/flagd">
-    <img src="https://goreportcard.com/badge/github.com/open-feature/flagd">
-  </a>
-  <a href="https://killercoda.com/open-feature/scenario/flagd-demo">
-    <img src="https://img.shields.io/badge/Killercoda-Interactive%20Demo-blue">
-  </a>
-</p>
+> [!IMPORTANT]
+> This is an independent **proof of concept**, incubated by a flagd maintainer.
+> It is **not** an official OpenFeature or CNCF project, and nothing here is endorsed by the OpenFeature Technical Committee.
+> If the idea holds up, the pieces are shaped so they can be proposed to [open-feature/flagd](https://github.com/open-feature/flagd) later.
+> Until then there are no releases and no images; build from source.
 
-<!-- markdownlint-enable MD033 -->
+## What is it?
 
-## What's flagd?
+A **flag relay** is a process that syncs flag configurations from somewhere, keeps them, evaluates them and serves them to OpenFeature clients — over [OFREP](https://github.com/open-feature/protocol), flagd's flag evaluation API, flag sync for in-process providers, or something else.
+[flagd](https://flagd.dev) is one. So are a vendor's edge proxy and relay proxy.
 
-flagd is a feature flag daemon with a Unix philosophy. Think of it as a ready-made, open source, OpenFeature-compliant feature flag backend system.
+OpenFeature Relay is a **runtime and a builder** for flag relays, in the way the [OpenTelemetry Collector Builder](https://opentelemetry.io/docs/collector/custom-collector/) is for collectors:
 
-## Features
+- you list the components you want in a **manifest**,
+- the **builder** generates and compiles a **distribution** that contains exactly those components,
+- anyone can write a component in their own Go module and build it in, without forking.
 
-- 🌐 OpenFeature compliant and [speaks your language](https://openfeature.dev/ecosystem?instant_search%5BrefinementList%5D%5Bvendor%5D%5B0%5D=flagd).
-- 🆕 Easy to [extend to new languages](https://flagd.dev/reference/providers/).
-- 🔄 Supports multiple data sources simultaneously.
-- 🕒 Feature Flag updates occur in near real-time.
-- 💪 Contains a [powerful and flexible rule targeting engine](https://flagd.dev/reference/flag-definitions/#targeting-rules) and [deterministic percentage-based rollouts](https://flagd.dev/reference/custom-operations/fractional-operation/).
-- 🔦 Flag evaluation traces and metrics are exposed and compatible with [OpenTelemetry](https://flagd.dev/reference/monitoring/#opentelemetry).
+flagd is the reference implementation, and the code starts from flagd's (this repository carries flagd's full history).
+Today's flagd becomes the **flagd-full** distribution: same CLI, configuration, ports, endpoints and behaviour.
 
-## ▶️ Quick Start
+## Why?
 
-Experiment with flagd in your browser using [the Killercoda tutorial](https://killercoda.com/open-feature/scenario/flagd-demo) or follow the instructions below to run on your own infrastructure.
+flagd today ships as one binary with every sync provider (file, HTTP, gRPC, Kubernetes, GCS, Azure Blob, S3), every service endpoint and the full OpenTelemetry SDK.
 
-1. flagd can be run as a standalone binary or container. [Download and install flagd or run it as a container](https://flagd.dev/installation/)
+- Its `core` module pulls in roughly 700 transitive dependencies, whatever you actually use.
+- Adding a sync provider or an endpoint means changing flagd itself.
+- In-process providers embed flagd's evaluator and, until recently, got its tracing spans whether they wanted them or not.
+- A vendor that wants OFREP, flag sync, event streams and telemetry for its own flag engine has to build all of it again.
 
-   Kubernetes-native? flagd can also be run [as part of the Kubernetes Operator](https://github.com/open-feature/open-feature-operator).
+OpenFeature Relay keeps the parts that every relay needs — polling, the store, change events, OFREP with its event stream, flag sync, telemetry, event delivery — shared, and makes everything else a selectable component.
 
-2. Start flagd:
+## Concepts
 
-    ```sh
-    flagd start \
-      --port 8013 \
-      --uri https://raw.githubusercontent.com/open-feature/flagd/main/samples/example_flags.flagd.json
-    ```
+```mermaid
+flowchart LR
+  src[(Source)] --> sp[Sync provider]
+  sp --> cf[Configuration format]
+  cf --> st[(Store)]
+  st --> ev[Evaluator]
+  ev --> se[Service endpoint<br/>OFREP · flag evaluation]
+  st --> fs[Service endpoint<br/>flag sync]
+  cf -. configuration change .-> bus{{Event bus}}
+  se -. evaluation .-> bus
+  bus --> sink[Event sink]
+```
 
-    Or use docker:
-    _Note - In Windows, use WSL system for both the file location and Docker runtime. Mixed file systems don't
-    work and this is a [limitation of Docker](https://github.com/docker/for-win/issues/8479)_
+| Component type | What it does | flagd-full ships |
+|----------------|--------------|------------------|
+| Sync provider | Reads flag configurations from a kind of source | file, HTTP, gRPC, Kubernetes, GCS, Azure Blob, S3 |
+| Configuration format | Validates flag configurations of one format and keeps them in the store as documents | flagd's JSON schema |
+| Evaluator | Resolves flags for an evaluation context from its paired format's documents; emits no telemetry | flagd's JsonLogic evaluator |
+| Service endpoint | Serves flags to clients over a protocol | flag evaluation (gRPC/Connect), OFREP, flag sync |
+| Middleware | Wraps an endpoint's HTTP handler (auth, CORS, rate limits) | h2c, CORS, HTTP metrics |
+| Telemetry provider | Tracing and metrics for endpoints and middleware | OpenTelemetry |
+| Event sink | Delivers configuration change, evaluation and tracking events elsewhere | — (new) |
 
-    ```sh
-    docker run \
-      --rm -it \
-      --name flagd \
-      -p 8013:8013 \
-      ghcr.io/open-feature/flagd:latest start \
-      --uri https://raw.githubusercontent.com/open-feature/flagd/main/samples/example_flags.flagd.json
-    ```
+A configuration format and its evaluator can ship together as an **engine module** — that is how vendors ship their engines.
+Each format keeps its own documents in the store, so flagd's flag model stays unchanged while a vendor's stays the vendor's.
+All terms are defined in the [glossary](docs/glossary.md).
 
-    If you wish, download the file locally to make changes:
+## Distributions
 
-    ```sh
-    wget https://raw.githubusercontent.com/open-feature/flagd/main/samples/example_flags.flagd.json
-    ```
+| Distribution | Contents | Purpose |
+|--------------|----------|---------|
+| **flagd-full** | every official component | today's flagd, unchanged |
+| **flagd-sync** | sync providers, flagd's format, flag sync — no evaluator | a configuration proxy: in-process providers get validated flag configurations from one place |
+| flagd-minimal, flagd-cloud, flagd-kubernetes | subsets | smaller binaries without the SDKs you don't use |
+| **vendor distribution** | a vendor's sync provider and engine behind OFREP | e.g. the Flagsmith engine or GO Feature Flag's, serving OpenFeature clients in place of the vendor's edge proxy |
+| your own | whatever your manifest lists | custom sources, endpoints, sinks |
 
-    In local mode, run flagd like this:
+## Status
 
-    ```sh
-    flagd start \
-      --port 8013 \
-      --uri file:./example_flags.flagd.json
-    ```
+Proof of concept. The specification is complete enough to build against; the code is at the start.
 
-    Or use docker ( _Note - In Windows, this requires WSL system for both the file location and Docker runtime_):
+| | |
+|---|---|
+| **Done** | The evaluator no longer imports OpenTelemetry, gRPC, Kubernetes or cloud SDKs, enforced by `depguard` rules and a CI boundary check; `golang.org/x/exp` replaced by the standard library. |
+| **In progress** | Splitting the configuration format out of the evaluator, with document versions ([UC-018](docs/use_cases/UC-018-develop-configuration-format-extension.md)). |
+| **Next** | Dependency-free evaluator and format modules for in-process providers; the untyped bulk evaluator and evaluation router; sync, service and other factories with the event bus; contract tests; the module split, builder CLI and manifest; flagd-full built by the builder passing the flagd test harness; a Flagsmith engine module as the cross-vendor proof. |
 
-    ```sh
-    docker run \
-      --rm -it \
-      --name flagd \
-      -p 8013:8013 \
-      -v $(pwd):/etc/flagd \
-      ghcr.io/open-feature/flagd:latest start \
-      --uri file:./etc/flagd/example_flags.flagd.json
-    ```
+What you can run today is flagd-full — that is, flagd built from this tree.
+The full order is in [CLAUDE.md](CLAUDE.md#poc-one-use-case-after-the-other); each use case's `Status` line in [docs/use_cases/](docs/use_cases/) says where it stands.
 
-    `--uri` can be a local file or any remote endpoint. Use `file:` prefix for local files. eg. `--uri file:/path/to/example_flags.flagd.json`. `gRPC` and `http` have their own requirements. More information can be found [here](https://flagd.dev/concepts/syncs/).
+## Try it
 
-    Multiple `--uri` parameters can be specified. In other words, flagd can retrieve flags from multiple sources simultaneously.
+You need Go (the version in `flagd/go.mod`), `make` and `curl`.
 
-3. Flagd is now ready to perform flag evaluations over either `HTTP(s)` or `gRPC`. This example utilizes `HTTP` via `cURL`.
+```sh
+git clone https://github.com/open-feature-forking/openfeature-relay.git
+cd openfeature-relay
+git submodule update --init
+make workspace-init
+make build-flagd
+./bin/flagd start --uri file:./config/samples/example_flags.flagd.json
+```
 
-    Retrieve a `String` value:
+Evaluate a flag over flagd's evaluation API (port 8013):
 
-    ```sh
-    curl -X POST "http://localhost:8013/flagd.evaluation.v1.Service/ResolveString" \
-      -d '{"flagKey":"myStringFlag","context":{}}' -H "Content-Type: application/json"
-    ```
+```sh
+curl -X POST "http://localhost:8013/flagd.evaluation.v1.Service/ResolveBoolean" \
+  -H "Content-Type: application/json" -d '{"flagKey":"myBoolFlag","context":{}}'
+```
 
-   For Windows we recommend using a [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) terminal.
-   Otherwise, use the following with `cmd`:
+…or over OFREP (port 8016):
 
-    ```sh
-    set json={"flagKey":"myStringFlag","context":{}}
-    curl -i -X POST -H "Content-Type: application/json" -d %json:"=\"% "localhost:8013/flagd.evaluation.v1.Service/ResolveString"
-    ```
+```sh
+curl -X POST "http://localhost:8016/ofrep/v1/evaluate/flags/myBoolFlag" \
+  -H "Content-Type: application/json" -d '{"context":{}}'
+```
 
-    Result:
+Run the tests with `make test`.
+On Windows, use WSL for Go and Docker.
 
-    ```json
-    {
-      "value": "val1",
-      "reason": "DEFAULT",
-      "variant":"key1"
-    }
-    ```
+## flagd
 
-    Updates to the underlying flag store (e.g. JSON file) are reflected by flagd in realtime. No restart is required.
+Everything flagd does, flagd-full does.
+flagd's documentation lives in [docs/](docs/index.md) in this repository and, for released flagd, at [flagd.dev](https://flagd.dev).
+flagd itself is developed at [open-feature/flagd](https://github.com/open-feature/flagd) by [its contributors](https://github.com/open-feature/flagd/graphs/contributors); this repository merges upstream regularly.
+For production use, use [released flagd](https://flagd.dev/installation/), not this repository.
 
-    flagd also supports boolean, integer, float and object flag types.
+## How it's built
 
-4. Now that flagd is running, it is time to integrate it into your application. Do this by using [an OpenFeature provider in a language of your choice](https://openfeature.dev/ecosystem?instant_search%5BrefinementList%5D%5Bvendor%5D%5B0%5D=FlagD).
+The specification is the contract, written with the AI Unified Process:
+[vision](docs/vision.md), [requirements](docs/requirements.md), [glossary](docs/glossary.md), [use cases](docs/use_cases/) and [research](docs/research/cross-vendor-evaluation.md).
 
-## 📐 High-level Architecture
+The code is written by AI agents in a fixed loop, with a human approving each plan and able to stop any pull request:
 
-![logical architecture of flagd](docs/images/flagd-logical-architecture.jpg "High level, logical architecture of flagd")
+| Role | Does |
+|------|------|
+| planner | turns a use case into steps, characterization tests and gates |
+| opposer | attacks the plan before code is written |
+| implementer / mechanic | implements the approved steps, with the gate output |
+| reviewer | re-runs the gates and reviews the pull request |
 
-## 📝 Further Documentation
+Agent definitions are in [.claude/agents/](.claude/agents/), plans and their reviews in [.claude/plans/](.claude/plans/), the working agreement in [CLAUDE.md](CLAUDE.md).
+Every slice lands as a pull request in this repository, and flagd's own gates — unit tests, lint, benchmarks, the test-harness acceptance suites — have to stay green.
 
-Further documentation including flagd configuration options, fractional evaluation, targeting rules and flag configuration merging strategies can be found at [flagd.dev](https://flagd.dev/) or [in this repository](./docs/index.md).
+## Contributing
 
-## 🫶 Contributing
-
-Interested in contributing? Great, we'd love your help! To get started, take a look at the [CONTRIBUTING](CONTRIBUTING.md) guide.
-
-We also hold regular community meetings that are open to everyone.
-Check the [OpenFeature community page](https://openfeature.dev/community/) for all the ways to get involved.
-
-Thanks so much to our contributors.
-
-<!-- markdownlint-disable MD033 -->
-<a href="https://github.com/open-feature/flagd/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=open-feature/flagd" />
-</a>
-<!-- markdownlint-enable MD033 -->
-
-Made with [contrib.rocks](https://contrib.rocks).
+Ideas, questions and criticism of the approach are the most useful contribution right now: open an issue.
+For code, read [CONTRIBUTING.md](CONTRIBUTING.md); commits need a DCO sign-off.
 
 ## License
 
-[Apache License 2.0](LICENSE)
+[Apache License 2.0](LICENSE), as flagd.
