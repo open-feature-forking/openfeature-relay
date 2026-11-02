@@ -15,7 +15,7 @@ import (
 
 	"github.com/open-feature/flagd/core/pkg/logger"
 	"github.com/open-feature/flagd/core/pkg/sync"
-	"github.com/open-feature/flagd/core/pkg/sync/internal/polling"
+	"github.com/open-feature/flagd/core/pkg/sync/polling"
 	"github.com/open-feature/flagd/core/pkg/utils"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"

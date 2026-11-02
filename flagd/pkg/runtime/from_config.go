@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/open-feature/flagd/core/pkg/configformat"
-	"github.com/open-feature/flagd/core/pkg/evaluator"
+	"github.com/open-feature/flagd/core/pkg/evaluator/jsonlogic"
 	"github.com/open-feature/flagd/core/pkg/logger"
 	"github.com/open-feature/flagd/core/pkg/service"
 	"github.com/open-feature/flagd/core/pkg/store"
@@ -145,12 +145,18 @@ func FromConfig(logger *logger.Logger, version string, config Config) (*Runtime,
 	}
 
 	// derive evaluator
-	var evalOpts []evaluator.JSONEvaluatorOption
+	var evalOpts []jsonlogic.JSONEvaluatorOption
 	// TODO(#2101): remove
 	if config.StrictNumericRange {
-		evalOpts = append(evalOpts, evaluator.WithStrictNumericRange())
+		evalOpts = append(evalOpts, jsonlogic.WithStrictNumericRange())
 	}
 	jsonEvaluator := evaluation.NewEvaluator(logger, store, evalOpts...)
+
+	options, err := telemetry.BuildConnectOptions(telCfg)
+	if err != nil {
+		// log the error but continue
+		logger.Error("failed to build connect options", zap.Error(err))
+	}
 
 	// derive services
 
@@ -159,7 +165,8 @@ func FromConfig(logger *logger.Logger, version string, config Config) (*Runtime,
 		logger.WithFields(zap.String("component", "service")),
 		jsonEvaluator,
 		store,
-		recorder)
+		recorder,
+		options...)
 
 	// ofrep service
 	ofrepService, err := ofrep.NewOfrepService(jsonEvaluator, store, config.CORS, ofrep.SvcConfiguration{
@@ -178,12 +185,6 @@ func FromConfig(logger *logger.Logger, version string, config Config) (*Runtime,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error creating OFREP service: %w", err)
-	}
-
-	options, err := telemetry.BuildConnectOptions(telCfg)
-	if err != nil {
-		// log the error but continue
-		logger.Error("failed to build connect options", zap.Error(err))
 	}
 
 	// flag sync service
@@ -235,7 +236,6 @@ func FromConfig(logger *logger.Logger, version string, config Config) (*Runtime,
 			CertPath:                   config.ServiceCertPath,
 			SocketPath:                 config.ServiceSocketPath,
 			CORS:                       config.CORS,
-			Options:                    options,
 			ContextValues:              config.ContextValues,
 			HeaderToContextKeyMappings: config.HeaderToContextKeyMappings,
 			StreamDeadline:             config.StreamDeadline,

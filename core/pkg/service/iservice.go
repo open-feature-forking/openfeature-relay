@@ -3,8 +3,6 @@ package service
 import (
 	"context"
 	"time"
-
-	"connectrpc.com/connect"
 )
 
 type NotificationType string
@@ -32,7 +30,6 @@ type Configuration struct {
 	KeyPath                    string
 	SocketPath                 string
 	CORS                       []string
-	Options                    []connect.HandlerOption
 	ContextValues              map[string]any
 	HeaderToContextKeyMappings map[string]string
 	StreamDeadline             time.Duration

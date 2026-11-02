@@ -1,6 +1,6 @@
-// Package flagconfigtest pins which flag configurations are accepted and which are rejected,
+// Package flagdtest pins which flag configurations are accepted and which are rejected,
 // together with the rows they leave in the store. Production code must not import it.
-package flagconfigtest
+package flagdtest
 
 import (
 	"context"

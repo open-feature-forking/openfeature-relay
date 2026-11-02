@@ -7,17 +7,17 @@ import (
 
 	"github.com/open-feature/flagd/core/pkg/logger"
 	"github.com/open-feature/flagd/core/pkg/sync"
-	blobSync "github.com/open-feature/flagd/core/pkg/sync/blob"
+	"github.com/open-feature/flagd/core/pkg/sync/azblob"
 	"github.com/open-feature/flagd/core/pkg/sync/file"
+	"github.com/open-feature/flagd/core/pkg/sync/gcs"
 	"github.com/open-feature/flagd/core/pkg/sync/grpc"
 	"github.com/open-feature/flagd/core/pkg/sync/grpc/credentials"
 	httpSync "github.com/open-feature/flagd/core/pkg/sync/http"
-	"github.com/open-feature/flagd/core/pkg/sync/internal/bloburi"
-	"github.com/open-feature/flagd/core/pkg/sync/internal/polling"
+	"github.com/open-feature/flagd/core/pkg/sync/polling"
+	"github.com/open-feature/flagd/core/pkg/sync/s3"
 	"github.com/open-feature/flagd/core/pkg/sync/kubernetes"
 	"go.uber.org/zap"
 	googlegrpc "google.golang.org/grpc"
-	"gocloud.dev/blob"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -30,9 +30,9 @@ const (
 	syncProviderGrpc       = "grpc"
 	syncProviderKubernetes = "kubernetes"
 	syncProviderHTTP       = "http"
-	syncProviderGcs        = "gcs"
-	syncProviderAzblob     = "azblob"
-	syncProviderS3         = "s3"
+	syncProviderGcs        = gcs.Provider
+	syncProviderAzblob     = azblob.Provider
+	syncProviderS3         = s3.Provider
 )
 
 var (
@@ -42,9 +42,6 @@ var (
 	regGRPCSecure         *regexp.Regexp
 	regGRPCCustomResolver *regexp.Regexp
 	regFile               *regexp.Regexp
-	regGcs                *regexp.Regexp
-	regAzblob             *regexp.Regexp
-	regS3                 *regexp.Regexp
 )
 
 func init() {
@@ -54,9 +51,6 @@ func init() {
 	regGRPCSecure = regexp.MustCompile("^" + grpc.PrefixSecure)
 	regGRPCCustomResolver = regexp.MustCompile("^" + grpc.SupportedScheme)
 	regFile = regexp.MustCompile("^file:")
-	regGcs = regexp.MustCompile("^gs://.+?/")
-	regAzblob = regexp.MustCompile("^azblob://.+?/")
-	regS3 = regexp.MustCompile("^s3://.+?/")
 }
 
 type ISyncBuilder interface {
@@ -128,13 +122,13 @@ func (sb *SyncBuilder) syncFromConfig(sourceConfig sync.SourceConfig, logger *lo
 		return sb.newGRPC(sourceConfig, logger), nil
 	case syncProviderGcs:
 		logger.Debug(fmt.Sprintf("using blob sync-provider with gcs driver for: %s", sourceConfig.URI))
-		return sb.newGcs(sourceConfig, logger)
+		return gcs.New(sourceConfig, logger, sb.SyncMetricsRecorder)
 	case syncProviderAzblob:
 		logger.Debug(fmt.Sprintf("using blob sync-provider with azblob driver for: %s", sourceConfig.URI))
-		return sb.newAzblob(sourceConfig, logger)
+		return azblob.New(sourceConfig, logger, sb.SyncMetricsRecorder)
 	case syncProviderS3:
 		logger.Debug(fmt.Sprintf("using blob sync-provider with s3 driver for: %s", sourceConfig.URI))
-		return sb.newS3(sourceConfig, logger)
+		return s3.New(sourceConfig, logger, sb.SyncMetricsRecorder)
 
 	default:
 		return nil, fmt.Errorf("invalid sync provider: %s, must be one of with "+
@@ -229,15 +223,7 @@ func (sb *SyncBuilder) newGRPC(config sync.SourceConfig, logger *logger.Logger) 
 // defaultInterval returns the configured interval or 5 seconds if unset,
 // along with a validated poller.
 func newPoller(config sync.SourceConfig) (uint32, *polling.CronPoller, error) {
-	var interval uint32 = 5
-	if config.Interval != 0 {
-		interval = config.Interval
-	}
-	poller, err := polling.NewCronPoller(interval, config.IntervalSeed)
-	if err != nil {
-		return 0, nil, err
-	}
-	return interval, poller, nil
+	return polling.NewSourcePoller(config.Interval, config.IntervalSeed)
 }
 
 func (sb *SyncBuilder) newHTTP(config sync.SourceConfig, logger *logger.Logger) (*httpSync.Sync, error) {
@@ -248,97 +234,6 @@ func (sb *SyncBuilder) newHTTP(config sync.SourceConfig, logger *logger.Logger) 
 	s := httpSync.NewHTTP(config, logger, poller, interval)
 	s.SetSyncMetricsRecorder(sb.SyncMetricsRecorder)
 	return s, nil
-}
-
-func (sb *SyncBuilder) newGcs(config sync.SourceConfig, logger *logger.Logger) (*blobSync.Sync, error) {
-	// Extract bucket uri and object name from the full URI:
-	// gs://bucket/path/to/object results in gs://bucket/ as bucketUri and
-	// path/to/object as an object name.
-	bucketURI, objectName := bloburi.Split(config.URI, regGcs)
-
-	interval, poller, err := newPoller(config)
-	if err != nil {
-		return nil, fmt.Errorf("invalid gcs sync configuration: %w", err)
-	}
-
-	return &blobSync.Sync{
-		Bucket: bucketURI,
-		Object: objectName,
-
-		BlobURLMux: blob.DefaultURLMux(),
-
-		Logger: logger.WithFields(
-			zap.String("component", "sync"),
-			zap.String("sync", "gcs"),
-		),
-		Interval:            interval,
-		Poller:              poller,
-		SyncMetricsRecorder: sb.SyncMetricsRecorder,
-	}, nil
-}
-
-func (sb *SyncBuilder) newAzblob(config sync.SourceConfig, logger *logger.Logger) (*blobSync.Sync, error) {
-	// Required to generate the azblob service URL
-	storageAccountName := os.Getenv("AZURE_STORAGE_ACCOUNT")
-	if storageAccountName == "" {
-		return nil, fmt.Errorf("environment variable AZURE_STORAGE_ACCOUNT not set or is blank")
-	}
-	if regexp.MustCompile(`\s`).MatchString(storageAccountName) {
-		return nil, fmt.Errorf("environment variable AZURE_STORAGE_ACCOUNT contains whitespace")
-	}
-
-	// Extract bucket uri and object name from the full URI:
-	// azblob://bucket/path/to/object results in azblob://bucket/ as bucketUri and
-	// path/to/object as an object name.
-	bucketURI, objectName := bloburi.Split(config.URI, regAzblob)
-
-	interval, poller, err := newPoller(config)
-	if err != nil {
-		return nil, fmt.Errorf("invalid azblob sync configuration: %w", err)
-	}
-
-	return &blobSync.Sync{
-		Bucket: bucketURI,
-		Object: objectName,
-
-		BlobURLMux: blob.DefaultURLMux(),
-
-		Logger: logger.WithFields(
-			zap.String("component", "sync"),
-			zap.String("sync", "azblob"),
-		),
-		Interval:            interval,
-		Poller:              poller,
-		SyncMetricsRecorder: sb.SyncMetricsRecorder,
-	}, nil
-}
-
-func (sb *SyncBuilder) newS3(config sync.SourceConfig, logger *logger.Logger) (*blobSync.Sync, error) {
-	// Extract bucket uri and object name from the full URI:
-	// s3://bucket/path/to/object results in s3://bucket/ as bucketUri and
-	// path/to/object as an object name. Any query string (e.g. use_path_style,
-	// region) is moved onto the bucket URL so gocloud's s3blob driver reads it.
-	bucketURI, objectName := bloburi.Split(config.URI, regS3)
-
-	interval, poller, err := newPoller(config)
-	if err != nil {
-		return nil, fmt.Errorf("invalid s3 sync configuration: %w", err)
-	}
-
-	return &blobSync.Sync{
-		Bucket: bucketURI,
-		Object: objectName,
-
-		BlobURLMux: blob.DefaultURLMux(),
-
-		Logger: logger.WithFields(
-			zap.String("component", "sync"),
-			zap.String("sync", "s3"),
-		),
-		Interval:            interval,
-		Poller:              poller,
-		SyncMetricsRecorder: sb.SyncMetricsRecorder,
-	}, nil
 }
 
 type IK8sClientBuilder interface {

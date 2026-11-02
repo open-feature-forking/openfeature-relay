@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/open-feature/flagd/core/internal/flagconfigtest"
+	flagconfigtest "github.com/open-feature/flagd/core/pkg/configformat/flagd/flagdtest"
 	"github.com/open-feature/flagd/core/pkg/configformat"
 	"github.com/open-feature/flagd/core/pkg/configformat/formattest"
 	"github.com/open-feature/flagd/core/pkg/logger"

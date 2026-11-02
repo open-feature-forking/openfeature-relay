@@ -1,5 +1,5 @@
 //nolint:wrapcheck
-package evaluator_test
+package jsonlogic_test
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	flagdEvaluator "github.com/open-feature/flagd/core/pkg/evaluator"
+	flagdEvaluator "github.com/open-feature/flagd/core/pkg/evaluator/jsonlogic"
 	"github.com/open-feature/flagd/core/pkg/logger"
 	"github.com/open-feature/flagd/core/pkg/model"
 	"github.com/open-feature/flagd/core/pkg/store"
