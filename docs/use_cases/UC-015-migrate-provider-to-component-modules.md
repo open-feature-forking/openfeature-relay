@@ -23,7 +23,7 @@
 1. Provider Author opens the migration guide for the target core release.
 2. System lists every moved import path under `core/` with its new component module and import path, and every renamed or removed identifier with its replacement.
 3. Provider Author lists the core import paths the provider uses today: evaluator, store, model, sync, logger, service, the file sync provider, the gRPC sync provider and its credentials, and the evaluator's combined loading of flag configurations.
-4. Provider Author finds each listed path in the migration guide.
+4. Provider Author finds each listed path in the migration guide (BR-001).
 5. Provider Author replaces each old import path and identifier with the one the guide names, hands the loading of flag configurations to the flagd configuration format (BR-005), and pins the new core module and component module versions.
 6. System builds the provider against the new modules, with no reference to the old core version left in the provider's module graph.
 7. Provider Author runs the provider's tests and the flagd Test Harness in-process and remote evaluation suites.
@@ -96,7 +96,7 @@
 
 ### BR-001: Complete Migration Guide
 
-The migration guide covers every exported import path under `core/` that moves or disappears in the release, so a provider migrates in one change without reading the core source (FR-043). A gap found by a Provider Author is a defect of the guide.
+The migration guide covers every exported import path under `core/` that moves or disappears in the release, so a provider migrates in one change without reading the core source (FR-043). It covers at least every path the Go flagd provider imports today: `core/pkg/evaluator`, `core/pkg/store`, `core/pkg/model`, `core/pkg/sync`, `core/pkg/logger`, `core/pkg/service`, `core/pkg/sync/file`, `core/pkg/sync/grpc` and `core/pkg/sync/grpc/credentials`. A gap found by a Provider Author is a defect of the guide.
 
 ### BR-002: Paths Move, Behaviour Does Not
 
@@ -112,4 +112,4 @@ The generated protobuf packages for flag evaluation and flag sync keep their lay
 
 ### BR-005: Loading and Evaluation Are Split
 
-Today `evaluator.SetState` parses, validates and loads a flag configuration into the store in one call. After the migration the flagd configuration format parses and validates the flag configuration into the store, and the evaluator only reads that store. The migration guide maps `SetState` to this split, including where validation errors are now reported, and the provider adds the configuration format component module to its dependencies.
+Today `evaluator.SetState` parses, validates and loads a flag configuration into the store in one call. After the migration the flagd configuration format parses and validates the flag configuration and keeps it in the store as its own documents, and its paired evaluator only reads those documents. The migration guide maps `SetState` to this split, including where validation errors are now reported, and the provider adds the configuration format component module to its dependencies.

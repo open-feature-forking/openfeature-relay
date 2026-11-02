@@ -9,7 +9,7 @@
 **Trigger:** Operator decides to move a flagd deployment to the first release built as flagd-full  
 **Status:** Draft  
 
-**Requirements:** [FR-020, NFR-002, NFR-007, C-003](../requirements.md)
+**Requirements:** [FR-020, FR-033, FR-034, NFR-002, NFR-007, C-003](../requirements.md)
 
 ## Preconditions
 
@@ -24,8 +24,8 @@
 4. System recognizes the scheme of every source and starts a sync provider for each one.
 5. System merges the flag configurations of all sources so that a later source overrides flag keys of an earlier one.
 6. System starts the flag evaluation, OFREP and flag sync service endpoints and the management port on the configured ports.
-7. System reports readiness on the management port.
-8. Operator checks the version information and confirms that the running binary is flagd-full of the target release.
+7. System reports readiness on the management port once every source has delivered a flag configuration that its configuration format accepted, as before.
+8. Operator checks with `flagd version` that the running binary names flagd-full, its manifest version and the target release.
 9. Operator sends evaluation requests that the previous deployment answered and receives the same results.
 10. Operator retires the previous flagd; the deployment now runs flagd-full with no change to its configuration.
 
@@ -67,7 +67,7 @@
 
 ### A5: Different Behaviour Observed
 
-**Trigger:** An evaluation result, an endpoint or the readiness behaviour differs from the previous deployment (step 9)  
+**Trigger:** An evaluation result, an endpoint, the readiness behaviour or the shape of the traces differs from the previous deployment (step 9)  
 **Flow:**
 
 1. Operator rolls back to the previous flagd release with the unchanged configuration.
@@ -99,7 +99,7 @@ When several sources define the same flag key, the source given later on the com
 
 ### BR-003: Same Scheme Coverage
 
-flagd-full contains a sync provider for every scheme the previous flagd accepted: `file:`, `http://`, `https://`, `grpc://`, `grpcs://`, the custom gRPC name-resolution scheme, `gs://`, `azblob://`, `s3://` and `core.openfeature.dev/`.
+A scheme is the prefix of a source that selects its sync provider and need not be a URI scheme. flagd-full contains a sync provider for every scheme the previous flagd accepted: `file:`, `http://`, `https://`, `grpc://`, `grpcs://`, the custom gRPC name-resolution scheme, `gs://`, `azblob://`, `s3://` and `core.openfeature.dev/`.
 
 ### BR-004: Verified Compatibility
 
@@ -108,3 +108,7 @@ A flagd-full release is published only when it passes the flagd test-harness RPC
 ### BR-005: Startup Time
 
 flagd-full reaches readiness within 10% of the time the previous flagd needs with the same sources, measured over 10 runs (NFR-002).
+
+### BR-006: Same Trace Shape
+
+flagd-full's service endpoints record one evaluation span per flag evaluation, as the previous flagd's evaluator did, so that an Operator's traces keep their shape after the upgrade (FR-033).

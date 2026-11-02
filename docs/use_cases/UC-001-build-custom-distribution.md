@@ -10,7 +10,7 @@
 **Trigger:** Distribution Builder needs a flagd with a set of components that no standard distribution offers  
 **Status:** Draft  
 
-**Requirements:** [FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007, FR-008, FR-017, FR-018, NFR-008, C-001](../requirements.md)
+**Requirements:** [FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007, FR-008, FR-017, FR-018, FR-034, NFR-008, C-001](../requirements.md)
 
 ## Preconditions
 
@@ -21,14 +21,14 @@
 ## Main Success Scenario
 
 1. Distribution Builder writes a manifest that names the distribution, its version and the output location.
-2. Distribution Builder lists in the manifest the components to compile in, grouped by component type (sync providers, configuration formats, evaluator, service endpoints, telemetry provider, middleware), each as a component module path with a version.
+2. Distribution Builder lists in the manifest the components to compile in, grouped by component type (sync providers, configuration formats, evaluators, service endpoints, and optionally a telemetry provider and middleware), each as a component module path with a version.
 3. Distribution Builder runs the Builder on the manifest.
 4. Builder validates the manifest.
 5. Builder generates the distribution source into the output location: an entry point that registers the factory of every listed component, and a module definition that requires every listed component module at its declared version.
 6. Builder asks the Go Toolchain to resolve the component modules and all their dependencies.
 7. Builder checks that every component module resolved at the version the manifest declares.
-8. Builder checks that every component a selected component needs is selected as well.
-9. Builder asks the Go Toolchain to compile the distribution source into a single flagd binary, stamped with the distribution version, the source revision and the build date.
+8. Builder checks that every component a selected component needs is selected as well, and that every scheme is claimed by one sync provider only.
+9. Builder asks the Go Toolchain to compile the distribution source into a single flagd binary, stamped with the distribution name, the distribution version, the source revision and the build date.
 10. Builder reports the location of the distribution binary and of the distribution source; the custom distribution is ready to run.
 
 ## Alternative Flows
@@ -117,7 +117,25 @@
 3. Distribution Builder adds the missing component to the manifest or removes the component that needs it.
 4. Use case continues at step 3.
 
-### A10: Compilation Fails
+### A10: Two Sync Providers Claim the Same Scheme
+
+**Trigger:** Two selected sync providers claim the same scheme (step 8)  
+**Flow:**
+
+1. Builder reports the scheme and both sync providers that claim it.
+2. Builder produces no binary.
+3. Distribution Builder removes one of the two sync providers from the manifest.
+4. Use case continues at step 3.
+
+### A11: Evaluator Nothing Needs
+
+**Trigger:** A selected evaluator is needed by no selected component, for example in a configuration proxy that lists one by mistake (step 8)  
+**Flow:**
+
+1. Builder warns that the evaluator is compiled in without a component that uses it.
+2. Use case continues at step 9.
+
+### A12: Compilation Fails
 
 **Trigger:** The Go Toolchain cannot compile the distribution source, for example because a component module does not provide a factory of the component type it is listed under, or two component modules depend on incompatible versions of the core module (step 9)  
 **Flow:**
@@ -132,7 +150,7 @@
 
 - The output location holds the distribution source generated from the manifest.
 - Unless the compile step was skipped, the output location holds a flagd binary that contains exactly the components the manifest lists, each at its declared version or from its declared local checkout.
-- The distribution binary reports the distribution version, source revision and build date.
+- The distribution binary reports the distribution name, distribution version, source revision and build date.
 - The manifest is unchanged.
 
 ### Failure Postconditions
@@ -150,7 +168,7 @@ A manifest names the distribution, its version and its output location, and list
 
 ### BR-002: Component Cardinality
 
-A distribution contains at least one sync provider, at least one configuration format, at least one service endpoint and exactly one telemetry provider (the noop telemetry provider counts). It contains at most one evaluator, and none when no selected component needs one, as in a configuration proxy. Middleware is optional.
+A distribution contains at least one sync provider, at least one configuration format and at least one service endpoint. It contains one evaluator for each configuration format whose flags it evaluates, and none when no selected component needs one, as in a configuration proxy; an evaluator nothing needs is compiled in with a warning (A11). A telemetry provider is optional, at most one is selected, and the noop telemetry provider is compiled in when the manifest names none. Middleware is optional.
 
 ### BR-003: Same Reference for Every Component
 
@@ -199,3 +217,7 @@ Any non-empty combination of service endpoints is valid, official or extension: 
 ### BR-014: Component Needs Are Met
 
 Each component states which component types or components it needs; a distribution is built only when every need of every selected component is met by another selected component. OFREP and flag evaluation need an evaluator; an evaluator needs the configuration format it evaluates; flag sync needs a configuration format but no evaluator.
+
+### BR-015: One Sync Provider per Scheme
+
+Every scheme is claimed by exactly one selected sync provider. A scheme is the prefix of a source, which need not be a URI scheme (for example `core.openfeature.dev/`); two sync providers claiming the same prefix make the manifest invalid.

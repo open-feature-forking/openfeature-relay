@@ -9,7 +9,7 @@
 **Trigger:** Extension Author decides to make flagd read flags from a kind of source that no official sync provider supports  
 **Status:** Draft  
 
-**Requirements:** [FR-010, FR-015, FR-003, FR-008, FR-025, C-001](../requirements.md)
+**Requirements:** [FR-010, FR-015, FR-003, FR-008, FR-025, FR-029, C-001](../requirements.md)
 
 ## Preconditions
 
@@ -31,7 +31,7 @@
 
 ### A1: Scheme Not Accepted
 
-**Trigger:** The contract tests reject a declared scheme because it is empty or not a URI prefix (step 5)  
+**Trigger:** The contract tests reject a declared scheme because it is empty (step 5)  
 **Flow:**
 
 1. System reports the rejected scheme and the scheme rule it breaks.
@@ -85,11 +85,11 @@ A sync provider component module depends on the core module and on no other flag
 
 ### BR-002: Schemes Select the Sync Provider
 
-Every declared scheme is a URI prefix such as `consul://`. In a distribution, a source is handed to the sync provider whose scheme its URI starts with, and one scheme belongs to at most one sync provider of that distribution; a clash between two selected sync providers is reported when the distribution is built (UC-001), not by this use case.
+Every declared scheme is a non-empty prefix of a source, such as `consul://` or `core.openfeature.dev/`; it need not be a URI scheme. In a distribution, a source is handed to the sync provider whose scheme it starts with, and one scheme belongs to at most one sync provider of that distribution; a clash between two selected sync providers is reported when the distribution is built (UC-001), not by this use case.
 
 ### BR-003: First Delivery as Soon as Possible
 
-The sync provider delivers the source's complete flag configuration as soon as it has read it, because a distribution becomes ready only after every configured source has delivered once.
+The sync provider delivers the source's complete flag configuration as soon as it has read it, because a distribution reaches readiness only after every configured source has delivered a flag configuration that its configuration format accepted.
 
 ### BR-004: Every Delivery Names Its Source
 
@@ -97,7 +97,7 @@ Each delivery carries the source it came from, so that the runtime attributes fl
 
 ### BR-005: Complete Configuration Unless Incremental Updates Are Enabled
 
-Each delivery replaces all flags of its source, unless the Operator has enabled incremental updates for that source; then it replaces only the flag sets it contains.
+Each delivery replaces all flags of its source, unless the Operator has enabled incremental updates for that source; then each delivery is an incremental update and replaces only the flag sets it contains.
 
 ### BR-006: Recoverable Source Errors Do Not Stop flagd
 
@@ -109,7 +109,7 @@ The sync provider stops reading and delivering when the distribution shuts down,
 
 ### BR-008: Format-Neutral Delivery
 
-A sync provider does not parse, validate or transform the flag configuration it reads; the configuration format the distribution selects does. A sync provider therefore works with any configuration format and in a configuration proxy, which has no evaluator, and an invalid flag configuration is rejected the same way whichever sync provider delivered it.
+A sync provider does not parse, validate or transform the flag configuration it reads; the configuration format the source names does, flagd's being the default (FR-029). A sync provider therefore works with every configuration format and in a configuration proxy, which has no evaluator, and an invalid flag configuration is rejected the same way whichever sync provider delivered it.
 
 ### BR-009: Same Selection as Official Components
 

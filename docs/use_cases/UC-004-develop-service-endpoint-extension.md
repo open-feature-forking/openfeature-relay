@@ -9,7 +9,7 @@
 **Trigger:** Extension Author decides to make flagd serve flags over a protocol that no official service endpoint supports  
 **Status:** Draft  
 
-**Requirements:** [FR-011, FR-015, FR-016, FR-017, FR-018, FR-025, FR-003, FR-008, C-001](../requirements.md)
+**Requirements:** [FR-011, FR-015, FR-016, FR-017, FR-018, FR-025, FR-029, FR-003, FR-008, C-001](../requirements.md)
 
 ## Preconditions
 
@@ -22,7 +22,7 @@
 2. Extension Author names the service endpoint's type and declares that it needs an evaluator.
 3. Extension Author implements the service endpoint: it starts serving clients when the distribution starts, answers each evaluation request by asking the injected evaluator, and stops serving when the distribution shuts down.
 4. Extension Author subscribes the service endpoint, through the event bus, to the runtime events it reacts to, such as flag changes.
-5. Extension Author implements the factory that creates the service endpoint from the dependencies a distribution injects: store, evaluator, event bus, configuration, logger and telemetry provider.
+5. Extension Author implements the factory that creates the service endpoint from the dependencies a distribution injects: store, event bus, configuration, logger, telemetry provider and, only when the service endpoint declared a need for one, the evaluator.
 6. Extension Author runs the service endpoint contract tests (include UC-008 Run Contract Tests).
 7. System reports that the service endpoint meets every case of the service endpoint contract.
 8. Extension Author tags and publishes the component module under its Go module path and version.
@@ -32,11 +32,11 @@
 
 ### A1: Endpoint Serves Flag Configurations Without an Evaluator
 
-**Trigger:** The service endpoint forwards flag configurations to clients, such as in-process providers, instead of evaluating flags (step 2)
+**Trigger:** The service endpoint forwards flag configurations to clients, such as in-process providers, instead of evaluating flags (step 2)  
 **Flow:**
 
 1. Extension Author declares that the service endpoint needs no evaluator.
-2. Extension Author implements the service endpoint so that it sends each client the validated flag configurations from the store, and sends them again after every flag change announced on the event bus.
+2. Extension Author implements the service endpoint so that it sends each client the documents the configuration formats keep in the store, as they are and tagged with their configuration format, and sends them again after every flag change announced on the event bus.
 3. Use case continues at step 5.
 
 ### A2: Endpoint Needs No Runtime Events
@@ -107,7 +107,7 @@ The runtime announces flag changes, naming the source that changed, on the event
 
 ### BR-003: Serve Only What the Distribution Injects
 
-A service endpoint answers evaluation requests from the injected evaluator and serves flag configurations from the injected store. It does not create an evaluator, parse flag configurations or read sources itself, so that every service endpoint of a distribution serves the same flags.
+A service endpoint answers evaluation requests from the injected evaluator and serves flag configurations from the injected store, as the documents of their configuration format, unchanged and tagged with that format. It does not create an evaluator, parse or convert flag configurations or read sources itself, so that every service endpoint of a distribution serves the same flags.
 
 ### BR-004: Declared Need for an Evaluator
 

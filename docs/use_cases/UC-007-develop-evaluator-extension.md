@@ -5,81 +5,78 @@
 **Use Case ID:** UC-007  
 **Use Case Name:** Develop Evaluator Extension  
 **Primary Actor:** Extension Author  
-**Goal:** Let flagd evaluate flags with another vendor's evaluation logic, such as Flagsmith's, by writing an evaluator extension in an own component module that a custom distribution can build in together with its configuration format.  
+**Goal:** Publish an evaluator in the Extension Author's own component module, verified against the evaluator contract, so that a distribution evaluates flags with another vendor's evaluation logic, such as Flagsmith's, from the documents of its paired configuration format.  
 **Trigger:** Extension Author needs flags evaluated in a way the JsonLogic evaluator does not support  
 **Status:** Draft  
 
-**Requirements:** [FR-014, FR-015, FR-018, FR-040, NFR-005](../requirements.md)
+**Requirements:** [FR-014, FR-015, FR-018, FR-027, FR-033, FR-040, FR-003, FR-008, NFR-005](../requirements.md)
 
 ## Preconditions
 
-- A released core module provides the evaluator factory interface, the flag model and the store the evaluator reads from.
-- A configuration format exists for the flag configurations the evaluator works with: flagd's own, or an extension written in UC-018 Develop Configuration Format Extension.
-- The Extension Author has a Go module of their own that depends on the core module.
+- A release of the core module that contains the evaluator factory interface and the evaluator contract tests is available.
+- A component module of the configuration format the evaluator pairs with is available: flagd's own, or an extension published in UC-018 Develop Configuration Format Extension.
+- The Extension Author has a Go module of their own in which the extension will live.
 
 ## Main Success Scenario
 
-1. Extension Author implements the evaluator factory interface in their component module, giving the evaluator a component name, the configuration format it needs and the configuration it accepts.
-2. Extension Author implements the evaluator: it resolves boolean, string, integer, float and object flags, and all flags at once, for an evaluation context from the flags in the store, returning value, variant, reason, metadata and error.
-3. Extension Author runs the contract tests for the evaluator component type (include UC-008 Run Contract Tests).
-4. System reports that the evaluator satisfies the evaluator contract.
-5. Extension Author lists the extension as the evaluator in the manifest of a custom distribution, together with its configuration format, with a local replacement of its component module.
-6. System validates the manifest, checks that the evaluator's configuration format is selected, generates the distribution source and compiles the custom distribution with the evaluator.
-7. Extension Author starts the custom distribution with a source holding flag configurations in the evaluator's configuration format.
-8. System parses and validates the flag configurations with the configuration format into the store, and creates the evaluator through its factory.
-9. Extension Author evaluates a flag through a service endpoint.
-10. System resolves the flag with the evaluator and returns the result through the service endpoint; the evaluator extension works in a custom distribution.
+1. Extension Author adds the core module and the paired configuration format's component module as dependencies of their component module.
+2. Extension Author names the evaluator's type and the configuration format it pairs with.
+3. Extension Author implements the evaluator: it resolves boolean, string, integer, float and object flags, and all flags at once, for an evaluation context from the documents its configuration format keeps in the store, and returns value, variant, reason, metadata and error.
+4. Extension Author implements the factory that creates the evaluator from the dependencies a distribution injects: the store, configuration and logger.
+5. Extension Author runs the evaluator contract tests (include UC-008 Run Contract Tests).
+6. System reports that the evaluator meets every case of the evaluator contract.
+7. Extension Author tags and publishes the component module under its Go module path and version.
+8. The evaluator is available as an extension that a Distribution Builder selects in a manifest by module path and version, together with its configuration format, exactly like an official evaluator.
 
 ## Alternative Flows
 
-### A1: Contract Violated
+### A1: Paired With flagd's Configuration Format
 
-**Trigger:** The contract tests report a violation, for example a wrong reason or error for a missing or disabled flag, a type mismatch that is not reported, or a resolution that sees a half-updated store (step 4)  
+**Trigger:** The evaluator evaluates flagd's flag model in a new way instead of a vendor's format (step 2)  
 **Flow:**
 
-1. System names each violated contract rule and the failing case.
-2. Extension Author corrects the evaluator.
+1. Extension Author pairs the evaluator with flagd's configuration format.
+2. Extension Author adds the flagd test-harness evaluation suite to the evaluator's contract run.
 3. Use case continues at step 3.
 
-### A2: Manifest Invalid
+### A2: Contract Case Fails
 
-**Trigger:** The manifest names more than one evaluator, does not select the evaluator's configuration format, or the entry for the extension cannot be resolved (step 6)  
+**Trigger:** At least one case of the evaluator contract fails, for example a wrong reason or error code for a missing or disabled flag, an unreported type mismatch, or a resolution that sees a half-updated store (step 6)  
 **Flow:**
 
-1. System rejects the manifest with an error naming the faulty entry, and for a missing configuration format the format the evaluator needs, and builds nothing.
-2. Extension Author corrects the manifest.
-3. Use case continues at step 6.
+1. System reports each failed case with its expected and its observed behaviour.
+2. Extension Author corrects the evaluator or its factory.
+3. Use case continues at step 5.
 
-### A3: Flag Configuration Rejected
+### A3: Try Extension in a Distribution Before Publishing
 
-**Trigger:** The configuration format rejects the flag configuration from a source (step 8)  
+**Trigger:** Extension Author wants to see the extension running in flagd before releasing it (step 7)  
 **Flow:**
 
-1. System logs an error naming the source and keeps the last flag configuration it accepted in the store.
-2. Extension Author corrects the flag configuration in the source.
-3. Use case continues at step 8.
+1. Extension Author builds a custom distribution whose manifest names the evaluator with its configuration format and replaces the evaluator's component module with the local checkout (UC-001 Build Custom Distribution).
+2. Extension Author starts the distribution with a source in the paired configuration format and confirms that a client receives the expected evaluation results through a service endpoint.
+3. Use case continues at step 7.
 
-### A4: Flag Not Resolvable
+### A4: Extension Author Abandons the Extension
 
-**Trigger:** The flag is missing, disabled, or of a different type than requested (step 10)  
+**Trigger:** Extension Author stops before the component module is published (step 7)  
 **Flow:**
 
-1. System returns the error code and reason the evaluator gives, in the same form the JsonLogic evaluator gives them.
+1. Extension Author leaves the component module unpublished.
 2. Use case ends.
 
 ## Postconditions
 
 ### Success Postconditions
 
-- The evaluator extension lives in the Extension Author's own component module and passes the evaluator contract tests.
-- A custom distribution that names the extension and its configuration format in its manifest resolves every flag evaluation with it.
-- No flagd source outside the Extension Author's component module was changed.
+- A tagged version of the component module exists under the Extension Author's Go module path.
+- The component module provides exactly one evaluator through a factory of the evaluator component type, and names the configuration format it pairs with.
+- That version of the evaluator passes every case of the evaluator contract of the core module version it depends on.
 
 ### Failure Postconditions
 
-- No distribution is built with an evaluator whose configuration format it does not select.
-- A distribution never resolves flags against a flag configuration its configuration format rejected.
-- A distribution whose manifest does not name the extension is unaffected by it.
+- No version of the component module is published that fails a case of the evaluator contract.
+- No official component module, standard distribution or the core module is changed.
 
 ## Business Rules
 
@@ -87,22 +84,34 @@
 
 A distribution contains at most one evaluator. A distribution without an evaluator, such as a configuration proxy, serves no flag evaluation.
 
-### BR-002: Paired With a Configuration Format
+### BR-002: Paired With One Configuration Format
 
-An evaluator names the configuration format it needs, and a distribution with that evaluator always contains that configuration format. The evaluator never parses or validates flag configurations itself; it reads only what the configuration format put into the store.
+An evaluator names the configuration format it pairs with. The builder rejects a manifest that selects the evaluator without that configuration format (FR-018).
 
-### BR-003: No Telemetry Dependency
+### BR-003: Reads Only Its Format's Documents
 
-The evaluator factory hands an evaluator no telemetry provider, and an evaluator records no traces or metrics of its own. Service endpoints observe evaluations through the telemetry provider; in-process providers observe them through hooks.
+Each configuration format keeps its own documents in the store. An evaluator reads only the documents of its paired configuration format and never parses or validates flag configurations itself; flagd's flag model is not changed for it.
 
-### BR-004: Dependency Boundary
+### BR-004: Contract Depends on the Format
+
+The evaluator contract cases that do not depend on a format, such as reasons, error codes and concurrent resolution, apply to every evaluator. The flagd test-harness evaluation suite is part of the contract only for evaluators paired with flagd's configuration format.
+
+### BR-005: No Telemetry
+
+The evaluator factory injects no telemetry provider, and an evaluator emits no telemetry. In flagd-full the service endpoints record the evaluation span (FR-033); in-process providers observe evaluations through hooks.
+
+### BR-006: Dependency Boundary
 
 An evaluator module depends on no telemetry, transport or sync provider module, so that an in-process provider can embed it. For the JsonLogic evaluator module this boundary is enforced in CI.
 
-### BR-005: Same Results Contract
+### BR-007: Same Results Contract
 
 An evaluator returns the reasons and error codes of the OpenFeature specification, so that clients cannot tell from the shape of a result which evaluator produced it.
 
-### BR-006: Concurrent Resolution
+### BR-008: Concurrent Resolution
 
-An evaluator resolves flags concurrently while the store changes; a resolution sees either the flags before or after a change, never a mix.
+An evaluator resolves flags concurrently while the store changes; a resolution sees either the documents before or after a change, never a mix.
+
+### BR-009: Same Selection as Official Components
+
+An extension is referenced in a manifest by Go module path and version in the same way as an official evaluator; no registration with the Maintainers is needed.

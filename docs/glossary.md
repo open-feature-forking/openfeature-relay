@@ -24,7 +24,7 @@
 | Evaluator | The component type that resolves a flag for an evaluation context from the documents of its paired configuration format; it emits no telemetry. | resolver |
 | Telemetry Provider    | A component type that supplies tracing, metrics and HTTP instrumentation to service endpoints and middleware.                            |                               |
 | Middleware            | A component type that wraps a service endpoint's HTTP handler with cross-cutting behaviour.                                               | interceptor, filter           |
-| Store                 | The in-memory holder of the flags parsed from all sources, queried by the evaluator and watched by the flag sync endpoint.               | memdb                         |
+| Store | The in-memory holder of the documents each configuration format accepted from its sources; evaluators read their own format's documents from it, and the flag sync endpoint watches it. | memdb |
 | Selector              | An expression a client sends to restrict a query or a flag sync subscription to the flags of certain sources or flag sets.                |                               |
 | OFREP                 | The OpenFeature Remote Evaluation Protocol, an HTTP API for evaluating flags; one of flagd's service endpoints.                          |                               |
 | Vendor Flag Service | Another vendor's hosted flag management service that a vendor distribution syncs flag configurations from, such as Flagsmith. |  |
@@ -39,6 +39,7 @@
 | FIPS Build            | A distribution compiled in FIPS 140-3 mode, with the crypto boundary described in docs/reference/fips-140-3.md. | |
 | Event Bus             | The publish/subscribe channel through which the runtime announces events, such as flag changes, to service endpoints.                  |                               |
 | Runtime | The part of a distribution that starts sync providers, hands their flag configurations to configuration formats, publishes events on the event bus and starts service endpoints. |  |
+| Image Build Environment | The container build tooling (for example Docker Buildx) that turns a compiled distribution and a Dockerfile into an image. | |
 | In-Process Provider | An OpenFeature provider that embeds the flagd configuration format and the evaluator and evaluates flags locally instead of calling a service endpoint. | embedded provider |
 | Remote Evaluation     | Evaluation performed by a running flagd and returned over a service endpoint, as opposed to in-process evaluation.                      | RPC mode                      |
 | Hook                  | An OpenFeature hook; for in-process providers, the only place observability is added.                                                    |                               |

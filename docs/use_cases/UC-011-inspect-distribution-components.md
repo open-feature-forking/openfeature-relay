@@ -9,7 +9,7 @@
 **Trigger:** Operator asks a flagd binary or image which components it contains  
 **Status:** Draft  
 
-**Requirements:** [FR-023](../requirements.md)
+**Requirements:** [FR-023, FR-034](../requirements.md)
 
 ## Preconditions
 
@@ -18,7 +18,7 @@
 ## Main Success Scenario
 
 1. Operator runs `flagd components` with the binary or image to inspect.
-2. System identifies the distribution by its name and release version.
+2. System identifies the distribution by its name and manifest version.
 3. System lists the components compiled into the binary, grouped by component type: sync providers, configuration formats, evaluators, service endpoints, telemetry providers and middleware.
 4. System shows, for every sync provider, the schemes it handles.
 5. System shows, for every component, the component module and version it comes from.
@@ -37,13 +37,22 @@
 
 ### A2: Inspection After a Startup Failure
 
-**Trigger:** Operator inspects the binary because it refused to start with a source whose scheme it does not support (step 1)  
+**Trigger:** Operator inspects the binary because it refused to start with a source whose scheme it does not support or a setting of a component it does not contain (step 1)  
 **Flow:**
 
 1. Operator runs the command named in the startup error.
 2. Use case continues at step 2.
 
-### A3: Required Component Missing
+### A3: Listing for Tooling
+
+**Trigger:** Operator asks for the listing as JSON, for a script or a deployment check to read (step 1)  
+**Flow:**
+
+1. System returns the distribution name, manifest version, components, schemes and component module versions as one JSON document with the same content as the text listing.
+2. Operator's tooling checks the document against the deployment's needs.
+3. Use case continues at step 6.
+
+### A4: Required Component Missing
 
 **Trigger:** A scheme, configuration format, evaluator, service endpoint or telemetry provider the deployment needs is not in the list (step 6)  
 **Flow:**
@@ -73,4 +82,8 @@ The command needs no source, configuration file or network access and returns wi
 
 ### BR-003: Same Output for Every Distribution
 
-Standard and custom distributions list their components in the same format, so that an Operator reads any distribution the same way.
+Standard and custom distributions list their components in the same text and JSON layout, so that an Operator and their tooling read any distribution the same way (FR-023).
+
+### BR-004: Same Identity as Version
+
+The distribution name and version in the listing are the ones `flagd version` reports (FR-034).

@@ -9,7 +9,7 @@
 **Trigger:** Operator decides to replace flagd-full with a smaller standard distribution for a deployment  
 **Status:** Draft  
 
-**Requirements:** [FR-021, FR-022, FR-024, NFR-003, NFR-004, NFR-011, C-009](../requirements.md)
+**Requirements:** [FR-021, FR-022, FR-023, FR-024, FR-034, NFR-003, NFR-004, NFR-011, C-009](../requirements.md)
 
 ## Preconditions
 
@@ -18,15 +18,16 @@
 
 ## Main Success Scenario
 
-1. Operator determines the schemes of the deployment's sources, the service endpoints its clients use, whether flagd evaluates flags or only forwards flag configurations to in-process providers, and whether it exports telemetry.
-2. Operator compares these needs with the published manifests of flagd-minimal, flagd-cloud, flagd-kubernetes, flagd-proxy and flagd-full.
-3. Operator selects the smallest standard distribution that covers every need, as a binary or as an image.
+1. Operator determines the schemes and configuration formats of the deployment's sources, the service endpoints its clients use, whether flagd evaluates flags or only forwards flag configurations to in-process providers, and whether it exports telemetry.
+2. Operator compares these needs with the published manifests of flagd-minimal, flagd-cloud, flagd-kubernetes, flagd-relay and flagd-full, or with the text or JSON listing of `flagd components` of each (UC-011).
+3. Operator selects the smallest standard distribution that covers every need, as a binary or as the image `ghcr.io/open-feature/flagd-<distribution>`.
 4. Operator starts the selected distribution with the unchanged start command, configuration file and environment variables.
-5. System checks the scheme of every source against the sync providers compiled into the distribution.
+5. System checks every setting and the scheme of every source against the components compiled into the distribution.
 6. System starts a sync provider for each source and the service endpoints the distribution contains.
-7. System reports readiness on the management port.
-8. Operator sends evaluation requests and receives the same results as from flagd-full.
-9. Operator keeps the selected distribution for the deployment; it runs with only the components the deployment uses.
+7. System reports readiness on the management port once every source has delivered a flag configuration that its configuration format accepted.
+8. Operator checks with `flagd version` that the running binary names the selected distribution and its manifest version.
+9. Operator sends evaluation requests and receives the same results as from flagd-full.
+10. Operator keeps the selected distribution for the deployment; it runs with only the components the deployment uses.
 
 ## Alternative Flows
 
@@ -35,7 +36,7 @@
 **Trigger:** The deployment must use FIPS 140-3 validated cryptography (step 3)  
 **Flow:**
 
-1. Operator selects the FIPS build of the chosen standard distribution.
+1. Operator selects the FIPS build of the chosen standard distribution, whose image tag carries the `-fips` suffix.
 2. Use case continues at step 4.
 
 ### A2: Scheme Not in Distribution
@@ -47,7 +48,16 @@
 2. Operator selects a standard distribution that contains a sync provider for the scheme.
 3. Use case continues at step 4.
 
-### A3: No Standard Distribution Fits
+### A3: Setting for an Absent Component
+
+**Trigger:** The configuration sets a setting of a component the distribution does not contain, such as an OpenTelemetry collector URI in a distribution with the noop telemetry provider (step 5)  
+**Flow:**
+
+1. System refuses to start and names each such setting and the component it belongs to.
+2. Operator removes the setting or selects a standard distribution that contains the component.
+3. Use case continues at step 4.
+
+### A4: No Standard Distribution Fits
 
 **Trigger:** No standard distribution smaller than flagd-full covers every need (step 3)  
 **Flow:**
@@ -55,25 +65,17 @@
 1. Operator either keeps flagd-full or asks a Distribution Builder for a custom distribution (UC-001).
 2. Use case ends.
 
-### A4: Settings for an Absent Component
-
-**Trigger:** The configuration sets a service endpoint or telemetry setting for a component the distribution does not contain, such as an OpenTelemetry collector URI in a distribution with the noop telemetry provider (step 6)  
-**Flow:**
-
-1. System starts without that component and logs a warning that names each ignored setting and the missing component.
-2. Use case continues at step 7.
-
 ### A5: Configuration Proxy Selected
 
-**Trigger:** The selected distribution is flagd-proxy, which contains no evaluator (step 8)  
+**Trigger:** The selected distribution is flagd-relay, which contains no evaluator (step 9)  
 **Flow:**
 
 1. Operator connects an in-process provider to the flag sync endpoint and confirms that it receives the same flag configurations as from flagd-full; running and operating the configuration proxy is UC-017.
-2. Use case continues at step 9.
+2. Use case continues at step 10.
 
 ### A6: Different Behaviour Observed
 
-**Trigger:** An evaluation result or a forwarded flag configuration differs from flagd-full for the same request (step 8)  
+**Trigger:** An evaluation result or a forwarded flag configuration differs from flagd-full for the same request (step 9)  
 **Flow:**
 
 1. Operator returns the deployment to flagd-full with the unchanged configuration.
@@ -84,24 +86,24 @@
 
 ### Success Postconditions
 
-- The deployment runs a standard distribution that contains a sync provider for every scheme of its sources.
-- Every evaluation returns the same result as flagd-full returns for the same request; a configuration proxy forwards the same flag configurations as flagd-full's flag sync endpoint.
+- The deployment runs a standard distribution that contains a component for every source, setting and service endpoint it uses.
+- Every evaluation returns the same result as flagd-full returns for the same request; flagd-relay forwards the same flag configurations as flagd-full's flag sync endpoint.
 - The deployment's start command, configuration file and environment variables are unchanged.
 
 ### Failure Postconditions
 
-- A distribution never serves evaluations while one of its configured sources is left without a sync provider.
+- A distribution never serves a request while a source or setting of its configuration has no component in it.
 - The configuration remains usable with flagd-full, so returning to it needs no change.
 
 ## Business Rules
 
-### BR-001: Fail on Unavailable Scheme
+### BR-001: Fail on Unavailable Component
 
-A distribution started with a source whose scheme it does not support stops before it serves any request and lists the schemes it supports (FR-022). It never skips such a source silently.
+A distribution started with a source whose scheme it does not support stops before it serves any request and lists the schemes it supports (FR-022). A setting of a component the distribution does not contain stops startup the same way, as an invalid component configuration does. A distribution never skips a source or setting silently.
 
 ### BR-002: Same Configuration Surface
 
-Every standard distribution accepts the same CLI flags, configuration file keys and environment variables as flagd-full; only the components behind them differ.
+Every standard distribution, flagd-relay included, uses the CLI flags, configuration file keys and environment variables of flagd-full; only the components behind them differ.
 
 ### BR-003: Telemetry Is a Component
 
@@ -111,14 +113,14 @@ A distribution with the noop telemetry provider contains no observability code a
 
 flagd-minimal is at most 50% of the size of flagd-full for the same OS and architecture (NFR-003), and its module graph contains no module under `k8s.io`, `cloud.google.com`, `github.com/aws`, `github.com/Azure` or `go.opentelemetry.io/otel/sdk` (NFR-004).
 
-### BR-005: FIPS Build per Standard Distribution
+### BR-005: Image Names
 
-Every standard distribution is also published as a FIPS 140-3 build with the same crypto boundary as today's FIPS build of flagd (C-009).
+A standard distribution's image is `ghcr.io/open-feature/flagd-<distribution>`; flagd-full keeps `ghcr.io/open-feature/flagd`. The FIPS build of a standard distribution adds the `-fips` suffix and keeps the crypto boundary of today's FIPS build of flagd (C-009).
 
 ### BR-006: Same Evaluation Results
 
-A standard distribution evaluates with the same evaluator as flagd-full; for the components it contains it returns the same results as flagd-full.
+A standard distribution evaluates with the same configuration format and evaluator as flagd-full; for the components it contains it returns the same results as flagd-full.
 
-### BR-007: Proxy Distribution Bounds
+### BR-007: flagd-relay Is the Configuration Proxy
 
-flagd-proxy is a configuration proxy: it contains sync providers, a configuration format and the flag sync endpoint but no evaluator, and its module graph contains no evaluator module and no `github.com/diegoholiveira/jsonlogic` module (NFR-011). It rejects invalid flag configurations the same way flagd-full does (FR-026).
+flagd-relay contains sync providers, a configuration format and the flag sync endpoint but no evaluator, and its module graph contains no evaluator module and no `github.com/diegoholiveira/jsonlogic` module (NFR-011). It rejects invalid flag configurations the same way flagd-full does (FR-026). Today's flagd-proxy stays a separate program with its own CLI and image and is not affected by adopting a standard distribution.

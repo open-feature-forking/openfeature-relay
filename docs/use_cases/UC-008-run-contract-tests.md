@@ -20,7 +20,7 @@
 
 1. Extension Author adds the contract tests of the component's type to the component module's own tests and hands them the component's factory and the test inputs that component type requires.
 2. Extension Author runs the component module's tests.
-3. System checks the factory's declarations: a non-empty type name and, where the component type requires them, well-formed schemes and the component types it needs.
+3. System checks the factory's declarations: a non-empty type name and, where the component type requires them, non-empty schemes and the components it needs, each named by component type or as one specific component, such as an evaluator's paired configuration format.
 4. System creates the component through its factory, injecting test stand-ins for every dependency a distribution would inject.
 5. System exercises the component in every case of its component type's contract.
 6. System reports, for each contract case, its name and whether it passed.
@@ -38,7 +38,7 @@
 
 ### A2: Declarations Invalid
 
-**Trigger:** The factory declares an empty type name, a scheme that is not a URI prefix or a needed component type that does not exist (step 3)  
+**Trigger:** The factory declares an empty type name, an empty scheme, or a need that names neither an existing component type nor a specific component (step 3)  
 **Flow:**
 
 1. System reports the invalid declaration and the rule it breaks.
@@ -94,11 +94,11 @@ Each set covers what the runtime relies on for that component type; the extensio
 | Component Type     | The contract cases verify that the component …                                                                                                                                          |
 |--------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Sync Provider      | delivers the source's complete flag configuration first, delivers a change of the source, delivers the complete flag configuration again on request, names its source, delivers the flag configuration unchanged, reports readiness, stops on shutdown (UC-003) |
-| Configuration Format | accepts a valid flag configuration into the store, rejects an invalid one naming the fault, leaves the store unchanged after a rejection, replaces only the delivering source's flags (UC-018) |
+| Configuration Format | accepts a valid flag configuration into the store as its own documents, rejects an invalid one naming the faulty entry, leaves the store unchanged after a rejection, replaces only the delivering source's flags, or only the flag sets of an incremental update (UC-018) |
 | Service Endpoint   | starts and stops with the distribution, answers from the injected evaluator or store, runs without an evaluator when it declares no need for one, reacts to a flag change announced on the event bus, stops on shutdown (UC-004) |
-| Middleware         | passes requests to the wrapped handler and returns its responses unless the middleware's own behaviour applies (UC-005)                                                                 |
-| Telemetry Provider | supplies tracing, metrics and HTTP instrumentation that service endpoints and middleware can use without further setup (UC-006)                                                         |
-| Evaluator          | resolves flags as the flagd test-harness evaluation suite expects (UC-007)                                                                                                              |
+| Middleware         | passes requests to the wrapped handler and returns its responses unchanged unless the middleware's own behaviour applies, and does so under concurrent requests (UC-005) |
+| Telemetry Provider | supplies tracing, metrics and HTTP instrumentation that service endpoints and middleware can use without further setup, never blocks a request, works under concurrent use and returns from shutdown (UC-006) |
+| Evaluator          | resolves each flag type with the value, variant, reason and error the OpenFeature specification defines, resolves concurrently while the store changes without seeing a half-updated store, and, when paired with flagd's configuration format, resolves as the flagd test-harness evaluation suite expects (UC-007) |
 
 ### BR-003: Only Injected Dependencies
 

@@ -13,29 +13,30 @@
 
 ## Preconditions
 
-- The distribution contains the snapshot components.
+- The distribution contains a sync provider for snapshots and writes the snapshot on every change of its flag state.
 - Operator has configured a snapshot location that persists across restarts.
 
 ## Main Success Scenario
 
 1. Operator restarts flagd with its configured sources and snapshot location.
 2. System reads the snapshot as the lowest-precedence source.
-3. System serves evaluations from the flags in the snapshot and reports readiness.
+3. System serves flags from the snapshot: an evaluating distribution answers evaluation requests and flagd-relay forwards the snapshot's flag configurations to in-process providers.
 4. System starts a sync provider for every configured source.
-5. A source delivers its flag configuration.
-6. System merges the live flag configuration over the snapshot, so that live flags override snapshot flags with the same key.
-7. System writes the new flag state to the snapshot.
-8. System serves evaluations from the live flag configurations; the restart caused no period without flags.
+5. Every configured source delivers a flag configuration that its configuration format accepts.
+6. System merges the live flag configurations over the snapshot, so that live flags override snapshot flags with the same key.
+7. System reports readiness on the management port.
+8. System writes the new flag state to the snapshot.
+9. System serves flags from the live flag configurations; the restart caused no period without flags.
 
 ## Alternative Flows
 
 ### A1: Sources Remain Unavailable
 
-**Trigger:** No source delivers a flag configuration (step 5)  
+**Trigger:** A configured source does not deliver a flag configuration (step 5)  
 **Flow:**
 
-1. System keeps serving evaluations from the snapshot and keeps retrying the sources.
-2. A source becomes available and delivers its flag configuration.
+1. System keeps serving flags from the snapshot, keeps retrying the source and does not report readiness, because readiness requires every configured source to have delivered.
+2. The source becomes available and delivers a flag configuration that its configuration format accepts.
 3. Use case continues at step 6.
 
 ### A2: No Snapshot Yet
@@ -43,12 +44,12 @@
 **Trigger:** The snapshot location holds no snapshot, as on the first start (step 2)  
 **Flow:**
 
-1. System starts without snapshot flags and reports readiness only after a source has delivered its flag configuration, as without a snapshot.
+1. System starts without snapshot flags and serves no flags until a source has delivered, as without a snapshot.
 2. Use case continues at step 4.
 
 ### A3: Snapshot Unreadable
 
-**Trigger:** The snapshot is corrupt or not a valid flag configuration (step 2)  
+**Trigger:** The snapshot is corrupt or its configuration format does not accept it (step 2)  
 **Flow:**
 
 1. System logs a warning that names the snapshot location and starts without snapshot flags.
@@ -64,24 +65,25 @@
 
 ### A5: Snapshot Not Writable
 
-**Trigger:** The snapshot location cannot be written (step 7)  
+**Trigger:** The snapshot location cannot be written (step 8)  
 **Flow:**
 
 1. System logs a warning that names the snapshot location and keeps serving the live flag configurations.
-2. Use case continues at step 8.
+2. Use case continues at step 9.
 
 ## Postconditions
 
 ### Success Postconditions
 
-- flagd serves the live flag configurations of its sources.
+- flagd serves the live flag configurations of its sources and reports readiness.
 - The snapshot holds the current flag state for the next restart.
 
 ### Failure Postconditions
 
 - A snapshot flag never overrides a flag with the same key from a live source.
-- An unreadable snapshot is never served as flag state.
+- A snapshot its configuration format does not accept is never served.
 - The snapshot is never replaced by a partly written flag state.
+- Readiness is never reported before every configured source has delivered an accepted flag configuration.
 
 ## Business Rules
 
@@ -95,8 +97,12 @@ flagd writes the snapshot after every change of the flag state it serves (FR-050
 
 ### BR-003: Snapshot Is Optional
 
-A distribution without the snapshot components, or a deployment without a snapshot location, behaves exactly as flagd without snapshots; Operators who do not use snapshots pay nothing for them.
+A distribution without snapshot support, or a deployment without a snapshot location, behaves exactly as flagd without snapshots; Operators who do not use snapshots pay nothing for them.
 
 ### BR-004: Works With Every Sync Provider
 
 The snapshot works with every sync provider without a change to that sync provider.
+
+### BR-005: Snapshot Does Not Make flagd Ready
+
+The snapshot is not a configured source for readiness: flagd serves flags from it before readiness, and reports readiness only when every configured source has delivered a flag configuration that its configuration format accepted.

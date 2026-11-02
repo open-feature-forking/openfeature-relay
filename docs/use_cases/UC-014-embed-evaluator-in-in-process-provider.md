@@ -7,7 +7,7 @@
 **Primary Actor:** Provider Author  
 **Secondary Actors:** flagd Test Harness  
 **Goal:** An in-process provider validates and evaluates flags locally with the same configuration format and evaluator flagd uses, pulling in only those, the core module and the sync providers it supports, and leaving observability to hooks  
-**Trigger:** Provider Author decides to add in-process evaluation to a provider, or to move an existing in-process provider onto the configuration format and evaluator component modules  
+**Trigger:** Provider Author decides to add in-process evaluation to a provider  
 **Status:** Draft  
 
 **Requirements:** [FR-040, FR-041, FR-042, NFR-005, C-010](../requirements.md)
@@ -21,10 +21,10 @@
 
 1. Provider Author adds the flagd configuration format and the evaluator component modules to the provider's dependencies.
 2. System adds the configuration format, the evaluator and the core module to the provider without any telemetry provider, service endpoint, transport or sync provider code (BR-001).
-3. Provider Author adds the sync provider component module for each scheme the provider supports, for example the file sync provider and the gRPC sync provider, which receives flag configurations from flagd-full or a configuration proxy.
+3. Provider Author adds the sync provider component module for each scheme the provider supports, for example the file sync provider and the gRPC sync provider, which receives flag configurations from flagd-full or from a configuration proxy such as flagd-relay.
 4. System adds only the selected sync providers to the provider (BR-004).
-5. Provider Author creates an empty store, then the configuration format and the evaluator over that same store, and connects the output of the sync provider to the configuration format.
-6. System parses and validates every flag configuration the sync provider emits with the configuration format, updates the store and reports which flags changed (BR-006).
+5. Provider Author creates an empty store, then the flagd configuration format and its paired evaluator over that same store, and connects the output of the sync provider to the configuration format.
+6. System parses and validates every flag configuration the sync provider emits with the configuration format, keeps it in the store as that configuration format's documents and reports which flags changed (BR-006).
 7. Provider Author routes the provider's boolean, string, integer, float and object flag resolutions to the evaluator.
 8. System resolves each flag for the evaluation context and returns value, variant, reason and flag metadata exactly as remote evaluation does for the same flag configuration (BR-002).
 9. Provider Author registers the OpenFeature hooks for traces and metrics in the provider's documentation and examples (BR-003).
@@ -104,7 +104,7 @@
 
 ### BR-001: Embedded Dependency Boundary
 
-The flagd configuration format and the evaluator component modules depend on no package under `go.opentelemetry.io`, `google.golang.org/grpc`, `connectrpc.com`, `k8s.io` or `gocloud.dev` (NFR-005). The Maintainers enforce this in CI, so a provider never has to exclude these modules itself.
+The flagd configuration format and the evaluator component modules depend on no package under `go.opentelemetry.io`, `google.golang.org/grpc`, `connectrpc.com`, `k8s.io` or `gocloud.dev` (NFR-005). UC-013 checks this boundary for every change, so a provider never has to exclude these modules itself.
 
 ### BR-002: One Evaluator
 
@@ -112,7 +112,7 @@ The evaluator component module is the code flagd-full evaluates with. There is n
 
 ### BR-003: Observability Through Hooks
 
-The configuration format and the evaluator emit no traces and no metrics. For an in-process provider, observability is added only through hooks, such as the OpenFeature OpenTelemetry hooks.
+The configuration format and the evaluator emit no traces and no metrics; in flagd-full the service endpoints record the evaluation spans (FR-033). For an in-process provider, observability is added only through hooks, such as the OpenFeature OpenTelemetry hooks.
 
 ### BR-004: Sync Providers by Choice
 
@@ -124,4 +124,4 @@ An in-process provider counts as evaluating like flagd when it passes the flagd 
 
 ### BR-006: One Validation
 
-The flagd configuration format is the code flagd-full and a configuration proxy validate flag configurations with. A flag configuration the provider rejects is one flagd-full and a configuration proxy reject as well (FR-026).
+The flagd configuration format is the code flagd-full and flagd-relay validate flag configurations with. A flag configuration the provider rejects is one flagd-full and flagd-relay reject as well (FR-026).

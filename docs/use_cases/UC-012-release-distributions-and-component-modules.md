@@ -10,12 +10,12 @@
 **Trigger:** Maintainer decides to release the changes merged on main since the last release  
 **Status:** Draft  
 
-**Requirements:** [FR-030, FR-031, NFR-009, C-009, C-011](../requirements.md)
+**Requirements:** [FR-030, FR-031, NFR-009, C-003, C-009, C-011](../requirements.md)
 
 ## Preconditions
 
 - Every component module, the core module and flagd are registered with the release automation, each with its own version and changelog.
-- The manifest of each standard distribution (flagd-minimal, flagd-cloud, flagd-kubernetes, flagd-proxy, flagd-full) is kept in the repository.
+- The manifest of each standard distribution (flagd-minimal, flagd-cloud, flagd-kubernetes, flagd-relay, flagd-full) is kept in the repository.
 - All changes on main since the last release are conventional commits.
 - GitHub Actions keeps a release pull request open that proposes the next version of every module changed since its last release.
 
@@ -97,7 +97,7 @@
 
 - Every module released has a release tag and a GitHub release with its changelog, and manifests can pin that version.
 - With a new flagd version, all five standard distributions are published under that version: manifest, standard and FIPS binary archives for the platform matrix, software bill of materials, and signed standard and FIPS images for `linux/amd64` and `linux/arm64`.
-- flagd-full is published as `ghcr.io/open-feature/flagd` and flagd-proxy as `ghcr.io/open-feature/flagd-proxy`, each with the same image tags and archive names as before the builder.
+- Every standard distribution is published under the image name of BR-012; flagd-full keeps the image tags and archive names of flagd before the builder.
 - The release state records the new version of every released module.
 
 ### Failure Postconditions
@@ -153,6 +153,10 @@ A released version is never moved, deleted or republished with different content
 
 The release pull request and its commits carry a DCO sign-off.
 
-### BR-012: flagd-proxy Continues Today's Release
+### BR-012: Image Names
 
-The flagd-proxy standard distribution, a configuration proxy, takes the place of today's separately released flagd-proxy: it keeps its image name `ghcr.io/open-feature/flagd-proxy` and its archive names, and from its first release as a standard distribution it follows the flagd version (BR-003).
+flagd-full is published as `ghcr.io/open-feature/flagd`. Every other standard distribution is published as `ghcr.io/open-feature/flagd-<distribution>`, e.g. `ghcr.io/open-feature/flagd-minimal` and `ghcr.io/open-feature/flagd-relay`. The FIPS build of each adds `-fips` to its image tags, as today.
+
+### BR-013: flagd-proxy Stays a Separate Release
+
+Today's flagd-proxy is not a standard distribution. It keeps its own version, release tag, binaries and image `ghcr.io/open-feature/flagd-proxy`, released as today; flagd-relay, the standard configuration proxy, does not replace it.
