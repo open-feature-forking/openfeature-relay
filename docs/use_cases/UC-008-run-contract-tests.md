@@ -9,7 +9,7 @@
 **Trigger:** Extension Author asks to verify a component against the contract of its component type  
 **Status:** Draft  
 
-**Requirements:** [FR-015, FR-014, FR-036, FR-045, NFR-010, NFR-013, C-001](../requirements.md)
+**Requirements:** [FR-015, FR-014, FR-036, FR-045, FR-054, FR-055, NFR-010, NFR-013, C-001](../requirements.md)
 
 ## Preconditions
 
@@ -20,7 +20,7 @@
 
 1. Extension Author adds the contract tests of the component's type to the component module's own tests and hands them the component's factory and the test inputs that component type requires.
 2. Extension Author runs the component module's tests.
-3. System checks the factory's declarations: a non-empty type name and, where the component type requires them, non-empty schemes and the components it needs, each named by component type or as one specific component, such as an evaluator's paired configuration format.
+3. System checks the factory's declarations: a non-empty type name and, where the component type requires them, non-empty schemes (fetchers and streaming sync providers) and the components it needs, each named by component type or as one specific component, such as an evaluator's paired configuration format.
 4. System creates the component through its factory, injecting test stand-ins for every dependency a distribution would inject.
 5. System exercises the component in every case of its component type's contract.
 6. System reports, for each contract case, its name and whether it passed.
@@ -93,8 +93,9 @@ Each set covers what the runtime relies on for that component type; the extensio
 
 | Component Type     | The contract cases verify that the component …                                                                                                                                          |
 |--------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Sync Provider      | delivers the source's complete flag configuration first, delivers a change of the source, delivers the complete flag configuration again on request, names its source, delivers the flag configuration unchanged, reports readiness, stops on shutdown (UC-003) |
-| Sync Provider, fetching | returns the flag configuration with a document version, reports "not changed" when given the current document version, returns a new document version after the source changed, reports a failed fetch without returning a flag configuration, abandons a fetch on shutdown (UC-003 A1) |
+| Fetcher            | fetches once per request and returns the flag configuration unchanged with its document version, reports "not changed" when given the current document version, returns a new document version after the source changed, reports a failed fetch without returning a flag configuration, abandons a running fetch on shutdown (UC-003) |
+| Fetch Trigger      | signals its source's fetcher each time the change signal arrives and never fetches or delivers itself, reconnects after losing the change signal without affecting other fetch triggers of the source, stops listening on shutdown (UC-003 A2) |
+| Streaming Sync Provider | delivers the source's complete flag configuration first, delivers each change the source pushes, delivers the complete flag configuration again on request, names its source, delivers the flag configuration unchanged, reports readiness, reconnects after losing the source, stops on shutdown (UC-003 A1) |
 | Configuration Format | accepts a valid flag configuration into the store as its own documents, reports each document's flag keys, flag set and document version and the added, updated and removed flag keys against the previous document, rejects an invalid one naming the faulty entry, leaves the store unchanged after a rejection, replaces only the delivering source's flags, or only the flag sets of an incremental update (UC-018) |
 | Service Endpoint   | starts and stops with the distribution, resolves flags only through the evaluation router for the request's selector, publishes one evaluation event per resolved flag, serves only the documents of the configuration format a client requests, derives cache validators and change announcements from document versions, runs without evaluators when it declares no need for them, reacts to a configuration change event, stops on shutdown (UC-004) |
 | Middleware         | passes requests to the wrapped handler and returns its responses unchanged unless the middleware's own behaviour applies, and does so under concurrent requests (UC-005) |
