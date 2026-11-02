@@ -7,7 +7,7 @@
 **Primary Actor:** Extension Author  
 **Goal:** Publish a configuration format in the Extension Author's own component module, verified against the configuration format contract, so that a distribution reads flag configurations written in another vendor's format, such as Flagsmith's, and keeps them as documents for its paired evaluator and the flag sync endpoint.  
 **Trigger:** Extension Author needs flagd to accept flag configurations in a format flagd's own configuration format does not support  
-**Status:** Draft  
+**Status:** Implemented  
 
 **Requirements:** [FR-019, FR-015, FR-018, FR-029, FR-044, FR-048, FR-049, FR-003, FR-008](../requirements.md)
 
