@@ -5,6 +5,10 @@
 // A flag configuration is {"environment": "<flag set>", "flags": {"<key>": <value>}}. The format
 // keeps each one as a document of the environment and rejects a delivery whose flags are not an
 // object or whose values are null, naming the faulty key.
+//
+// A real extension keeps the tests that run it in a distribution in a separate module, so that its
+// own module graph stays free of telemetry and transport dependencies; this example keeps them
+// next to the format only to stay small.
 package keyvalue
 
 import (
