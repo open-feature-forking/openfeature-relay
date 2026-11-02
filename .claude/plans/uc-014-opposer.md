@@ -86,7 +86,7 @@ Plan: `.claude/plans/uc-014.md` (main @ dbce7cb). Commands ran in WSL Ubuntu wit
   - release-please-config.json has one package each for `core`, `flagd` and `flagd-proxy` (with `include-component-in-tag` and `tag-separator: "/"`).
   - release-please attributes a commit to every package whose path contains a changed file. A change in `core/pkg/evaluator/` therefore also bumps `core`, unless `core` excludes the nested paths.
   - The workflow is disabled here, as CLAUDE.md says.
-- **Fix:** add a row to the named gaps covering 11 new release-please packages, with `package-name` set to the directory, and `exclude-paths` on `core`. The tag names (eleven `<dir>/vX.Y.Z` series) belong in issue #26 so Simon sees the release cost of Q1.
+- **Fix:** add a row to the named gaps covering 11 new release-please packages, with `package-name` set to the directory, and `exclude-paths` on `core`. The tag names (eleven `<dir>/vX.Y.Z` series) belong in issue #26 so the project lead sees the release cost of Q1.
 
 ### 8. minor: the light core's requirements differ from the plan, and NFR-006 may object
 

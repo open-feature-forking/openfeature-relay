@@ -15,7 +15,7 @@ actor "Image Build Environment" as imagebuild <<system>>
 actor "In-Process Provider" as inproc <<system>>
 actor "Vendor Flag Service" as vendor <<system>>
 
-rectangle "flagd Builder" {
+rectangle "OpenFeature Relay" {
     usecase "UC-001\nBuild Custom Distribution" as UC001
     usecase "UC-002\nPackage Distribution as Image" as UC002
 
