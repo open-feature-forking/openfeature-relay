@@ -2,3 +2,8 @@
 # NFR-005: the evaluator and the configuration formats import no telemetry, transport or platform clients.
 core:./pkg/evaluator:opentelemetry|grpc|connectrpc|k8s.io|gocloud
 core:./pkg/configformat/...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|jsonlogic|core/pkg/evaluator|core/pkg/sync/
+# Q2: the sync providers import no telemetry (blob carries OpenTelemetry through gocloud's own tracing).
+core:./pkg/sync/file:go.opentelemetry.io
+core:./pkg/sync/grpc:go.opentelemetry.io
+core:./pkg/sync/http:go.opentelemetry.io
+core:./pkg/sync/kubernetes:go.opentelemetry.io

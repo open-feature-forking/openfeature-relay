@@ -15,13 +15,14 @@ import (
 	"github.com/open-feature/flagd/core/pkg/store"
 	"github.com/open-feature/flagd/core/pkg/sync"
 	syncbuilder "github.com/open-feature/flagd/core/pkg/sync/builder"
-	"github.com/open-feature/flagd/core/pkg/sync/syncmetrics"
+	"github.com/open-feature/flagd/core/pkg/sync/grpc"
 	"github.com/open-feature/flagd/core/pkg/telemetry"
 	"github.com/open-feature/flagd/flagd/pkg/evaluation"
 	flageval "github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation"
 	"github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation/ofrep"
 	flagsync "github.com/open-feature/flagd/flagd/pkg/service/flag-sync"
 	"go.uber.org/zap"
+	googlegrpc "google.golang.org/grpc"
 )
 
 // from_config is a collection of structures and parsers responsible for deriving flagd runtime
@@ -214,8 +215,8 @@ func FromConfig(logger *logger.Logger, version string, config Config) (*Runtime,
 	// provider (grpc, http, file, kubernetes, blob) emits the universal client-side sync
 	// metrics into the same reader as the rest of flagd's telemetry.
 	syncLogger := logger.WithFields(zap.String("component", "sync"))
-	syncMetricsRecorder := syncmetrics.NewRecorder(nil)
-	iSyncs, err := syncProvidersFromConfig(syncLogger, syncProviders, syncMetricsRecorder)
+	syncMetricsRecorder := telemetry.NewSyncRecorder(nil)
+	iSyncs, err := syncProvidersFromConfig(syncLogger, syncProviders, syncMetricsRecorder, telemetry.NewStreamRecorder(nil))
 	if err != nil {
 		return nil, err
 	}
@@ -253,10 +254,13 @@ func FromConfig(logger *logger.Logger, version string, config Config) (*Runtime,
 func syncProvidersFromConfig(
 	logger *logger.Logger,
 	sources []sync.SourceConfig,
-	syncMetricsRecorder *syncmetrics.Recorder,
+	syncMetricsRecorder sync.MetricsRecorder,
+	streamMetricsRecorder grpc.StreamMetricsRecorder,
 ) ([]sync.ISync, error) {
 	builder := syncbuilder.NewSyncBuilder()
 	builder.SyncMetricsRecorder = syncMetricsRecorder
+	builder.StreamMetricsRecorder = streamMetricsRecorder
+	builder.GRPCDialOptions = []googlegrpc.DialOption{telemetry.GRPCClientDialOption()}
 	syncs, err := builder.SyncsFromConfig(sources, logger)
 	if err != nil {
 		return nil, fmt.Errorf("could not create sync sources from config: %w", err)
