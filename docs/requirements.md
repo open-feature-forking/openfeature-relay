@@ -64,6 +64,7 @@ Derived from [vision.md](vision.md). Terms follow [glossary.md](glossary.md).
 | NFR-009 | Platform Matrix               | Every standard distribution builds for the same OS and architecture matrix flagd releases today, and its images for `linux/amd64` and `linux/arm64`.                                         | Portability     | High     | Open   |
 | NFR-010 | Example Components            | Each factory interface has an example component in the repository that CI builds into a distribution and starts successfully.                                                                | Usability       | Medium   | Open   |
 | NFR-011 | Proxy Distribution Deps       | The flagd-relay module graph contains no evaluator module and no `github.com/diegoholiveira/jsonlogic` module.                                                                                 | Maintainability | High     | Open   |
+| NFR-012 | Stable Dependencies           | No module depends on `golang.org/x/exp` or another experimental package once the Go standard library offers an equivalent (`maps`, `slices`, `cmp`, `iter`); every module targets the Go version of C-002 and uses its standard library first. | Maintainability | Medium   | Open   |
 
 ## Constraints
 
