@@ -279,7 +279,7 @@ func (s *Store) Apply(req ApplyRequest) error {
 		newFlag.Priority = priority
 		newFlag.Metadata = patchMetadata(metadata, newFlag.Metadata)
 
-		flagSetId := flagsTableSetID(newFlag, metadata)
+		flagSetId := internalFlagSetID(FlagSetID(newFlag, metadata))
 		newFlag.FlagSetId = flagSetId
 		newFlags[flagIdentifier{flagSetId: newFlag.FlagSetId, key: newFlag.Key}] = newFlag
 	}
