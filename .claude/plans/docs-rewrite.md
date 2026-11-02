@@ -10,7 +10,7 @@ Not in scope: changing the spec's content, code, or the flagd docs' substance. T
 
 | # | Question | Decision |
 |---|----------|----------|
-| D1 | Public name | Keep "OpenFeature Relay", with a disclaimer on the README and the site home: an independent proof of concept, not an official OpenFeature or CNCF project. The project lead gives the OpenFeature TC a heads-up before the repository goes public (P8e). |
+| D1 | Public name | Keep "OpenFeature Relay", with a disclaimer on the README and the site home: an independent proof of concept, not an official OpenFeature or CNCF project. The project lead is an OpenFeature TC member and may raise it with the other TC members before or when going public (P8e); that is not an approval gate. The disclaimer stays until the TC decides otherwise. |
 | D2 | Spec on the site | Yes, under "Design". |
 | D3 | `.claude/` and `CLAUDE.md` | Public; `CLAUDE.md` trimmed of local paths and personal details, gates also documented generically in `CONTRIBUTING.md`. |
 | D4 | Research note | Published under "Design" after the cleanup (P6). |
@@ -151,7 +151,7 @@ New pages are short (one screen each) and link to the spec for detail rather tha
 - [x] **P8b (must)** `CONTRIBUTING.md`: no community-meeting wording; "we follow the OpenFeature code of conduct"; Brigade artefact removed.
 - [ ] **P8c (should)** The spec names upstream image names (`ghcr.io/open-feature/flagd...`) as the target; the README and site only tell readers to build from source. Nothing to change.
 - [x] **P8d (should)** Issue templates: checked, they do not mention flagd. Nothing to change.
-- [ ] **P8e (must, project lead)** Heads-up to the OpenFeature TC before going public.
+- [ ] **P8e (optional, project lead)** Raise it with the other OpenFeature TC members before or when going public; not a gate.
 
 ### Workflows and settings
 
@@ -179,7 +179,7 @@ New pages are short (one screen each) and link to the spec for detail rather tha
 
 ## 4. Steps
 
-Steps 1–5 are implemented as small commits on `docs/relay-rewrite` (one pull request). Gates: markdownlint, `mkdocs build --strict`, the spec gate for spec files. Step 6 is the project lead's, with P8e, P10, P10a and P10b.
+Steps 1–5 are implemented as small commits on `docs/relay-rewrite` (one pull request). Gates: markdownlint, `mkdocs build --strict`, the spec gate for spec files. Step 6 is the project lead's, with P10, P10a, P10b and the optional P8e.
 
 | # | Step | Who | Gate |
 |---|------|-----|------|
