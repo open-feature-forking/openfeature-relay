@@ -20,6 +20,7 @@ func TestBlobSourcesCharacterization(t *testing.T) {
 		wantBucket     string
 		wantObject     string
 		wantInterval   uint32
+		wantScheme     string // the URL scheme the cloud's driver registers on the mux
 		wantErr        string
 	}{
 		{
@@ -28,6 +29,7 @@ func TestBlobSourcesCharacterization(t *testing.T) {
 			wantBucket:   "gs://bucket/",
 			wantObject:   "path/to/object",
 			wantInterval: 5,
+			wantScheme:   "gs",
 		},
 		{
 			name:         "gcs with interval",
@@ -35,6 +37,7 @@ func TestBlobSourcesCharacterization(t *testing.T) {
 			wantBucket:   "gs://bucket/",
 			wantObject:   "object",
 			wantInterval: 30,
+			wantScheme:   "gs",
 		},
 		{
 			name:    "gcs interval beyond the maximum",
@@ -48,6 +51,7 @@ func TestBlobSourcesCharacterization(t *testing.T) {
 			wantBucket:     "azblob://bucket/",
 			wantObject:     "path/to/object",
 			wantInterval:   5,
+			wantScheme:     "azblob",
 		},
 		{
 			name:    "azblob without storage account",
@@ -66,6 +70,7 @@ func TestBlobSourcesCharacterization(t *testing.T) {
 			wantBucket:   "s3://bucket/",
 			wantObject:   "path/to/object",
 			wantInterval: 10,
+			wantScheme:   "s3",
 		},
 		{
 			name:         "s3 query moves onto the bucket",
@@ -73,6 +78,7 @@ func TestBlobSourcesCharacterization(t *testing.T) {
 			wantBucket:   "s3://bucket?use_path_style=true&region=eu-west-1",
 			wantObject:   "path/to/object",
 			wantInterval: 5,
+			wantScheme:   "s3",
 		},
 		{
 			name:         "scheme without a slash after the bucket",
@@ -80,6 +86,7 @@ func TestBlobSourcesCharacterization(t *testing.T) {
 			wantBucket:   "",
 			wantObject:   "s3://bucket",
 			wantInterval: 5,
+			wantScheme:   "s3",
 		},
 	}
 
@@ -100,6 +107,7 @@ func TestBlobSourcesCharacterization(t *testing.T) {
 			require.Equal(t, tt.wantBucket, blobSync.Bucket)
 			require.Equal(t, tt.wantObject, blobSync.Object)
 			require.Equal(t, tt.wantInterval, blobSync.Interval)
+			require.True(t, blobSync.BlobURLMux.ValidBucketScheme(tt.wantScheme), "driver for %q is registered", tt.wantScheme)
 		})
 	}
 }
