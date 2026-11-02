@@ -10,10 +10,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/open-feature/flagd/core/pkg/evaluator"
 	"github.com/open-feature/flagd/core/pkg/logger"
 	"github.com/open-feature/flagd/core/pkg/store"
 	coresync "github.com/open-feature/flagd/core/pkg/sync"
+	"github.com/open-feature/flagd/flagd/pkg/evaluation"
 	"github.com/open-feature/flagd/flagd/pkg/service"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
@@ -106,7 +106,7 @@ func TestOfrepEvaluationSpans(t *testing.T) {
 	log := logger.NewLogger(nil, false)
 	flagStore, err := store.NewStore(log, []string{spanTestSource})
 	require.NoError(t, err)
-	eval := evaluator.NewJSON(log, flagStore)
+	eval := evaluation.NewEvaluator(log, flagStore)
 	require.NoError(t, eval.SetState(coresync.DataSync{FlagData: spanTestFlags, Source: spanTestSource}))
 
 	server := httptest.NewServer(NewOfrepHandler(log, eval, nil, nil, nil, "flagd", SSEConfig{}, newCompression(t)))

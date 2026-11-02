@@ -13,6 +13,7 @@ import (
 	syncbuilder "github.com/open-feature/flagd/core/pkg/sync/builder"
 	"github.com/open-feature/flagd/core/pkg/sync/syncmetrics"
 	"github.com/open-feature/flagd/core/pkg/telemetry"
+	"github.com/open-feature/flagd/flagd/pkg/evaluation"
 	flageval "github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation"
 	"github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation/ofrep"
 	flagsync "github.com/open-feature/flagd/flagd/pkg/service/flag-sync"
@@ -136,7 +137,7 @@ func FromConfig(logger *logger.Logger, version string, config Config) (*Runtime,
 	if config.StrictNumericRange {
 		evalOpts = append(evalOpts, evaluator.WithStrictNumericRange())
 	}
-	jsonEvaluator := evaluator.NewJSON(logger, store, evalOpts...)
+	jsonEvaluator := evaluation.NewEvaluator(logger, store, evalOpts...)
 
 	// derive services
 

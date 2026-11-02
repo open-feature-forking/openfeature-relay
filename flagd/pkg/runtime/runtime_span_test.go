@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/open-feature/flagd/core/pkg/evaluator"
 	"github.com/open-feature/flagd/core/pkg/logger"
 	"github.com/open-feature/flagd/core/pkg/store"
 	coresync "github.com/open-feature/flagd/core/pkg/sync"
+	"github.com/open-feature/flagd/flagd/pkg/evaluation"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
@@ -97,7 +97,7 @@ func TestFlagSyncSpan(t *testing.T) {
 			require.NoError(t, err)
 			syncService := &recordingSyncService{}
 			runtime := Runtime{
-				Evaluator:       evaluator.NewJSON(log, flagStore),
+				Evaluator:       evaluation.NewEvaluator(log, flagStore),
 				Logger:          log,
 				SyncService:     syncService,
 				sourceReadiness: map[string]bool{spanTestSource: false},

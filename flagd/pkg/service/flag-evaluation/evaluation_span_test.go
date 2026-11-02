@@ -16,11 +16,11 @@ import (
 	evalV2 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/evaluation/v2"
 	schemaV1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/schema/v1"
 	"connectrpc.com/connect"
-	"github.com/open-feature/flagd/core/pkg/evaluator"
 	"github.com/open-feature/flagd/core/pkg/logger"
 	iservice "github.com/open-feature/flagd/core/pkg/service"
 	"github.com/open-feature/flagd/core/pkg/store"
 	coresync "github.com/open-feature/flagd/core/pkg/sync"
+	"github.com/open-feature/flagd/flagd/pkg/evaluation"
 	flagdService "github.com/open-feature/flagd/flagd/pkg/service"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
@@ -118,7 +118,7 @@ func newEvaluationSpanClients(t *testing.T) evaluationSpanClients {
 	log := logger.NewLogger(nil, false)
 	flagStore, err := store.NewStore(log, []string{spanTestSource})
 	require.NoError(t, err)
-	eval := evaluator.NewJSON(log, flagStore)
+	eval := evaluation.NewEvaluator(log, flagStore)
 	require.NoError(t, eval.SetState(coresync.DataSync{FlagData: spanTestFlags, Source: spanTestSource}))
 
 	svc := NewConnectService(log, eval, flagStore, nil)
