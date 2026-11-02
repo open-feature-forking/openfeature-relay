@@ -1,7 +1,11 @@
 PHONY: .docker-build .build .run .mockgen
 PREFIX=/usr/local
 PUBLIC_JSON_SCHEMA_DIR=docs/schema/v0/
-ALL_GO_MOD_DIRS := $(shell find . \( -path ./test/integration -o -path ./.claude \) -prune -o -type f -name 'go.mod' -exec dirname {} \; | sort)
+ALL_GO_MOD_DIRS := $(shell find . \( -path ./test/integration -o -path ./.claude -o -path ./test-harness -o -path ./spec -o -path ./schemas -o -path ./playground-app \) -prune -o -type f -name 'go.mod' -exec dirname {} \; | sort)
+
+# The library modules: what embedders import. Tests, the FIPS tests and the benchmarks run on exactly
+# these (plus the binaries), and testdata/go-packages.txt pins the packages they contain.
+GO_LIB_MODULE_DIRS := ./core
 
 # The FIPS variant builds against the CMVP-certified Go Cryptographic Module
 # v1.0.0 (certificate #5247). The literal version is required; the
@@ -53,8 +57,11 @@ build-flagd-fips:
 	go version -m ./bin/flagd-fips | grep -E 'GOFIPS140=|-tags='
 .PHONY: test
 test: test-core test-flagd test-flagd-proxy test-configformat-example
-test-core:
-	go test -race -covermode=atomic -cover -short ./core/pkg/... -coverprofile=core-coverage.out
+test-core: test-modules
+test-modules:
+	@rc=0; for m in $(GO_LIB_MODULE_DIRS); do \
+		go test -race -covermode=atomic -cover -short $$m/... -coverprofile=$$(echo $$m | sed 's#^\./##; s#/#-#g')-coverage.out || rc=1; \
+	done; exit $$rc
 test-flagd:
 	go test -race -covermode=atomic -cover -short ./flagd/pkg/... -coverprofile=flagd-coverage.out
 test-configformat-example:
@@ -70,7 +77,7 @@ test-flagd-proxy:
 # TLS negotiate X25519 and fail under fips140=only.
 .PHONY: test-fips
 test-fips:
-	$(FIPS_ENV) go test -tags $(FIPS_TAGS) -short -count=1 -exec 'env GODEBUG=fips140=only' ./core/... ./flagd/... ./flagd-proxy/...
+	$(FIPS_ENV) go test -tags $(FIPS_TAGS) -short -count=1 -exec 'env GODEBUG=fips140=only' $(addsuffix /...,$(GO_LIB_MODULE_DIRS)) ./flagd/... ./flagd-proxy/...
 
 # Regenerate the crypto dependency closure recorded in the FIPS docs. Pinned to
 # linux/amd64: the closure is platform-dependent, so an unpinned run would
@@ -83,7 +90,7 @@ fips-closure:
 	@echo "wrote docs/reference/fips-crypto-closure.txt"
 
 flagd-benchmark-test:
-	go test -bench=Bench -short -benchtime=5s -benchmem ./core/... | tee benchmark.txt
+	go test -bench=Bench -short -benchtime=5s -benchmem $(addsuffix /...,$(GO_LIB_MODULE_DIRS)) | tee benchmark.txt
 flagd-integration-test-harness:
 # target used to start a locally built flagd with the e2e flags
 	cd flagd; go run main.go start -f file:../test-harness/flags/testing-flags.json -f file:../test-harness/flags/custom-ops.json -f file:../test-harness/flags/evaluator-refs.json -f file:../test-harness/flags/zero-flags.json -f file:../test-harness/flags/edge-case-flags.json
@@ -114,16 +121,28 @@ lint:
 lint-fix:
 	go install -v github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
 	rc=0; $(foreach module, $(ALL_GO_MOD_DIRS), ${GOPATH}/bin/golangci-lint run --fix $(module)/... || rc=1;) exit $$rc
-.PHONY: check-evaluator-boundary
-check-evaluator-boundary:
-	@deps=$$(cd core && go list -deps ./pkg/evaluator) || exit 1; \
-	if echo "$$deps" | grep -E 'opentelemetry|grpc|connectrpc|k8s.io|gocloud'; then \
-		echo "core/pkg/evaluator must not depend on the packages listed above"; exit 1; \
-	fi; \
-	deps=$$(cd core && go list -deps ./pkg/configformat/...) || exit 1; \
-	if echo "$$deps" | grep -E 'opentelemetry|grpc|connectrpc|k8s.io|gocloud|jsonlogic|core/pkg/evaluator|core/pkg/sync/'; then \
-		echo "core/pkg/configformat must not depend on the packages listed above"; exit 1; \
-	fi
+# The packages of the library modules must not change unnoticed, so that a move cannot drop a package from the test run.
+.PHONY: check-package-coverage
+check-package-coverage:
+	@for m in $(GO_LIB_MODULE_DIRS); do (cd $$m && go list ./...) || exit 1; done | sort > .go-packages.tmp; \
+	tr -d '\r' < testdata/go-packages.txt > .go-packages.want; \
+	if ! diff -u .go-packages.want .go-packages.tmp; then rm -f .go-packages.tmp .go-packages.want; \
+		echo "the packages of the library modules differ from testdata/go-packages.txt"; exit 1; fi; \
+	rm -f .go-packages.tmp .go-packages.want
+
+# testdata/module-boundaries.txt lists <module dir>:<packages>:<forbidden import path regexp>; no package of
+# <packages>, nor anything it imports, may match.
+.PHONY: check-module-boundary check-evaluator-boundary
+check-module-boundary:
+	@while IFS=: read -r dir pkgs forbidden; do \
+		forbidden=$$(printf '%s' "$$forbidden" | tr -d '\r'); \
+		case "$$dir" in ''|'#'*) continue;; esac; \
+		deps=$$(cd $$dir && go list -deps $$pkgs) || exit 1; \
+		if echo "$$deps" | grep -E "$$forbidden"; then \
+			echo "$$dir $$pkgs must not depend on the packages listed above"; exit 1; \
+		fi; \
+	done < testdata/module-boundaries.txt
+check-evaluator-boundary: check-module-boundary
 install-mockgen:
 	go install go.uber.org/mock/mockgen@v0.4.0
 mockgen: install-mockgen

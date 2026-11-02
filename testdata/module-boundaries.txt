@@ -1,0 +1,4 @@
+# <module dir>:<packages>:<forbidden import path regexp>
+# NFR-005: the evaluator and the configuration formats import no telemetry, transport or platform clients.
+core:./pkg/evaluator:opentelemetry|grpc|connectrpc|k8s.io|gocloud
+core:./pkg/configformat/...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|jsonlogic|core/pkg/evaluator|core/pkg/sync/

@@ -34,7 +34,8 @@ jobs:
           go-version-file: 'flagd/go.mod'
       - run: make workspace-init
       - run: make lint
-      - run: make check-evaluator-boundary
+      - run: make check-package-coverage
+      - run: make check-module-boundary
 
   docs-check:
     runs-on: ubuntu-latest
