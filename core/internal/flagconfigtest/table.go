@@ -32,12 +32,14 @@ type Row struct {
 }
 
 // Case applies Deliveries in order. Every delivery but the last must be accepted; WantErr is the
-// exact error text of the last one, empty if it is accepted.
+// exact error text of the last one, empty if it is accepted. Where flagd wraps a message of the Go
+// JSON decoder, which differs between Go versions, WantErrPrefix names flagd's part of the text.
 type Case struct {
 	Name       string
 	Sources    []string // priority order, highest first
 	Deliveries []sync.DataSync
 	WantErr    string
+	WantErrPrefix string
 	WantRows   []Row
 }
 
@@ -55,10 +57,12 @@ func Run(t *testing.T, newStore func(sources []string) store.IStore, apply func(
 				switch {
 				case !last && err != nil:
 					t.Fatalf("delivery %d must be accepted, got error: %v", i, err)
-				case last && tc.WantErr == "" && err != nil:
+				case last && tc.WantErr == "" && tc.WantErrPrefix == "" && err != nil:
 					t.Fatalf("want accepted, got error: %v", err)
 				case last && tc.WantErr != "" && (err == nil || err.Error() != tc.WantErr):
 					t.Fatalf("want error %q, got %v", tc.WantErr, err)
+				case last && tc.WantErrPrefix != "" && (err == nil || !strings.HasPrefix(err.Error(), tc.WantErrPrefix)):
+					t.Fatalf("want error starting with %q, got %v", tc.WantErrPrefix, err)
 				}
 			}
 
