@@ -1,7 +1,7 @@
 PHONY: .docker-build .build .run .mockgen
 PREFIX=/usr/local
 PUBLIC_JSON_SCHEMA_DIR=docs/schema/v0/
-ALL_GO_MOD_DIRS := $(shell find . -path ./test/integration -prune -o -type f -name 'go.mod' -exec dirname {} \; | sort)
+ALL_GO_MOD_DIRS := $(shell find . \( -path ./test/integration -o -path ./.claude \) -prune -o -type f -name 'go.mod' -exec dirname {} \; | sort)
 
 # The FIPS variant builds against the CMVP-certified Go Cryptographic Module
 # v1.0.0 (certificate #5247). The literal version is required; the
