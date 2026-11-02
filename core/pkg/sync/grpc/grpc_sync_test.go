@@ -19,7 +19,6 @@ import (
 	"github.com/open-feature/flagd/core/pkg/sync"
 	credendialsmock "github.com/open-feature/flagd/core/pkg/sync/grpc/credentials/mock"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
@@ -57,45 +56,52 @@ func (c *payloadThenEOFClient) Recv() (*v1.SyncFlagsResponse, error) {
 	return &v1.SyncFlagsResponse{FlagConfiguration: c.flags}, nil
 }
 
+// recordingStreamMetrics records the calls a Sync makes to its StreamMetricsRecorder.
+type recordingStreamMetrics struct {
+	opened, closed, reconnects int
+}
+
+func (r *recordingStreamMetrics) RecordStreamOpened(context.Context, string, string) { r.opened++ }
+func (r *recordingStreamMetrics) RecordStreamClosed(context.Context, string, string) { r.closed++ }
+func (r *recordingStreamMetrics) RecordReconnect(context.Context, string, string)    { r.reconnects++ }
+
 // Test_ReconnectCountedOnlyAfterStreamDelivers verifies a reconnect counts only when the re-established stream serves a payload
 func Test_ReconnectCountedOnlyAfterStreamDelivers(t *testing.T) {
 	t.Run("stream rejected on first Recv does not count a reconnect", func(t *testing.T) {
-		m, reader := newTestClientStreamMetrics(t)
-		g := Sync{URI: "grpc://x", Logger: logger.NewLogger(nil, false), streamMetrics: m}
+		m := &recordingStreamMetrics{}
+		g := Sync{URI: "grpc://x", Logger: logger.NewLogger(nil, false), StreamMetricsRecorder: m}
 
 		// eofFlagSyncClient errors on first Recv, like an immediate upstream rejection
 		_ = g.handleFlagSync(context.Background(), eofFlagSyncClient{}, nil, true)
 
-		rm := collectClientStream(t, reader)
-		require.Nil(t, findClientStreamMetric(rm, metricClientStreamReconnects),
-			"a stream rejected on first Recv must not increment reconnects")
+		require.Zero(t, m.reconnects, "a stream rejected on first Recv must not increment reconnects")
 	})
 
 	t.Run("stream that delivers a payload counts one reconnect", func(t *testing.T) {
-		m, reader := newTestClientStreamMetrics(t)
-		g := Sync{URI: "grpc://x", Logger: logger.NewLogger(nil, false), streamMetrics: m}
+		m := &recordingStreamMetrics{}
+		g := Sync{URI: "grpc://x", Logger: logger.NewLogger(nil, false), StreamMetricsRecorder: m}
 		dataSync := make(chan sync.DataSync, 1)
 
 		_ = g.handleFlagSync(context.Background(), &payloadThenEOFClient{flags: "{}"}, dataSync, true)
 
-		rm := collectClientStream(t, reader)
-		metric := findClientStreamMetric(rm, metricClientStreamReconnects)
-		require.NotNil(t, metric)
-		sum := metric.Data.(metricdata.Sum[int64])
-		require.Len(t, sum.DataPoints, 1)
-		require.EqualValues(t, 1, sum.DataPoints[0].Value)
+		require.Equal(t, 1, m.reconnects)
 	})
 
 	t.Run("initial (non-reconnect) stream never counts a reconnect", func(t *testing.T) {
-		m, reader := newTestClientStreamMetrics(t)
-		g := Sync{URI: "grpc://x", Logger: logger.NewLogger(nil, false), streamMetrics: m}
+		m := &recordingStreamMetrics{}
+		g := Sync{URI: "grpc://x", Logger: logger.NewLogger(nil, false), StreamMetricsRecorder: m}
 		dataSync := make(chan sync.DataSync, 1)
 
 		_ = g.handleFlagSync(context.Background(), &payloadThenEOFClient{flags: "{}"}, dataSync, false)
 
-		rm := collectClientStream(t, reader)
-		require.Nil(t, findClientStreamMetric(rm, metricClientStreamReconnects),
-			"the initial connection is not a reconnect")
+		require.Zero(t, m.reconnects, "the initial connection is not a reconnect")
+	})
+
+	t.Run("a Sync without a recorder records nothing and does not fail", func(t *testing.T) {
+		g := Sync{URI: "grpc://x", Logger: logger.NewLogger(nil, false)}
+		dataSync := make(chan sync.DataSync, 1)
+
+		_ = g.handleFlagSync(context.Background(), &payloadThenEOFClient{flags: "{}"}, dataSync, true)
 	})
 }
 

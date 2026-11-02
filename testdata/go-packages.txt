@@ -27,7 +27,6 @@ github.com/open-feature/flagd/core/pkg/sync/http/mock
 github.com/open-feature/flagd/core/pkg/sync/internal/bloburi
 github.com/open-feature/flagd/core/pkg/sync/internal/polling
 github.com/open-feature/flagd/core/pkg/sync/kubernetes
-github.com/open-feature/flagd/core/pkg/sync/syncmetrics
 github.com/open-feature/flagd/core/pkg/sync/testing
 github.com/open-feature/flagd/core/pkg/telemetry
 github.com/open-feature/flagd/core/pkg/utils

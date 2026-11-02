@@ -15,8 +15,8 @@ import (
 	"github.com/open-feature/flagd/core/pkg/sync/internal/bloburi"
 	"github.com/open-feature/flagd/core/pkg/sync/internal/polling"
 	"github.com/open-feature/flagd/core/pkg/sync/kubernetes"
-	"github.com/open-feature/flagd/core/pkg/sync/syncmetrics"
 	"go.uber.org/zap"
+	googlegrpc "google.golang.org/grpc"
 	"gocloud.dev/blob"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
@@ -69,7 +69,13 @@ type SyncBuilder struct {
 
 	// SyncMetricsRecorder, when non-nil, is passed to every sync provider so they can
 	// record the universal client-side sync metrics
-	SyncMetricsRecorder *syncmetrics.Recorder
+	SyncMetricsRecorder sync.MetricsRecorder
+
+	// StreamMetricsRecorder, when non-nil, is passed to gRPC sync providers to record their stream lifecycle.
+	StreamMetricsRecorder grpc.StreamMetricsRecorder
+
+	// GRPCDialOptions are passed to gRPC sync providers as client connection options.
+	GRPCDialOptions []googlegrpc.DialOption
 }
 
 func NewSyncBuilder() *SyncBuilder {
@@ -214,6 +220,9 @@ func (sb *SyncBuilder) newGRPC(config sync.SourceConfig, logger *logger.Logger) 
 		IncrementalUpdates:  config.IncrementalUpdates,
 		Headers:             config.Headers,
 		SyncMetricsRecorder: sb.SyncMetricsRecorder,
+
+		StreamMetricsRecorder: sb.StreamMetricsRecorder,
+		DialOptions:           sb.GRPCDialOptions,
 	}
 }
 

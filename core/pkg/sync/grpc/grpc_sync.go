@@ -13,8 +13,6 @@ import (
 	"github.com/open-feature/flagd/core/pkg/sync"
 	grpccredential "github.com/open-feature/flagd/core/pkg/sync/grpc/credentials"
 	_ "github.com/open-feature/flagd/core/pkg/sync/grpc/nameresolvers" // initialize custom resolvers e.g. envoy.Init()
-	"github.com/open-feature/flagd/core/pkg/sync/syncmetrics"
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
@@ -60,33 +58,28 @@ type Sync struct {
 	// SyncMetricsRecorder, when non-nil, is used to record the source-agnostic
 	// client-side sync metrics (feature_flag.flagd.sync.client.flag_config.*). Nil is
 	// safe — the recorder's methods tolerate nil receivers.
-	SyncMetricsRecorder *syncmetrics.Recorder
+	SyncMetricsRecorder sync.MetricsRecorder
+
+	// StreamMetricsRecorder, when non-nil, records the lifecycle of the sync stream. Nil records nothing.
+	StreamMetricsRecorder StreamMetricsRecorder
+
+	// DialOptions are added to the client connection after the credentials, in both the default and
+	// the override path. A distribution passes its client instrumentation (a stats handler) here.
+	DialOptions []grpc.DialOption
 
 	client        FlagSyncServiceClient
 	ready         atomic.Bool
-	streamMetrics *clientStreamMetrics
 }
 
 func (g *Sync) Init(_ context.Context) error {
-	// Build the gRPC-client-specific stream-lifecycle recorder off the global MeterProvider
-	// (telemetry.NewOTelRecorder registers it globally via otel.SetMeterProvider). Nil is
-	// safe — the returned recorder degrades to no-ops.
-	g.streamMetrics = newClientStreamMetrics(nil)
-
 	var rpcCon *grpc.ClientConn // Reusable client connection
 	var err error
 
-	// Instrument the outbound sync channel (flagd -> flag-server) so that standard
-	// rpc.client.* metrics land on the same reader as flagd's other metrics.
-	// Applied on both the default and the override paths — grpc-go supports multiple
-	// stats handlers, so an override that already installs its own still composes.
-	statsHandler := grpc.WithStatsHandler(otelgrpc.NewClientHandler())
-
 	if len(g.GrpcDialOptionsOverride) > 0 {
 		g.Logger.Debug("GRPC DialOptions override provided")
-		opts := make([]grpc.DialOption, 0, len(g.GrpcDialOptionsOverride)+1)
+		opts := make([]grpc.DialOption, 0, len(g.GrpcDialOptionsOverride)+len(g.DialOptions))
 		opts = append(opts, g.GrpcDialOptionsOverride...)
-		opts = append(opts, statsHandler)
+		opts = append(opts, g.DialOptions...)
 		rpcCon, err = grpc.NewClient(g.URI, opts...)
 	} else {
 		var tCredentials credentials.TransportCredentials
@@ -97,14 +90,14 @@ func (g *Sync) Init(_ context.Context) error {
 			return err
 		}
 
+		opts := []grpc.DialOption{grpc.WithTransportCredentials(tCredentials)}
 		// Set MaxMsgSize if passed
 		if g.MaxMsgSize > 0 {
 			g.Logger.Info(fmt.Sprintf("setting max receive message size %d bytes default 4MB", g.MaxMsgSize))
-			dialOptions := grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(g.MaxMsgSize))
-			rpcCon, err = grpc.NewClient(g.URI, grpc.WithTransportCredentials(tCredentials), dialOptions, statsHandler)
-		} else {
-			rpcCon, err = grpc.NewClient(g.URI, grpc.WithTransportCredentials(tCredentials), statsHandler)
+			opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(g.MaxMsgSize)))
 		}
+		opts = append(opts, g.DialOptions...)
+		rpcCon, err = grpc.NewClient(g.URI, opts...)
 	}
 
 	if err != nil {
@@ -144,7 +137,7 @@ func (g *Sync) ReSync(ctx context.Context, dataSync chan<- sync.DataSync) error 
 	}
 	select {
 	case dataSync <- update:
-		g.SyncMetricsRecorder.RecordFlagConfigReceived(ctx, syncmetrics.SourceGRPC, g.URI, g.Selector)
+		sync.RecordFlagConfigReceived(ctx, g.SyncMetricsRecorder, sync.SourceGRPC, g.URI, g.Selector)
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -164,13 +157,13 @@ func (g *Sync) Sync(ctx context.Context, dataSync chan<- sync.DataSync) error {
 	if err != nil {
 		return fmt.Errorf("unable to sync flags: %w", err)
 	}
-	g.streamMetrics.recordStreamOpened(ctx, g.URI, g.Selector)
+	g.streamOpened(ctx)
 
 	g.Logger.Debug(fmt.Sprintf("watching %s for changes", g.URI))
 
 	// Initial stream listening. Error will be logged and continue and retry connection establishment
 	err = g.handleFlagSync(ctx, syncClient, dataSync, false)
-	g.streamMetrics.recordStreamClosed(ctx, g.URI, g.Selector)
+	g.streamClosed(ctx)
 	if err == nil {
 		// This should not happen as handleFlagSync expects to return with an error
 		return nil
@@ -185,10 +178,10 @@ func (g *Sync) Sync(ctx context.Context, dataSync chan<- sync.DataSync) error {
 			// We shall exit
 			return nil
 		}
-		g.streamMetrics.recordStreamOpened(ctx, g.URI, g.Selector)
+		g.streamOpened(ctx)
 
 		err = g.handleFlagSync(ctx, syncClient, dataSync, true)
-		g.streamMetrics.recordStreamClosed(ctx, g.URI, g.Selector)
+		g.streamClosed(ctx)
 		if err != nil {
 			g.Logger.Warn(fmt.Sprintf("error with stream listener: %s", err.Error()))
 			continue
@@ -256,7 +249,7 @@ func (g *Sync) handleFlagSync(
 		if firstRecv {
 			firstRecv = false
 			if isReconnect {
-				g.streamMetrics.recordReconnect(ctx, g.URI, g.Selector)
+				g.streamReconnected(ctx)
 			}
 		}
 
@@ -269,7 +262,7 @@ func (g *Sync) handleFlagSync(
 		}
 		select {
 		case dataSync <- update:
-			g.SyncMetricsRecorder.RecordFlagConfigReceived(ctx, syncmetrics.SourceGRPC, g.URI, g.Selector)
+			sync.RecordFlagConfigReceived(ctx, g.SyncMetricsRecorder, sync.SourceGRPC, g.URI, g.Selector)
 		case <-ctx.Done():
 			return ctx.Err()
 		}

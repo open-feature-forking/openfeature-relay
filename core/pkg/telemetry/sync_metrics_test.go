@@ -1,10 +1,11 @@
-package syncmetrics
+package telemetry
 
 import (
 	"context"
 	"testing"
 	"time"
 
+	coresync "github.com/open-feature/flagd/core/pkg/sync"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
 	msdk "go.opentelemetry.io/otel/sdk/metric"
@@ -18,11 +19,11 @@ const (
 
 // newTestRecorder wires a Recorder against an in-memory ManualReader so tests can inspect
 // the emitted data points without any Prometheus / OTLP export path in the loop.
-func newTestRecorder(t *testing.T) (*Recorder, *msdk.ManualReader) {
+func newTestRecorder(t *testing.T) (*SyncRecorder, *msdk.ManualReader) {
 	t.Helper()
 	reader := msdk.NewManualReader()
 	mp := msdk.NewMeterProvider(msdk.WithReader(reader))
-	return NewRecorder(mp), reader
+	return NewSyncRecorder(mp), reader
 }
 
 func collect(t *testing.T, reader *msdk.ManualReader) metricdata.ResourceMetrics {
@@ -47,17 +48,17 @@ func findMetric(rm metricdata.ResourceMetrics, name string) *metricdata.Metrics 
 func TestNewRecorder_NilProviderIsSafe(t *testing.T) {
 	// A nil MeterProvider must yield a fully-functional (noop) Recorder — required for
 	// tests, library embedders, and any bootstrap path where OTel isn't wired yet.
-	r := NewRecorder(nil)
+	r := NewSyncRecorder(nil)
 	require.NotNil(t, r)
 	// These must not panic even though nothing is being observed.
-	r.RecordFlagConfigReceived(context.Background(), SourceGRPC, testURI, testSelector)
+	r.RecordFlagConfigReceived(context.Background(), coresync.SourceGRPC, testURI, testSelector)
 }
 
 func TestRecorder_NilReceiverIsSafe(t *testing.T) {
-	var r *Recorder
-	// Callers that hold a *Recorder must be able to invoke record methods unconditionally
+	var r *SyncRecorder
+	// Callers that hold a *SyncRecorder must be able to invoke record methods unconditionally
 	// even if the value was never constructed.
-	r.RecordFlagConfigReceived(context.Background(), SourceGRPC, testURI, testSelector)
+	r.RecordFlagConfigReceived(context.Background(), coresync.SourceGRPC, testURI, testSelector)
 }
 
 func TestRecordFlagConfigReceived_IncrementsCounterAndUpdatesTimestamp(t *testing.T) {
@@ -65,9 +66,9 @@ func TestRecordFlagConfigReceived_IncrementsCounterAndUpdatesTimestamp(t *testin
 	ctx := context.Background()
 
 	before := time.Now().Unix()
-	r.RecordFlagConfigReceived(ctx, SourceGRPC, testURI, testSelector)
-	r.RecordFlagConfigReceived(ctx, SourceGRPC, testURI, testSelector)
-	r.RecordFlagConfigReceived(ctx, SourceGRPC, testURI, testSelector)
+	r.RecordFlagConfigReceived(ctx, coresync.SourceGRPC, testURI, testSelector)
+	r.RecordFlagConfigReceived(ctx, coresync.SourceGRPC, testURI, testSelector)
+	r.RecordFlagConfigReceived(ctx, coresync.SourceGRPC, testURI, testSelector)
 	after := time.Now().Unix()
 
 	rm := collect(t, reader)
@@ -94,7 +95,7 @@ func TestRecordFlagConfigReceived_IncrementsCounterAndUpdatesTimestamp(t *testin
 
 func TestRecordFlagConfigReceived_EmitsDualAttributeSet(t *testing.T) {
 	r, reader := newTestRecorder(t)
-	r.RecordFlagConfigReceived(context.Background(), SourceGRPC, testURI, testSelector)
+	r.RecordFlagConfigReceived(context.Background(), coresync.SourceGRPC, testURI, testSelector)
 
 	rm := collect(t, reader)
 	counter := findMetric(rm, metricFlagConfigReceived)
@@ -104,19 +105,19 @@ func TestRecordFlagConfigReceived_EmitsDualAttributeSet(t *testing.T) {
 	set := dp.Attributes
 
 	// Legacy (kept for back-compat).
-	assertAttr(t, set, AttrLegacyProvider, SourceGRPC)
+	assertAttr(t, set, AttrLegacyProvider, coresync.SourceGRPC)
 	assertAttr(t, set, AttrLegacyURI, testURI)
 	assertAttr(t, set, AttrLegacySelector, testSelector)
 
 	// New OTel-aligned.
-	assertAttr(t, set, AttrType, SourceGRPC)
+	assertAttr(t, set, AttrType, coresync.SourceGRPC)
 	assertAttr(t, set, AttrURI, testURI)
 	assertAttr(t, set, AttrSelector, testSelector)
 }
 
 func TestRecordFlagConfigReceived_OmitsSelectorAttributesWhenEmpty(t *testing.T) {
 	r, reader := newTestRecorder(t)
-	r.RecordFlagConfigReceived(context.Background(), SourceHTTP, testURI, "")
+	r.RecordFlagConfigReceived(context.Background(), coresync.SourceHTTP, testURI, "")
 
 	rm := collect(t, reader)
 	counter := findMetric(rm, metricFlagConfigReceived)
@@ -130,8 +131,8 @@ func TestRecordFlagConfigReceived_OmitsSelectorAttributesWhenEmpty(t *testing.T)
 	require.False(t, hasNew, "expected no %s attribute when selector is empty", AttrSelector)
 
 	// URI + type/provider still present.
-	assertAttr(t, set, AttrType, SourceHTTP)
-	assertAttr(t, set, AttrLegacyProvider, SourceHTTP)
+	assertAttr(t, set, AttrType, coresync.SourceHTTP)
+	assertAttr(t, set, AttrLegacyProvider, coresync.SourceHTTP)
 }
 
 func TestRecordFlagConfigReceived_MultipleSourcesEmitDistinctSeries(t *testing.T) {
@@ -140,8 +141,8 @@ func TestRecordFlagConfigReceived_MultipleSourcesEmitDistinctSeries(t *testing.T
 
 	// Two sources, three applies each. Expect two distinct series on both instruments.
 	for i := 0; i < 3; i++ {
-		r.RecordFlagConfigReceived(ctx, SourceGRPC, "grpc://server-a:8015", "")
-		r.RecordFlagConfigReceived(ctx, SourceHTTP, "http://server-b/flags", "")
+		r.RecordFlagConfigReceived(ctx, coresync.SourceGRPC, "grpc://server-a:8015", "")
+		r.RecordFlagConfigReceived(ctx, coresync.SourceHTTP, "http://server-b/flags", "")
 	}
 
 	rm := collect(t, reader)
@@ -213,7 +214,7 @@ func TestRecordFlagConfigReceived_RedactsSecretsInURI(t *testing.T) {
 	const secretURI = "https://user:hunter2@api.example.com/flags?token=SECRET_TOKEN"
 	const cleanURI = "https://api.example.com/flags"
 
-	r.RecordFlagConfigReceived(ctx, SourceHTTP, secretURI, "")
+	r.RecordFlagConfigReceived(ctx, coresync.SourceHTTP, secretURI, "")
 
 	rm := collect(t, reader)
 	counter := findMetric(rm, metricFlagConfigReceived)
