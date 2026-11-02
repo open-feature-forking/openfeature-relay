@@ -12,12 +12,12 @@ import (
 	"time"
 
 	"github.com/diegoholiveira/jsonlogic/v3"
-	schema "github.com/open-feature/flagd-schemas/json"
+	"github.com/open-feature/flagd/core/pkg/configformat"
+	"github.com/open-feature/flagd/core/pkg/configformat/flagd"
 	"github.com/open-feature/flagd/core/pkg/logger"
 	"github.com/open-feature/flagd/core/pkg/model"
 	"github.com/open-feature/flagd/core/pkg/store"
 	"github.com/open-feature/flagd/core/pkg/sync"
-	"github.com/santhosh-tekuri/jsonschema/v6"
 	"go.uber.org/zap"
 )
 
@@ -30,17 +30,6 @@ const (
 	Disabled        = "DISABLED"
 	ProtoVersionKey = "__flagd.protoVersion__" // used to mark if the request is coming from an older proto source, which has different fallback behavior
 )
-
-func addSchemaResource(compiler *jsonschema.Compiler, url string, schemaData string) error {
-	unmarshalJSON, err := jsonschema.UnmarshalJSON(strings.NewReader(schemaData))
-	if err != nil {
-		return err
-	}
-	if err := compiler.AddResource(url, unmarshalJSON); err != nil {
-		return err
-	}
-	return nil
-}
 
 type constraints interface {
 	bool | string | map[string]any | float64 | interface{}
@@ -74,9 +63,10 @@ func WithStrictNumericRange() JSONEvaluatorOption {
 
 // JSON evaluator
 type JSON struct {
-	store      store.IStore
-	Logger     *logger.Logger
-	jsonSchema *jsonschema.Schema
+	store     store.IStore
+	Logger    *logger.Logger
+	validator *flagd.Validator
+	format    *flagd.Format // set when the store is a *store.Store
 	Resolver
 }
 
@@ -86,28 +76,14 @@ func NewJSON(logger *logger.Logger, s store.IStore, opts ...JSONEvaluatorOption)
 		zap.String("evaluator", "json"),
 	)
 
-	// Create a new JSON Schema compiler
-	compiler := jsonschema.NewCompiler()
-
-	if err := addSchemaResource(compiler, "https://flagd.dev/schema/v0/flagd.json", schema.FlagdSchema); err != nil {
-		logger.Warn("Failed to add schema resource", zap.Error(err))
-	}
-	if err := addSchemaResource(compiler, "https://flagd.dev/schema/v0/flags.json", schema.FlagSchema); err != nil {
-		logger.Warn("Failed to add schema resource", zap.Error(err))
-	}
-	if err := addSchemaResource(compiler, "https://flagd.dev/schema/v0/targeting.json", schema.TargetingSchema); err != nil {
-		logger.Warn("Failed to add schema resource", zap.Error(err))
-	}
-
-	jsonSchema, err := compiler.Compile("https://flagd.dev/schema/v0/flagd.json")
-	if err != nil {
-		logger.Fatal("Failed to compile schema", zap.Error(err))
-	}
 	ev := JSON{
-		store:      s,
-		Logger:     logger,
-		jsonSchema: jsonSchema,
-		Resolver:   NewResolver(s, logger),
+		store:     s,
+		Logger:    logger,
+		validator: flagd.NewValidator(logger),
+		Resolver:  NewResolver(s, logger),
+	}
+	if st, ok := s.(*store.Store); ok {
+		ev.format = ev.validator.On(st)
 	}
 
 	for _, o := range opts {
@@ -117,17 +93,30 @@ func NewJSON(logger *logger.Logger, s store.IStore, opts ...JSONEvaluatorOption)
 	return &ev
 }
 
+// Deprecated: configuration formats accept flag configurations; SetState remains for callers that
+// hold an evaluator and keeps the error texts they see.
 func (je *JSON) SetState(payload sync.DataSync) error {
-	var definition Definition
-
-	err := je.configToFlagDefinition(payload.FlagData, &definition)
-	if err != nil {
-		return err
+	in := configformat.Input{
+		Source: payload.Source, Data: payload.FlagData, Selector: payload.Selector,
+		IncrementalUpdate: payload.IncrementalUpdates,
 	}
 
-	je.store.Update(payload.Source, definition.Flags, definition.Metadata, payload.IncrementalUpdates)
+	var err error
+	if je.format != nil {
+		_, err = je.format.Accept(context.Background(), in)
+	} else {
+		// an IStore implemented elsewhere may not store documents
+		var definition flagd.Definition
+		if definition, err = je.validator.Validate(in); err == nil {
+			je.store.Update(payload.Source, definition.Flags, definition.Metadata, payload.IncrementalUpdates)
+		}
+	}
 
-	return nil
+	var rejection configformat.Rejection
+	if errors.As(err, &rejection) {
+		return errors.New(rejection.Reason)
+	}
+	return err
 }
 
 // Resolver implementation for flagd flags. This resolver should be kept reusable, hence must interact with interfaces.
@@ -487,128 +476,3 @@ func getFlagdProperties(context map[string]any) (flagdProperties, bool) {
 	return p, true
 }
 
-// configToFlagDefinition convert string configurations to flags and store them to pointer newFlags
-func (je *JSON) configToFlagDefinition(config string, definition *Definition) error {
-	// json schema validation
-	inst, err := jsonschema.UnmarshalJSON(strings.NewReader(config))
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal JSON string: %v", err)
-	}
-	if err := je.jsonSchema.Validate(inst); err != nil {
-		je.Logger.Warn(fmt.Sprintf(
-			"flag definition does not conform to the schema; validation errors: %s", err),
-		)
-	}
-
-	type JsonRawDef struct {
-		Flags    json.RawMessage        `json:"flags"`
-		Metadata map[string]interface{} `json:"metadata"`
-	}
-
-	// Transpose evaluators and unmarshal directly into JsonDef
-	transposedConfig, err := transposeEvaluators(config)
-	if err != nil {
-		return fmt.Errorf("transposing evaluators: %w", err)
-	}
-
-	var rawDef JsonRawDef
-	err = json.Unmarshal([]byte(transposedConfig), &rawDef)
-	if err != nil {
-		return fmt.Errorf("unmarshalling provided configurations: %w", err)
-	}
-	definition.Metadata = rawDef.Metadata
-	definition.Flags = []model.Flag{}
-
-	// Check if flags is an array or object
-	trimmed := strings.TrimSpace(string(rawDef.Flags))
-	if strings.HasPrefix(trimmed, "[") {
-		// It's an array
-		var flags []model.Flag
-		if err := json.Unmarshal(rawDef.Flags, &flags); err != nil {
-			return fmt.Errorf("unmarshalling flags array: %w", err)
-		}
-		definition.Flags = flags
-	} else {
-		// It's an object
-		var flagsMap map[string]model.Flag
-		if err := json.Unmarshal(rawDef.Flags, &flagsMap); err != nil {
-			return fmt.Errorf("unmarshalling flags map: %w", err)
-		}
-		// convert map to slice
-		var flags []model.Flag
-		for k, v := range flagsMap {
-			v.Key = k
-			flags = append(flags, v)
-		}
-		definition.Flags = flags
-	}
-	je.warnUnsafeNumericVariants(definition)
-	return validateDefaultVariants(definition)
-}
-
-// warnUnsafeNumericVariants warns about numeric variants outside the safe range
-func (je *JSON) warnUnsafeNumericVariants(definition *Definition) {
-	for _, flag := range definition.Flags {
-		for name, v := range flag.Variants {
-			if f, ok := v.(float64); ok && !isSafeRange(f) {
-				// TODO(#2101): update message
-				je.Logger.Warn(fmt.Sprintf(
-					"variant '%s' of flag '%s' is outside [-(2^53-1), 2^53-1]; it may be inaccurate "+
-						"and is rejected in strict numeric range mode (the default in future versions)", name, flag.Key))
-			}
-		}
-	}
-}
-
-// validateDefaultVariants returns an error if any of the default variants aren't valid
-func validateDefaultVariants(flags *Definition) error {
-	for _, flag := range flags.Flags {
-		// Default Variant is not provided in the config
-		if flag.DefaultVariant == "" {
-			continue
-		}
-
-		if _, ok := flag.Variants[flag.DefaultVariant]; !ok {
-			return fmt.Errorf(
-				"default variant: '%s' isn't a valid variant of flag: '%s'", flag.DefaultVariant, flag.Key,
-			)
-		}
-	}
-
-	return nil
-}
-
-func transposeEvaluators(state string) (string, error) {
-	var evaluators Evaluators
-	if err := json.Unmarshal([]byte(state), &evaluators); err != nil {
-		return "", fmt.Errorf("unmarshal: %w", err)
-	}
-
-	// round-trip to normalize whitespace so we can use plain string matching
-	var raw interface{}
-	if err := json.Unmarshal([]byte(state), &raw); err != nil {
-		return "", fmt.Errorf("normalize: %w", err)
-	}
-	normalizedBytes, err := json.Marshal(raw)
-	if err != nil {
-		return "", fmt.Errorf("normalize marshal: %w", err)
-	}
-	result := string(normalizedBytes)
-
-	for evalName, evalRaw := range evaluators.Evaluators {
-		marshalledEval, err := evalRaw.MarshalJSON()
-		if err != nil {
-			return "", fmt.Errorf("marshal evaluator: %w", err)
-		}
-
-		evalValue := string(marshalledEval)
-		if len(evalValue) < 3 {
-			return "", errors.New("evaluator object is empty")
-		}
-
-		refPattern := `{"$ref":"` + evalName + `"}`
-		result = strings.ReplaceAll(result, refPattern, evalValue)
-	}
-
-	return result, nil
-}
