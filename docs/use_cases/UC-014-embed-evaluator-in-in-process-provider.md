@@ -21,7 +21,7 @@
 
 1. Provider Author adds the flagd configuration format and the evaluator component modules to the provider's dependencies.
 2. System adds the configuration format, the evaluator and the core module to the provider without any telemetry provider, service endpoint, transport or sync provider code (BR-001).
-3. Provider Author adds the sync provider component module for each scheme the provider supports, for example the file sync provider and the gRPC sync provider, which receives flag configurations from flagd-full or from a configuration proxy such as flagd-relay.
+3. Provider Author adds the sync provider component module for each scheme the provider supports, for example the file sync provider and the gRPC sync provider, which receives flag configurations from flagd-full or from a configuration proxy such as flagd-sync.
 4. System adds only the selected sync providers to the provider (BR-004).
 5. Provider Author creates an empty store, then the configuration format and its paired evaluator over that same store, and connects the output of the sync provider to the configuration format; a flag sync request of the gRPC sync provider names that configuration format or, for flagd's, leaves it to the default (BR-007).
 6. System decodes every flag configuration the sync provider emits, validates it with the configuration format, keeps it in the store as that configuration format's documents and reports which flags changed (BR-006).
@@ -70,7 +70,7 @@
 
 ### A5: Requested Configuration Format Not Served
 
-**Trigger:** flagd-full or flagd-relay holds no documents of the configuration format the flag sync request names (step 6)  
+**Trigger:** flagd-full or flagd-sync holds no documents of the configuration format the flag sync request names (step 6)  
 **Flow:**
 
 1. The gRPC sync provider receives no flag configurations, and System reports to the provider that the source does not serve the requested configuration format.
@@ -142,7 +142,7 @@ An in-process provider counts as evaluating like flagd when it passes the flagd 
 
 ### BR-006: One Validation
 
-The flagd configuration format is the code flagd-full and flagd-relay validate flag configurations with. A flag configuration the provider rejects is one flagd-full and flagd-relay reject as well (FR-026).
+The flagd configuration format is the code flagd-full and flagd-sync validate flag configurations with. A flag configuration the provider rejects is one flagd-full and flagd-sync reject as well (FR-026).
 
 ### BR-007: Requested Configuration Format
 

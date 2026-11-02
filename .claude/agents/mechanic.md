@@ -1,6 +1,6 @@
 ---
 name: mechanic
-description: Does mechanical flagd-builder changes a plan marks as mechanic, such as renames, go.mod moves, import rewrites, release-please config and changelog entries. Cheap and fast; not for design decisions.
+description: Does mechanical OpenFeature Relay changes a plan marks as mechanic, such as renames, go.mod moves, import rewrites, release-please config and changelog entries. Cheap and fast; not for design decisions.
 tools: Read, Grep, Glob, Bash, Edit, Write
 model: haiku
 ---

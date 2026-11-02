@@ -19,7 +19,7 @@
 ## Main Success Scenario
 
 1. Operator determines the schemes and configuration formats of the deployment's sources, the service endpoints its clients use, whether flagd evaluates flags or only forwards flag configurations to in-process providers, and whether it exports telemetry.
-2. Operator compares these needs with the published manifests of flagd-minimal, flagd-cloud, flagd-kubernetes, flagd-relay and flagd-full, or with the text or JSON listing of `flagd components` of each (UC-011).
+2. Operator compares these needs with the published manifests of flagd-minimal, flagd-cloud, flagd-kubernetes, flagd-sync and flagd-full, or with the text or JSON listing of `flagd components` of each (UC-011).
 3. Operator selects the smallest standard distribution that covers every need, as a binary or as the image `ghcr.io/open-feature/flagd-<distribution>`.
 4. Operator starts the selected distribution with the unchanged start command, configuration file and environment variables.
 5. System checks every setting and the scheme of every source against the components compiled into the distribution.
@@ -67,7 +67,7 @@
 
 ### A5: Configuration Proxy Selected
 
-**Trigger:** The selected distribution is flagd-relay, which contains no evaluator (step 9)  
+**Trigger:** The selected distribution is flagd-sync, which contains no evaluator (step 9)  
 **Flow:**
 
 1. Operator connects an in-process provider to the flag sync endpoint and confirms that it receives the same flag configurations as from flagd-full; running and operating the configuration proxy is UC-017.
@@ -87,7 +87,7 @@
 ### Success Postconditions
 
 - The deployment runs a standard distribution that contains a component for every source, setting and service endpoint it uses.
-- Every evaluation returns the same result as flagd-full returns for the same request; flagd-relay forwards the same flag configurations as flagd-full's flag sync endpoint.
+- Every evaluation returns the same result as flagd-full returns for the same request; flagd-sync forwards the same flag configurations as flagd-full's flag sync endpoint.
 - The deployment's start command, configuration file and environment variables are unchanged, except for removed settings of components the deployment does not use.
 
 ### Failure Postconditions
@@ -103,7 +103,7 @@ A distribution started with a source whose scheme it does not support stops befo
 
 ### BR-002: Same Configuration Surface
 
-Every standard distribution, flagd-relay included, accepts flagd-full's CLI flags, configuration file keys and environment variables for the components it contains, with the same names and defaults. A setting of a component it lacks stops startup (BR-001), so a flagd-full command works unchanged only on a distribution that contains every component the command configures.
+Every standard distribution, flagd-sync included, accepts flagd-full's CLI flags, configuration file keys and environment variables for the components it contains, with the same names and defaults. A setting of a component it lacks stops startup (BR-001), so a flagd-full command works unchanged only on a distribution that contains every component the command configures.
 
 ### BR-003: Telemetry Is a Component
 
@@ -115,12 +115,12 @@ flagd-minimal is at most 50% of the size of flagd-full for the same OS and archi
 
 ### BR-005: Release Names
 
-A standard distribution's image is `ghcr.io/open-feature/flagd-<distribution>` and its binary archives are `flagd-<distribution>_<version>_<OS>_<arch>`; flagd-full keeps `ghcr.io/open-feature/flagd` and `flagd_<version>_<OS>_<arch>` (UC-009 BR-007). The FIPS build of a standard distribution adds `-fips` to its image tags and to the product name of its archives, e.g. `flagd-relay-fips_<version>_<OS>_<arch>`, and keeps the crypto boundary of today's FIPS build of flagd (C-009).
+A standard distribution's image is `ghcr.io/open-feature/flagd-<distribution>` and its binary archives are `flagd-<distribution>_<version>_<OS>_<arch>`; flagd-full keeps `ghcr.io/open-feature/flagd` and `flagd_<version>_<OS>_<arch>` (UC-009 BR-007). The FIPS build of a standard distribution adds `-fips` to its image tags and to the product name of its archives, e.g. `flagd-sync-fips_<version>_<OS>_<arch>`, and keeps the crypto boundary of today's FIPS build of flagd (C-009).
 
 ### BR-006: Same Evaluation Results
 
 A standard distribution evaluates with the same configuration format and evaluator as flagd-full; for the components it contains it returns the same results as flagd-full.
 
-### BR-007: flagd-relay Is the Configuration Proxy
+### BR-007: flagd-sync Is the Configuration Proxy
 
-flagd-relay contains sync providers, a configuration format and the flag sync endpoint but no evaluator, and its module graph contains no evaluator module and no `github.com/diegoholiveira/jsonlogic` module (NFR-011). It rejects invalid flag configurations the same way flagd-full does (FR-026). Today's flagd-proxy stays a separate program with its own CLI and image and is not affected by adopting a standard distribution.
+flagd-sync contains sync providers, a configuration format and the flag sync endpoint but no evaluator, and its module graph contains no evaluator module and no `github.com/diegoholiveira/jsonlogic` module (NFR-011). It rejects invalid flag configurations the same way flagd-full does (FR-026). Today's flagd-proxy stays a separate program with its own CLI and image and is not affected by adopting a standard distribution.

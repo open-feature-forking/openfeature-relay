@@ -6,7 +6,7 @@
 **Use Case Name:** Verify Change Against Distributions  
 **Primary Actor:** Maintainer  
 **Secondary Actors:** GitHub Actions, flagd Test Harness  
-**Goal:** Know before a change is merged whether it keeps every standard distribution building, keeps flagd-full compatible with today's flagd, keeps flagd-relay rejecting what flagd-full rejects, and keeps evaluation performance and dependency boundaries within their limits.  
+**Goal:** Know before a change is merged whether it keeps every standard distribution building, keeps flagd-full compatible with today's flagd, keeps flagd-sync rejecting what flagd-full rejects, and keeps evaluation performance and dependency boundaries within their limits.  
 **Trigger:** A pull request against main is opened or updated  
 **Status:** Draft  
 
@@ -24,12 +24,12 @@
 1. Maintainer opens or updates a pull request with a change to main.
 2. GitHub Actions runs the linters, including the dependency rules, and the unit tests of every module.
 3. GitHub Actions builds every standard distribution from its manifest, with the modules of the change in place of their released versions, as a standard build and a FIPS build.
-4. GitHub Actions checks that the module graph of flagd-minimal contains no module listed in NFR-004, that the module graph of flagd-relay contains no evaluator module and no JsonLogic module, and that neither the evaluator module nor the flagd configuration format module depends on a package listed in NFR-005.
+4. GitHub Actions checks that the module graph of flagd-minimal contains no module listed in NFR-004, that the module graph of flagd-sync contains no evaluator module and no JsonLogic module, and that neither the evaluator module nor the flagd configuration format module depends on a package listed in NFR-005.
 5. GitHub Actions builds the flagd-full image of the change and runs the flagd Test Harness RPC and in-process suites against it with the tag selection of today's flagd.
-6. GitHub Actions gives flagd-relay and flagd-full each flag configuration of the set and checks that flagd-relay rejects every flag configuration flagd-full rejects and accepts every one flagd-full accepts.
+6. GitHub Actions gives flagd-sync and flagd-full each flag configuration of the set and checks that flagd-sync rejects every flag configuration flagd-full rejects and accepts every one flagd-full accepts.
 7. GitHub Actions runs the evaluator benchmarks on the change and on its merge base and compares allocations and time per operation of each benchmark.
 8. GitHub Actions reports the result of each check on the pull request.
-9. Maintainer sees that all checks passed and knows the change keeps every standard distribution building, flagd-full compatible and flagd-relay consistent with flagd-full.
+9. Maintainer sees that all checks passed and knows the change keeps every standard distribution building, flagd-full compatible and flagd-sync consistent with flagd-full.
 
 ## Alternative Flows
 
@@ -61,7 +61,7 @@
 
 ### A4: Dependency Boundary Violated
 
-**Trigger:** flagd-minimal contains a forbidden module, flagd-relay contains an evaluator module or a JsonLogic module, or the evaluator module or the flagd configuration format module depends on a forbidden package (step 4)  
+**Trigger:** flagd-minimal contains a forbidden module, flagd-sync contains an evaluator module or a JsonLogic module, or the evaluator module or the flagd configuration format module depends on a forbidden package (step 4)  
 **Flow:**
 
 1. GitHub Actions reports the forbidden module or package and the import chain that pulls it in.
@@ -95,12 +95,12 @@
 2. Maintainer accepts the new selection in the review with a stated reason, or asks for it to be reverted.
 3. Use case continues at step 6 after acceptance, or at step 2 after a revert.
 
-### A8: flagd-relay and flagd-full Disagree
+### A8: flagd-sync and flagd-full Disagree
 
-**Trigger:** flagd-relay accepts a flag configuration flagd-full rejects, or rejects one flagd-full accepts (step 6)  
+**Trigger:** flagd-sync accepts a flag configuration flagd-full rejects, or rejects one flagd-full accepts (step 6)  
 **Flow:**
 
-1. GitHub Actions reports each flag configuration with the result of flagd-relay and of flagd-full.
+1. GitHub Actions reports each flag configuration with the result of flagd-sync and of flagd-full.
 2. Maintainer updates the change.
 3. Use case continues at step 2.
 
@@ -129,9 +129,9 @@
 - The pull request carries a passed result for every check.
 - Every standard distribution builds from the change, as standard and FIPS build.
 - flagd-full built from the change passes the RPC and in-process suites with today's tag selection, or with a selection the Maintainer accepted in review.
-- flagd-relay rejects and accepts exactly the flag configurations of the set that flagd-full rejects and accepts.
+- flagd-sync rejects and accepts exactly the flag configurations of the set that flagd-full rejects and accepts.
 - No evaluator benchmark allocates more per operation than on the merge base, and every time deviation beyond 5% is reported on the pull request.
-- flagd-minimal, flagd-relay, the evaluator module and the flagd configuration format module stay inside their dependency boundaries.
+- flagd-minimal, flagd-sync, the evaluator module and the flagd configuration format module stay inside their dependency boundaries.
 
 ### Failure Postconditions
 
@@ -163,7 +163,7 @@ The benchmark baseline is the merge base of the pull request with main. A benchm
 
 ### BR-006: Dependency Boundaries
 
-flagd-minimal contains no module under `k8s.io`, `cloud.google.com`, `github.com/aws`, `github.com/Azure` or `go.opentelemetry.io/otel/sdk`. flagd-relay contains no evaluator module and no `github.com/diegoholiveira/jsonlogic` module. Neither the evaluator module nor the flagd configuration format module depends on a package under `go.opentelemetry.io`, `google.golang.org/grpc`, `connectrpc.com`, `k8s.io` or `gocloud.dev`. The existing FIPS dependency rules of the linters stay in force.
+flagd-minimal contains no module under `k8s.io`, `cloud.google.com`, `github.com/aws`, `github.com/Azure` or `go.opentelemetry.io/otel/sdk`. flagd-sync contains no evaluator module and no `github.com/diegoholiveira/jsonlogic` module. Neither the evaluator module nor the flagd configuration format module depends on a package under `go.opentelemetry.io`, `google.golang.org/grpc`, `connectrpc.com`, `k8s.io` or `gocloud.dev`. The existing FIPS dependency rules of the linters stay in force.
 
 ### BR-007: Verification Publishes Nothing
 
@@ -171,4 +171,4 @@ Binaries and images built for verification stay inside the verification run.
 
 ### BR-008: Same Verdict as flagd-full
 
-flagd-relay and flagd-full are checked against the same set of flag configurations, and flagd-relay gives the same verdict, accept or reject, as flagd-full for each one. A flag configuration added to the set is valid or invalid by flagd-full's verdict, never by flagd-relay's.
+flagd-sync and flagd-full are checked against the same set of flag configurations, and flagd-sync gives the same verdict, accept or reject, as flagd-full for each one. A flag configuration added to the set is valid or invalid by flagd-full's verdict, never by flagd-sync's.

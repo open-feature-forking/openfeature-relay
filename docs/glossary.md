@@ -2,10 +2,11 @@
 
 | Term                  | Definition                                                                                                                                  | Avoid                         |
 |-----------------------|---------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------|
-| Builder               | The flagd-builder CLI that turns a manifest into generated source and a compiled distribution.                                             | ocb, generator                |
+| OpenFeature Relay | The runtime, component interfaces and builder from which flag relay distributions are built; flagd is its reference implementation. | flagd-builder, proxy builder |
+| Builder | The relay builder CLI that turns a manifest into generated source and a compiled distribution. | ocb, generator, flagd-builder |
 | Manifest              | The YAML file that names a distribution and lists the component modules, versions and replacements it is built from.                       | config, builder config        |
 | Distribution          | A flagd binary, and its image, built from one manifest; it contains exactly the components the manifest selects.                          | flavour                       |
-| Standard Distribution | A distribution whose manifest the Maintainers publish with every release: flagd-minimal, flagd-cloud, flagd-kubernetes, flagd-relay or flagd-full. |  |
+| Standard Distribution | A distribution whose manifest the Maintainers publish with every release: flagd-minimal, flagd-cloud, flagd-kubernetes, flagd-sync or flagd-full. |  |
 | flagd-full            | The standard distribution with every official component; it behaves exactly like flagd before the builder.                               | monolith                      |
 | Custom Distribution   | A distribution built from a manifest that is not a standard distribution.                                                                   |                               |
 | Component             | A selectable unit compiled into a distribution, exposed by a component module through a factory.                                          |                               |
@@ -20,7 +21,7 @@
 | Service Endpoint      | A component type that serves flags to clients over a protocol: flag evaluation (gRPC/ConnectRPC), OFREP or flag sync.                     | server, access point          |
 | Flag Configuration    | The flags a sync provider delivers from a source, with variants and targeting, written in one configuration format.                                          | flag config, flag definitions |
 | Configuration Format | A component type that validates flag configurations of one format (flagd's JSON schema, a vendor's format) and keeps them in the store as its own documents, which only its paired evaluator reads; it reports each document's flag keys, flag set, version and changes. | parser |
-| Configuration Proxy | A distribution with sync providers, a configuration format and the flag sync endpoint but no evaluator; it forwards validated flag configurations to in-process providers. flagd-relay is the standard one; today's flagd-proxy is a separate program. |  |
+| Configuration Proxy | A distribution with sync providers, a configuration format and the flag sync endpoint but no evaluator; it forwards validated flag configurations to in-process providers. flagd-sync is the standard one; today's flagd-proxy is a separate program. |  |
 | Evaluator | The component type that resolves one, several or all flags of a selector for an evaluation context from the documents of its paired configuration format, returning untyped results with OpenFeature reasons and error codes; it emits no telemetry. | resolver |
 | Telemetry Provider    | A component type that supplies tracing, metrics and HTTP instrumentation to service endpoints and middleware.                            |                               |
 | Middleware | A component type that wraps a service endpoint's HTTP handler with cross-cutting behaviour; it may bind a request to a selector and attach request attributes. | interceptor, filter |

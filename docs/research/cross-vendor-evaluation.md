@@ -1,6 +1,6 @@
 # Cross-Vendor Evaluation: flagd, Flagsmith, GO Feature Flag
 
-Does the flagd-builder component model carry flagd, Flagsmith and GO Feature Flag (GOFF), so that the heavy lifting is shared and each vendor keeps its flexibility?
+Does the OpenFeature Relay component model carry flagd, Flagsmith and GO Feature Flag (GOFF), so that the heavy lifting is shared and each vendor keeps its flexibility?
 
 **Short answer:** yes, with five changes.
 The sync provider, store, OFREP and telemetry/middleware slots fit all three almost unchanged.
@@ -12,7 +12,7 @@ The proposed home is one new component type, the **event sink**, fed by an event
 
 | Short name | Repository                                     | Commit             | Notes                                                             |
 |------------|------------------------------------------------|--------------------|-------------------------------------------------------------------|
-| `flagd`    | this checkout (`flagd-builder`, branch `spec`) | `628f4b7`          | `core/`, `flagd/`                                                 |
+| `flagd`    | this checkout (`OpenFeature Relay`, branch `spec`) | `628f4b7`          | `core/`, `flagd/`                                                 |
 | `edge`     | github.com/Flagsmith/edge-proxy                | `2612bfd`          | paths under `src/edge_proxy/`                                     |
 | `fsgo`     | github.com/Flagsmith/flagsmith-go-client       | `adc44cb`          | engine under `flagengine/`                                        |
 | `goff`     | github.com/thomaspoignant/go-feature-flag      | `157db90`          | relay proxy under `cmd/relayproxy/`, engine under `modules/core/` |
@@ -168,7 +168,7 @@ Both vendors' engines contain the format and the evaluator in one Go module: GOF
 The Flagsmith format's natural document is the prepared `EngineEvaluationContext`, an engine type.
 UC-018 BR-005 ("a configuration format module depends on no evaluator module") and its postcondition "exactly one configuration format" cannot hold for them.
 Allow an **engine module**: one component module that provides a configuration format and its paired evaluator.
-The evaluator-free promise then stays where it matters: flagd-relay with flagd's format (NFR-011); a vendor configuration proxy carries the vendor engine.
+The evaluator-free promise then stays where it matters: flagd-sync with flagd's format (NFR-011); a vendor configuration proxy carries the vendor engine.
 
 ### 3.6 Credential-dependent results
 

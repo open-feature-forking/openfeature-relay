@@ -1,6 +1,6 @@
-# flagd-builder
+# OpenFeature Relay (incubator)
 
-Incubator for an OpenTelemetry Collector Builder-style modular flagd. This repository carries flagd's full history but is not a GitHub fork. `main` is upstream flagd plus this work: every slice lands on `main` through a pull request in this repository. Upstream changes come in by merging `upstream/main` into `main`.
+Incubator for OpenFeature Relay: an OpenTelemetry Collector Builder-style runtime and builder for flag relays, with flagd as the reference implementation. This repository carries flagd's full history but is not a GitHub fork. `main` is upstream flagd plus this work: every slice lands on `main` through a pull request in this repository. Upstream changes come in by merging `upstream/main` into `main`.
 
 The specification is the contract: `docs/vision.md`, `docs/requirements.md`, `docs/glossary.md`, `docs/use_cases.puml`, `docs/use_cases/`. Use glossary terms in code, commits and PR text. A behaviour the spec does not state is a question, not a decision.
 
@@ -49,7 +49,7 @@ After phase 1 (C1, C2, D), work proceeds one use case at a time, in this order. 
 | 7 | UC-008 Run Contract Tests | contract tests for every component type, grown with 3–6 |
 | 8 | UC-001 Build Custom Distribution | module split (phase 4), builder CLI and manifest (phase 5) |
 | 9 | UC-009 Upgrade to flagd-full | flagd-full built by the builder, test-harness suites green |
-| 10 | UC-011, UC-010, UC-017, UC-021 | components command, standard distributions, flagd-relay, event export |
+| 10 | UC-011, UC-010, UC-017, UC-021 | components command, standard distributions, flagd-sync, event export |
 | 11 | UC-019 Serve Vendor Flags | a Flagsmith engine module as the cross-vendor proof |
 | 12 | UC-002, UC-012, UC-013, UC-015 | image, release, CI verification, migration guide |
 
@@ -62,7 +62,7 @@ A use case is done when its main success scenario and every alternative flow hav
 Go and Docker work only inside WSL Ubuntu. The system Go there is 1.22 and cannot resolve `go 1.27` on its own, so pin the toolchain. Run Go gates from the repository root:
 
 ```bash
-wsl -d Ubuntu -- bash -lc 'export GOTOOLCHAIN=go1.27.3; cd /mnt/c/Users/simon/openfeature/flagd-builder && make workspace-init && make test-core test-flagd'
+wsl -d Ubuntu -- bash -lc 'export GOTOOLCHAIN=go1.27.3; cd /mnt/c/Users/simon/openfeature/OpenFeature Relay && make workspace-init && make test-core test-flagd'
 ```
 
 From Git Bash, prefix `wsl` calls with `MSYS_NO_PATHCONV=1`. The spec gate is Python and runs on Windows directly.
