@@ -11,7 +11,7 @@ None of these is built by the builder yet; today flagd built from this repositor
 
 | Distribution | Contents | Purpose |
 |--------------|----------|---------|
-| **flagd-full** | every official component | today's flagd: same CLI, configuration, ports, endpoints and images |
+| **flagd-full** | every component maintained in this repository | today's flagd: same CLI, configuration, ports and endpoints |
 | flagd-minimal | no Kubernetes client, cloud SDK or OpenTelemetry SDK; at most half the size of flagd-full | a small flagd |
 | flagd-cloud | not specified yet | named for cloud deployments |
 | flagd-kubernetes | not specified yet | named for Kubernetes deployments |
