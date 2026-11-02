@@ -116,3 +116,53 @@ Plan: `.claude/plans/uc-014.md` revision 3 (main @ 450aefe). Commands ran in WSL
   - gRPC's own packages import none.
   - Today the stats handler sits on both the default and the override path (grpc_sync.go:83-90), so "`DialOptions` always appended, separate from the override" keeps behaviour.
 - **Revision 2's other findings carry over as the plan says:** targets iterating module directories, binding directories in the Dockerfiles (now amended by 7), Q7's replace of core itself (1a), two example modules, per-directory boundary checks, and release-please packages and tags.
+
+## Revision 4 check
+
+Plan revision 4 (main @ 718ae2c), checked against code and with commands, as before.
+
+**The blocker is resolved, and so are the three majors. No new blocker or major. Two new minors.**
+
+### Finding 1 (blocker): resolved
+
+Section 4 now carries both custom meters, and each detail matches today's code:
+
+| Detail | Plan revision 4 | Code today |
+|---|---|---|
+| Stream metrics | `StreamMetricsRecorder` with `RecordStreamOpened`, `RecordStreamClosed`, `RecordReconnect(ctx, uri, selector)` | `clientStreamMetrics`, same three operations |
+| Call sites | Same points | grpc_sync.go:167, 173, 188, 191, 259 |
+| Implementation | `telemetry/otel` `NewGRPCStreamMetrics` | `client_stream_metrics.go` |
+| Meter / scope | `github.com/open-feature/flagd/core/pkg/sync/grpc` as a literal | `clientStreamMeterName` |
+| Instrument kinds | Int64UpDownCounter (`stream.active`), Int64Counter (`stream.reconnects`) | Same |
+| Units | None, kept on purpose | None (the Prometheus mangling comment) |
+| Attributes | Legacy and current provider/type, sanitized URI, selector when set | `streamAttrs` |
+| Generic recorder | `NewSyncMetricsRecorder`, meter `…/core/pkg/sync/syncmetrics` as a literal, unchanged | `syncmetrics.Recorder` |
+
+When the meter provider is read:
+- Today the stream metrics read `otel.GetMeterProvider()` in each gRPC `Init`, and `syncmetrics` reads it at from_config.go:217. Both run after `BuildMetricsRecorder` → `otel.SetMeterProvider` (from_config.go:115, metrics.go:242).
+- That is the only `SetMeterProvider` in production code. `ReloadInterval` reloads certificates, not the provider.
+- Building both recorders once in `from_config.go` after line 115 therefore binds the same provider.
+- One shared instrument set instead of one per gRPC source aggregates identically, because the SDK deduplicates identical instruments.
+- `otelgrpc.NewClientHandler()` is built there too, after the trace and meter providers (lines 108, 115), as `Init` does today.
+
+The "nil means noop" interface field needs explicit guards at the five call sites, or a noop default set in `Init`. Today's nil checks live inside the concrete methods. That's an implementation detail the reviewer should check, not a finding.
+
+### Findings 2–4 (major): resolved
+
+- **2:** the forbidden lists now split package graph from module graph. `sync/grpc` and `filegrpc` forbid OTel in packages only. The `file` example's module graph is achievable: the OpenFeature go-sdk v1.20.0 adds no OTel, gRPC, connect, k8s or gocloud (`go mod graph` count 0, probed in a scratch module).
+- **3:** 1d now reads `prometheus.DefaultGatherer` and calls `FromConfig` once. No other test in `flagd/pkg/runtime` calls `FromConfig`; `fromconfig_test` is a separate binary. It also starts the syncs and selects by scope.
+- **4:** the runner moves to the `integration-test` job (which has submodules) and fails when the features are missing. The tag expression `@in-process && (@file || @disabled)` matches `evaluation`, `targeting`, `disabled` and `metadata` at 9d8dace. Provider kinds are mapped to flag files.
+
+The minors 5–9 are handled as stated in section 9.
+
+### New minor A: PR 2's "no OTel" check includes `blob`, which can't pass
+
+- **Plan step:** step 2 check ("`go list -deps` of each `core/pkg/sync/...` provider package (not `builder`) has no `go.opentelemetry.io`").
+- **Evidence:** through its non-telemetry imports alone, which are gocloud and the cloud SDKs, `core/pkg/sync/blob` reaches 50 `go.opentelemetry.io` packages. For `file`, `grpc`, `http` and `kubernetes` the count is 0.
+- **Fix:** run the check on `file`, `grpc`, `http` and `kubernetes`, and state that `blob` carries OTel through gocloud. That is consistent with Q2's scope and with the forbidden lists, which don't cover `blob`.
+
+### New minor B: 1d's forced reconnect needs the same address
+
+- **Plan step:** 1d ("gRPC source backed by an in-test `syncv1` server on `localhost:0`… Stop and restart the in-test server once").
+- **Evidence:** the gRPC sync redials its configured URI with exponential backoff (grpc_sync.go:199-214) and counts a reconnect on the first receive after it (:255-259). A server restarted on `localhost:0` gets a new port, so the sync never reconnects, and the reconnect series never appears.
+- **Fix:** take the port from the first listener and restart on that exact address. Allow for the first backoff step, `backOffBase^1` seconds, in the wait.
