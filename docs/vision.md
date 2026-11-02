@@ -15,7 +15,7 @@ The evaluator traces through the global OpenTelemetry state, so applications usi
 flagd becomes a set of components assembled into a distribution, the way the OpenTelemetry Collector Builder assembles collectors:
 
 - **Flexible**: a distribution contains only the components its manifest selects; unused components and their dependencies are not compiled in.
-- **Powerful**: sync providers, configuration formats, evaluators, service endpoints, telemetry and middleware are all selectable component types behind factory interfaces. Any combination of service endpoints is possible: OFREP alone, flag evaluation alone, both, or extensions.
+- **Powerful**: sync providers, configuration formats, evaluators, service endpoints, event sinks, telemetry and middleware are all selectable component types behind factory interfaces. Any combination of service endpoints is possible: OFREP alone, flag evaluation alone, both, or extensions.
 - **Backward compatible**: the `flagd-full` distribution behaves exactly like today's flagd — same CLI, configuration, ports, endpoints and images.
 - **Easy to extend**: anyone can write a component in their own Go module and build it into a distribution without forking flagd.
 - **Embeddable**: the evaluator and the flagd configuration format are dependency-free modules and the entry point for in-process providers; their observability comes from OpenFeature hooks, while flagd-full's service endpoints keep recording evaluation spans.
@@ -24,7 +24,7 @@ Three distributions show the range:
 
 - **flagd-full**: today's flagd, unchanged.
 - **Configuration proxy** (flagd-relay): sync providers, a configuration format and the flag sync endpoint, no evaluator; in-process providers get validated flag configurations from one place. Parsing and validating flag configurations therefore moves out of the evaluator into the configuration format. Today's flagd-proxy stays a separate program.
-- **Vendor distribution**: another vendor's sync provider, configuration format and evaluator behind OFREP, for example the Flagsmith engine, so flagd can stand in for that vendor's edge proxy for OpenFeature clients. Each configuration format keeps its own documents in the store, so flagd's flag model stays unchanged; a source names its format, flagd's being the default.
+- **Vendor distribution**: another vendor's sync provider, configuration format and evaluator behind OFREP, for example the Flagsmith engine or GO Feature Flag's evaluation module, so flagd can stand in for that vendor's edge or relay proxy for OpenFeature clients. Each configuration format keeps its own documents in the store, so flagd's flag model stays unchanged; a source names its format, flagd's being the default. Polling, the store, change events, OFREP with its event stream, flag sync, telemetry and event delivery are shared; the flag model, rules, bucketing and identity mapping stay the vendor's.
 
 ## Roles
 
@@ -44,6 +44,8 @@ In scope for the first release:
 - an event bus replacing the runtime's typed calls into services
 - standard distributions: minimal, cloud, Kubernetes, relay, full
 - the evaluator as an embeddable module without telemetry, transport or sync dependencies
+- an event sink component type, and an event bus that carries configuration change, evaluation and tracking events
+- a shared poller that drives sync providers which only fetch, with conditional requests, jitter, backoff and a refetch trigger
 
 Enabled by the architecture, planned for a later release:
 
@@ -55,6 +57,9 @@ Out of scope:
 - changes to flag evaluation semantics or flagd's flag configuration schema
 - shipping vendor components; the vendor distribution is a goal for Extension Authors, not for the Maintainers
 - a hosted registry for community components
+- server-side OpenFeature hooks; middleware, context enrichment and event sinks cover the positions before and after evaluation
+- stored identities with persisted traits, as some vendor flag services keep them
+- per-flag-set pipelines (own sync providers, event sinks and enrichment per flag set)
 
 ## Way of working
 
@@ -69,3 +74,4 @@ The specification in this folder follows the AI Unified Process: vision, require
 - An Extension Author builds a distribution with a custom sync provider without changing flagd.
 - A configuration proxy serves in-process providers without an evaluator compiled in.
 - The Go in-process provider depends on the evaluator module and nothing it does not use.
+- A vendor distribution built from a vendor engine module answers OFREP requests with the vendor's values, variants and reasons, and the shared OFREP endpoint serves its ETags and event stream unchanged.
