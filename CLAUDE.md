@@ -20,7 +20,7 @@ Each phase runs plan → oppose → implement → review, one role per agent in 
 - The implementer works on its own worktree, cut from `main` (or from the slice it builds on); it never pushes.
 - The orchestrating session pushes the slice as `phase-<n>/pr-<x>-<topic>` and opens a pull request in this repository against `main` (or against the slice below it, stacked). Plans, reviews and spec changes go straight to `main`.
 - The reviewer reviews the pull request: it re-runs the gates and posts its verdict as a PR review comment. `ready` needs every named gate green in its own run and CI green.
-- On `ready` with green CI, the orchestrating session merges with a merge commit (keeping the signed-off commits) and deletes the branch. `ready after fixes` goes back to the implementer as new commits on the same branch, never an amend.
+- On `ready` with green CI, the orchestrating session merges with a merge commit (keeping the signed-off commits) and deletes the branch. In a stack, retarget the next PR to `main` before merging the one below it: deleting a PR's base branch closes the PR instead of retargeting it. `ready after fixes` goes back to the implementer as new commits on the same branch, never an amend.
 - The project lead approves each plan before implementation, and can stop or veto any PR; they are not a required approver for merges inside this repository.
 - The release-please and benchmark-pages workflows are disabled in this repository; do not enable them.
 
@@ -33,6 +33,10 @@ Each phase runs plan → oppose → implement → review, one role per agent in 
 5. Builder CLI, manifest, code generation (FR-001..FR-009, FR-017, FR-018).
 6. Standard distributions, images, CI (FR-021, FR-030..FR-032, NFR-003, NFR-009, NFR-011).
 7. Contract tests, example extension, migration guide (FR-015, FR-043, NFR-010).
+
+## Issues
+
+Every use case has an issue titled `UC-0XX: <name>` (label `use-case`); the pinned roadmap issue lists them in PoC order. Every PR starts its description with `Part of #<issue>`. The orchestrating session keeps the use case issue's PR list and definition-of-done checkboxes current, adds the `in progress` label when planning starts, and closes the issue when the use case is done. Work outside the use cases (docs, public readiness) has its own issue.
 
 ## PoC: one use case after the other
 
