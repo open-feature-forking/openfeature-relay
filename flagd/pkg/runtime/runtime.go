@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"syscall"
 
+	"github.com/open-feature/flagd/core/pkg/configformat"
 	"github.com/open-feature/flagd/core/pkg/evaluator"
 	"github.com/open-feature/flagd/core/pkg/logger"
 	"github.com/open-feature/flagd/core/pkg/service"
@@ -31,6 +32,9 @@ type Runtime struct {
 	EvaluationService service.IFlagEvaluationService
 	ServiceConfig     service.Configuration
 	Syncs             []sync.ISync
+	// Formats holds the configuration format of each source that names one other than flagd's, keyed
+	// by source. Sources without an entry update the Evaluator.
+	Formats map[string]configformat.ConfigurationFormat
 
 	// sourceReadiness records whether each configured source has successfully updated the evaluator.
 	sourceReadiness map[string]bool
@@ -144,7 +148,12 @@ func (r *Runtime) updateAndEmit(payload sync.DataSync) {
 		context.Background(),
 		"flagSync",
 		trace.WithAttributes(attribute.String("feature_flag.source", payload.Source)))
-	err := r.Evaluator.SetState(payload)
+	var err error
+	if format, ok := r.Formats[payload.Source]; ok {
+		err = r.accept(format, payload)
+	} else {
+		err = r.Evaluator.SetState(payload)
+	}
 	if err != nil {
 		span.SetStatus(codes.Error, "flagSync error")
 		span.RecordError(err)
@@ -169,4 +178,24 @@ func (r *Runtime) updateAndEmit(payload sync.DataSync) {
 		}
 	}
 	r.SyncService.Emit(payload.Source)
+}
+
+// accept hands a payload to the configuration format of its source. A rejection names source and entry.
+func (r *Runtime) accept(format configformat.ConfigurationFormat, payload sync.DataSync) error {
+	result, err := format.Accept(context.Background(), configformat.Input{
+		Source: payload.Source, Data: payload.FlagData, Selector: payload.Selector,
+		IncrementalUpdate: payload.IncrementalUpdates,
+	})
+	if err != nil {
+		return err
+	}
+	for _, d := range result.Documents {
+		r.Logger.Debug(fmt.Sprintf(
+			"source %q, format %q, flag set %q, version %s: %d flags, %d added, %d updated, %d removed",
+			payload.Source, format.Type(), d.FlagSet, d.Version, len(d.FlagKeys), len(d.Added), len(d.Updated), len(d.Removed)))
+	}
+	for _, dropped := range result.Dropped {
+		r.Logger.Warn(fmt.Sprintf("dropped: %v", dropped))
+	}
+	return nil
 }
