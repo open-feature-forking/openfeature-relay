@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"testing"
 
+	flagconfigtest "github.com/open-feature-forking/openfeature-relay/configformat/flagd/flagdtest"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
-	flagconfigtest "github.com/open-feature-forking/openfeature-relay/core/pkg/configformat/flagd/flagdtest"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat/formattest"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"

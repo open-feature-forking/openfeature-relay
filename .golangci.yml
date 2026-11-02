@@ -28,7 +28,9 @@ linters:
         evaluator-boundary:
           files:
             - "**/core/pkg/evaluator/**"
+            - "**/evaluator/**"
             - "**/core/pkg/configformat/**"
+            - "**/configformat/**"
           deny:
             - pkg: go.opentelemetry.io
               desc: the evaluator imports no telemetry; flagd records spans around it
@@ -43,9 +45,12 @@ linters:
         configformat-no-evaluator:
           files:
             - "**/core/pkg/configformat/**"
+            - "**/configformat/**"
           deny:
             - pkg: github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator
               desc: a configuration format knows no evaluator; evaluators read the documents formats store
+            - pkg: github.com/open-feature-forking/openfeature-relay/evaluator/
+              desc: a configuration format knows no evaluator module
             - pkg: github.com/diegoholiveira/jsonlogic
               desc: a configuration format knows no evaluator engine
             - pkg: github.com/open-feature-forking/openfeature-relay/sync/

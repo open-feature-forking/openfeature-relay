@@ -16,8 +16,8 @@ import (
 
 	keyvalue "github.com/open-feature/flagd/test/configformat-example"
 
+	flagdformat "github.com/open-feature-forking/openfeature-relay/configformat/flagd"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat/flagd"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat/formattest"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
@@ -166,14 +166,14 @@ func TestSourceWithoutFormatIsRejectedByFlagd(t *testing.T) {
 	st, err := store.NewStore(log, []string{source})
 	require.NoError(t, err)
 
-	_, err = flagd.NewFormat(st, log).Accept(context.Background(), configformat.Input{Source: source, Data: keyvalueFlags})
+	_, err = flagdformat.NewFormat(st, log).Accept(context.Background(), configformat.Input{Source: source, Data: keyvalueFlags})
 
 	var rejection configformat.Rejection
 	require.True(t, errors.As(err, &rejection), "want a rejection, got %v", err)
 	require.Equal(t, source, rejection.Source)
 	require.Contains(t, rejection.Reason, "unmarshalling flags map: ")
 	require.Empty(t, st.Documents(keyvalue.Type, source))
-	require.Empty(t, st.Documents(flagd.Type, source))
+	require.Empty(t, st.Documents(flagdformat.Type, source))
 
 	path := writeFile(t, "vendor.json", keyvalueFlags)
 	rt, err := runtime.FromConfig(log, "test", runtime.Config{

@@ -5,7 +5,7 @@ ALL_GO_MOD_DIRS := $(shell find . \( -path ./test/integration -o -path ./.claude
 
 # The library modules: what embedders import. Tests, the FIPS tests and the benchmarks run on exactly
 # these (plus the binaries), and testdata/go-packages.txt pins the packages they contain.
-GO_LIB_MODULE_DIRS := ./core ./sync/file ./sync/flagd-grpc ./sync/http ./sync/openfeature-operator ./sync/blob ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel
+GO_LIB_MODULE_DIRS := ./core ./sync/file ./sync/flagd-grpc ./sync/http ./sync/openfeature-operator ./sync/blob ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel ./evaluator/flagd ./configformat/flagd
 
 # The FIPS variant builds against the CMVP-certified Go Cryptographic Module
 # v1.0.0 (certificate #5247). The literal version is required; the

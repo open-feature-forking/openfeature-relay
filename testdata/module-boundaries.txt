@@ -2,12 +2,16 @@
 # NFR-005: the evaluator and the configuration formats import no telemetry, transport or platform clients.
 # NFR-011: the evaluator interfaces carry neither the JsonLogic engine nor the JSON schema library.
 core:./pkg/evaluator:opentelemetry|grpc|connectrpc|k8s.io|gocloud|jsonlogic|jsonschema
-core:./pkg/evaluator/...:opentelemetry|grpc|connectrpc|k8s.io|gocloud
-core:./pkg/configformat/...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|jsonlogic|core/pkg/evaluator|openfeature-relay/sync/
+core:./pkg/evaluator/...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|jsonlogic|jsonschema
+core:./pkg/configformat/...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|jsonlogic|jsonschema|core/pkg/evaluator|openfeature-relay/(sync|evaluator)/
 # The service interfaces and the OFREP models stay light.
 core:./pkg/service/...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|jsonlogic|jsonschema
-# The core module imports no telemetry, transport, platform client or other library module.
-core:./...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|cloud.google.com|github.com/Azure|github.com/aws|openfeature-relay/(sync|telemetry)/
+# The core module imports no telemetry, transport, platform client, JsonLogic engine, schema library or other library module.
+core:./...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|cloud.google.com|github.com/Azure|github.com/aws|jsonlogic|jsonschema|openfeature-relay/(sync|telemetry|evaluator|configformat)/
+# NFR-005, NFR-011: the embeddable modules import no telemetry, transport or platform clients, and flagd's
+# configuration format knows no evaluator, engine or sync provider.
+evaluator/flagd:./...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|openfeature-relay/(sync|telemetry)/
+configformat/flagd:./...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|jsonlogic|core/pkg/evaluator|openfeature-relay/(sync|telemetry|evaluator)/
 # Q2: the sync providers import no telemetry and no other sync module.
 sync/file:./...:go.opentelemetry.io|openfeature-relay/(telemetry|sync/(flagd-grpc|http|openfeature-operator|blob|gcs|azblob|s3|builder))
 sync/flagd-grpc:./...:go.opentelemetry.io|openfeature-relay/(telemetry|sync/(file|http|openfeature-operator|blob|gcs|azblob|s3|builder))
