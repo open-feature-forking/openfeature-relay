@@ -1,0 +1,76 @@
+@startuml Use Cases Overview
+left to right direction
+
+actor "Distribution Builder" as builder
+actor "Extension Author" as author
+actor "Operator" as operator
+actor "Maintainer" as maintainer
+actor "Provider Author" as provider
+
+actor "Go Toolchain" as go <<system>>
+actor "Container Registry" as registry <<system>>
+actor "GitHub Actions" as ci <<system>>
+actor "flagd Test Harness" as harness <<system>>
+
+rectangle "flagd Builder" {
+    usecase "UC-001\nBuild Custom Distribution" as UC001
+    usecase "UC-002\nPackage Distribution as Image" as UC002
+
+    usecase "UC-003\nDevelop Sync Provider Extension" as UC003
+    usecase "UC-004\nDevelop Service Endpoint Extension" as UC004
+    usecase "UC-005\nDevelop Middleware Extension" as UC005
+    usecase "UC-006\nDevelop Telemetry Provider Extension" as UC006
+    usecase "UC-007\nDevelop Evaluator Extension" as UC007
+    usecase "UC-008\nRun Contract Tests" as UC008
+
+    usecase "UC-009\nUpgrade to flagd-full" as UC009
+    usecase "UC-010\nAdopt Standard Distribution" as UC010
+    usecase "UC-011\nInspect Distribution Components" as UC011
+
+    usecase "UC-012\nRelease Distributions and Component Modules" as UC012
+    usecase "UC-013\nVerify Change Against Distributions" as UC013
+
+    usecase "UC-014\nEmbed Evaluator in In-Process Provider" as UC014
+    usecase "UC-015\nMigrate Provider to Component Modules" as UC015
+
+    usecase "UC-016\nRecover From Snapshot" as UC016
+}
+
+builder --> UC001
+builder --> UC002
+
+author --> UC003
+author --> UC004
+author --> UC005
+author --> UC006
+author --> UC007
+
+UC003 ..> UC008 : <<include>>
+UC004 ..> UC008 : <<include>>
+UC005 ..> UC008 : <<include>>
+UC006 ..> UC008 : <<include>>
+UC007 ..> UC008 : <<include>>
+
+operator --> UC009
+operator --> UC010
+operator --> UC011
+operator --> UC016
+
+maintainer --> UC012
+maintainer --> UC013
+
+provider --> UC014
+provider --> UC015
+
+UC001 --> go
+UC002 --> registry
+UC012 --> ci
+UC012 --> registry
+UC013 --> ci
+UC013 --> harness
+
+note right of UC016
+  Deferred: FR-050, FR-051
+end note
+
+@enduml

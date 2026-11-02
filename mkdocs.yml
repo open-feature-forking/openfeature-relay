@@ -39,6 +39,16 @@ extra_css:
   - assets/extra.css
 
 docs_dir: docs
+# flagd-builder specification (AI Unified Process), not part of the site
+exclude_docs: |
+  /vision.md
+  /requirements.md
+  /glossary.md
+  /use_cases.puml
+  /use_cases/
+  /test_cases/
+  /processes/
+  /entity_model.md
 repo_url: https://github.com/open-feature/flagd
 repo_name: open-feature/flagd
 edit_uri: edit/main/docs/
