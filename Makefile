@@ -56,7 +56,7 @@ build-flagd-fips:
 	$(FIPS_ENV) go build -tags $(FIPS_TAGS) -ldflags "-X main.version=dev -X main.commit=$$(git rev-parse --short HEAD) -X main.date=$$(date +%FT%TZ)" -o ./bin/flagd-fips ./flagd
 	go version -m ./bin/flagd-fips | grep -E 'GOFIPS140=|-tags='
 .PHONY: test
-test: test-core test-flagd test-flagd-proxy test-configformat-example
+test: test-core test-flagd test-flagd-proxy test-configformat-example test-evaluator-testkit
 test-core: test-modules
 test-modules:
 	@rc=0; for m in $(GO_LIB_MODULE_DIRS); do \
@@ -66,6 +66,9 @@ test-flagd:
 	go test -race -covermode=atomic -cover -short ./flagd/pkg/... -coverprofile=flagd-coverage.out
 test-configformat-example:
 	go test -race -short -count=1 ./test/configformat-example/...
+# The testbed's evaluator suite lives in the test-harness submodule (git submodule update --init test-harness).
+test-evaluator-testkit:
+	go test -race -short -count=1 ./test/evaluator-testkit/...
 test-flagd-proxy:
 	go test -race -covermode=atomic -cover -short ./flagd-proxy/pkg/... -coverprofile=flagd-proxy-coverage.out
 # fips140=only makes non-approved algorithms error or panic, so this fails if a
