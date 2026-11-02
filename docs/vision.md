@@ -15,10 +15,16 @@ The evaluator traces through the global OpenTelemetry state, so applications usi
 flagd becomes a set of components assembled into a distribution, the way the OpenTelemetry Collector Builder assembles collectors:
 
 - **Flexible**: a distribution contains only the components its manifest selects; unused components and their dependencies are not compiled in.
-- **Powerful**: sync providers, service endpoints, evaluators, telemetry and middleware are all selectable component types behind factory interfaces.
+- **Powerful**: sync providers, configuration formats, evaluators, service endpoints, telemetry and middleware are all selectable component types behind factory interfaces. Any combination of service endpoints is possible: OFREP alone, flag evaluation alone, both, or extensions.
 - **Backward compatible**: the `flagd-full` distribution behaves exactly like today's flagd — same CLI, configuration, ports, endpoints and images.
 - **Easy to extend**: anyone can write a component in their own Go module and build it into a distribution without forking flagd.
 - **Embeddable**: the evaluator is a dependency-free module and the single entry point for in-process providers; their observability comes from OpenFeature hooks.
+
+Three distributions show the range:
+
+- **flagd-full**: today's flagd, unchanged.
+- **Configuration proxy**: sync providers, a configuration format and the flag sync endpoint, no evaluator; in-process providers get validated flag configurations from one place. Parsing and validating flag configurations therefore moves out of the evaluator into the configuration format.
+- **Vendor distribution**: another vendor's sync provider, configuration format and evaluator behind OFREP, for example the Flagsmith engine, so flagd can stand in for that vendor's edge proxy.
 
 ## Roles
 
@@ -33,10 +39,10 @@ flagd becomes a set of components assembled into a distribution, the way the Ope
 In scope for the first release:
 
 - the builder CLI, the manifest format and code generation
-- factory interfaces for sync providers, service endpoints, evaluators, telemetry and middleware
+- factory interfaces for sync providers, configuration formats, evaluators, service endpoints, telemetry and middleware
 - splitting `core` into a lightweight core module and component modules
 - an event bus replacing the runtime's typed calls into services
-- standard distributions: minimal, cloud, Kubernetes, full
+- standard distributions: minimal, cloud, Kubernetes, proxy, full
 - the evaluator as an embeddable module without telemetry, transport or sync dependencies
 
 Enabled by the architecture, planned for a later release:
@@ -46,7 +52,8 @@ Enabled by the architecture, planned for a later release:
 Out of scope:
 
 - dynamic loading (Go plugins, shared libraries)
-- changes to flag evaluation semantics or the flag definition schema
+- changes to flag evaluation semantics or flagd's flag configuration schema
+- shipping vendor components; the vendor distribution is a goal for Extension Authors, not for the Maintainers
 - a hosted registry for community components
 
 ## Way of working
@@ -60,4 +67,5 @@ The specification in this folder follows the AI Unified Process: vision, require
 - `flagd-full` passes the flagd test-harness suites with the same results as today's flagd.
 - A minimal distribution contains no Kubernetes client, cloud SDK or OpenTelemetry SDK.
 - An Extension Author builds a distribution with a custom sync provider without changing flagd.
+- A configuration proxy serves in-process providers without an evaluator compiled in.
 - The Go in-process provider depends on the evaluator module and nothing it does not use.

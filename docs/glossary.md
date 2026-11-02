@@ -9,7 +9,7 @@
 | flagd-full            | The standard distribution with every official component; it behaves exactly like flagd before the builder.                               | monolith                      |
 | Custom Distribution   | A distribution built from a manifest that is not a standard distribution.                                                                   |                               |
 | Component             | A selectable unit compiled into a distribution, exposed by a component module through a factory.                                          |                               |
-| Component Type        | The kind of a component: sync provider, service endpoint, evaluator, telemetry provider or middleware.                                    |                               |
+| Component Type        | The kind of a component: sync provider, configuration format, evaluator, service endpoint, telemetry provider or middleware.               |                               |
 | Component Module      | A Go module with its own go.mod that provides one component.                                                                                |                               |
 | Core Module           | The Go module holding the factory interfaces, the flag model and the sync data types that all component modules depend on.               | core package                  |
 | Factory               | The interface a component module implements so that a distribution can create its component from injected dependencies.                 |                               |
@@ -17,7 +17,10 @@
 | Sync Provider         | A component type that reads flag configurations from a kind of source (file, HTTP, gRPC, Kubernetes, blob storage) and emits them.      | sync source, syncer           |
 | Source                | One configured location a sync provider reads from, given as a URI on the command line or in the configuration file.                     |                               |
 | Scheme                | The URI prefix of a source (`file:`, `https://`, `s3://`) that selects the sync provider handling it.                                     |                               |
-| Service Endpoint      | A component type that serves flags to clients over a protocol: flag evaluation (gRPC/ConnectRPC), OFREP or flag sync.                     | server                        |
+| Service Endpoint      | A component type that serves flags to clients over a protocol: flag evaluation (gRPC/ConnectRPC), OFREP or flag sync.                     | server, access point          |
+| Flag Configuration    | The flags a sync provider delivers from a source, with variants and targeting, written in one configuration format.                                          | flag config, flag definitions |
+| Configuration Format  | A component type that parses and validates flag configurations of one format (flagd's JSON schema, a vendor's format) into the store.    | parser                        |
+| Configuration Proxy   | A distribution with sync providers, a configuration format and the flag sync endpoint but no evaluator; it forwards validated flag configurations to in-process providers. | relay                         |
 | Evaluator             | The component type that resolves a flag for an evaluation context; the JsonLogic evaluator is the one in-process providers embed.       | engine, resolver              |
 | Telemetry Provider    | A component type that supplies tracing, metrics and HTTP instrumentation to service endpoints and middleware.                            |                               |
 | Middleware            | A component type that wraps a service endpoint's HTTP handler with cross-cutting behaviour.                                               | interceptor, filter           |

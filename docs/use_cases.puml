@@ -34,6 +34,10 @@ rectangle "flagd Builder" {
     usecase "UC-015\nMigrate Provider to Component Modules" as UC015
 
     usecase "UC-016\nRecover From Snapshot" as UC016
+
+    usecase "UC-017\nRun Configuration Proxy" as UC017
+    usecase "UC-018\nDevelop Configuration Format Extension" as UC018
+    usecase "UC-019\nServe Vendor Flags" as UC019
 }
 
 builder --> UC001
@@ -44,17 +48,21 @@ author --> UC004
 author --> UC005
 author --> UC006
 author --> UC007
+author --> UC018
 
 UC003 ..> UC008 : <<include>>
 UC004 ..> UC008 : <<include>>
 UC005 ..> UC008 : <<include>>
 UC006 ..> UC008 : <<include>>
 UC007 ..> UC008 : <<include>>
+UC018 ..> UC008 : <<include>>
 
 operator --> UC009
 operator --> UC010
 operator --> UC011
 operator --> UC016
+operator --> UC017
+operator --> UC019
 
 maintainer --> UC012
 maintainer --> UC013
