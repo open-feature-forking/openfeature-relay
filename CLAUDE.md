@@ -1,6 +1,6 @@
-# flagd-builder
+# OpenFeature Relay (incubator)
 
-Incubator for an OpenTelemetry Collector Builder-style modular flagd. This repository carries flagd's full history but is not a GitHub fork: upstream pull requests go to `open-feature/flagd` from `open-feature-forking/flagd`. `main` mirrors upstream; work happens on branches cut from `spec`.
+Incubator for OpenFeature Relay: an OpenTelemetry Collector Builder-style runtime and builder for flag relays, with flagd as the reference implementation. This repository carries flagd's full history but is not a GitHub fork. `main` is upstream flagd plus this work: every slice lands on `main` through a pull request in this repository. Upstream changes come in by merging `upstream/main` into `main`.
 
 The specification is the contract: `docs/vision.md`, `docs/requirements.md`, `docs/glossary.md`, `docs/use_cases.puml`, `docs/use_cases/`. Use glossary terms in code, commits and PR text. A behaviour the spec does not state is a question, not a decision.
 
@@ -17,9 +17,12 @@ Each phase runs plan → oppose → implement → review, one role per agent in 
 | reviewer    | opus   | no          | re-run gates, findings, verdict                |
 
 - A plan with an open `blocker` from the opposer goes back to the planner.
-- The implementer works on its own branch or worktree; it never pushes.
-- The reviewer's verdict, not the implementer's report, decides whether a slice is done. `ready` needs every named gate green in the reviewer's own run.
-- Simon approves each plan and each upstream PR.
+- The implementer works on its own worktree, cut from `main` (or from the slice it builds on); it never pushes.
+- The orchestrating session pushes the slice as `phase-<n>/pr-<x>-<topic>` and opens a pull request in this repository against `main` (or against the slice below it, stacked). Plans, reviews and spec changes go straight to `main`.
+- The reviewer reviews the pull request: it re-runs the gates and posts its verdict as a PR review comment. `ready` needs every named gate green in its own run and CI green.
+- On `ready` with green CI, the orchestrating session merges with a merge commit (keeping the signed-off commits) and deletes the branch. `ready after fixes` goes back to the implementer as new commits on the same branch, never an amend.
+- Simon approves each plan before implementation, and can stop or veto any PR; he is not a required approver for merges inside this repository.
+- The release-please and benchmark-pages workflows are disabled in this repository; do not enable them.
 
 ## Phases
 
@@ -31,15 +34,40 @@ Each phase runs plan → oppose → implement → review, one role per agent in 
 6. Standard distributions, images, CI (FR-021, FR-030..FR-032, NFR-003, NFR-009, NFR-011).
 7. Contract tests, example extension, migration guide (FR-015, FR-043, NFR-010).
 
+## PoC: one use case after the other
+
+After phase 1 (C1, C2, D), work proceeds one use case at a time, in this order. Each runs the same loop and lands as one or more PRs against `main`; phases 2–7 above are covered by the use cases that need them.
+
+| # | Use case | Brings in |
+|---|----------|-----------|
+| 1 | UC-018 Develop Configuration Format Extension | configuration format split out of `SetState`, document versions (phase 2) |
+| 2 | UC-014 Embed Evaluator in In-Process Provider | evaluator and flagd configuration format as dependency-free modules |
+| 3 | UC-007 Develop Evaluator Extension | untyped bulk evaluator, typed adapter, evaluation router, engine modules |
+| 4 | UC-003 Develop Sync Provider Extension | sync factory, fetching sync providers and the shared poller |
+| 5 | UC-004 Develop Service Endpoint Extension | service factory, event bus, runtime registry (phase 3) |
+| 6 | UC-005, UC-006, UC-020 | middleware, telemetry provider and event sink factories |
+| 7 | UC-008 Run Contract Tests | contract tests for every component type, grown with 3–6 |
+| 8 | UC-001 Build Custom Distribution | module split (phase 4), builder CLI and manifest (phase 5) |
+| 9 | UC-009 Upgrade to flagd-full | flagd-full built by the builder, test-harness suites green |
+| 10 | UC-011, UC-010, UC-017, UC-021 | components command, standard distributions, flagd-sync, event export |
+| 11 | UC-019 Serve Vendor Flags | a Flagsmith engine module as the cross-vendor proof |
+| 12 | UC-002, UC-012, UC-013, UC-015 | image, release, CI verification, migration guide |
+
+UC-016 stays Deferred.
+
+A use case is done when its main success scenario and every alternative flow have an automated test, the reviewer's verdict is `ready`, the PR is merged, and its `**Status:**` line moves to `Implemented` (to `Tested` once a test case under `docs/test_cases/` covers it). This is a proof of concept: upstream reviewability (C-006) is a preference, not a gate.
+
 ## Gates
 
 Go and Docker work only inside WSL Ubuntu. The system Go there is 1.22 and cannot resolve `go 1.27` on its own, so pin the toolchain. Run Go gates from the repository root:
 
 ```bash
-wsl -d Ubuntu -- bash -lc 'export GOTOOLCHAIN=go1.27.3; cd /mnt/c/Users/simon/openfeature/flagd-builder && make workspace-init && make test-core test-flagd'
+wsl -d Ubuntu -- bash -lc 'export GOTOOLCHAIN=go1.27.3; cd /mnt/c/Users/simon/openfeature/OpenFeature Relay && make workspace-init && make test-core test-flagd'
 ```
 
 From Git Bash, prefix `wsl` calls with `MSYS_NO_PATHCONV=1`. The spec gate is Python and runs on Windows directly.
+
+In a worktree under `.claude/worktrees/`, export `GOWORK=$PWD/go.work` before `make workspace-init`, or `go work init` finds the main checkout's `go.work` and fails. `make lint` needs `export GOPATH=$(go env GOPATH)`, which the WSL login shell does not set.
 
 | Gate            | Command (inside WSL, repo root)                                                         | Requirement     |
 |-----------------|-----------------------------------------------------------------------------------------|-----------------|
@@ -52,6 +80,10 @@ From Git Bash, prefix `wsl` calls with `MSYS_NO_PATHCONV=1`. The spec gate is Py
 | Spec (Windows)  | `python ~/.claude/plugins/cache/ai-unified-process-marketplace/aiup-core/*/skills/spec-review/scripts/spec_lint.py --docs docs` | spec changes |
 
 A red gate is reported with its output. If a gate fails on untouched code too, say so; it is the environment, not the change.
+
+## Containment
+
+All work stays in this repository until Simon says otherwise. No pushes, branches, pull requests, issues or comments anywhere except `open-feature-forking/openfeature-relay`: not to `open-feature/flagd`, not to `open-feature-forking/flagd`, not to go-sdk-contrib or any other repository. Other checkouts (go-sdk-contrib, flagd) are read-only references. "Upstream PR" in a plan means a branch here, shaped so it could go upstream later. The `upstream` remote has pushing disabled.
 
 ## Conventions
 

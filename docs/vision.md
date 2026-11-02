@@ -1,4 +1,6 @@
-# Vision: flagd Builder
+# Vision: OpenFeature Relay
+
+OpenFeature Relay is a runtime and a builder for flag relays: processes that sync flag configurations, keep them, evaluate them and serve them to OpenFeature clients over OFREP, flag sync and other service endpoints. flagd is its reference implementation: today's flagd becomes the flagd-full distribution, and the code starts from flagd's.
 
 ## Problem
 
@@ -23,7 +25,7 @@ flagd becomes a set of components assembled into a distribution, the way the Ope
 Three distributions show the range:
 
 - **flagd-full**: today's flagd, unchanged.
-- **Configuration proxy** (flagd-relay): sync providers, a configuration format and the flag sync endpoint, no evaluator; in-process providers get validated flag configurations from one place. Parsing and validating flag configurations therefore moves out of the evaluator into the configuration format. Today's flagd-proxy stays a separate program.
+- **Configuration proxy** (flagd-sync): sync providers, a configuration format and the flag sync endpoint, no evaluator; in-process providers get validated flag configurations from one place. Parsing and validating flag configurations therefore moves out of the evaluator into the configuration format. Today's flagd-proxy stays a separate program.
 - **Vendor distribution**: another vendor's sync provider, configuration format and evaluator behind OFREP, for example the Flagsmith engine or GO Feature Flag's evaluation module, so flagd can stand in for that vendor's edge or relay proxy for OpenFeature clients. Each configuration format keeps its own documents in the store, so flagd's flag model stays unchanged; a source names its format, flagd's being the default. Polling, the store, change events, OFREP with its event stream, flag sync, telemetry and event delivery are shared; the flag model, rules, bucketing and identity mapping stay the vendor's.
 
 ## Roles
@@ -63,8 +65,8 @@ Out of scope:
 
 ## Way of working
 
-flagd-builder incubates the work with flagd's full history.
-Each piece lands upstream in `open-feature/flagd` as a reviewable pull request, opened from `open-feature-forking/flagd`.
+OpenFeature Relay incubates the work with flagd's full history.
+Every piece lands on this repository's `main` through a pull request in this repository; nothing goes to `open-feature/flagd` or any other repository until Simon decides to take it upstream.
 The specification in this folder follows the AI Unified Process: vision, requirements, use cases, entity model, test cases.
 
 ## Success

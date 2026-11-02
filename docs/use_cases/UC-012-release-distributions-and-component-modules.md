@@ -15,7 +15,7 @@
 ## Preconditions
 
 - Every component module, the core module and flagd are registered with the release automation, each with its own version and changelog.
-- The manifest of each standard distribution (flagd-minimal, flagd-cloud, flagd-kubernetes, flagd-relay, flagd-full) is kept in the repository.
+- The manifest of each standard distribution (flagd-minimal, flagd-cloud, flagd-kubernetes, flagd-sync, flagd-full) is kept in the repository.
 - All changes on main since the last release are conventional commits.
 - GitHub Actions keeps a release pull request open that proposes the next version of every module changed since its last release.
 
@@ -155,14 +155,14 @@ The release pull request and its commits carry a DCO sign-off.
 
 ### BR-012: Image and Archive Names
 
-The name of a standard distribution is `flagd` for flagd-full and `flagd-<distribution>` for every other one (e.g. `flagd-minimal`, `flagd-relay`).
+The name of a standard distribution is `flagd` for flagd-full and `flagd-<distribution>` for every other one (e.g. `flagd-minimal`, `flagd-sync`).
 
 - Image: `ghcr.io/open-feature/<name>`, tagged `latest` and `v<version>`; the FIPS image is tagged `latest-fips` and `v<version>-fips`.
 - Binary archive: `<name>_<version>_<OS>_<arch>.tar.gz`, and `.zip` for Windows; the FIPS archive is `<name>-fips_<version>_<OS>_<arch>` with the same extension.
-- `<version>` has no `v` prefix, `<OS>` is `Darwin`, `Linux` or `Windows`, and `<arch>` is `arm64`, `x86_64` or `i386`, as in today's release (e.g. `flagd_0.19.0_Linux_x86_64.tar.gz`, `flagd-relay-fips_0.19.0_Windows_x86_64.zip`).
+- `<version>` has no `v` prefix, `<OS>` is `Darwin`, `Linux` or `Windows`, and `<arch>` is `arm64`, `x86_64` or `i386`, as in today's release (e.g. `flagd_0.19.0_Linux_x86_64.tar.gz`, `flagd-sync-fips_0.19.0_Windows_x86_64.zip`).
 
 For flagd-full this rule yields exactly today's image and archive names.
 
 ### BR-013: flagd-proxy Stays a Separate Release
 
-Today's flagd-proxy is not a standard distribution. It keeps its own version, release tag, binaries and image `ghcr.io/open-feature/flagd-proxy`, released as today; flagd-relay, the standard configuration proxy, does not replace it.
+Today's flagd-proxy is not a standard distribution. It keeps its own version, release tag, binaries and image `ghcr.io/open-feature/flagd-proxy`, released as today; flagd-sync, the standard configuration proxy, does not replace it.

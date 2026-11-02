@@ -20,7 +20,7 @@
 
 1. Operator restarts flagd with its configured sources and snapshot location.
 2. System reads the snapshot as the lowest-precedence source: for every document it restores the source, configuration format, flag set and document version.
-3. System serves flags from the snapshot: an evaluating distribution answers evaluation requests and flagd-relay forwards the snapshot's flag configurations to in-process providers.
+3. System serves flags from the snapshot: an evaluating distribution answers evaluation requests and flagd-sync forwards the snapshot's flag configurations to in-process providers.
 4. System starts a sync provider for every configured source.
 5. Every configured source delivers a flag configuration that its configuration format accepts.
 6. System merges the live flag configurations over the snapshot, so that live flags override snapshot flags with the same key.

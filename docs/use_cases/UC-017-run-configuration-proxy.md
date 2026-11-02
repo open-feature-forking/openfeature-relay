@@ -14,7 +14,7 @@
 
 ## Preconditions
 
-- A configuration proxy is available as a binary or image: the flagd-relay standard distribution (UC-012), or a custom distribution without evaluation service endpoints (UC-001), such as a vendor configuration proxy built from a vendor's engine module.
+- A configuration proxy is available as a binary or image: the flagd-sync standard distribution (UC-012), or a custom distribution without evaluation service endpoints (UC-001), such as a vendor configuration proxy built from a vendor's engine module.
 - Operator has the sources that hold the deployment's flag configurations and the settings, as flagd-full's CLI flags, configuration file keys or environment variables, for the components a configuration proxy contains: sources, the flag sync endpoint and the management port.
 - The in-process providers of the deployment support the flag sync endpoint as their source.
 
@@ -124,7 +124,7 @@
 
 ### BR-001: No Evaluation
 
-A configuration proxy contains sync providers, configuration formats and service endpoints that forward flag configurations, and neither the flag evaluation nor the OFREP service endpoint; it resolves no flag. The flagd-relay module graph contains no evaluator module and no `github.com/diegoholiveira/jsonlogic` module (NFR-011). A vendor configuration proxy carries the vendor's engine module, which holds the vendor's evaluator next to its configuration format (FR-048); that evaluator is compiled in but never resolves a flag.
+A configuration proxy contains sync providers, configuration formats and service endpoints that forward flag configurations, and neither the flag evaluation nor the OFREP service endpoint; it resolves no flag. The flagd-sync module graph contains no evaluator module and no `github.com/diegoholiveira/jsonlogic` module (NFR-011). A vendor configuration proxy carries the vendor's engine module, which holds the vendor's evaluator next to its configuration format (FR-048); that evaluator is compiled in but never resolves a flag.
 
 ### BR-002: Same Validation as flagd-full
 

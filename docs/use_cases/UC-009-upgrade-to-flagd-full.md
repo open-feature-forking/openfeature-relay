@@ -115,7 +115,7 @@ The flag evaluation and OFREP service endpoints record one evaluation span per f
 
 ### BR-007: Release Names
 
-Binary archives follow today's release pattern with the distribution name in the product position, and FIPS builds add `-fips` to it: flagd-full keeps `flagd_<version>_<OS>_<arch>` and `flagd-fips_<version>_<OS>_<arch>`; every other standard distribution is `flagd-<distribution>_<version>_<OS>_<arch>` and `flagd-<distribution>-fips_<version>_<OS>_<arch>`, e.g. `flagd-relay-fips_<version>_Linux_x86_64`. flagd-full's image stays `ghcr.io/open-feature/flagd`, the others are `ghcr.io/open-feature/flagd-<distribution>`, and FIPS images add `-fips` to their tags (UC-012).
+Binary archives follow today's release pattern with the distribution name in the product position, and FIPS builds add `-fips` to it: flagd-full keeps `flagd_<version>_<OS>_<arch>` and `flagd-fips_<version>_<OS>_<arch>`; every other standard distribution is `flagd-<distribution>_<version>_<OS>_<arch>` and `flagd-<distribution>-fips_<version>_<OS>_<arch>`, e.g. `flagd-sync-fips_<version>_Linux_x86_64`. flagd-full's image stays `ghcr.io/open-feature/flagd`, the others are `ghcr.io/open-feature/flagd-<distribution>`, and FIPS images add `-fips` to their tags (UC-012).
 
 ### BR-008: No Staleness Limit by Default
 

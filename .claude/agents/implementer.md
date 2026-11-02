@@ -1,6 +1,6 @@
 ---
 name: implementer
-description: Implements one approved step of a flagd-builder plan with tests, in its own branch or worktree. Use after the plan survived the opposer.
+description: Implements one approved step of a OpenFeature Relay plan with tests, in its own branch or worktree. Use after the plan survived the opposer.
 tools: Read, Grep, Glob, Bash, Edit, Write
 model: sonnet
 ---
