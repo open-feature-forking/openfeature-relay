@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"strings"
 	"time"
@@ -22,7 +23,6 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
-	"golang.org/x/exp/maps"
 )
 
 const (
@@ -498,7 +498,7 @@ func setFlagdProperties(
 		context = map[string]any{}
 	}
 
-	newContext := maps.Clone(context) //nolint:govet // linter can't inline generics
+	newContext := maps.Clone(context)
 
 	if _, ok := newContext[flagdPropertiesKey]; ok {
 		log.Debug("overwriting $flagd properties in the context")
