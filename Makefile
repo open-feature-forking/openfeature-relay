@@ -112,6 +112,12 @@ lint:
 lint-fix:
 	go install -v github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
 	rc=0; $(foreach module, $(ALL_GO_MOD_DIRS), ${GOPATH}/bin/golangci-lint run --fix $(module)/... || rc=1;) exit $$rc
+.PHONY: check-evaluator-boundary
+check-evaluator-boundary:
+	@deps=$$(cd core && go list -deps ./pkg/evaluator) || exit 1; \
+	if echo "$$deps" | grep -E 'opentelemetry|grpc|connectrpc|k8s.io|gocloud'; then \
+		echo "core/pkg/evaluator must not depend on the packages listed above"; exit 1; \
+	fi
 install-mockgen:
 	go install go.uber.org/mock/mockgen@v0.4.0
 mockgen: install-mockgen

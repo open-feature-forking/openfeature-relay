@@ -23,6 +23,26 @@ linters:
               desc: DES/3DES is not an approved algorithm
             - pkg: crypto/rc4
               desc: RC4 is not an approved algorithm
+        # The evaluator stays free of transport, telemetry and platform dependencies (NFR-005).
+        # The check-evaluator-boundary make target covers transitive imports.
+        evaluator-boundary:
+          files:
+            - "**/core/pkg/evaluator/**"
+          deny:
+            - pkg: go.opentelemetry.io
+              desc: the evaluator imports no telemetry; flagd records spans around it
+            - pkg: google.golang.org/grpc
+              desc: the evaluator imports no transport
+            - pkg: connectrpc.com
+              desc: the evaluator imports no transport
+            - pkg: k8s.io
+              desc: the evaluator imports no platform clients
+            - pkg: gocloud.dev
+              desc: the evaluator imports no platform clients
+        stable-dependencies:
+          deny:
+            - pkg: golang.org/x/exp
+              desc: use the standard library; x/exp has no compatibility promise
   exclusions:
     generated: lax
     presets:
