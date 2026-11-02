@@ -9,9 +9,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	schema "github.com/open-feature/flagd-schemas/json"
@@ -250,7 +252,9 @@ func (f *Format) Accept(_ context.Context, in configformat.Input) (configformat.
 	}
 
 	bySet := map[string][]model.Flag{}
-	if id, ok := definition.Metadata["flagSetId"].(string); ok {
+	// a flag set named only by the set's metadata still gets a document; the unnamed flag set does not,
+	// because a delivery replaces the unnamed flag set only through the flags it contains
+	if id, ok := definition.Metadata["flagSetId"].(string); ok && id != "" {
 		bySet[id] = nil
 	}
 	for _, flag := range definition.Flags {
@@ -270,10 +274,11 @@ func (f *Format) Accept(_ context.Context, in configformat.Input) (configformat.
 	for _, set := range sortedKeys(bySet) {
 		fingerprints := make(map[string]string, len(bySet[set]))
 		for _, flag := range bySet[set] {
-			fingerprints[flag.Key] = fingerprint(flag)
+			fingerprints[flag.Key] = fingerprint(flag, definition.Metadata)
 		}
 		report := configformat.DocumentReport{FlagSet: set, FlagKeys: sortedKeys(fingerprints)}
 		h := sha256.New()
+		fmt.Fprintf(h, "metadata=%s;", marshal(definition.Metadata))
 		for _, key := range report.FlagKeys {
 			fmt.Fprintf(h, "%s=%s;", key, fingerprints[key])
 			if old, ok := previous[set][key]; !ok {
@@ -306,14 +311,25 @@ func (f *Format) Accept(_ context.Context, in configformat.Input) (configformat.
 	return result, nil
 }
 
-func fingerprint(flag model.Flag) string {
-	b, err := json.Marshal(flag)
-	if err != nil {
-		// a flag that was just unmarshalled from JSON marshals back
-		panic(fmt.Sprintf("unable to marshal flag %q: %v", flag.Key, err))
+// fingerprint covers the flag as the store keeps it, with the set's metadata merged in.
+func fingerprint(flag model.Flag, setMetadata model.Metadata) string {
+	if setMetadata != nil || flag.Metadata != nil {
+		merged := make(model.Metadata, len(setMetadata)+len(flag.Metadata))
+		maps.Copy(merged, setMetadata)
+		maps.Copy(merged, flag.Metadata)
+		flag.Metadata = merged
 	}
-	sum := sha256.Sum256(append([]byte(flag.Key+"\x00"), b...))
+	sum := sha256.Sum256([]byte(strconv.Quote(flag.Key) + marshal(flag)))
 	return hex.EncodeToString(sum[:])
+}
+
+func marshal(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		// values that were just unmarshalled from JSON marshal back
+		panic(fmt.Sprintf("unable to marshal %T: %v", v, err))
+	}
+	return string(b)
 }
 
 func sortedKeys[V any](m map[string]V) []string {
