@@ -111,3 +111,8 @@ Run from the repository root, inside WSL with `GOTOOLCHAIN=go1.27.3`, after `mak
 - **Test globals.** A1–A3 depend on otel's global delegation. Install-before-build and one provider per package (section 2) are what make them deterministic; a later refactor that moves a tracer into a package-level `var` would make them flaky. Section 3 forbids that for new code.
 - **NFR-006, C-005.** Untouched: no go.mod moves other than C1a's version bump, no protobuf changes.
 - **Upstream content.** `.claude/`, `CLAUDE.md`, the spec docs and this plan never go into the PRs.
+
+## Revision 4 (orchestrator, 2026-11-02, from C1)
+
+- **One evaluator constructor.** PR A's span tests built `evaluator.NewJSON` themselves, so C1's noop wiring in `from_config.go` never reached them and every span appeared twice (evaluator and decorator). PR A therefore adds a production refactor: one flagd function builds the evaluator (body: today's `evaluator.NewJSON(log, s)`); `from_config.go` and all three span tests use it. C1 passes `evaluator.WithTracerProvider(noop.NewTracerProvider())` inside that function, not in `from_config.go`. The span test files stay byte-identical from the end of PR A through C1 and C2.
+- **`GOWORK=off` check dropped.** `GOWORK=off go build ./flagd/...` already fails on the base: flagd depends on unreleased core API. C1 keeps only the minimal `flagd/go.mod` core bump; builds go through the workspace, as the images do.
