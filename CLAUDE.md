@@ -41,6 +41,8 @@ wsl -d Ubuntu -- bash -lc 'export GOTOOLCHAIN=go1.27.3; cd /mnt/c/Users/simon/op
 
 From Git Bash, prefix `wsl` calls with `MSYS_NO_PATHCONV=1`. The spec gate is Python and runs on Windows directly.
 
+In a worktree under `.claude/worktrees/`, export `GOWORK=$PWD/go.work` before `make workspace-init`, or `go work init` finds the main checkout's `go.work` and fails. `make lint` needs `export GOPATH=$(go env GOPATH)`, which the WSL login shell does not set.
+
 | Gate            | Command (inside WSL, repo root)                                                         | Requirement     |
 |-----------------|-----------------------------------------------------------------------------------------|-----------------|
 | Unit tests      | `make test-core test-flagd test-flagd-proxy`                                            | all             |
