@@ -35,12 +35,12 @@
 
 ## Alternative Flows
 
-### A1: Scheme or Configuration Format Not in Distribution
+### A1: Scheme Not in Distribution
 
-**Trigger:** A source uses a scheme for which the configuration proxy contains no sync provider, or names a configuration format the configuration proxy does not contain (step 2)  
+**Trigger:** A source uses a scheme for which the configuration proxy contains no sync provider (step 2)  
 **Flow:**
 
-1. System refuses to start and names the source, its scheme or configuration format, and the schemes and configuration formats the configuration proxy supports.
+1. System refuses to start and names the source, its scheme and the schemes the configuration proxy supports.
 2. Use case ends.
 
 ### A2: Setting for an Absent Component
@@ -105,6 +105,14 @@
 1. System serves no flag evaluation; the client's request finds no service endpoint for it.
 2. Operator configures the client as an in-process provider, or points it at a distribution with an evaluator.
 3. Use case continues at step 8.
+
+### A9: Configuration Format Not in Distribution
+
+**Trigger:** A source names a configuration format the configuration proxy does not contain (step 2)  
+**Flow:**
+
+1. System skips the source, logs an error naming the source and the configuration formats the configuration proxy contains, and leaves the source out of readiness (UC-018 BR-011).
+2. Use case continues at step 3 with the other sources.
 
 ## Postconditions
 

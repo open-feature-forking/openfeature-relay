@@ -36,12 +36,12 @@
 
 ## Alternative Flows
 
-### A1: Scheme or Configuration Format Not in Distribution
+### A1: Scheme Not in Distribution
 
-**Trigger:** A source uses a scheme for which the vendor distribution contains no sync provider, or names a configuration format it does not contain (step 2)  
+**Trigger:** A source uses a scheme for which the vendor distribution contains no sync provider (step 2)  
 **Flow:**
 
-1. System refuses to start and names the source, its scheme or configuration format, and the schemes and configuration formats the vendor distribution supports.
+1. System refuses to start and names the source, its scheme and the schemes the vendor distribution supports.
 2. Use case ends.
 
 ### A2: Credential Refused
@@ -106,6 +106,14 @@
 1. Operator keeps the clients of that environment on the edge proxy.
 2. Operator reports the difference to the vendor as a defect of the vendor's evaluator or configuration format.
 3. Use case ends.
+
+### A9: Configuration Format Not in Distribution
+
+**Trigger:** A source names a configuration format the vendor distribution does not contain (step 2)  
+**Flow:**
+
+1. System skips the source, logs an error naming the source and the configuration formats the vendor distribution contains, and leaves the source out of readiness (UC-018 BR-011).
+2. Use case continues at step 3 with the other sources.
 
 ## Postconditions
 
