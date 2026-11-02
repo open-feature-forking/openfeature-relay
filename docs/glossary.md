@@ -38,7 +38,7 @@
 | Management Port       | The port on which flagd serves health, readiness and metrics, separate from the service endpoints. | |
 | Contract Test         | A reusable test the Maintainers ship per component type that checks a component behaves as the runtime expects. | |
 | FIPS Build            | A distribution compiled in FIPS 140-3 mode, with the crypto boundary described in docs/reference/fips-140-3.md. | |
-| Document              | The parsed, validated form of one source's flag configuration, owned by the configuration format that accepted it and kept in the store. | |
+| Document | The parsed, validated flags of one flag set from one source, owned by the configuration format that accepted them and kept in the store; a source whose flag configuration holds several flag sets yields several documents. |  |
 | Contract Case         | One check within a contract test, such as rejecting an invalid flag configuration without changing the store. | |
 | Release Tag           | The git tag `<module path>/v<version>` that releases one component module, or the flagd release a standard distribution follows. | |
 | flagd Test Harness    | The Gherkin acceptance suites and test bed (open-feature/flagd-testbed) that flagd and its providers run to prove evaluation and sync behaviour. | |
