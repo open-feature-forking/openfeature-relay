@@ -53,6 +53,10 @@ From Git Bash, prefix `wsl` calls with `MSYS_NO_PATHCONV=1`. The spec gate is Py
 
 A red gate is reported with its output. If a gate fails on untouched code too, say so; it is the environment, not the change.
 
+## Containment
+
+All work stays in this repository until Simon says otherwise. No pushes, branches, pull requests, issues or comments anywhere except `open-feature-forking/flagd-builder`: not to `open-feature/flagd`, not to `open-feature-forking/flagd`, not to go-sdk-contrib or any other repository. Other checkouts (go-sdk-contrib, flagd) are read-only references. "Upstream PR" in a plan means a branch here, shaped so it could go upstream later. The `upstream` remote has pushing disabled.
+
 ## Conventions
 
 - Conventional commits, `git commit -s` signed off as `simon.schrottner@flagsmith.com`; no AI co-author trailers.
