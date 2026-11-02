@@ -39,6 +39,10 @@ linters:
               desc: the evaluator imports no platform clients
             - pkg: gocloud.dev
               desc: the evaluator imports no platform clients
+        stable-dependencies:
+          deny:
+            - pkg: golang.org/x/exp
+              desc: use the standard library; x/exp has no compatibility promise
   exclusions:
     generated: lax
     presets:
