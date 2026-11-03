@@ -1,14 +1,18 @@
 // Command relay-builder turns a manifest into a distribution of the relay: a flagd binary that contains exactly the
-// components the manifest selects (UC-001). This version validates the manifest.
+// components the manifest selects (UC-001). Building is experimental until the runtime module provides its cmd package.
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 
+	"github.com/open-feature-forking/openfeature-relay/builder/internal/build"
+	"github.com/open-feature-forking/openfeature-relay/builder/internal/generate"
+	"github.com/open-feature-forking/openfeature-relay/builder/internal/gotool"
 	"github.com/open-feature-forking/openfeature-relay/builder/internal/manifest"
 )
 
@@ -18,6 +22,7 @@ const (
 	exitInvalid  = 1
 	exitUsage    = 2
 	exitInternal = 3
+	exitFailed   = 4
 )
 
 // options are the flags of the command.
@@ -27,6 +32,8 @@ type options struct {
 	skipGenerate, skipGetModules, skipCompile, skipStrictVersioning bool
 	goBinary                                                        string
 	verbose                                                         bool
+	// validateOnly stops after the manifest is checked.
+	validateOnly bool
 }
 
 func parseFlags(args []string, stderr io.Writer) (options, error) {
@@ -40,6 +47,7 @@ func parseFlags(args []string, stderr io.Writer) (options, error) {
 	fs.BoolVar(&o.skipStrictVersioning, "skip-strict-versioning", false, "report a resolved version that differs from the declared one as a warning, not a failure")
 	fs.StringVar(&o.goBinary, "go", "go", "the go `binary` to run")
 	fs.BoolVar(&o.verbose, "verbose", false, "print what the Builder does")
+	fs.BoolVar(&o.validateOnly, "validate-only", false, "check the manifest and stop")
 	fs.Usage = func() {
 		fmt.Fprintln(stderr, "Usage: relay-builder --manifest <file> [flags]")
 		fs.PrintDefaults()
@@ -79,7 +87,39 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "relay-builder: %v\n", err)
 		return exitInternal
 	}
-	fmt.Fprintf(stdout, "the manifest %s is valid: %s %s, %d component(s)\n", o.manifest, m.Dist.Name, m.Dist.Version, len(m.Entries()))
+	if o.validateOnly {
+		fmt.Fprintf(stdout, "the manifest %s is valid: %s %s, %d component(s)\n", o.manifest, m.Dist.Name, m.Dist.Version, len(m.Entries()))
+		return exitOK
+	}
+	return buildDistribution(m, o, stdout, stderr)
+}
+
+// version is the version of the Builder; a release build stamps it with -ldflags "-X main.version=v1.2.3". It is the
+// version of the core and runtime modules that a manifest does not pin.
+var version = "dev"
+
+func buildDistribution(m *manifest.Manifest, o options, stdout, stderr io.Writer) int {
+	fmt.Fprintln(stderr, "warning: building a distribution is experimental until the runtime module provides its cmd package")
+	generateOptions := generate.Options{}
+	if version != "dev" {
+		generateOptions.RuntimeVersion, generateOptions.CoreVersion = version, version
+	}
+	tool := gotool.Tool{Go: o.goBinary}
+	if o.verbose {
+		tool.Log = stderr
+	}
+	res, err := build.Run(context.Background(), m, build.Options{
+		SkipGenerate: o.skipGenerate, SkipGetModules: o.skipGetModules, SkipCompile: o.skipCompile,
+		SkipStrictVersioning: o.skipStrictVersioning, Generate: generateOptions, Tool: tool, Warn: stderr,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "relay-builder: %v\n", err)
+		return exitFailed
+	}
+	if res.Binary != "" {
+		fmt.Fprintf(stdout, "binary: %s\n", res.Binary)
+	}
+	fmt.Fprintf(stdout, "source: %s\n", res.SourceDir)
 	return exitOK
 }
 
