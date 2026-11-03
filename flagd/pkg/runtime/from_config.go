@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -73,6 +74,9 @@ type Config struct {
 	// SyncFactories are the sync components, besides the official ones, that sources may select.
 	SyncFactories []sync.Factory
 	CORS          []string
+	// EndpointSettings are the settings of the service endpoints of a distribution, besides the official ones, keyed by
+	// the endpoint's type. An endpoint gets its own as Settings.Config.
+	EndpointSettings map[string]map[string]any
 
 	ContextValues              map[string]any
 	HeaderToContextKeyMappings map[string]string
@@ -205,7 +209,7 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		rt.Evaluator = inputs.router.IEvaluator()
 	}
 	endpointConfigs := endpointConfigs{
-		config: config, serviceConfig: rt.ServiceConfig, sources: sources, recorder: recorder, options: options,
+		formats: append([]string{flagdformat.Type}, formatTypes...), config: config, serviceConfig: rt.ServiceConfig, sources: sources, recorder: recorder, options: options,
 	}
 	for _, factory := range components.Endpoints {
 		if err := service.ValidateDeclarations(factory); err != nil {
@@ -243,6 +247,7 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 
 // endpointConfigs derives the settings of the official endpoints from the operator's configuration.
 type endpointConfigs struct {
+	formats       []string // the configuration formats of the distribution, flagd's first
 	config        Config
 	serviceConfig service.Configuration
 	sources       []string
@@ -260,6 +265,7 @@ func (c endpointConfigs) forEndpoint(endpointType string) map[string]any {
 		}}
 	case ofrep.Type:
 		return map[string]any{ofrep.ConfigKey: ofrep.EndpointConfig{
+			Formats: c.formats,
 			Service: ofrep.SvcConfiguration{
 				Port:                  c.config.OfrepServicePort,
 				ServiceName:           svcName,
@@ -293,7 +299,11 @@ func (c endpointConfigs) forEndpoint(endpointType string) map[string]any {
 			MaxRequestBodyBytes:   c.config.MaxRequestBodyBytes,
 		}}
 	}
-	return map[string]any{}
+	settings := maps.Clone(c.config.EndpointSettings[endpointType])
+	if settings == nil {
+		settings = map[string]any{}
+	}
+	return settings
 }
 
 // staleLimitsOf pairs the sources that set staleAfter with their sync providers, which must report their last contact.

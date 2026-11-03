@@ -46,6 +46,9 @@ func (Factory) Create(s service.Settings) (service.Endpoint, error) {
 		return nil, fmt.Errorf("the %s endpoint needs a resolver", Type)
 	}
 	cfg, _ := s.Config[ConfigKey].(EndpointConfig)
+	if port, ok := s.Config["port"].(int); ok {
+		cfg.Configuration.Port = uint16(port)
+	}
 	svc := NewConnectService(s.Logger.WithFields(zap.String("component", "service")), s.Resolver, s.Store, cfg.Metrics, cfg.Options...)
 	svc.httpMiddleware = s.HTTPMiddleware
 	return &endpoint{svc: svc, cfg: cfg.Configuration}, nil

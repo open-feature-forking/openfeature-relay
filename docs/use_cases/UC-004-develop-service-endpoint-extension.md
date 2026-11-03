@@ -7,9 +7,9 @@
 **Primary Actor:** Extension Author  
 **Goal:** Publish a service endpoint in the Extension Author's own component module, verified against the service endpoint contract, so that a distribution serves flag evaluations or flag configurations to clients over a protocol no official service endpoint supports.  
 **Trigger:** Extension Author decides to make flagd serve flags over a protocol that no official service endpoint supports  
-**Status:** Draft  
+**Status:** Implemented  
 
-**Requirements:** [FR-011, FR-015, FR-016, FR-017, FR-018, FR-025, FR-029, FR-035, FR-037, FR-039, FR-044, FR-046, FR-047, FR-003, FR-008, NFR-013, C-001](../requirements.md)
+**Requirements:** [FR-011, FR-015, FR-016, FR-017, FR-018, FR-025, FR-029, FR-035, FR-037, FR-038, FR-039, FR-044, FR-046, FR-047, FR-003, FR-008, NFR-013, C-001](../requirements.md)
 
 ## Preconditions
 
@@ -20,7 +20,7 @@
 
 1. Extension Author adds the core module as a dependency of their component module.
 2. Extension Author names the service endpoint's type and declares that it resolves flags through the evaluation router.
-3. Extension Author implements the service endpoint: it starts serving clients when the distribution starts, resolves the flags of each request for the request's selector through the evaluation router, answers in its protocol, publishes an evaluation event for each resolved flag on the event bus, and stops serving when the distribution shuts down.
+3. Extension Author implements the service endpoint: it starts serving clients when the distribution starts, resolves the flags of each request for the request's selector through the injected evaluation router, which publishes an evaluation event for each resolved flag on the event bus, answers in its protocol, and stops serving when the distribution shuts down.
 4. Extension Author subscribes the service endpoint, through the event bus, to the configuration change events it reacts to, such as a change of the flags its clients have asked for.
 5. Extension Author implements the factory that creates the service endpoint from the dependencies a distribution injects: store with document versions, event bus, configuration, logger, telemetry provider and, because it declared that it resolves flags, the evaluation router.
 6. Extension Author runs the service endpoint contract tests (include UC-008 Run Contract Tests).
@@ -45,7 +45,7 @@
 **Flow:**
 
 1. Extension Author declares that the service endpoint needs the evaluator of that vendor's configuration format.
-2. Extension Author implements the service endpoint so that it asks the evaluation router for that configuration format's evaluator and builds its answers from that evaluator's own results, still publishing an evaluation event for each resolved flag.
+2. Extension Author implements the service endpoint so that it asks the evaluation router for that configuration format's evaluator and builds its answers from that evaluator's own results, and, because it does not resolve through the evaluation router, publishes an evaluation event for each resolved flag itself.
 3. Use case continues at step 4.
 
 ### A3: Endpoint Collects Events From In-Process Providers
@@ -80,7 +80,7 @@
 **Flow:**
 
 1. Extension Author lets the factory wrap the service endpoint's HTTP handler with the middleware the distribution selects.
-2. Extension Author implements the service endpoint so that it takes the selector and request attributes that middleware bound to a request, before a selector the client sent, and hands both to the evaluation router.
+2. Extension Author implements the service endpoint so that it takes the selector and request attributes that middleware bound to a request and intersects that selector with the one the client sent: a key only one of them sets is taken from it, and a key both set to different values matches no flag. It hands the result and the attributes to the evaluation router.
 3. Use case continues at step 6.
 
 ### A7: Contract Case Fails
@@ -151,7 +151,7 @@ A service endpoint that serves flag configurations or change announcements takes
 
 ### BR-007: Versions Come From the Configuration Format
 
-Cache validators, such as ETags, and change announcements, such as event stream events, are derived from the document versions the configuration formats report, never from re-reading or fingerprinting flags, so that they work for every configuration format (FR-046).
+Cache validators, such as ETags, and change announcements, such as event stream events, are derived from the document versions the configuration formats report, never from re-reading or fingerprinting flags, so that they work for every configuration format (FR-046). A validator that also depends on the evaluation context, such as the ETag of a bulk evaluation, may hash the response it validates.
 
 ### BR-008: Publishing Never Slows Evaluation
 
@@ -168,3 +168,18 @@ The service endpoint stops accepting clients when the distribution shuts down, e
 ### BR-011: Same Selection as Official Components
 
 An extension is referenced in a manifest by Go module path and version in the same way as an official service endpoint; no registration with the Maintainers is needed.
+
+## Delivered by Later Use Cases
+
+This use case is `Implemented` for the service endpoint side: the factory, settings and declared needs, the event bus, the runtime registry that serves any set of endpoints, the contract tests, the OFREP event stream and validators from document versions, and `test/service-example` with a test endpoint for a vendor client API. These parts are delivered by the use cases named here, and are accepted gaps of this one:
+
+| Gap | Delivered by |
+|-----|--------------|
+| Main scenario steps 8–9, A8, BR-011, FR-003, FR-008, the manifest check of FR-018, C-001 | UC-001 |
+| BR-009, `Settings.Telemetry`, `/metrics` from the telemetry provider | UC-006 |
+| Middleware factories, the chain, the official endpoints honouring a bound selector, FR-047 | UC-005 |
+| Event sinks and their flush | UC-020 |
+| An official collector endpoint, FR-039 | UC-021 |
+| Vendor flags on the flag evaluation event stream | UC-019 |
+| Flag sync of vendor documents | UC-017 |
+| A webhook fetch trigger | UC-019 |
