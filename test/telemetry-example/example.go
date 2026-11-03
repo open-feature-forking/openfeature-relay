@@ -334,3 +334,6 @@ func (i instrument) Add(_ context.Context, incr int64, attrs ...telemetry.Attrib
 func (i instrument) Record(_ context.Context, value float64, attrs ...telemetry.Attribute) {
 	i.p.measure(i.scope, i.name, i.kind, value, attrs)
 }
+
+// NewFactory returns the factory of the example telemetry provider, as a generated main of a distribution calls it.
+func NewFactory() telemetry.Factory { return Factory{} }

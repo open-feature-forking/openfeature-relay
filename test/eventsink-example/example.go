@@ -155,3 +155,6 @@ func payloads(batch []events.Event) []map[string]any {
 	}
 	return out
 }
+
+// NewFactory returns the factory of the example event sink, as a generated main of a distribution calls it.
+func NewFactory() eventsink.Factory { return Factory{} }

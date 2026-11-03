@@ -21,7 +21,9 @@ import (
 	"sort"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
+	keyvalueeval "github.com/open-feature/flagd/test/configformat-example/evaluator"
 )
 
 // Type is the name by which a source selects this configuration format.
@@ -124,3 +126,11 @@ func (f *Format) Accept(_ context.Context, in configformat.Input) (configformat.
 func reject(source, entry, reason string) error {
 	return configformat.Rejection{Source: source, Entry: entry, Reason: reason}
 }
+
+// NewConfigurationFormatFactory returns the factory of the engine's configuration format, as a generated main of a
+// distribution calls it for an entry of the `engines` group.
+func NewConfigurationFormatFactory() configformat.Factory { return Factory{} }
+
+// NewEvaluatorFactory returns the factory of the engine's evaluator, the second half of an entry of the `engines`
+// group.
+func NewEvaluatorFactory() evaluator.Factory { return keyvalueeval.Factory{} }

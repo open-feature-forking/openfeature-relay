@@ -30,3 +30,6 @@ func (Factory) Create(settings evaluator.Settings) (evaluator.Evaluator, error) 
 	}
 	return NewJSON(settings.Logger, settings.Store, opts...), nil
 }
+
+// NewFactory returns the factory of the JsonLogic evaluator, as a generated main of a distribution calls it.
+func NewFactory() evaluator.Factory { return Factory{} }

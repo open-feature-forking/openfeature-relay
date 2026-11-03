@@ -2,7 +2,6 @@ package builder
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -19,8 +18,6 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/sync/s3"
 	googlegrpc "google.golang.org/grpc"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 const (
@@ -245,39 +242,6 @@ type IK8sClientBuilder interface {
 	GetK8sClient() (dynamic.Interface, error)
 }
 
-type KubernetesClientBuilder struct{}
-
-func (kcb KubernetesClientBuilder) GetK8sClient() (dynamic.Interface, error) {
-	clusterConfig, err := k8sClusterConfig()
-	if err != nil {
-		return nil, err
-	}
-
-	dynamicClient, err := dynamic.NewForConfig(clusterConfig)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create dynamicClient: %w", err)
-	}
-	return dynamicClient, nil
-}
-
-// k8sClusterConfig build K8s connection config based available configurations
-func k8sClusterConfig() (*rest.Config, error) {
-	cfg := os.Getenv("KUBECONFIG")
-
-	var clusterConfig *rest.Config
-	var err error
-
-	if cfg != "" {
-		clusterConfig, err = clientcmd.BuildConfigFromFlags("", cfg)
-		if err != nil {
-			return nil, fmt.Errorf("error building cluster config from flags: %w", err)
-		}
-	} else {
-		clusterConfig, err = rest.InClusterConfig()
-		if err != nil {
-			return nil, fmt.Errorf("error fetching cluster config: %w", err)
-		}
-	}
-
-	return clusterConfig, nil
-}
+// KubernetesClientBuilder builds the Kubernetes client from the cluster configuration of the environment. It lives in
+// the Kubernetes sync module, whose factory uses it when no builder is set.
+type KubernetesClientBuilder = ofoperator.KubernetesClientBuilder
