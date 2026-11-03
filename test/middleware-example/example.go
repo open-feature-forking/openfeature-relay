@@ -130,3 +130,6 @@ func (m *Middleware) Handler(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
+
+// NewFactory returns the factory of the example middleware, as a generated main of a distribution calls it.
+func NewFactory() middleware.Factory { return Factory{} }

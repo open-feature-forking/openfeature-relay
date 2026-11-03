@@ -21,7 +21,7 @@ type ClientBuilder interface {
 }
 
 // Factory creates the streaming sync providers of FeatureFlag sources. A distribution sets the builder of the
-// Kubernetes client.
+// Kubernetes client; without one the factory reads the cluster configuration from the environment.
 type Factory struct {
 	Client ClientBuilder
 }
@@ -44,7 +44,11 @@ func (Factory) ParseURI(uri string) (sync.SourceConfig, bool) {
 
 // CreateStreaming creates the provider of a source.
 func (f Factory) CreateStreaming(settings sync.Settings) (sync.StreamingSyncProvider, error) {
-	client, err := f.Client.GetK8sClient()
+	builder := f.Client
+	if builder == nil {
+		builder = KubernetesClientBuilder{}
+	}
+	client, err := builder.GetK8sClient()
 	if err != nil {
 		return nil, fmt.Errorf("error creating kubernetes clients: %w", err)
 	}
@@ -56,3 +60,7 @@ func (f Factory) CreateStreaming(settings sync.Settings) (sync.StreamingSyncProv
 	s.SyncMetricsRecorder = settings.Metrics
 	return s, nil
 }
+
+// NewFactories returns the factories of the Kubernetes sync component, as a generated main of a distribution calls
+// it. They read the cluster configuration from the environment.
+func NewFactories() []sync.Factory { return []sync.Factory{Factory{}} }

@@ -315,3 +315,6 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)
 }
+
+// NewFactory returns the factory of the example endpoint, as a generated main of a distribution calls it.
+func NewFactory() service.Factory { return Factory{} }

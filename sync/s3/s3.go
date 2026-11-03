@@ -29,6 +29,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/blobfetch"
 )
 
@@ -236,3 +237,6 @@ func (s *store) Read(ctx context.Context) ([]byte, string, error) {
 	}
 	return data, aws.ToString(response.ContentType), nil
 }
+
+// NewFactories returns the factories of the s3 sync component, as a generated main of a distribution calls it.
+func NewFactories() []sync.Factory { return []sync.Factory{NewFactory()} }
