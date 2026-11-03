@@ -181,7 +181,7 @@ var startCmd = &cobra.Command{
 			rtLogger.Fatal("refusing to start", zap.Error(err))
 		}
 
-		syncProviders, err := syncbuilder.ParseSyncProviderURIs(viper.GetStringSlice(uriFlagName))
+		syncProviders, err := syncbuilder.ParseSyncProviderURIs(viper.GetStringSlice(uriFlagName), syncbuilder.Official()...)
 		if err != nil {
 			log.Fatal(err)
 		}

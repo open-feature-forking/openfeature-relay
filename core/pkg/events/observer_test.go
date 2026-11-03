@@ -153,3 +153,20 @@ func TestObserverNoSubscriberAllocs(t *testing.T) {
 	}
 	require.Equal(t, call(base), call(a), "a typed call with an observer and no subscriber adds no allocation")
 }
+
+func TestObserverReportsTheFlagSetTheEvaluatorNames(t *testing.T) {
+	listed := result("k", true)
+	listed.FlagSet = "listed"
+	listed.Metadata = nil
+	a, sub := observed(t, answering{results: []evaluator.Result{listed}})
+
+	_, _, _, _, err := a.ResolveBooleanValue(context.Background(), "", "k", nil)
+	require.NoError(t, err)
+	_, _, err = a.ResolveAllValues(context.Background(), "", nil)
+	require.NoError(t, err)
+
+	got := received(sub)
+	require.Len(t, got, 2)
+	require.Equal(t, "listed", got[0].FlagSet, "a single call")
+	require.Equal(t, "listed", got[1].FlagSet, "a bulk call")
+}

@@ -36,8 +36,12 @@ func EvaluationObserver(bus *Bus, endpoint string) func(context.Context, evaluat
 	}
 }
 
-// flagSet is the flag set the flag belongs to, as its metadata says, or else the one the selector names.
+// flagSet is the flag set the flag was listed under, as the evaluator reports it, or else as its metadata says,
+// or else the one the selector names.
 func flagSet(req evaluator.Request, res evaluator.Result) string {
+	if res.FlagSet != "" {
+		return res.FlagSet
+	}
 	if id, ok := res.Metadata["flagSetId"].(string); ok {
 		return id
 	}

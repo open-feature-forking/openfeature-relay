@@ -47,6 +47,12 @@ type AttributeSample struct {
 	With any
 }
 
+// SharedSample is a key that Setup delivers under several flag sets.
+type SharedSample struct {
+	Key      string
+	FlagSets []string
+}
+
 // PairedSample is two flags that Write always changes together.
 type PairedSample struct {
 	Keys [2]string
@@ -70,8 +76,11 @@ type Samples struct {
 	AbsentDefault string
 	Attribute     *AttributeSample
 	Paired        *PairedSample
+	// Shared makes the contract check that a bulk request lists the key once for each flag set.
+	Shared *SharedSample
 	// BulkOnly names keys whose bulk result may differ from their single result, because the evaluator
-	// documents a bulk-only rule for them.
+	// documents a bulk-only rule for them. A bulk result without a value may carry the typed zero value of the
+	// flag, which needs no entry here.
 	BulkOnly []string
 }
 
@@ -174,6 +183,7 @@ func Run(t T, factory evaluator.Factory, samples Samples) {
 	r.unknownKey()
 	r.bulkEqualsSingle()
 	r.attributes()
+	r.bulkFlagSets()
 	r.appendsToDst()
 	r.consistentResolution()
 }
@@ -255,8 +265,10 @@ func (r run) unknownKey() {
 	}
 }
 
+// same compares two results. Value counts only where HasValue is set: a bulk result may carry the typed zero value
+// of a flag that resolves to none, and a single result of that flag carries nothing.
 func same(a, b evaluator.Result) bool {
-	return a.HasValue == b.HasValue && reflect.DeepEqual(a.Value, b.Value) &&
+	return a.HasValue == b.HasValue && (!a.HasValue || reflect.DeepEqual(a.Value, b.Value)) &&
 		a.Variant == b.Variant && a.Reason == b.Reason && a.ErrorCode == b.ErrorCode
 }
 
@@ -309,6 +321,33 @@ func (r run) attributes() {
 		r.expect("attributes", !without.HasValue || !reflect.DeepEqual(without.Value, a.With), a.Key+" without attributes",
 			"a different resolution", fmt.Sprintf("HasValue=%v Value=%#v", without.HasValue, without.Value))
 	}
+}
+
+// bulkFlagSets checks that every entry of a key held by several flag sets reports the flag set it was listed
+// under: the router tells the entries apart by it.
+func (r run) bulkFlagSets() {
+	r.t.Helper()
+	sh := r.samples.Shared
+	if sh == nil {
+		return
+	}
+	ev, _ := r.create()
+	bulk, err := evaluate(ev, evaluator.Request{Bulk: true})
+	if err != nil {
+		r.t.Errorf("bulk flag sets: bulk evaluation: expected no error, observed %v", err)
+		return
+	}
+	var observed []string
+	for _, res := range bulk {
+		if res.FlagKey == sh.Key {
+			observed = append(observed, res.FlagSet)
+		}
+	}
+	expected := append([]string(nil), sh.FlagSets...)
+	sort.Strings(expected)
+	sort.Strings(observed)
+	r.expect("bulk flag sets", reflect.DeepEqual(expected, observed), sh.Key+" entries and the flag set of each",
+		fmt.Sprintf("%q", expected), fmt.Sprintf("%q", observed))
 }
 
 // appendsToDst passes a result the caller holds and expects it to stay at index 0 with the results of the

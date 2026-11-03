@@ -1257,8 +1257,8 @@ bulk ctx=other err=<nil> setMetadata=map[] count=12
   targeting-null-with-default value=false variant="off" reason=DEFAULT err=<nil> metadata=map[] flagKey=targeting-null-with-default
   type-mismatch value="hello" variant="text" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=type-mismatch
 ## context holding NaN
-targeting-match bool    value=false variant="" reason=ERROR err=ERROR metadata=map[]
-fractional string  value="" variant="" reason=ERROR err=ERROR metadata=map[]
-targeting-match int     value=0 variant="" reason=ERROR err=ERROR metadata=map[]
-targeting-match float   value=0 variant="" reason=ERROR err=ERROR metadata=map[]
-targeting-match object  value=map[string]interface {}(nil) variant="" reason=ERROR err=ERROR metadata=map[]
+targeting-match bool    value=false variant="" reason=ERROR err=GENERAL metadata=map[]
+fractional string  value="" variant="" reason=ERROR err=GENERAL metadata=map[]
+targeting-match int     value=0 variant="" reason=ERROR err=GENERAL metadata=map[]
+targeting-match float   value=0 variant="" reason=ERROR err=GENERAL metadata=map[]
+targeting-match object  value=map[string]interface {}(nil) variant="" reason=ERROR err=GENERAL metadata=map[]

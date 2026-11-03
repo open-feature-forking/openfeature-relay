@@ -220,8 +220,18 @@ func ExceptionType(val string) attribute.KeyValue {
 // NewOTelRecorder creates a MetricsRecorder based on the provided metric.Reader. The MeterProvider created here is
 // registered globally so that otelgrpc, otelhttp, and otelconnect instrumentation libraries can use it.
 func NewOTelRecorder(exporter msdk.Reader, resource *resource.Resource, serviceName string) *MetricsRecorder {
-	// create a metric provider with custom bucket size for histograms
-	provider := msdk.NewMeterProvider(
+	provider := newMeterProvider(exporter, resource, serviceName)
+
+	// Set as global MeterProvider so otelgrpc and other instrumentation can use it
+	otel.SetMeterProvider(provider)
+
+	return newRecorder(provider.Meter(serviceName))
+}
+
+// newMeterProvider creates a meter provider with flagd's histogram buckets for the instruments of the scope
+// serviceName.
+func newMeterProvider(exporter msdk.Reader, resource *resource.Resource, serviceName string) *msdk.MeterProvider {
+	return msdk.NewMeterProvider(
 		msdk.WithReader(exporter),
 		// for the request duration metric we use the default bucket size which are tailored for response time in seconds
 		msdk.WithView(getDurationView(serviceName, httpRequestDurationMetric, prometheus.DefBuckets)),
@@ -237,12 +247,10 @@ func NewOTelRecorder(exporter msdk.Reader, resource *resource.Resource, serviceN
 		// but can be overridden with the OTEL_GO_X_CARDINALITY_LIMIT environment variable
 		msdk.WithCardinalityLimit(2000),
 	)
+}
 
-	// Set as global MeterProvider so otelgrpc and other instrumentation can use it
-	otel.SetMeterProvider(provider)
-
-	meter := provider.Meter(serviceName)
-
+// newRecorder creates flagd's instruments on meter.
+func newRecorder(meter metric.Meter) *MetricsRecorder {
 	// we can ignore errors from OpenTelemetry since they could occur if we select the wrong aggregator
 	hduration, _ := meter.Float64Histogram(
 		httpRequestDurationMetric,

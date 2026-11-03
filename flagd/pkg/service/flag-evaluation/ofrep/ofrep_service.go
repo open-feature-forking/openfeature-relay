@@ -47,7 +47,7 @@ type Service struct {
 }
 
 func NewOfrepService(
-	evaluator evaluator.IEvaluator, flagStore store.IStore, origins []string, cfg SvcConfiguration, contextValues map[string]any, headerToContextKeyMappings map[string]string,
+	evaluator evaluator.IResolver, flagStore store.IStore, origins []string, cfg SvcConfiguration, contextValues map[string]any, headerToContextKeyMappings map[string]string,
 ) (*Service, error) {
 	corsMiddleware := corsmw.New(origins)
 

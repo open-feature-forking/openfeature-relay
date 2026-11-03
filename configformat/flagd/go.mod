@@ -21,7 +21,6 @@ replace (
 	github.com/open-feature-forking/openfeature-relay/core => ../../core
 	github.com/open-feature-forking/openfeature-relay/evaluator/flagd => ../../evaluator/flagd
 	github.com/open-feature-forking/openfeature-relay/sync/azblob => ../../sync/azblob
-	github.com/open-feature-forking/openfeature-relay/sync/blob => ../../sync/blob
 	github.com/open-feature-forking/openfeature-relay/sync/builder => ../../sync/builder
 	github.com/open-feature-forking/openfeature-relay/sync/file => ../../sync/file
 	github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc => ../../sync/flagd-grpc

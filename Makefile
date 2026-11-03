@@ -5,7 +5,7 @@ ALL_GO_MOD_DIRS := $(shell find . \( -path ./test/integration -o -path ./.claude
 
 # The library modules: what embedders import. Tests, the FIPS tests and the benchmarks run on exactly
 # these (plus the binaries), and testdata/go-packages.txt pins the packages they contain.
-GO_LIB_MODULE_DIRS := ./core ./sync/file ./sync/flagd-grpc ./sync/http ./sync/openfeature-operator ./sync/blob ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel ./evaluator/flagd ./configformat/flagd
+GO_LIB_MODULE_DIRS := ./core ./sync/file ./sync/flagd-grpc ./sync/http ./sync/openfeature-operator ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel ./evaluator/flagd ./configformat/flagd
 
 # The FIPS variant builds against the CMVP-certified Go Cryptographic Module
 # v1.0.0 (certificate #5247). The literal version is required; the
@@ -56,7 +56,7 @@ build-flagd-fips:
 	$(FIPS_ENV) go build -tags $(FIPS_TAGS) -ldflags "-X main.version=dev -X main.commit=$$(git rev-parse --short HEAD) -X main.date=$$(date +%FT%TZ)" -o ./bin/flagd-fips ./flagd
 	go version -m ./bin/flagd-fips | grep -E 'GOFIPS140=|-tags='
 .PHONY: test
-test: test-core test-flagd test-flagd-proxy test-configformat-example test-service-example test-evaluator-testkit test-inprocess-example
+test: test-core test-flagd test-flagd-proxy test-configformat-example test-service-example test-evaluator-testkit test-inprocess-example test-sync-example
 test-core: test-modules
 test-modules:
 	@rc=0; for m in $(GO_LIB_MODULE_DIRS); do \
@@ -64,6 +64,8 @@ test-modules:
 	done; exit $$rc
 test-flagd:
 	go test -race -covermode=atomic -cover -short ./flagd/pkg/... -coverprofile=flagd-coverage.out
+test-sync-example:
+	go test -race -short -count=1 ./test/sync-example/...
 test-configformat-example:
 	go test -race -short -count=1 ./test/configformat-example/...
 test-service-example:
@@ -73,7 +75,7 @@ test-evaluator-testkit:
 	go test -race -short -count=1 ./test/evaluator-testkit/...
 # The in-process examples assert on their own module graphs, which they read with the go command outside the workspace.
 test-inprocess-example:
-	go test -race -short -count=1 ./test/inprocess-example/file/... ./test/inprocess-example/filegrpc/...
+	go test -race -short -count=1 ./test/inprocess-example/file/... ./test/inprocess-example/filegrpc/... ./test/inprocess-example/engine/...
 test-flagd-proxy:
 	go test -race -covermode=atomic -cover -short ./flagd-proxy/pkg/... -coverprofile=flagd-proxy-coverage.out
 # fips140=only makes non-approved algorithms error or panic, so this fails if a
