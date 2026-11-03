@@ -197,3 +197,18 @@ func TestPublishWhileClosing(t *testing.T) {
 	bus.Close()
 	wg.Wait()
 }
+
+func TestPublisherReportedMissedIsDelivered(t *testing.T) {
+	bus := NewBus()
+	sub := bus.Subscribe(SubscribeOptions{Kinds: []Kind{KindConfigurationChange}, Buffer: 1})
+	defer sub.Close()
+
+	bus.Publish(ConfigurationChange{Version: "1", Missed: 3})
+	require.Equal(t, 3, (<-sub.C()).(ConfigurationChange).Missed, "what the publisher lost reaches the subscriber")
+
+	bus.Publish(ConfigurationChange{Version: "2"})
+	bus.Publish(ConfigurationChange{Version: "3", Missed: 2}) // dropped
+	<-sub.C()
+	bus.Publish(ConfigurationChange{Version: "4"})
+	require.Equal(t, 1, (<-sub.C()).(ConfigurationChange).Missed, "the dropped event's own count is not kept, one was dropped")
+}
