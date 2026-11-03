@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/blobfetch"
 	"google.golang.org/api/option"
 )
@@ -182,3 +183,6 @@ func (s *store) Read(ctx context.Context) ([]byte, string, error) {
 	}
 	return data, r.Attrs.ContentType, nil
 }
+
+// NewFactories returns the factories of the gcs sync component, as a generated main of a distribution calls it.
+func NewFactories() []sync.Factory { return []sync.Factory{NewFactory()} }
