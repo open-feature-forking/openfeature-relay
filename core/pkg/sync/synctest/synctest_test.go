@@ -227,11 +227,12 @@ func (m mismatched) ParseURI(uri string) (sync.SourceConfig, bool) {
 type triggerBug string
 
 const (
-	triggerOK            triggerBug = ""
-	triggerNoReconnect   triggerBug = "stops for good when it loses the change signal"
-	triggerIgnoresDone   triggerBug = "does not return when its context is done"
-	triggerErrorOnDone   triggerBug = "returns an error when its context is done"
-	triggerSignalsAlways triggerBug = "keeps signalling after shutdown"
+	triggerOK             triggerBug = ""
+	triggerNoReconnect    triggerBug = "stops for good when it loses the change signal"
+	triggerIgnoresDone    triggerBug = "does not return when its context is done"
+	triggerErrorOnDone    triggerBug = "returns an error when its context is done"
+	triggerSignalsAlways  triggerBug = "keeps signalling after shutdown"
+	triggerSignalsUnasked triggerBug = "signals without a change signal"
 )
 
 type stubTrigger struct {
@@ -242,6 +243,9 @@ type stubTrigger struct {
 }
 
 func (s *stubTrigger) Run(ctx context.Context, signal func()) error {
+	if s.bug == triggerSignalsUnasked {
+		signal()
+	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -300,7 +304,7 @@ func TestTriggerContract(t *testing.T) {
 
 		require.Empty(t, report.Aborted)
 		require.Empty(t, report.FailedCases())
-		require.Len(t, report.Cases, 4)
+		require.Len(t, report.Cases, 5)
 	})
 
 	tests := []struct {
@@ -310,6 +314,7 @@ func TestTriggerContract(t *testing.T) {
 		{triggerNoReconnect, []string{synctest.CaseReconnects, synctest.CaseReturnsNilOnDone}},
 		{triggerIgnoresDone, []string{synctest.CaseReturnsNilOnDone, synctest.CaseStopsListening}},
 		{triggerErrorOnDone, []string{synctest.CaseReturnsNilOnDone}},
+		{triggerSignalsUnasked, []string{synctest.CaseNeverFetchesItself}},
 	}
 	for _, tt := range tests {
 		t.Run("a trigger that "+string(tt.bug)+" fails its cases", func(t *testing.T) {

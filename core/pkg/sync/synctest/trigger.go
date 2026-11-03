@@ -25,13 +25,13 @@ type TriggerInputs struct {
 	Timeout time.Duration
 }
 
-// Names of the contract cases of a fetch trigger (UC-008 BR-002). That a trigger never fetches or delivers itself
-// holds by construction: Run is handed the signal function and nothing else.
+// Names of the contract cases of a fetch trigger (UC-008 BR-002).
 const (
-	CaseSignalsEachTime  = "signals each time the change signal arrives"
-	CaseReconnects       = "reconnects after losing the change signal"
-	CaseStopsListening   = "stops listening on shutdown"
-	CaseReturnsNilOnDone = "returns nil from Run on shutdown"
+	CaseNeverFetchesItself = "signals only for the change signal, so it never fetches or delivers on its own"
+	CaseSignalsEachTime    = "signals each time the change signal arrives"
+	CaseReconnects         = "reconnects after losing the change signal"
+	CaseStopsListening     = "stops listening on shutdown"
+	CaseReturnsNilOnDone   = "returns nil from Run on shutdown"
 )
 
 // RunTrigger runs the contract tests of a fetch trigger: one subtest per contract case.
@@ -125,6 +125,13 @@ func CheckTrigger(t testing.TB, f sync.TriggerFactory, in TriggerInputs) contrac
 		}
 		return false
 	}
+	// nothing but the change signal makes the trigger signal; Run is handed the signal function and nothing else, so
+	// a signal without it is the trigger fetching on its own
+	unasked := awaitSignal(quietPeriod)
+	cases = append(cases, check(CaseNeverFetchesItself, !unasked,
+		fmt.Sprintf("no signal in the %s before the change signal arrives", quietPeriod),
+		fmt.Sprintf("signalled without a change signal: %v", unasked)))
+
 	one := arrive()
 	two := arrive()
 	cases = append(cases, check(CaseSignalsEachTime, one && two,
