@@ -8,7 +8,7 @@
 **Secondary Actors:** Go Toolchain  
 **Goal:** Turn a manifest into a runnable flagd binary that contains exactly the components the manifest selects, with its generated source available for inspection or commit.  
 **Trigger:** Distribution Builder needs a flagd with a set of components that no standard distribution offers  
-**Status:** Draft  
+**Status:** Implemented  
 
 **Requirements:** [FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007, FR-008, FR-017, FR-018, FR-034, NFR-008, C-001](../requirements.md)
 
@@ -221,3 +221,19 @@ Each component states which component types or components it needs; a distributi
 ### BR-015: One Sync Provider per Scheme
 
 Every scheme is claimed by exactly one selected sync provider. A scheme is the prefix of a source, which need not be a URI scheme (for example `core.openfeature.dev/`); two sync providers claiming the same prefix make the manifest invalid.
+
+## Delivered by Later Use Cases
+
+This use case is `Implemented`: the manifest and its validation, the generated source, module resolution with the version checks, the checks of needs and schemes, the compile, the skippable steps, the distribution's own command line, and the manifests of flagd-full and of the test distributions that the Builder builds in CI. These parts are delivered by the use cases named here, and are accepted gaps of this one:
+
+| Gap | Delivered by |
+|-----|--------------|
+| Tagged releases and the Builder's release | UC-012 |
+| Standard manifests, the platform matrix, flagd-minimal's NFR-003 and NFR-004 | UC-010 |
+| A module graph that does not carry the tests of the runtime and the sync builder: `go mod tidy` reads them, so every manifest replaces all sync modules, which inflates the module graph of a small distribution | UC-010 |
+| Settings of absent components stop startup (the table of flag to component settings exists) | UC-010 |
+| flagd-full released from the generated source | UC-009 |
+| `flagd components` (the inventory and the identity exist) | UC-011 |
+| Operator settings for extension components | UC-021 |
+| Reference Dockerfile (FR-009) | UC-002 |
+| Middleware and event sinks applied by the runtime (the generated source lists their factories) | UC-005, UC-020 |
