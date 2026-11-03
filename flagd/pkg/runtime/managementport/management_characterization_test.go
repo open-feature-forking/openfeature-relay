@@ -2,7 +2,7 @@
 
 // Package managementport pins what the runtime serves on the management port. It is its own test
 // binary because the Prometheus exporter registers with the default registry once per process; no
-// other test scrapes /metrics.
+// other test scrapes /metrics. Run it with -count=1: a second run in the same process fails on that registration.
 //
 // The test starts the runtime and stops it with SIGTERM, which Start handles itself.
 package managementport

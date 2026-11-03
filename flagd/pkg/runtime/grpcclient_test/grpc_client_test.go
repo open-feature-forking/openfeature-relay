@@ -2,7 +2,8 @@
 
 // Package grpcclient_test pins the client-side telemetry of the flagd-grpc sync provider as FromConfig wires it:
 // the span of the sync stream and the rpc.client metrics the gRPC stats handler records. It builds one runtime,
-// with the console span exporter, in a test binary of its own; the stream metrics are pinned in syncmetrics_test.
+// with the console span exporter, in a test binary of its own (run it with -count=1); the stream metrics are
+// pinned in syncmetrics_test.
 package grpcclient_test
 
 import (

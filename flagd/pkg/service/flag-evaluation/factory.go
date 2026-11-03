@@ -76,7 +76,9 @@ func (s *ConnectService) serveEndpoint(ctx context.Context, svcConf service.Conf
 	}
 	s.logger.Info(fmt.Sprintf("Flag IResolver listening at %s", lis.Addr()))
 
-	// the streams' requests end with this context, which is cancelled once their last notification is queued
+	// the requests of the server end with this context, which is cancelled once the streams' last notification is queued.
+	// A unary request still running at that moment is cancelled too, where the graceful Shutdown would have drained it;
+	// evaluations do not wait on their context, so they finish and answer.
 	streams, endStreams := context.WithCancel(context.Background())
 	defer endStreams()
 	s.server.BaseContext = func(net.Listener) context.Context { return streams }

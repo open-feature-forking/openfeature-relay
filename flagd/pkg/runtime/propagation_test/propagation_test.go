@@ -4,6 +4,7 @@
 // FromConfig, with the console span exporter, in a test binary of its own: FromConfig installs process-wide
 // telemetry, and the exporter writes to the process's standard output. The management port characterization pins
 // that the propagators are installed with OTEL_TRACES_EXPORTER unset too, since autoexport then selects OTLP.
+// Run it with -count=1.
 //
 // The test starts the runtime and stops it with SIGTERM, which Start handles itself.
 package propagation_test
