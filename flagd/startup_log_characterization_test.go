@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -172,5 +173,23 @@ func TestStartupLogCharacterization(t *testing.T) {
 	want, err := os.ReadFile(startupLogsGolden)
 	require.NoError(t, err, "record the current logs with `go test -run TestStartupLogCharacterization -update-startup-logs`")
 	want = bytes.ReplaceAll(want, []byte("\r\n"), []byte("\n"))
-	require.Equal(t, string(want), out.String())
+	require.Equal(t, stampedLogs(string(want)), stampedLogs(out.String()))
+}
+
+// logStamp matches the version, commit and date a log line of flagd version carries, in the console and the JSON
+// encoding.
+var logStamp = regexp.MustCompile(`(version|commit|date)=\S+|"(version|commit|date)": "[^"]*"`)
+
+// stampedLogs leaves the stamps of the flagd version line out of the comparison when FLAGD_BINARY names a binary the
+// Builder made: it carries the stamps of its manifest, not those of the pin's own build.
+func stampedLogs(s string) string {
+	if os.Getenv("FLAGD_BINARY") == "" {
+		return s
+	}
+	return logStamp.ReplaceAllStringFunc(s, func(m string) string {
+		if i := strings.IndexAny(m, "=:"); i >= 0 {
+			return m[:i+1] + " <stamp>"
+		}
+		return m
+	})
 }
