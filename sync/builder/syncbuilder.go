@@ -9,6 +9,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/fetching"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/polling"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	"github.com/open-feature-forking/openfeature-relay/sync/azblob"
 	"github.com/open-feature-forking/openfeature-relay/sync/file"
 	flagdgrpc "github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc"
@@ -80,6 +81,9 @@ type SyncBuilder struct {
 	// SyncMetricsRecorder, when non-nil, is passed to every sync provider so they can
 	// record the universal client-side sync metrics
 	SyncMetricsRecorder sync.MetricsRecorder
+
+	// Telemetry is passed to every sync component as Settings.Telemetry.
+	Telemetry telemetry.Provider
 }
 
 // clientFunc adapts a function to a client builder.
@@ -97,6 +101,12 @@ func NewSyncBuilder(factories ...sync.Factory) *SyncBuilder {
 	}
 	sb.factories = factories
 	return sb
+}
+
+// NewSyncBuilderOf creates a builder for exactly the given factories: without any, no source can be created. It is how a
+// distribution builds sync providers from its own components.
+func NewSyncBuilderOf(factories ...sync.Factory) *SyncBuilder {
+	return &SyncBuilder{k8sClientBuilder: &KubernetesClientBuilder{}, factories: factories}
 }
 
 // SyncFromURI creates the sync provider of a file or FeatureFlag source given as a --uri; the configuration proxy
