@@ -335,3 +335,20 @@ func TestBuildIgnoresWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestMissingReplaceHintForAnUnreadableGoMod pins the hint for the report go prints when a module has no release:
+// the revision it looks for does not exist.
+func TestMissingReplaceHintForAnUnreadableGoMod(t *testing.T) {
+	report := "go: downloading example.test/core v0.1.0\ngo: example.test/dist imports\n\texample.test/comp imports\n" +
+		"\texample.test/core/util: reading example.test/core/go.mod at revision core/v0.1.0: unknown revision core/v0.1.0"
+
+	err := mapResolve(report, []Component{{Module: "example.test/comp", Version: "v1.0.0"}}, errors.New("exit status 1"))
+
+	var resolve *ResolveError
+	if !errors.As(err, &resolve) {
+		t.Fatalf("want a ResolveError, got %v", err)
+	}
+	if resolve.Module != "example.test/core" || !strings.Contains(resolve.Hint, "replaces") {
+		t.Fatalf("the module without a release is named with the hint: %+v", resolve)
+	}
+}
