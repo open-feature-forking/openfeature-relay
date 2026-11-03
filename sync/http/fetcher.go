@@ -199,3 +199,6 @@ func (Factory) ParseURI(uri string) (sync.SourceConfig, bool) {
 func (Factory) CreateFetcher(settings sync.Settings) (sync.Fetcher, error) {
 	return NewFetcher(settings.Source, settings.Logger), nil
 }
+
+// NewFactories returns the factories of the HTTP sync component, as a generated main of a distribution calls it.
+func NewFactories() []sync.Factory { return []sync.Factory{Factory{}} }

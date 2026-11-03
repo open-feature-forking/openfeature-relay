@@ -155,3 +155,9 @@ func (t hangupTrigger) Run(ctx context.Context, signal func()) error {
 		}
 	}
 }
+
+// NewFactories returns the factories of the example sync component, as a generated main of a distribution calls it:
+// the fetcher over a source that holds no flags, and the SIGHUP trigger.
+func NewFactories() []sync.Factory {
+	return []sync.Factory{Factory{Source: NewSource(`{"flags":{}}`)}, TriggerFactory{}}
+}
