@@ -126,27 +126,43 @@ func TestHTTPDeliveryCharacterization(t *testing.T) {
 		}
 	})
 
-	t.Run("a failed initial fetch stops the provider", func(t *testing.T) {
-		fs := newFlagServer(t, "", "")
+	t.Run("a failed initial fetch keeps the provider up and not ready until the source answers", func(t *testing.T) {
+		fs := newFlagServer(t, "", flagsA)
 		fs.mu.Lock()
 		fs.status = http.StatusInternalServerError
 		fs.mu.Unlock()
 		uri := fs.URL + "/flags"
 
-		provider, _ := buildSource(t, sync.SourceConfig{URI: uri, Provider: "http", Interval: 1})
-		require.NoError(t, provider.Init(context.Background()))
-		err := provider.Sync(context.Background(), make(chan sync.DataSync, 1))
-		require.ErrorContains(t, err, "500")
-		require.False(t, provider.IsReady())
+		src := startSource(t, sync.SourceConfig{URI: uri, Provider: "http", Interval: 1})
+		fs.nextRequest(t)
+		fs.nextRequest(t) // it fetches again by itself
+		src.requireNoDelivery(t)
+		require.False(t, src.provider.IsReady())
+		select {
+		case err := <-src.syncErr:
+			t.Fatalf("the provider stopped with %v", err)
+		default:
+		}
+
+		fs.mu.Lock()
+		fs.status = http.StatusOK
+		fs.mu.Unlock()
+		src.requireDelivery(t, sync.DataSync{FlagData: flagsA, Source: uri})
+		require.Eventually(t, src.provider.IsReady, deliveryTimeout, 10*time.Millisecond)
 	})
 
-	t.Run("a source that is down fails the initial fetch", func(t *testing.T) {
+	t.Run("a source that is down does not stop the provider", func(t *testing.T) {
 		fs := newFlagServer(t, "", "")
 		uri := fs.URL + "/flags"
 		fs.Close()
 
-		provider, _ := buildSource(t, sync.SourceConfig{URI: uri, Provider: "http", Interval: 1})
-		require.NoError(t, provider.Init(context.Background()))
-		require.Error(t, provider.Sync(context.Background(), make(chan sync.DataSync, 1)))
+		src := startSource(t, sync.SourceConfig{URI: uri, Provider: "http", Interval: 1})
+		src.requireNoDelivery(t)
+		require.False(t, src.provider.IsReady())
+		select {
+		case err := <-src.syncErr:
+			t.Fatalf("the provider stopped with %v", err)
+		default:
+		}
 	})
 }

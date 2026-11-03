@@ -145,7 +145,7 @@ func NewSync(
 		SourceType:         sync.SourceBlob,
 		Metrics:            recorder,
 		IncrementalUpdates: config.IncrementalUpdates,
-		Legacy:             fetching.Legacy{ExitOnFirstFailure: true, NoDeadline: true, IgnoreIncremental: true},
+		Legacy:             fetching.Legacy{NoDeadline: true, IgnoreIncremental: true},
 	}), nil
 }
 

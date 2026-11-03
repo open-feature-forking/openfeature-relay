@@ -20,7 +20,7 @@ import (
 func legacyFor(f sync.Factory) fetching.Legacy {
 	switch f.Type() {
 	case httpSync.Provider, gcs.Provider, azblob.Provider, s3.Provider:
-		return fetching.Legacy{ExitOnFirstFailure: true, NoDeadline: true, IgnoreIncremental: true}
+		return fetching.Legacy{NoDeadline: true, IgnoreIncremental: true}
 	case file.Provider:
 		return fetching.Legacy{
 			RedeliverUnchanged: true, EmptyOnReadError: true, NoDeadline: true, IgnoreIncremental: true,
