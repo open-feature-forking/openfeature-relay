@@ -71,13 +71,14 @@ type resolution struct {
 	metadata model.Metadata
 	err      error
 	// the request and the configuration format are kept for the observer
-	req    evaluator.Request
-	format string
+	req     evaluator.Request
+	format  string
+	flagSet string
 }
 
 // observe reports a single resolution as the adapter returns it.
 func (a *adapter) observe(ctx context.Context, r resolution, value any, variant, reason string, metadata model.Metadata, err error) {
-	res := evaluator.Result{FlagKey: r.req.FlagKey, Variant: variant, Reason: reason, Metadata: metadata, Format: r.format}
+	res := evaluator.Result{FlagKey: r.req.FlagKey, Variant: variant, Reason: reason, Metadata: metadata, Format: r.format, FlagSet: r.flagSet}
 	if err != nil {
 		res.ErrorCode = errorCode(err)
 	} else if r.hasValue {
@@ -89,7 +90,7 @@ func (a *adapter) observe(ctx context.Context, r resolution, value any, variant,
 // observeBulk reports one flag of a bulk request, as the adapter returns it in value.
 func (a *adapter) observeBulk(ctx context.Context, req evaluator.Request, r evaluator.Result, value evaluator.AnyValue) {
 	res := evaluator.Result{
-		FlagKey: r.FlagKey, Variant: value.Variant, Reason: value.Reason, ErrorCode: r.ErrorCode, Metadata: r.Metadata, Format: r.Format,
+		FlagKey: r.FlagKey, Variant: value.Variant, Reason: value.Reason, ErrorCode: r.ErrorCode, Metadata: r.Metadata, Format: r.Format, FlagSet: r.FlagSet,
 	}
 	if r.ErrorCode == "" && r.HasValue {
 		res.Value, res.HasValue = r.Value, true
@@ -127,7 +128,7 @@ func (a *adapter) single(ctx context.Context, key string, evalCtx map[string]any
 	a.buffers.Put(bufferp)
 
 	r := classify(ctx, result, len(results), err)
-	r.req, r.format = req, result.Format
+	r.req, r.format, r.flagSet = req, result.Format, result.FlagSet
 	return r
 }
 

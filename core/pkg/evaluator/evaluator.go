@@ -44,7 +44,6 @@ type Result struct {
 	FlagKey string
 	// Format is the configuration format whose evaluator resolved the flag. The router stamps it.
 	Format string
-
 	// FlagSet is the flag set the entry was listed under, "" for the unnamed flag set. An evaluator sets it on
 	// every result it returns for a flag, so that the router can tell the entries of one key in several flag sets
 	// apart; Metadata keeps whatever the evaluator's format reports.
