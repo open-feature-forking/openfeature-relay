@@ -5,16 +5,12 @@
 
 Only allocs/op is compared. ns/op depends on the runner and is ignored. A benchmark that ran several times has a
 range of allocs/op. It fails when the lowest allocs/op of the head is above the highest of the base and, for a
-benchmark that allocates 100 or more times per operation, above the lowest of the base by more than
-max(1, 0.1%).
+benchmark that is not in NOISY, above the lowest of the base at all.
 
-Why a tolerance on the large benchmarks only: the allocations that happen once per run (a pool that fills, a map
-that grows, a timer) are spread over the iterations of the run. run-benchmarks.sh runs 1000 iterations, which brings
-that share below one allocation per operation, and what is left is a rounding of one: 203 against 204 on
-BenchmarkFractionalEvaluation, 180 against 181 on the flag evaluation endpoint, with identical code. At 100 iterations
-the same benchmarks moved by 2 to 6 (381 against 383), which is why the iteration count is raised and the tolerance is
-not. A hot path of under 100 allocs/op shows one extra allocation as a change of its own, so it gets no tolerance. A
-rise that stays inside the tolerance or the base's range is listed as noise. A benchmark that exists in only one of the outputs
+NOISY lists the benchmarks that were observed to differ between two runs of identical code, each with the size of the
+difference that is noise and why. Everything else is strict, whatever its size: a hot path, a targeting resolve or an
+endpoint benchmark that gains one allocation fails. A rise that stays inside the tolerance or the base's range is
+listed as noise. A benchmark that exists in only one of the outputs
 is listed and never fails the comparison. A table of the benchmarks whose allocs/op changed, the packages that were
 benchmarked and the benchmarks within noise go to stdout and, when GITHUB_STEP_SUMMARY is set, to the job summary.
 """
@@ -42,9 +38,33 @@ def parse(path):
     return results
 
 
-def tolerance(base_lowest):
-    """The rise in allocs/op that is noise for a benchmark whose base allocates base_lowest at best."""
-    return 0 if base_lowest < 100 else max(1, base_lowest // 1000)
+# Benchmark name (without package) -> (tolerated rise in allocs/op, extra tolerated rise in thousandths of the base's
+# lowest allocs/op, why). run-benchmarks.sh runs 1000 iterations (SetState: 100), which spreads the allocations that
+# happen once per run (a pool that fills, a map that grows, a timer) to under one per operation; what is left is a
+# rounding. Measured on the same code in 6 runs of 3: 203 or 204 on the fractional evaluation, 180 or 181, 316 or 317,
+# 173 or 174 and 213 to 215 on the endpoints. At 100 iterations the same benchmarks moved by up to 6.
+_ROUNDING = "one-time allocations amortized over 1000 iterations leave a rounding"
+NOISY = {
+    "BenchmarkFractionalEvaluation/test_a@faas.com": (1, 0, _ROUNDING),
+    "BenchmarkFractionalEvaluation/test_b@faas.com": (1, 0, _ROUNDING),
+    "BenchmarkFractionalEvaluation/test_c@faas.com": (1, 0, _ROUNDING),
+    "BenchmarkFractionalEvaluation/test_d@faas.com": (1, 0, _ROUNDING),
+    "BenchmarkConnectResolveBoolean": (1, 0, _ROUNDING),
+    "BenchmarkConnectResolveAll": (1, 0, _ROUNDING),
+    "BenchmarkOFREPSingle": (1, 0, _ROUNDING),
+    "BenchmarkOFREPBulk": (2, 0, _ROUNDING),
+    # 368,000 allocs/op, run for 100 iterations because 1000 take 70 s: it moved by 4 to 7 (0.002%).
+    "BenchmarkSetState": (1, 1, "368,000 allocs/op: a handful of one-time allocations is far below 0.1%"),
+}
+
+
+def tolerance(key, base_lowest):
+    """The rise in allocs/op that is noise for the benchmark key whose base allocates base_lowest at best."""
+    name = key.split(" ", 1)[1]
+    if name not in NOISY:
+        return 0
+    floor, per_mille, _ = NOISY[name]
+    return max(floor, base_lowest * per_mille // 1000)
 
 
 def show(values):
@@ -80,7 +100,7 @@ def main(argv):
         return 2
 
     common = sorted(set(base) & set(head))
-    rose = [k for k in common if min(head[k]) > max(base[k]) and min(head[k]) - min(base[k]) > tolerance(min(base[k]))]
+    rose = [k for k in common if min(head[k]) > max(base[k]) and min(head[k]) - min(base[k]) > tolerance(k, min(base[k]))]
     fell = [k for k in common if max(head[k]) < min(base[k])]
     noise = [k for k in common if k not in rose and min(head[k]) > min(base[k])]
     added = sorted(set(head) - set(base))

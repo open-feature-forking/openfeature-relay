@@ -51,22 +51,27 @@ class CompareAllocs(unittest.TestCase):
         self.assertEqual(code, 0, text)
         self.assertIn("| flagd: BenchmarkResolveAllValues | 383 | 375..376 | -8 |", text)
 
-    def test_the_tolerance_starts_at_100_allocs(self):
+    def test_only_the_listed_benchmarks_have_a_tolerance(self):
         cases = {
-            # (base, head): exit code
-            (99, 100): 1,  # under 100 allocs/op any rise fails
-            (100, 101): 0,  # 100 or more: max(1, 0.1%) = 1
-            (100, 102): 1,
-            (2000, 2002): 0,  # 0.1% of 2000
-            (2000, 2003): 1,
-            (368000, 368300): 0,
+            # (benchmark, base, head): exit code
+            ("BenchmarkFractionalEvaluation/test_a@faas.com", 203, 204): 0,  # listed: one allocation is noise
+            ("BenchmarkFractionalEvaluation/test_a@faas.com", 203, 205): 1,
+            ("BenchmarkConnectResolveAll", 316, 317): 0,
+            ("BenchmarkConnectResolveAll", 316, 318): 1,
+            ("BenchmarkOFREPBulk", 213, 215): 0,  # listed with two
+            ("BenchmarkOFREPBulk", 213, 216): 1,
+            ("BenchmarkSetState", 368390, 368700): 0,  # listed, 0.1% of 368,390 is 368
+            ("BenchmarkSetState", 368390, 368800): 1,
+            ("BenchmarkResolveAllValues", 383, 384): 1,  # not listed: strict, whatever the size
+            ("BenchmarkResolveBooleanValue/test_staticBoolFlag", 22, 23): 1,
+            ("BenchmarkTargetingResolve", 100, 101): 1,
         }
         with tempfile.TemporaryDirectory() as tmp:
-            for (base, head), want in cases.items():
-                with self.subTest(base=base, head=head):
+            for (name, base, head), want in cases.items():
+                with self.subTest(name=name, base=base, head=head):
                     b, h = pathlib.Path(tmp, "b"), pathlib.Path(tmp, "h")
-                    b.write_text(bench({"BenchmarkX": [base] * 3}))
-                    h.write_text(bench({"BenchmarkX": [head] * 3}))
+                    b.write_text(bench({name: [base] * 3}))
+                    h.write_text(bench({name: [head] * 3}))
                     self.assertEqual(compare(b, h)[0], want)
 
     def test_a_rise_inside_the_range_of_the_base_passes(self):
