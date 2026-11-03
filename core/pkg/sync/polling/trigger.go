@@ -61,10 +61,9 @@ type IntervalTrigger struct {
 	now   func() time.Time
 	sleep func(ctx context.Context, d time.Duration) bool
 
-	mu        sync.Mutex
-	failures  int
-	noBackoff bool
-	finished  chan struct{}
+	mu       sync.Mutex
+	failures int
+	finished chan struct{}
 }
 
 // NewIntervalTrigger creates an IntervalTrigger. An empty seed means offset 0, and it fails
@@ -125,10 +124,10 @@ func (t *IntervalTrigger) Run(ctx context.Context, signal func()) error {
 
 func (t *IntervalTrigger) nextWait() time.Duration {
 	t.mu.Lock()
-	failures, noBackoff := t.failures, t.noBackoff
+	failures := t.failures
 	t.mu.Unlock()
 
-	if d := t.backoff.Delay(failures); d > 0 && !noBackoff {
+	if d := t.backoff.Delay(failures); d > 0 {
 		return d
 	}
 	now := t.now()
@@ -144,15 +143,6 @@ func sleep(ctx context.Context, d time.Duration) bool {
 	case <-timer.C:
 		return true
 	}
-}
-
-// WithoutBackoff makes the trigger stay on its schedule whatever the fetches it causes did, as the poller did before
-// it backed off. It returns the trigger.
-func (t *IntervalTrigger) WithoutBackoff() *IntervalTrigger {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.noBackoff = true
-	return t
 }
 
 // TriggerType is the type of the core's interval trigger in the `triggers` of a source.

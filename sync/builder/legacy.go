@@ -3,10 +3,6 @@ package builder
 import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/fetching"
-	"github.com/open-feature-forking/openfeature-relay/sync/azblob"
-	"github.com/open-feature-forking/openfeature-relay/sync/gcs"
-	httpSync "github.com/open-feature-forking/openfeature-relay/sync/http"
-	"github.com/open-feature-forking/openfeature-relay/sync/s3"
 )
 
 // The official fetchers run in the legacy mode of the fetching sync provider: they behave as the sync providers they
@@ -17,14 +13,3 @@ import (
 func legacyFor(sync.Factory) fetching.Legacy {
 	return fetching.Legacy{}
 }
-
-// legacyPollerWithoutBackoff reports whether the poller of an official fetcher stays on its schedule while fetches
-// fail, as the pollers of the providers it replaces did.
-func legacyPollerWithoutBackoff(f sync.Factory) bool {
-	switch f.Type() {
-	case httpSync.Provider, gcs.Provider, azblob.Provider, s3.Provider:
-		return true
-	}
-	return false
-}
-

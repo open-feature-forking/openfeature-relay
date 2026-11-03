@@ -168,9 +168,6 @@ func (sb *SyncBuilder) createTrigger(config sync.TriggerConfig, resolution Resol
 		if err != nil {
 			return nil, fmt.Errorf("invalid %s sync configuration: %w", resolution.Source.Provider, err)
 		}
-		if legacyPollerWithoutBackoff(resolution.Factory) {
-			poller.WithoutBackoff()
-		}
 		return poller, nil
 	}
 	for _, f := range sb.factories {
