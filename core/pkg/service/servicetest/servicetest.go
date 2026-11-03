@@ -16,9 +16,11 @@ import (
 	"reflect"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/contracttest"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator/typed"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
@@ -116,26 +118,10 @@ type Inputs struct {
 	SendEvents func(ctx context.Context, addr string, batch Batch) error
 }
 
-// Result is the outcome of one case.
-type Result struct {
-	Name string
-	// Duration is how long the case took.
-	Duration time.Duration
-	// Err is nil when the case passed; it states the expected and the observed behaviour.
-	Err error
-}
-
-// Run checks the factory against every applicable case of the contract.
+// Run checks the factory against every applicable case of the contract: one subtest per case.
 func Run(t *testing.T, f service.Factory, in Inputs) {
 	t.Helper()
-	for _, r := range Check(f, in) {
-		t.Run(r.Name, func(t *testing.T) {
-			t.Logf("took %v", r.Duration)
-			if r.Err != nil {
-				t.Error(r.Err)
-			}
-		})
-	}
+	Check(t, f, in).Run(t)
 }
 
 type contractCase struct {
@@ -168,8 +154,9 @@ var always = func(service.Needs, Inputs) bool { return true }
 
 func resolves(n service.Needs, _ Inputs) bool { return n.Router || n.Format != "" }
 
-// Check runs the cases and returns every result, in order, without failing a test.
-func Check(f service.Factory, in Inputs) []Result {
+// Check runs the cases and returns the report, without failing a test. A case of a feature the author named in Without
+// is reported as not applicable; one whose input is neither supplied nor named fails, naming the input.
+func Check(_ testing.TB, f service.Factory, in Inputs) contracttest.Report {
 	cases := []contractCase{
 		{"declarations", always, caseDeclarations, ""},
 		{"creates from what it declared", always, caseCreates, ""},
@@ -186,15 +173,13 @@ func Check(f service.Factory, in Inputs) []Result {
 	}
 
 	needs := f.Needs()
-	var results []Result
-	for _, feature := range in.Without {
-		if !slices.Contains(allFeatures, feature) {
-			results = append(results, Result{Name: "inputs", Err: fmt.Errorf(
-				"expected Without to name features of the contract: %v\nobserved: %q", allFeatures, feature)})
-		} else if feature.supplied(in) {
-			results = append(results, Result{Name: "inputs", Err: fmt.Errorf(
-				"expected Without not to name a feature whose input is set\nobserved: %q is both set and named", feature)})
-		}
+	var report contracttest.Report
+	supplied := map[Feature]bool{}
+	for _, feature := range allFeatures {
+		supplied[feature] = feature.supplied(in)
+	}
+	if err := contracttest.ValidateWithout(in.Without, supplied); err != nil {
+		report.Cases = append(report.Cases, failure("inputs", err))
 	}
 	for _, c := range cases {
 		if !c.applicable(needs, in) {
@@ -202,18 +187,31 @@ func Check(f service.Factory, in Inputs) []Result {
 		}
 		if c.feature != "" && !c.feature.supplied(in) {
 			if slices.Contains(in.Without, c.feature) {
+				report.Cases = append(report.Cases, contracttest.NotApplicable(c.name, fmt.Sprintf("Without: %s", c.feature)))
 				continue
 			}
-			results = append(results, Result{Name: c.name, Err: fmt.Errorf(
+			report.Cases = append(report.Cases, failure(c.name, fmt.Errorf(
 				"the input %s is required\nexpected the endpoint to supply it, or to name %s in Without when it has no such feature\nobserved: neither",
-				c.feature, c.feature)})
+				c.feature, c.feature)))
 			continue
 		}
-		began := time.Now()
-		err := guarded(func() error { return c.run(newEnv(f, in)) })
-		results = append(results, Result{Name: c.name, Err: err, Duration: time.Since(began)})
+		if err := guarded(func() error { return c.run(newEnv(f, in)) }); err != nil {
+			report.Cases = append(report.Cases, failure(c.name, err))
+			continue
+		}
+		report.Cases = append(report.Cases, contracttest.Pass(c.name, c.name))
 	}
-	return results
+	return report
+}
+
+// failure makes a failed case from an error that states the expected and the observed behaviour, each on a line of its
+// own.
+func failure(name string, err error) contracttest.Case {
+	text := err.Error()
+	if i := strings.Index(text, "\nobserved"); i >= 0 {
+		return contracttest.Case{Name: name, Expected: strings.TrimSpace(text[:i]), Observed: strings.TrimSpace(text[i:])}
+	}
+	return contracttest.Case{Name: name, Expected: name, Observed: text}
 }
 
 // guarded turns a panic of the endpoint into a failure of the case.

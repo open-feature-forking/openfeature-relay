@@ -15,11 +15,11 @@ provider without a backend or configuration
   1. is usable without further setup
      expected: spans, instruments and both HTTP wrappers work right after Create; the wrapped handler's response is unchanged
   2. never blocks a request while its backend stalls
-     expected: with a stalled backend, a request through both HTTP wrappers and recording a span and metrics return within 100ms
+     expected: with a stalled backend, a request through both HTTP wrappers and recording a span and metrics return within 100ms (NoBackend: there is no backend to stall, so the provider is used as it is)
   3. works under concurrent use
      expected: 64 goroutines record spans and metrics and send requests at once without a panic or a changed response
   4. returns from shutdown within its context while its backend stalls
-     expected: with a stalled backend, Shutdown returns within its context of 200ms
+     expected: with a stalled backend, Shutdown returns within its context of 200ms (NoBackend: there is no backend to stall, so the provider is used as it is)
   5. delivers held data on shutdown
      expected: a provider without a backend returns nil from Shutdown
   6. rejects an invalid configuration naming the faulty value

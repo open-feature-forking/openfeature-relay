@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/contracttest"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/eventsink"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
@@ -70,71 +71,26 @@ type Inputs struct {
 	Timeout time.Duration
 }
 
-// Case is the outcome of one contract case.
-type Case struct {
-	Name     string
-	Passed   bool
-	Expected string
-	Observed string
-}
-
-// Report is the outcome of a run.
-type Report struct {
-	// Aborted says why no contract case was exercised.
-	Aborted string
-	Cases   []Case
-}
-
-// Failed reports whether the run is a failure: it was aborted or a case failed.
-func (r Report) Failed() bool {
-	return r.Aborted != "" || len(r.FailedCases()) > 0
-}
-
-// FailedCases names the cases that failed.
-func (r Report) FailedCases() []string {
-	var names []string
-	for _, c := range r.Cases {
-		if !c.Passed {
-			names = append(names, c.Name)
-		}
-	}
-	return names
-}
-
-func (r Report) report(t *testing.T) {
-	t.Helper()
-	if r.Aborted != "" {
-		t.Fatalf("the contract tests were not run: %s", r.Aborted)
-	}
-	for _, c := range r.Cases {
-		t.Run(c.Name, func(t *testing.T) {
-			if !c.Passed {
-				t.Errorf("expected: %s\nobserved: %s", c.Expected, c.Observed)
-			}
-		})
-	}
-}
-
 // Run runs the contract tests of an event sink: one subtest per contract case.
 func Run(t *testing.T, f eventsink.Factory, in Inputs) {
 	t.Helper()
-	Check(t, f, in).report(t)
+	Check(t, f, in).Run(t)
 }
 
 // Check runs the contract tests of an event sink and returns their outcome. t is only handed to the test inputs.
-func Check(t testing.TB, f eventsink.Factory, in Inputs) Report {
+func Check(t testing.TB, f eventsink.Factory, in Inputs) contracttest.Report {
 	if msg := missing(in); msg != "" {
-		return Report{Aborted: msg}
+		return contracttest.Report{Aborted: msg}
 	}
 	if err := eventsink.ValidateDeclarations(f); err != nil {
-		return Report{Aborted: fmt.Sprintf("invalid declaration: %v", err)}
+		return contracttest.Report{Aborted: fmt.Sprintf("invalid declaration: %v", err)}
 	}
 	r := runner{t: t, f: f, in: in, limit: in.Timeout}
 	if r.limit <= 0 {
 		r.limit = DefaultTimeout
 	}
 	if _, err := f.Create(eventsink.Settings{Logger: logger.NewLogger(nil, false), Config: in.Config}); err != nil {
-		return Report{Aborted: fmt.Sprintf("the factory cannot create the sink from the valid configuration (error %v)", err)}
+		return contracttest.Report{Aborted: fmt.Sprintf("the factory cannot create the sink from the valid configuration (error %v)", err)}
 	}
 
 	cases := []struct {
@@ -150,10 +106,10 @@ func Check(t testing.TB, f eventsink.Factory, in Inputs) Report {
 		{CasePermanentNotRetried, r.permanentNotRetried},
 		{CaseInvalidConfig, r.invalidConfig},
 	}
-	report := Report{}
+	report := contracttest.Report{}
 	for _, c := range cases {
 		expected, observed := guarded(c.run)
-		report.Cases = append(report.Cases, Case{Name: c.name, Passed: observed == "", Expected: expected, Observed: observed})
+		report.Cases = append(report.Cases, contracttest.Check(c.name, expected, observed))
 		// a request an earlier case cancelled may still reach the external system; it must not count for the next case
 		time.Sleep(SettleTime)
 	}
@@ -161,22 +117,13 @@ func Check(t testing.TB, f eventsink.Factory, in Inputs) Report {
 }
 
 func missing(in Inputs) string {
-	var parts []string
-	need := func(name string, set bool, cases ...string) {
-		if !set {
-			quoted := make([]string, len(cases))
-			for i, c := range cases {
-				quoted[i] = fmt.Sprintf("%q", c)
-			}
-			parts = append(parts, fmt.Sprintf("test input %s is missing, needed by the cases %s", name, strings.Join(quoted, ", ")))
-		}
-	}
-	need("Inputs.Received", in.Received != nil, CaseKindsOnly, CaseBatches, CaseFlushesOnShutdown, CaseRetryableDelivered, CasePermanentNotRetried)
-	need("Inputs.Stall", in.Stall != nil, CaseFullBufferDrops, CaseReturnsInTime)
-	need("Inputs.Refuse", in.Refuse != nil, CaseRetryableDelivered, CasePermanentNotRetried)
-	need("Inputs.InvalidConfig", in.NoConfig || in.InvalidConfig != nil, CaseInvalidConfig)
-	need("Inputs.FaultyValue", in.NoConfig || in.FaultyValue != "", CaseInvalidConfig)
-	return strings.Join(parts, "; ")
+	return contracttest.Missing(
+		contracttest.Need("Inputs.Received", in.Received != nil, CaseKindsOnly, CaseBatches, CaseFlushesOnShutdown, CaseRetryableDelivered, CasePermanentNotRetried),
+		contracttest.Need("Inputs.Stall", in.Stall != nil, CaseFullBufferDrops, CaseReturnsInTime),
+		contracttest.Need("Inputs.Refuse", in.Refuse != nil, CaseRetryableDelivered, CasePermanentNotRetried),
+		contracttest.Need("Inputs.InvalidConfig", in.NoConfig || in.InvalidConfig != nil, CaseInvalidConfig),
+		contracttest.Need("Inputs.FaultyValue", in.NoConfig || in.FaultyValue != "", CaseInvalidConfig),
+	)
 }
 
 // guarded runs a case and turns a panic into its observed behaviour. A case reports "" as observed when it passed.
@@ -530,7 +477,7 @@ func (r runner) permanentNotRetried() (string, string) {
 
 func (r runner) invalidConfig() (string, string) {
 	if r.in.NoConfig {
-		return "", ""
+		return "a sink that takes no configuration has no invalid configuration to reject (NoConfig)", ""
 	}
 	expected := fmt.Sprintf("the factory rejects the configuration with an error that contains %q", r.in.FaultyValue)
 	_, err := r.f.Create(eventsink.Settings{Logger: logger.NewLogger(nil, false), Config: r.in.InvalidConfig})
@@ -542,3 +489,4 @@ func (r runner) invalidConfig() (string, string) {
 	}
 	return expected, ""
 }
+

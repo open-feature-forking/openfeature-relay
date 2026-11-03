@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/contracttest"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 )
 
@@ -36,28 +37,28 @@ const (
 // RunTrigger runs the contract tests of a fetch trigger: one subtest per contract case.
 func RunTrigger(t *testing.T, f sync.TriggerFactory, in TriggerInputs) {
 	t.Helper()
-	CheckTrigger(t, f, in).report(t)
+	CheckTrigger(t, f, in).Run(t)
 }
 
 // CheckTrigger runs the contract tests of a fetch trigger and returns their outcome. t is only handed to the test
 // inputs.
-func CheckTrigger(t testing.TB, f sync.TriggerFactory, in TriggerInputs) Report {
-	if msg := missing(
-		missingInput{"TriggerInputs.Signal", in.Signal != nil, []string{CaseSignalsEachTime, CaseReconnects, CaseStopsListening}},
-		missingInput{"TriggerInputs.Interrupt", in.Interrupt != nil, []string{CaseReconnects}},
+func CheckTrigger(t testing.TB, f sync.TriggerFactory, in TriggerInputs) contracttest.Report {
+	if msg := contracttest.Missing(
+		contracttest.Need("TriggerInputs.Signal", in.Signal != nil, CaseSignalsEachTime, CaseReconnects, CaseStopsListening),
+		contracttest.Need("TriggerInputs.Interrupt", in.Interrupt != nil, CaseReconnects),
 	); msg != "" {
-		return Report{Aborted: msg}
+		return contracttest.Report{Aborted: msg}
 	}
 	if err := sync.ValidateDeclarations(f); err != nil {
-		return Report{Aborted: fmt.Sprintf("invalid declarations: %v", err)}
+		return contracttest.Report{Aborted: fmt.Sprintf("invalid declarations: %v", err)}
 	}
 	trigger, err := f.CreateTrigger(newSettings(in.Source, f.Type(), in.Config))
 	if err != nil || trigger == nil {
-		return Report{Aborted: fmt.Sprintf("the factory cannot create the fetch trigger (trigger %v, error %v)", trigger, err)}
+		return contracttest.Report{Aborted: fmt.Sprintf("the factory cannot create the fetch trigger (trigger %v, error %v)", trigger, err)}
 	}
 	if init, ok := trigger.(sync.InitializingTrigger); ok {
 		if err := init.Init(context.Background()); err != nil {
-			return Report{Aborted: fmt.Sprintf("the fetch trigger cannot be initialized: %v", err)}
+			return contracttest.Report{Aborted: fmt.Sprintf("the fetch trigger cannot be initialized: %v", err)}
 		}
 	}
 
@@ -111,7 +112,7 @@ func CheckTrigger(t testing.TB, f sync.TriggerFactory, in TriggerInputs) Report 
 		}
 	}
 
-	var cases []Case
+	var cases []contracttest.Case
 
 	// the change signal may arrive before the trigger listens to it, so it is sent again until it is seen
 	arrive := func() bool {
@@ -155,5 +156,5 @@ func CheckTrigger(t testing.TB, f sync.TriggerFactory, in TriggerInputs) Report 
 		"no signal for a change signal that arrives after shutdown",
 		fmt.Sprintf("stopped: %v, signalled after shutdown: %v", stopped, late)))
 
-	return Report{Cases: cases}
+	return contracttest.Report{Cases: cases}
 }

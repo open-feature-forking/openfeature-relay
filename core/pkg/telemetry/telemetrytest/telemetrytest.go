@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/contracttest"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 )
 
@@ -80,65 +81,20 @@ type Inputs struct {
 	Timeout time.Duration
 }
 
-// Case is the outcome of one contract case.
-type Case struct {
-	Name     string
-	Passed   bool
-	Expected string
-	Observed string
-}
-
-// Report is the outcome of a run.
-type Report struct {
-	// Aborted says why no contract case was exercised.
-	Aborted string
-	Cases   []Case
-}
-
-// Failed reports whether the run is a failure: it was aborted or a case failed.
-func (r Report) Failed() bool {
-	return r.Aborted != "" || len(r.FailedCases()) > 0
-}
-
-// FailedCases names the cases that failed.
-func (r Report) FailedCases() []string {
-	var names []string
-	for _, c := range r.Cases {
-		if !c.Passed {
-			names = append(names, c.Name)
-		}
-	}
-	return names
-}
-
-func (r Report) report(t *testing.T) {
-	t.Helper()
-	if r.Aborted != "" {
-		t.Fatalf("the contract tests were not run: %s", r.Aborted)
-	}
-	for _, c := range r.Cases {
-		t.Run(c.Name, func(t *testing.T) {
-			if !c.Passed {
-				t.Errorf("expected: %s\nobserved: %s", c.Expected, c.Observed)
-			}
-		})
-	}
-}
-
 // Run runs the contract tests of a telemetry provider: one subtest per contract case.
 func Run(t *testing.T, f telemetry.Factory, in Inputs) {
 	t.Helper()
-	Check(t, f, in).report(t)
+	Check(t, f, in).Run(t)
 }
 
 // Check runs the contract tests of a telemetry provider and returns their outcome. t is only handed to the test
 // inputs.
-func Check(t testing.TB, f telemetry.Factory, in Inputs) Report {
+func Check(t testing.TB, f telemetry.Factory, in Inputs) contracttest.Report {
 	if msg := missing(in); msg != "" {
-		return Report{Aborted: msg}
+		return contracttest.Report{Aborted: msg}
 	}
 	if err := telemetry.ValidateDeclarations(f); err != nil {
-		return Report{Aborted: fmt.Sprintf("invalid declaration: %v", err)}
+		return contracttest.Report{Aborted: fmt.Sprintf("invalid declaration: %v", err)}
 	}
 	r := runner{t: t, f: f, in: in, limit: in.Timeout}
 	if r.limit <= 0 {
@@ -146,7 +102,7 @@ func Check(t testing.TB, f telemetry.Factory, in Inputs) Report {
 	}
 	p, err := r.create(in.Config)
 	if err != nil || p == nil {
-		return Report{Aborted: fmt.Sprintf("the factory cannot create the provider from the valid configuration (provider %v, error %v)", p, err)}
+		return contracttest.Report{Aborted: fmt.Sprintf("the factory cannot create the provider from the valid configuration (provider %v, error %v)", p, err)}
 	}
 	_ = shutdown(p, r.limit)
 
@@ -161,30 +117,21 @@ func Check(t testing.TB, f telemetry.Factory, in Inputs) Report {
 		{CaseFlushesOnShutdown, r.flushesOnShutdown},
 		{CaseInvalidConfig, r.invalidConfig},
 	}
-	report := Report{}
+	report := contracttest.Report{}
 	for _, c := range cases {
 		expected, observed := guarded(c.run)
-		report.Cases = append(report.Cases, Case{Name: c.name, Passed: observed == "", Expected: expected, Observed: observed})
+		report.Cases = append(report.Cases, contracttest.Check(c.name, stating(in, c.name, expected), observed))
 	}
 	return report
 }
 
 func missing(in Inputs) string {
-	var parts []string
-	need := func(name string, set bool, cases ...string) {
-		if !set {
-			quoted := make([]string, len(cases))
-			for i, c := range cases {
-				quoted[i] = fmt.Sprintf("%q", c)
-			}
-			parts = append(parts, fmt.Sprintf("test input %s is missing, needed by the cases %s", name, strings.Join(quoted, ", ")))
-		}
-	}
-	need("Inputs.StallBackend", in.NoBackend || in.StallBackend != nil, CaseNeverBlocks, CaseShutdownReturns)
-	need("Inputs.Observed", in.NoBackend || in.Observed != nil, CaseFlushesOnShutdown)
-	need("Inputs.InvalidConfig", in.NoConfig || in.InvalidConfig != nil, CaseInvalidConfig)
-	need("Inputs.FaultyValue", in.NoConfig || in.FaultyValue != "", CaseInvalidConfig)
-	return strings.Join(parts, "; ")
+	return contracttest.Missing(
+		contracttest.Need("Inputs.StallBackend", in.NoBackend || in.StallBackend != nil, CaseNeverBlocks, CaseShutdownReturns),
+		contracttest.Need("Inputs.Observed", in.NoBackend || in.Observed != nil, CaseFlushesOnShutdown),
+		contracttest.Need("Inputs.InvalidConfig", in.NoConfig || in.InvalidConfig != nil, CaseInvalidConfig),
+		contracttest.Need("Inputs.FaultyValue", in.NoConfig || in.FaultyValue != "", CaseInvalidConfig),
+	)
 }
 
 // guarded runs a case and turns a panic into its observed behaviour. A case reports "" as observed when it passed.
@@ -465,4 +412,13 @@ func (r runner) invalidConfig() (string, string) {
 		return expected, fmt.Sprintf("the error %q does not name it", err)
 	}
 	return expected, ""
+}
+
+// stating adds the declared mode to the expectation of a case that runs differently in it, so that a report shows which
+// assertion ran.
+func stating(in Inputs, name, expected string) string {
+	if in.NoBackend && (name == CaseNeverBlocks || name == CaseShutdownReturns) {
+		return expected + " (NoBackend: there is no backend to stall, so the provider is used as it is)"
+	}
+	return expected
 }
