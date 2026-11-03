@@ -94,7 +94,7 @@ See [sync source](../reference/sync-configuration.md#source-configuration) confi
 ### Azure Blob sync
 
 The Azure Blob sync provider fetches flags from an Azure Blob Storage blob and periodically polls the blob for the flag definition updates.
-It uses [environment variables](https://pkg.go.dev/gocloud.dev/blob/azureblob#hdr-URLs) to set the Storage Account name and to
+It uses environment variables (`AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_KEY`, `AZURE_STORAGE_SAS_TOKEN`, `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_STORAGEBLOB_CONNECTIONSTRING`, `AZURE_STORAGE_DOMAIN`, `AZURE_STORAGE_PROTOCOL`, `AZURE_STORAGE_IS_CDN` and `AZURE_STORAGE_IS_LOCAL_EMULATOR`) to set the Storage Account name and to
 authorize the calls to Azure Blob Storage.
 
 ```shell
@@ -120,6 +120,9 @@ In this example, `s3://my-bucket/my-flags.json` is expected to be a valid URI ac
 (either by being public or together with the appropriate credentials read from a file or via the environment as described in the AWS docs linked above).
 The polling interval is configurable.
 See [sync source](../reference/sync-configuration.md#source-configuration) for details.
+
+The URI takes these options in its query: `region`, `endpoint`, `profile`, `use_path_style` (or `s3ForcePathStyle`), `disable_https`, `dualstack`, `fips`, `accelerate`, `anonymous`, `hostname_immutable`, `rate_limiter_capacity` and `awssdk=v2`.
+The provider uses the AWS SDK for Go v2 only, so `awssdk=v1` stops flagd at start-up.
 
 ## Merging
 
