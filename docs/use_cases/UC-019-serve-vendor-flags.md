@@ -171,3 +171,7 @@ The vendor's engine module and any vendor-specific sync provider or service endp
 ### BR-010: Scope Is OpenFeature Clients
 
 A vendor distribution replaces the edge proxy for OpenFeature clients that evaluate through OFREP. Clients of the vendor's own client interface need a service endpoint extension that serves it.
+
+## Inherited Gaps
+
+- A webhook fetch trigger for a source, alongside server-sent events and vendor change events: it is not a service endpoint, because the event bus has no "fetch now" event and a trigger runs per source (moved here from UC-003 and UC-004).

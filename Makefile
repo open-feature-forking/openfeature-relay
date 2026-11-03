@@ -60,6 +60,7 @@ build-flagd-fips:
 TEST_TARGETS += test-core
 TEST_TARGETS += test-flagd
 TEST_TARGETS += test-flagd-proxy
+TEST_TARGETS += test-builder
 TEST_TARGETS += test-configformat-example
 TEST_TARGETS += test-service-example
 TEST_TARGETS += test-evaluator-testkit
@@ -97,6 +98,9 @@ test-evaluator-testkit:
 # The in-process examples assert on their own module graphs, which they read with the go command outside the workspace.
 test-inprocess-example:
 	go test -race -short -count=1 ./test/inprocess-example/file/... ./test/inprocess-example/filegrpc/... ./test/inprocess-example/engine/...
+# The Builder is a tool of its own: it imports no relay module (UC-001 Q1).
+test-builder:
+	go test -race -short -count=1 ./builder/...
 test-flagd-proxy:
 	go test -race -covermode=atomic -cover -short ./flagd-proxy/pkg/... -coverprofile=flagd-proxy-coverage.out
 # fips140=only makes non-approved algorithms error or panic, so this fails if a
