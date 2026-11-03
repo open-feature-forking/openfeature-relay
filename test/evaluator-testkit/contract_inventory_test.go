@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/cucumber/godog"
+	flagdeval "github.com/open-feature-forking/openfeature-relay/evaluator/flagd"
 	"github.com/stretchr/testify/require"
 )
 
@@ -47,4 +48,20 @@ func TestContractInventory(t *testing.T) {
 	want, err := os.ReadFile(golden)
 	require.NoError(t, err, "run with UPDATE_GOLDEN=1 to create the golden file")
 	require.Equal(t, strings.ReplaceAll(string(want), "\r\n", "\n"), got.String())
+}
+
+// A suite that yields no scenario is not a pass: Run would otherwise accept an evaluator that was never asked anything.
+func TestASuiteWithoutScenariosAbortsTheRun(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "gherkin"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "flags"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "flags", "testkit-flags.json"), []byte(`{"flags":{}}`), 0o600))
+	defer func(dirBefore, flagsBefore string) { suiteDir, flagsFile = dirBefore, flagsBefore }(suiteDir, flagsFile)
+	suiteDir, flagsFile = dir, filepath.Join(dir, "flags", "testkit-flags.json")
+
+	report := Check(t, flagdeval.Factory{})
+
+	require.True(t, report.Failed())
+	require.Empty(t, report.Cases)
+	require.Contains(t, report.Aborted, "ran no scenario")
 }

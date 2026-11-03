@@ -5,7 +5,9 @@ package configformat
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
@@ -74,4 +76,15 @@ type Settings struct {
 	Store  *store.Store
 	Logger *logger.Logger
 	Config map[string]any
+}
+
+// ValidateDeclarations checks what a factory declares: a non-empty type name.
+func ValidateDeclarations(f Factory) error {
+	if f == nil {
+		return errors.New("the factory is nil")
+	}
+	if strings.TrimSpace(f.Type()) == "" {
+		return errors.New("the type name is empty")
+	}
+	return nil
 }
