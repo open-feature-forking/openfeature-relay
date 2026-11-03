@@ -56,7 +56,17 @@ build-flagd-fips:
 	$(FIPS_ENV) go build -tags $(FIPS_TAGS) -ldflags "-X main.version=dev -X main.commit=$$(git rev-parse --short HEAD) -X main.date=$$(date +%FT%TZ)" -o ./bin/flagd-fips ./flagd
 	go version -m ./bin/flagd-fips | grep -E 'GOFIPS140=|-tags='
 .PHONY: test
-test: test-core test-flagd test-flagd-proxy test-configformat-example test-service-example test-evaluator-testkit test-inprocess-example test-sync-example test-telemetry-example
+# One target per line, so parallel pull requests that add a test target merge cleanly.
+TEST_TARGETS += test-core
+TEST_TARGETS += test-flagd
+TEST_TARGETS += test-flagd-proxy
+TEST_TARGETS += test-configformat-example
+TEST_TARGETS += test-service-example
+TEST_TARGETS += test-evaluator-testkit
+TEST_TARGETS += test-inprocess-example
+TEST_TARGETS += test-sync-example
+TEST_TARGETS += test-telemetry-example
+test: $(TEST_TARGETS)
 test-core: test-modules
 test-modules:
 	@rc=0; for m in $(GO_LIB_MODULE_DIRS); do \
