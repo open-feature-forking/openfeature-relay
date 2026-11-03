@@ -37,7 +37,48 @@ jobs:
       - run: make workspace-init
       - run: make lint
       - run: make check-package-coverage
-      - run: make check-module-boundary
+      # The module boundary tables include the evaluator boundary (NFR-005), which check-evaluator-boundary names.
+      - run: make check-module-boundary check-evaluator-boundary
+      # NFR-012: golang.org/x/exp is gone from the sources and from the direct requirements.
+      - name: No golang.org/x/exp in the sources
+        run: |
+          found=$(grep -rln 'golang.org/x/exp' --include=*.go . || true)
+          if [ -n "$found" ]; then echo "::error::golang.org/x/exp is imported in:"; echo "$found"; exit 1; fi
+      - name: No golang.org/x/exp in the direct requirements
+        run: |
+          found=$(grep -rn 'golang.org/x/exp' --include=go.mod . | grep -v indirect || true)
+          if [ -n "$found" ]; then echo "::error::golang.org/x/exp is a direct requirement in:"; echo "$found"; exit 1; fi
+
+  # Allocations per operation (NFR-001) of the library benchmarks, on the pull request's merge commit and on its base.
+  # The merge commit carries the scripts below even when the branch was cut before they existed.
+  # ns/op is not compared: runners are too noisy for it.
+  benchmark:
+    name: Benchmarks (allocs/op)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the merge commit
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+        with:
+          ref: ${{ github.sha }}
+          path: head
+      - name: Checkout the base
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+      - name: Setup go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
+        with:
+          go-version-file: 'head/flagd/go.mod'
+          cache-dependency-path: |
+            head/**/go.sum
+      - name: Benchmark the base
+        run: bash head/.github/scripts/run-benchmarks.sh base "$RUNNER_TEMP/base.txt"
+      - name: Benchmark the head
+        run: bash head/.github/scripts/run-benchmarks.sh head "$RUNNER_TEMP/head.txt"
+      - name: Compare allocs/op
+        run: python3 head/.github/scripts/compare-allocs.py "$RUNNER_TEMP/base.txt" "$RUNNER_TEMP/head.txt"
 
   docs-check:
     runs-on: ubuntu-latest

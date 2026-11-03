@@ -1,0 +1,41 @@
+fetcher
+  1. fetches the flag configuration once per request with its source version
+     expected: a fetch without a previous version returns the flag configuration and a non-empty source version
+  2. reports not changed when given the current source version, and never without one
+     expected: a fetch given the current source version reports Unchanged, and a fetch without a previous version never does
+  3. returns a new source version after the source changed
+     expected: after the source changed, a fetch given "v0" returns the changed flag configuration with a new source version
+  4. abandons a running fetch when its context is done
+     expected: a fetch with a done context returns within 300ms
+  5. reports a failed fetch without returning a flag configuration
+     expected: a fetch of a broken source returns an error and no flag configuration
+fetch trigger
+  1. signals each time the change signal arrives
+     expected: one signal for each arrival of the change signal, here two
+  2. reconnects after losing the change signal
+     expected: a signal for a change signal that arrives after the connection was lost
+  3. returns nil from Run on shutdown
+     expected: Run returns nil within 300ms of the context being done
+  4. stops listening on shutdown
+     expected: no signal for a change signal that arrives after shutdown
+streaming sync provider
+  1. stays up when the source is unavailable at startup and delivers once it answers
+     expected: the provider stays up and not ready while the source is unavailable, then delivers and is ready
+  2. delivers the source's complete flag configuration first
+     expected: the complete flag configuration within 300ms
+  3. delivers the flag configuration unchanged
+     expected: the delivered flag configuration equals {"flags":{"one":{}}}
+  4. reports readiness
+     expected: IsReady is true within 300ms of the first delivery
+  5. delivers each change the source pushes
+     expected: a delivery of the changed flag configuration
+  6. delivers the complete flag configuration again on request
+     expected: ReSync returns nil and delivers the complete flag configuration, {"flags":{"two":{}}}
+  7. reconnects after losing the source
+     expected: after the source was lost and came back, a delivery of the complete flag configuration, {"flags":{"two":{}}}
+  8. delivers what its source's removal calls for
+     expected: a removed source delivers nothing (Keep): the last accepted flags stay in force
+  9. stops on shutdown
+     expected: Sync returns nil within 300ms of the context being done
+  10. names its source
+     expected: every delivery names the configured source "stub://flags"

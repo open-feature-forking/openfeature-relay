@@ -91,10 +91,10 @@ A red gate is reported with its output. If a gate fails on untouched code too, s
 
 ### Local runs and CI
 
-The machine is shared by several sessions, so gate runs collide on ports and on the golangci-lint lock. CI runs on every pushed PR and is the gate for what it covers: `make test` (every module with `-race`, the examples and the evaluator testkit), `make lint` with `depguard`, package coverage, module boundaries, the integration suite and the docs check. Do not repeat those locally.
+The machine is shared by several sessions, so gate runs collide on ports and on the golangci-lint lock. CI runs on every pushed PR and is the gate for what it covers: `make test` (every module with `-race`, the examples and the evaluator testkit), `make lint` with `depguard`, package coverage, module boundaries (the evaluator boundary included), the `golang.org/x/exp` greps, the integration suite, the docs check and, on pull requests, a comparison of the allocs/op of the library and the flagd endpoint benchmarks against the PR's base (it fails if the head's lowest value is above the base's highest over three runs; ns/op is not compared). Do not repeat those locally.
 
-- **Implementer:** run the tests of the packages you touched (`go test -race`), plus the gates CI does not run: benchmarks when an evaluator or endpoint hot path changes, the `x/exp` and evaluator-boundary greps, and spec lint for spec changes. Commit and report. The orchestrating session pushes, and CI is the full run.
-- **Reviewer:** read the PR's CI result instead of re-running those gates. Run locally only what judgement needs: targeted tests, mutations, benchmarks, spec lint. A verdict may be `ready, pending CI`; the merge waits for green CI either way.
+- **Implementer:** run the tests of the packages you touched (`go test -race`), plus spec lint for spec changes, the one gate CI does not run (the build workflow ignores `docs/**`). Commit and report. The orchestrating session pushes, and CI is the full run.
+- **Reviewer:** read the PR's CI result instead of re-running those gates. Run locally only what judgement needs: targeted tests, mutations, spec lint, and benchmarks for ns/op, which CI does not compare. A verdict may be `ready, pending CI`; the merge waits for green CI either way.
 - **A full local run** is only for diagnosing a CI failure that does not reproduce in a targeted run.
 
 ## Containment
