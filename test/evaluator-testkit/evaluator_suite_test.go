@@ -3,7 +3,7 @@ package evaluatortestkit_test
 import (
 	"testing"
 
-	evaluatortestkit "github.com/open-feature/flagd/test/evaluator-testkit"
+	evaluatortestkit "github.com/open-feature-forking/openfeature-relay/test/evaluator-testkit"
 	flagdeval "github.com/open-feature-forking/openfeature-relay/evaluator/flagd"
 )
 
