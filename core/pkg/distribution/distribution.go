@@ -8,6 +8,7 @@ import (
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/middleware"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
@@ -30,6 +31,9 @@ type Components struct {
 	Telemetry telemetry.Factory
 	// TelemetryConfig is the configuration of Telemetry, as the keys of telemetry.Settings.Config.
 	TelemetryConfig map[string]any
+	// Middleware are the HTTP middleware of the service endpoints that serve HTTP, in list order: the first sees a request
+	// first. They run inside h2c and CORS, which stay layers of the endpoints. flagd-full lists none.
+	Middleware []middleware.Configured
 	// MetricsHandler serves /metrics on the management port. Nil leaves it to the telemetry provider, and answers
 	// 404 if the provider serves none.
 	MetricsHandler http.Handler

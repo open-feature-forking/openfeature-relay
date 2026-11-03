@@ -16,8 +16,8 @@ import (
 
 // TestConnectContract runs the service endpoint contract on the flag evaluation endpoint. It names the features it
 // does not have through the contract's inputs: it serves no documents, collects no events, gives no validator,
-// announces its changes from the flags table and not from the bus (UC-004 Q7), and does not honour a selector bound
-// by middleware yet (UC-005).
+// announces its changes from the flags table and not from the bus (UC-004 Q7). It honours a selector bound by
+// middleware.
 func TestConnectContract(t *testing.T) {
 	client := func(addr string) evaluationV1.ServiceClient {
 		return evaluationV1.NewServiceClient(http.DefaultClient, "http://"+addr)
@@ -25,9 +25,10 @@ func TestConnectContract(t *testing.T) {
 
 	servicetest.Run(t, Factory{}, servicetest.Inputs{
 		PortKey: "port",
+		HTTP:    true,
 		Without: []servicetest.Feature{
 			servicetest.FeatureDocuments, servicetest.FeatureValidator, servicetest.FeatureListen,
-			servicetest.FeatureSendEvents, servicetest.FeatureHTTP,
+			servicetest.FeatureSendEvents,
 		},
 		Connect: func(ctx context.Context, addr string) (<-chan struct{}, error) {
 			// the event stream stays open until the endpoint ends it; its first message says that it serves
