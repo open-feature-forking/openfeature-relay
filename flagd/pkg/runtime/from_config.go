@@ -446,7 +446,7 @@ func httpMiddleware(
 	}
 	created := make([]middleware.Middleware, 0, len(configured))
 	for i, c := range configured {
-		if err := middleware.ValidateDeclaration(c.Factory); err != nil {
+		if err := middleware.ValidateDeclarations(c.Factory); err != nil {
 			return nil, fmt.Errorf("the middleware factory at position %d declares: %w", i, err)
 		}
 		mw, err := c.Factory.Create(middleware.Settings{
