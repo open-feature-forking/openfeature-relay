@@ -7,7 +7,7 @@
 **Primary Actor:** Extension Author  
 **Goal:** Publish a fetcher, a fetch trigger or a streaming sync provider in the Extension Author's own component module, verified against its contract, so that a distribution obtains flags from a kind of source, or reacts to a kind of change signal, that no official component supports.  
 **Trigger:** Extension Author decides to make flagd read flags from a kind of source, or refetch on a kind of change signal, that no official component supports  
-**Status:** Draft  
+**Status:** Implemented  
 
 **Requirements:** [FR-010, FR-045, FR-053, FR-054, FR-055, FR-015, FR-003, FR-008, FR-025, FR-029, FR-049, FR-052, C-001](../requirements.md)
 
@@ -20,7 +20,7 @@
 
 1. Extension Author adds the core module as a dependency of their component module.
 2. Extension Author names the sync provider's type and the schemes of the sources it handles.
-3. Extension Author implements the sync provider as a fetcher: given the document version of its previous fetch, it fetches the source once and returns the flag configuration as read, with its encoding when known and its new document version, or reports that nothing changed. The fetcher decides nothing about when to fetch.
+3. Extension Author implements the sync provider as a fetcher: given the source version of its previous fetch, it fetches the source once and returns the flag configuration as read, with its encoding when known and its new source version, or reports that nothing changed. The fetcher decides nothing about when to fetch.
 4. Extension Author implements the factory that creates the fetcher for one source from the dependencies a distribution injects.
 5. Extension Author runs the contract tests of the extension (include UC-008 Run Contract Tests).
 6. System reports that the extension meets every case of its contract.
@@ -112,7 +112,7 @@ A fetch trigger tells its source's fetcher to fetch and does nothing else. Sever
 
 ### BR-004: Fetchers Answer Conditionally
 
-A fetcher reports "not changed" when the source's document version equals the one it was given, and then delivers nothing; the previous flag configuration stays in force. A fetch that fails delivers nothing either. At most one fetch of a source runs at a time; a signal that arrives during a fetch leads to exactly one further fetch after it.
+A fetcher reports "not changed" when the source version of the source equals the one it was given, and then delivers nothing; the previous flag configuration stays in force. A fetch that fails delivers nothing either. At most one fetch of a source runs at a time; a signal that arrives during a fetch leads to exactly one further fetch after it.
 
 ### BR-005: First Delivery as Soon as Possible
 
@@ -128,7 +128,7 @@ Each delivery replaces all flags of its source, unless the Operator has enabled 
 
 ### BR-008: Recoverable Source Errors Do Not Stop flagd
 
-Errors the extension can recover from, such as an unreachable source, never stop the distribution: a fetcher reports the failed fetch and the core's poller backs off; a streaming sync provider reconnects and reports itself not ready meanwhile. A streaming sync provider ends with an error only when it can never deliver again, because that error stops the whole distribution.
+Errors the extension can recover from, such as an unreachable source, never stop the distribution, not even a failed first fetch or first connection: a fetcher reports the failed fetch and is fetched again after a backoff; a streaming sync provider reconnects. The sync provider stays up and not ready until its first delivery. A sync provider that loses its source after a first delivery reconnects and stays ready with its last accepted flag configuration; readiness is lost only when the source's last accepted delivery exceeds the staleness limit (BR-005). A streaming sync provider ends with an error only when it can never deliver again, because that error stops the whole distribution. A source that cannot be configured, such as a file path that does not exist at startup, is a configuration error and still stops flagd at startup.
 
 ### BR-009: Stop on Shutdown
 
@@ -136,8 +136,25 @@ When the distribution shuts down, a fetcher abandons a running fetch, a fetch tr
 
 ### BR-010: Encoding- and Format-Neutral Delivery
 
-A sync provider does not decode, parse, validate or transform the flag configuration it obtains. The core decodes its encoding (JSON, YAML or TOML), and the configuration format the source names validates it, flagd's being the default (FR-029). A sync provider therefore works with every encoding and configuration format and in a configuration proxy, which has no evaluator, and an invalid flag configuration is rejected the same way whichever sync provider delivered it.
+A sync provider does not decode, parse, validate or transform the flag configuration it obtains. It may take the flag configuration out of its source's protocol envelope (the `flagConfiguration` field of a flagd sync message, the `spec.flagSpec` of a FeatureFlag resource) but never changes it. The core decodes its encoding (JSON, YAML or TOML), and the configuration format the source names validates it, flagd's being the default (FR-029). A sync provider therefore works with every encoding and configuration format and in a configuration proxy, which has no evaluator, and an invalid flag configuration is rejected the same way whichever sync provider delivered it.
 
 ### BR-011: Same Selection as Official Components
 
 An extension is referenced in a manifest by Go module path and version in the same way as an official fetcher, fetch trigger or streaming sync provider, such as `sync/http` or `sync/flagd-grpc`; no registration with the Maintainers is needed.
+
+### BR-012: Sources That Disappear
+
+A deleted file is an empty flag configuration: the sync provider delivers `{}`, which removes the flags of its source. A deleted FeatureFlag resource delivers nothing, and the flags last accepted from it stay in force. A file that exists but cannot be read, and content that cannot be decoded, deliver nothing and keep the last accepted flags.
+
+## Delivered by Later Use Cases
+
+This use case is `Implemented` for the sync provider side: the factory interfaces, the fetching sync provider, the fetch triggers and the contract tests are in the core module, the official sync providers are created through their factories, and `test/sync-example` shows an Extension Author's module. These parts are delivered by the use cases named here, and are accepted gaps of this one:
+
+- Steps 7–8 (publishing, and selecting the extension in a manifest), A5, BR-011 and the scheme clash of BR-002 at build time: UC-001.
+- Staleness (FR-052), the readiness half of BR-005: UC-004.
+- Telemetry injected generically: the gRPC dial options and the stream recorder stay fields of the `flagd-grpc` factory until UC-006 supplies them through the telemetry provider.
+- Fetch triggers that need an inbound endpoint or a vendor: a webhook (UC-004), server-sent events and vendor change events (UC-019). Notifying a system of a change is an event sink (UC-020).
+- The official `http` fetcher answers conditionally with the ETag and the body digest only; sources that answer `If-Modified-Since`, such as the Flagsmith environment document, need their own fetcher (UC-019).
+- flagd-proxy keeps `SyncFromURI`; it moves to the flag sync endpoint in UC-017.
+- TOML decoding, the TOML part of BR-010 and FR-049: the core decodes JSON and YAML only, as before. UC-018 lists the same gap, and no use case delivers it yet; the project lead assigns it to one, or drops TOML from FR-049, BR-010 and UC-018 BR-009.
+- The exported names this use case removed (`NewHTTP`, `NewFileSync`, the fields of `file.Sync`, `polling.Poller`, `CronPoller`, `NewCronPoller`, `NewSourcePoller`, `MockPoller`, `gcs.New`, `azblob.New`, `s3.New`, the fields of `blob.Sync`, and the type `blob.NewSync` returns, now `sync.StreamingSyncProvider`) go into the migration guide of UC-015.

@@ -173,7 +173,17 @@ func (sb *SyncBuilder) createTrigger(config sync.TriggerConfig, resolution Resol
 			return tf.CreateTrigger(sync.Settings{Source: resolution.Source, Logger: log, Config: config.Config})
 		}
 	}
-	return nil, fmt.Errorf("unknown fetch trigger type %q, available: %s", config.Type, strings.Join(sb.triggerTypes(), ", "))
+	return nil, sb.checkTriggerType(config.Type)
+}
+
+// checkTriggerType fails for a fetch trigger type no factory provides, naming the ones available.
+func (sb *SyncBuilder) checkTriggerType(triggerType string) error {
+	for _, t := range sb.triggerTypes() {
+		if t == triggerType {
+			return nil
+		}
+	}
+	return fmt.Errorf("unknown fetch trigger type %q, available: %s", triggerType, strings.Join(sb.triggerTypes(), ", "))
 }
 
 func (sb *SyncBuilder) triggerTypes() []string {
