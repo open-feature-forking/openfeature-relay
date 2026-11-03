@@ -27,3 +27,5 @@ sync/s3:./...:cloud.google.com|github.com/Azure|openfeature-relay/(telemetry|syn
 sync/builder:./...:openfeature-relay/telemetry/
 # The telemetry module imports core only: no sync module and no platform client.
 telemetry/otel:./...:openfeature-relay/sync/|k8s.io|gocloud|cloud.google.com|github.com/Azure|github.com/aws
+# BR-001 of UC-003: the example sync extension imports no sync provider, telemetry, transport or platform client.
+test/sync-example:./...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|open-feature/flagd/flagd|openfeature-relay/(sync|telemetry|evaluator|configformat)/
