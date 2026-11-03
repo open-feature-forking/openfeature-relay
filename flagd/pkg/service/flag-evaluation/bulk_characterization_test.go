@@ -145,6 +145,7 @@ func TestBulkResponseCharacterization(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v: record the current behaviour with `go test -run TestBulkResponseCharacterization -update-bulk`", err)
 	}
+	want = bytes.ReplaceAll(want, []byte("\r\n"), []byte("\n"))
 	if got := out.String(); got != string(want) {
 		wantLines, gotLines := strings.Split(string(want), "\n"), strings.Split(got, "\n")
 		for n := 0; n < len(wantLines) && n < len(gotLines); n++ {
