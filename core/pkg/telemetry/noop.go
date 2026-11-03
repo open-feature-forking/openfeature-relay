@@ -68,6 +68,12 @@ func (noopMeter) Float64Histogram(string, ...InstrumentOption) Float64Histogram 
 	return noopInstrument{}
 }
 
+func (noopMeter) Int64Gauge(string, ...InstrumentOption) Int64Gauge { return noopGauge{} }
+
+type noopGauge struct{}
+
+func (noopGauge) Record(context.Context, int64, ...Attribute) {}
+
 type noopInstrument struct{}
 
 func (noopInstrument) Add(context.Context, int64, ...Attribute) {}

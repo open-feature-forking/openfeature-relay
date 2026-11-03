@@ -196,12 +196,27 @@ func (m meter) Float64Histogram(name string, opts ...coretel.InstrumentOption) c
 	return float64Histogram{h}
 }
 
+func (m meter) Int64Gauge(name string, opts ...coretel.InstrumentOption) coretel.Int64Gauge {
+	description, unit, _ := instrumentOptions(opts)
+	g, err := m.m.Int64Gauge(name, metric.WithDescription(description), metric.WithUnit(unit))
+	if err != nil {
+		otel.Handle(err)
+	}
+	return int64Gauge{g}
+}
+
 // The SDK returns a usable instrument together with an error, so the instruments below are never nil.
 
 type int64Counter struct{ c metric.Int64Counter }
 
 func (c int64Counter) Add(ctx context.Context, incr int64, attrs ...coretel.Attribute) {
 	c.c.Add(ctx, incr, metric.WithAttributes(convert(attrs)...))
+}
+
+type int64Gauge struct{ g metric.Int64Gauge }
+
+func (g int64Gauge) Record(ctx context.Context, value int64, attrs ...coretel.Attribute) {
+	g.g.Record(ctx, value, metric.WithAttributes(convert(attrs)...))
 }
 
 type int64UpDownCounter struct{ c metric.Int64UpDownCounter }

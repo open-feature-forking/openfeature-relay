@@ -222,11 +222,9 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 
 	// build sync providers with a shared source-agnostic sync-metrics recorder so every
 	// provider (grpc, http, file, kubernetes, blob) emits the universal client-side sync
-	// metrics into the same reader as the rest of flagd's otelprovider.
+	// metrics into the same reader as the rest of flagd's telemetry.
 	syncLogger := logger.WithFields(zap.String("component", "sync"))
-	syncMetricsRecorder := otelprovider.NewSyncRecorder(nil)
-	iSyncs, err := syncProvidersFromConfig(
-		syncLogger, syncProviders, syncMetricsRecorder, otelprovider.NewStreamRecorder(nil), config.SyncFactories)
+	iSyncs, err := syncProvidersFromConfig(syncLogger, syncProviders, tp, config.SyncFactories)
 	if err != nil {
 		return nil, err
 	}
@@ -284,22 +282,30 @@ func (c endpointConfigs) forEndpoint(endpointType string) map[string]any {
 	return map[string]any{}
 }
 
+// grpcClientInstrumentation is implemented by a telemetry provider that instruments outbound gRPC connections.
+type grpcClientInstrumentation interface {
+	GRPCDialOptions() []googlegrpc.DialOption
+}
+
 // syncProvidersFromConfig is a helper to build ISync implementations from SourceConfig.
-// The syncMetricsRecorder is forwarded to every sync provider so they can record the
-// universal client-side sync metrics. A nil recorder is safe (methods no-op).
+// The sync providers record the universal client-side sync metrics, and the stream metrics of the gRPC source,
+// through the telemetry provider, whose gRPC client instrumentation the gRPC source dials with.
 func syncProvidersFromConfig(
 	logger *logger.Logger,
 	sources []sync.SourceConfig,
-	syncMetricsRecorder sync.MetricsRecorder,
-	streamMetricsRecorder flagdgrpc.StreamMetricsRecorder,
+	tp telemetry.Provider,
 	extra []sync.Factory,
 ) ([]sync.ISync, error) {
+	var dialOptions []googlegrpc.DialOption
+	if p, ok := tp.(grpcClientInstrumentation); ok {
+		dialOptions = p.GRPCDialOptions()
+	}
 	factories := syncbuilder.OfficialWith(syncbuilder.OfficialOptions{
-		StreamMetrics:   streamMetricsRecorder,
-		GRPCDialOptions: []googlegrpc.DialOption{otelprovider.GRPCClientDialOption()},
+		StreamMetrics:   flagdgrpc.NewStreamMetrics(tp.Meter(flagdgrpc.StreamMetricsScope)),
+		GRPCDialOptions: dialOptions,
 	})
 	builder := syncbuilder.NewSyncBuilder(append(factories, extra...)...)
-	builder.SyncMetricsRecorder = syncMetricsRecorder
+	builder.SyncMetricsRecorder = sync.NewMetricsRecorder(tp.Meter(sync.MetricsScope))
 	syncs, err := builder.SyncsFromConfig(sources, logger)
 	if err != nil {
 		return nil, fmt.Errorf("could not create sync sources from config: %w", err)
