@@ -27,6 +27,7 @@ ConfigurationFormats: []configformat.Factory(nil)
 Evaluators: []evaluator.Factory(nil)
 SyncFactories: []sync.Factory(nil)
 CORS: []string{}
+EndpointSettings: map[string]map[string]interface {}(nil)
 ContextValues: map[string]interface {}{}
 HeaderToContextKeyMappings: map[string]string{}
 MaxRequestBodyBytes: 1000000
@@ -61,6 +62,7 @@ ConfigurationFormats: []configformat.Factory(nil)
 Evaluators: []evaluator.Factory(nil)
 SyncFactories: []sync.Factory(nil)
 CORS: []string{"https://a.cli", "https://b.cli"}
+EndpointSettings: map[string]map[string]interface {}(nil)
 ContextValues: map[string]interface {}{"cliKey1":"cliValue1", "cliKey2":"cliValue2"}
 HeaderToContextKeyMappings: map[string]string{"X-Cli-A":"cliA", "X-Cli-B":"cliB"}
 MaxRequestBodyBytes: 4321
@@ -95,6 +97,7 @@ ConfigurationFormats: []configformat.Factory(nil)
 Evaluators: []evaluator.Factory(nil)
 SyncFactories: []sync.Factory(nil)
 CORS: []string{"https://a.env", "https://b.env"}
+EndpointSettings: map[string]map[string]interface {}(nil)
 ContextValues: map[string]interface {}{"envKey1":"envValue1"}
 HeaderToContextKeyMappings: map[string]string{"X-Env-A":"envA"}
 MaxRequestBodyBytes: 5432
@@ -130,6 +133,7 @@ ConfigurationFormats: []configformat.Factory(nil)
 Evaluators: []evaluator.Factory(nil)
 SyncFactories: []sync.Factory(nil)
 CORS: []string{"https://a.file", "https://b.file"}
+EndpointSettings: map[string]map[string]interface {}(nil)
 ContextValues: map[string]interface {}{"filekey1":"fileValue1"}
 HeaderToContextKeyMappings: map[string]string{"x-file-a":"fileA"}
 MaxRequestBodyBytes: 6543
@@ -165,6 +169,7 @@ ConfigurationFormats: []configformat.Factory(nil)
 Evaluators: []evaluator.Factory(nil)
 SyncFactories: []sync.Factory(nil)
 CORS: []string{}
+EndpointSettings: map[string]map[string]interface {}(nil)
 ContextValues: map[string]interface {}{}
 HeaderToContextKeyMappings: map[string]string{}
 MaxRequestBodyBytes: 1000000
@@ -200,6 +205,7 @@ ConfigurationFormats: []configformat.Factory(nil)
 Evaluators: []evaluator.Factory(nil)
 SyncFactories: []sync.Factory(nil)
 CORS: []string{}
+EndpointSettings: map[string]map[string]interface {}(nil)
 ContextValues: map[string]interface {}{}
 HeaderToContextKeyMappings: map[string]string{}
 MaxRequestBodyBytes: 1000000
