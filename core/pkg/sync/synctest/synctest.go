@@ -195,7 +195,6 @@ func timeoutOr(d time.Duration) time.Duration {
 	return DefaultTimeout
 }
 
-func pass(name string) Case { return Case{Name: name, Passed: true} }
 
 func check(name string, ok bool, expected, observed string) Case {
 	return Case{Name: name, Passed: ok, Expected: expected, Observed: observed}

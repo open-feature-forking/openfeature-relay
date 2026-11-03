@@ -78,11 +78,6 @@ func newCollector(ch <-chan sync.DataSync, done <-chan struct{}) *collector {
 	return c
 }
 
-func (c *collector) count() int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return len(c.deliveries)
-}
 
 // await waits for the delivery with the given index.
 func (c *collector) await(index int, d time.Duration) (sync.DataSync, bool) {

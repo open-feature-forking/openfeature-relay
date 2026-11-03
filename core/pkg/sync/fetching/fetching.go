@@ -309,7 +309,7 @@ func (p *Provider) deliver(ctx context.Context, dataSync chan<- sync.DataSync, f
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-	if !(fallback && p.opts.Legacy.CountOnlyRead) {
+	if !fallback || !p.opts.Legacy.CountOnlyRead {
 		sync.RecordFlagConfigReceived(ctx, p.opts.Metrics, p.opts.SourceType, p.opts.Source, "")
 	}
 	return nil
