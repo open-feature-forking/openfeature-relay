@@ -97,3 +97,9 @@ func ValidateDeclarations(f Factory) error {
 type SourceTyper interface {
 	SourceType() string
 }
+
+// Aliased is implemented by a FetcherFactory that is also selected by other provider names. Each alias names the
+// only fetch trigger attached to a source selected by it.
+type Aliased interface {
+	Aliases() map[string]TriggerConfig
+}
