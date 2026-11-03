@@ -73,7 +73,7 @@ func (s syncHandler) syncFlags(
 	}()
 
 	watcher := make(chan store.FlagQueryResult, 1)
-	selector, err := newSelector(selectorExpression)
+	selector, err := newSelector(ctx, selectorExpression)
 	if err != nil {
 		exitReason = "error"
 		return s.connectError(err)
@@ -168,7 +168,8 @@ func (s syncHandler) GetMetadata(_ context.Context, _ *connect.Request[syncv1.Ge
 		nil
 }
 
-// connectError maps a fetch failure onto a status; both selector failures are InvalidArgument.
+// connectError maps a fetch failure onto a status: a client's selector failures are InvalidArgument, an invalid
+// selector bound by a middleware is Internal.
 func (s syncHandler) connectError(err error) error {
 	fetchErr, ok := errors.AsType[fetchError](err)
 	if !ok {
@@ -178,6 +179,9 @@ func (s syncHandler) connectError(err error) error {
 	switch fetchErr.kind {
 	case fetchSelectorMalformed:
 		return connect.NewError(connect.CodeInvalidArgument, fetchErr.cause)
+	case fetchBoundSelectorInvalid:
+		s.log.Error("invalid bound selector", zap.Error(fetchErr.cause))
+		return connect.NewError(connect.CodeInternal, errors.New("internal error"))
 	case fetchMarshal:
 		s.log.Error("error marshalling flags", zap.Error(fetchErr.cause))
 		return connect.NewError(connect.CodeDataLoss, errors.New("error marshalling flags"))

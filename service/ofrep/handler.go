@@ -19,7 +19,12 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/service/transport"
 	"github.com/open-feature-forking/openfeature-relay/service/transport/middleware"
 	"github.com/rs/xid"
+	"go.uber.org/zap"
 )
+
+// internalErrorDetails is what a client learns of a request the server could not handle because of its own
+// configuration.
+const internalErrorDetails = "internal error"
 
 const (
 	key              = "key"
@@ -130,7 +135,16 @@ func (h *handler) HandleFlagEvaluation(w http.ResponseWriter, r *http.Request) {
 	}
 	evaluationContext := flagdContext(h.Logger, requestID, request, h.contextValues, r.Header, h.headerToContextKeyMappings)
 	selectorExpression := r.Header.Get(service.FLAGD_SELECTOR_HEADER)
-	selector, err := store.NewSelector(selectorExpression)
+	selector, err := service.RequestSelector(r.Context(), selectorExpression)
+	if errors.Is(err, service.ErrInvalidBoundSelector) {
+		h.Logger.Error("invalid bound selector", zap.Error(err))
+		h.writeJSONToResponse(http.StatusInternalServerError, ofrep.EvaluationError{
+			Key:          flagKey,
+			ErrorCode:    model.GeneralErrorCode,
+			ErrorDetails: internalErrorDetails,
+		}, w)
+		return
+	}
 	if err != nil {
 		h.writeJSONToResponse(http.StatusBadRequest, ofrep.EvaluationError{
 			Key:          flagKey,
@@ -141,7 +155,15 @@ func (h *handler) HandleFlagEvaluation(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := context.WithValue(r.Context(), store.SelectorContextKey{}, selector)
 
-	evaluation := h.evaluator.ResolveAsAnyValue(ctx, requestID, flagKey, evaluationContext)
+	var evaluation evaluator.AnyValue
+	if service.MatchesNoFlags(selector) {
+		// the bound and the client's selectors conflict: no flag matches both
+		evaluation = evaluator.AnyValue{
+			FlagKey: flagKey, Reason: model.ErrorReason, Metadata: model.Metadata{}, Error: errors.New(model.FlagNotFoundErrorCode),
+		}
+	} else {
+		evaluation = h.evaluator.ResolveAsAnyValue(ctx, requestID, flagKey, evaluationContext)
+	}
 	if h.metricsRecorder != nil {
 		h.metricsRecorder.RecordEvaluation(
 			ctx, evaluation.Error, evaluation.Reason, evaluation.Variant, evaluation.FlagKey,
@@ -169,7 +191,13 @@ func (h *handler) HandleBulkEvaluation(w http.ResponseWriter, r *http.Request) {
 
 	evaluationContext := flagdContext(h.Logger, requestID, request, h.contextValues, r.Header, h.headerToContextKeyMappings)
 	selectorExpression := r.Header.Get(service.FLAGD_SELECTOR_HEADER)
-	selector, err := store.NewSelector(selectorExpression)
+	selector, err := service.RequestSelector(r.Context(), selectorExpression)
+	if errors.Is(err, service.ErrInvalidBoundSelector) {
+		h.Logger.Error("invalid bound selector", zap.Error(err))
+		res := ofrep.BulkEvaluationContextErrorFrom(model.GeneralErrorCode, internalErrorDetails)
+		h.writeJSONToResponse(http.StatusInternalServerError, res, w)
+		return
+	}
 	if err != nil {
 		res := ofrep.BulkEvaluationContextErrorFrom(model.GeneralErrorCode, fmt.Sprintf("invalid selector: %v", err))
 		h.writeJSONToResponse(http.StatusBadRequest, res, w)
@@ -196,7 +224,7 @@ func (h *handler) HandleBulkEvaluation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.writeJSONToResponse(http.StatusOK,
-		h.bulkResponse(selectorExpression, evaluations, metadata, h.configLastModified(selectorExpression)), w)
+		h.bulkResponse(selectorExpression, evaluations, metadata, h.configLastModified(sse.Channel(ctx, selectorExpression, selector))), w)
 }
 
 // configLastModified reports when the flag configuration behind the selector last changed, or 0
@@ -262,7 +290,12 @@ func (h *handler) configEtagDiffers(r *http.Request) bool {
 		return false
 	}
 
-	current, _, ok := h.versioner.Version(r.Header.Get(service.FLAGD_SELECTOR_HEADER))
+	expression := r.Header.Get(service.FLAGD_SELECTOR_HEADER)
+	selector, err := service.RequestSelector(r.Context(), expression)
+	if err != nil {
+		return false
+	}
+	current, _, ok := h.versioner.Version(sse.Channel(r.Context(), expression, selector))
 	if !ok {
 		return false
 	}

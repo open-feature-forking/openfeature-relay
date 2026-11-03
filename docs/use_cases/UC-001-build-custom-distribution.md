@@ -10,7 +10,7 @@
 **Trigger:** Distribution Builder needs a flagd with a set of components that no standard distribution offers  
 **Status:** Implemented  
 
-**Requirements:** [FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007, FR-008, FR-017, FR-018, FR-034, NFR-008, C-001](../requirements.md)
+**Requirements:** [FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007, FR-008, FR-017, FR-018, FR-034, NFR-008, NFR-010, C-001](../requirements.md)
 
 ## Preconditions
 

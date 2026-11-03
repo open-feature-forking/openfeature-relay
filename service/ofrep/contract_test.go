@@ -17,7 +17,7 @@ import (
 
 // TestOFREPContract runs the service endpoint contract on the OFREP endpoint. It names the features it does not
 // have through the contract's inputs: it serves no documents, collects no events, gives clients no validator
-// outside a live event stream, and does not honour a selector bound by middleware yet (UC-005).
+// outside a live event stream. It honours a selector bound by middleware.
 func TestOFREPContract(t *testing.T) {
 	sse := func(ctx context.Context, addr, selector string) (*http.Response, error) {
 		path := "/ofrep/v1/sse"
@@ -33,12 +33,13 @@ func TestOFREPContract(t *testing.T) {
 
 	servicetest.Run(t, Factory{}, servicetest.Inputs{
 		PortKey: "port",
+		HTTP:    true,
 		Config: map[string]any{ConfigKey: EndpointConfig{
 			Service: SvcConfiguration{ServiceName: "flagd", SSEEnabled: true, SSEInactivityDelaySec: 60},
 			Formats: []string{"flagd", servicetest.VendorFormat},
 		}},
 		Without: []servicetest.Feature{
-			servicetest.FeatureDocuments, servicetest.FeatureValidator, servicetest.FeatureSendEvents, servicetest.FeatureHTTP,
+			servicetest.FeatureDocuments, servicetest.FeatureValidator, servicetest.FeatureSendEvents,
 		},
 		Connect: func(_ context.Context, addr string) (<-chan struct{}, error) {
 			resp, err := sse(context.Background(), addr, "")
