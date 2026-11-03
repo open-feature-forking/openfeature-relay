@@ -87,7 +87,7 @@ func start(
 		SyncProviders:                providers,
 		ConfigurationFormats:         []configformat.Factory{factory},
 		SyncFactories:                extra,
-	})
+	}, runtime.Official())
 	require.NoError(t, err)
 
 	done := make(chan error, 1)

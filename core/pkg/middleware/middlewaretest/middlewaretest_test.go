@@ -202,7 +202,7 @@ func TestBrokenStubsFailExactlyTheirCases(t *testing.T) {
 		{bugBindsWrongType, []string{middlewaretest.CaseBindings}},
 	}
 	for _, tt := range tests {
-		report := middlewaretest.Check(stubFactory{typ: "stub", bug: tt.bug}, inputs())
+		report := middlewaretest.Check(t, stubFactory{typ: "stub", bug: tt.bug}, inputs())
 		if report.Aborted != "" {
 			t.Errorf("bug %d: aborted: %s", tt.bug, report.Aborted)
 			continue
@@ -219,7 +219,7 @@ func TestBrokenStubsFailExactlyTheirCases(t *testing.T) {
 }
 
 func TestAbortedRuns(t *testing.T) {
-	noInputs := middlewaretest.Check(stubFactory{typ: "stub"}, middlewaretest.Inputs{Config: map[string]any{"key": goodKey}})
+	noInputs := middlewaretest.Check(t, stubFactory{typ: "stub"}, middlewaretest.Inputs{Config: map[string]any{"key": goodKey}})
 	for _, name := range []string{"Inputs.Passed", "Inputs.Answered", "Inputs.InvalidConfig", "Inputs.FaultyValue",
 		middlewaretest.CasePassesUnchanged, middlewaretest.CaseAnswered, middlewaretest.CaseInvalidConfig} {
 		if !strings.Contains(noInputs.Aborted, name) {
@@ -229,15 +229,15 @@ func TestAbortedRuns(t *testing.T) {
 	if len(noInputs.Cases) != 0 || !noInputs.Failed() {
 		t.Error("a run with missing inputs exercised cases or passed")
 	}
-	if r := middlewaretest.Check(stubFactory{typ: " "}, inputs()); !strings.Contains(r.Aborted, "type name") {
+	if r := middlewaretest.Check(t, stubFactory{typ: " "}, inputs()); !strings.Contains(r.Aborted, "type name") {
 		t.Errorf("empty type: aborted %q", r.Aborted)
 	}
-	if r := middlewaretest.Check(stubFactory{typ: "stub", bug: bugNilMiddleware}, inputs()); !strings.Contains(r.Aborted, "cannot create") {
+	if r := middlewaretest.Check(t, stubFactory{typ: "stub", bug: bugNilMiddleware}, inputs()); !strings.Contains(r.Aborted, "cannot create") {
 		t.Errorf("nil middleware: aborted %q", r.Aborted)
 	}
 	in := inputs()
 	in.Config = map[string]any{"key": 7}
-	if r := middlewaretest.Check(stubFactory{typ: "stub"}, in); !strings.Contains(r.Aborted, "7 is not a string") {
+	if r := middlewaretest.Check(t, stubFactory{typ: "stub"}, in); !strings.Contains(r.Aborted, "7 is not a string") {
 		t.Errorf("factory failure: aborted %q", r.Aborted)
 	}
 }
@@ -254,7 +254,7 @@ func TestContractOnMiddlewareThatBindsNoSelector(t *testing.T) {
 }
 
 func TestBindingASelectorThatWasNotExpectedFailsOnlyTheBindings(t *testing.T) {
-	report := middlewaretest.Check(stubFactory{typ: "stub", attributesOnly: true, bug: bugBindsUnaskedSelector}, attributesInputs())
+	report := middlewaretest.Check(t, stubFactory{typ: "stub", attributesOnly: true, bug: bugBindsUnaskedSelector}, attributesInputs())
 
 	if report.Aborted != "" {
 		t.Fatalf("aborted: %s", report.Aborted)

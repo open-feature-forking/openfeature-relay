@@ -39,6 +39,33 @@ func NewEvaluator(log *logger.Logger, s store.IStore, opts ...flagdeval.JSONEval
 func NewRoutedEvaluator(
 	log *logger.Logger, st *store.Store, formats []string, extra []evaluator.Factory, opts ...flagdeval.JSONEvaluatorOption,
 ) (evaluator.IEvaluator, error) {
+	rt, err := NewRouter(log, st, formats, extra, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return routed{IResolver: rt.Resolver(), json: rt.json}, nil
+}
+
+// Router is the evaluation router of a distribution, with flagd's evaluator behind its first route.
+type Router struct {
+	*router.Router
+	json *flagdeval.JSON
+}
+
+// Resolver returns the typed calls over the router; options are those of the typed adapter, for example an
+// observer of the resolutions.
+func (r *Router) Resolver(opts ...typed.Option) evaluator.IResolver {
+	return typed.New(r.Router, append(typedOptions(r.json), opts...)...)
+}
+
+// IEvaluator returns the typed calls over the router with the state updates of flagd's evaluator, for a caller
+// that holds the distribution's one evaluator.
+func (r *Router) IEvaluator() evaluator.IEvaluator { return routed{IResolver: r.Resolver(), json: r.json} }
+
+// NewRouter builds the router of a distribution: the formats and extra evaluators are as for NewRoutedEvaluator.
+func NewRouter(
+	log *logger.Logger, st *store.Store, formats []string, extra []evaluator.Factory, opts ...flagdeval.JSONEvaluatorOption,
+) (*Router, error) {
 	available := append([]string{flagdformat.Type}, formats...)
 	sort.Strings(available[1:])
 
@@ -68,7 +95,7 @@ func NewRoutedEvaluator(
 	if err != nil {
 		return nil, err
 	}
-	return routed{IResolver: typed.New(rt, typedOptions(jsonEvaluator)...), json: jsonEvaluator}, nil
+	return &Router{Router: rt, json: jsonEvaluator}, nil
 }
 
 // routed is the typed calls over the router, with the state updates of flagd's evaluator.

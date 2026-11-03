@@ -13,7 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestPortInUse pins which step fails, and with which error, when a port an endpoint listens on is taken.
+// TestPortInUse pins which step fails, and with which error, when a port an endpoint listens on is taken. The
+// management port is the runtime's own: its error no longer comes through the flag evaluation service.
 func TestPortInUse(t *testing.T) {
 	tests := []struct {
 		name string
@@ -25,22 +26,22 @@ func TestPortInUse(t *testing.T) {
 		{
 			name:  "management port",
 			port:  func(c *Config) *uint16 { return &c.ManagementPort },
-			start: "error returned from serving flag evaluation service: errgroup closed with error: listen tcp :%d: bind: address already in use",
+			start: "error from the management port: listen tcp :%d: bind: address already in use",
 		},
 		{
 			name:  "flag evaluation port",
 			port:  func(c *Config) *uint16 { return &c.ServicePort },
-			start: "error returned from serving flag evaluation service: errgroup closed with error: error creating listener for flag evaluation service: listen tcp :%d: bind: address already in use",
+			start: "error from service endpoint \"flag-evaluation\": error creating listener for flag evaluation service: listen tcp :%d: bind: address already in use",
 		},
 		{
 			name:  "OFREP port",
 			port:  func(c *Config) *uint16 { return &c.OfrepServicePort },
-			start: "error from ofrep server: error from ofrep service: error from ofrep service: listen tcp :%d: bind: address already in use",
+			start: "error from service endpoint \"ofrep\": error from ofrep service: error from ofrep service: listen tcp :%d: bind: address already in use",
 		},
 		{
 			name:       "flag sync port",
 			port:       func(c *Config) *uint16 { return &c.SyncServicePort },
-			fromConfig: "error creating sync service: error creating listener: listen tcp :%d: bind: address already in use",
+			fromConfig: "error creating the service endpoint \"flag-sync\": error creating sync service: error creating listener: listen tcp :%d: bind: address already in use",
 		},
 	}
 	for _, tt := range tests {
@@ -51,7 +52,7 @@ func TestPortInUse(t *testing.T) {
 			require.NoError(t, err)
 			defer l.Close()
 
-			rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg)
+			rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, Official())
 			if tt.fromConfig != "" {
 				require.EqualError(t, err, fmt.Sprintf(tt.fromConfig, *busy))
 				return

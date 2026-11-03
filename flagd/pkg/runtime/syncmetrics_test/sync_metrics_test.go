@@ -134,7 +134,7 @@ func TestSyncMetricsCharacterization(t *testing.T) {
 			{URI: addr, Provider: "grpc"},
 			{URI: addr, Provider: "grpc", Selector: "source=a"},
 		},
-	})
+	}, runtime.Official())
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
