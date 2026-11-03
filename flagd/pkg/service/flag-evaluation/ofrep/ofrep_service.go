@@ -37,6 +37,9 @@ type SvcConfiguration struct {
 	SSEEnabled            bool
 	SSEInactivityDelaySec int
 	SSEPublicURL          string
+
+	// HTTPMiddleware wraps the routes after CORS and before the router. Nil means none.
+	HTTPMiddleware func(http.Handler) http.Handler
 }
 
 type Service struct {
@@ -103,6 +106,9 @@ func NewOfrepService(
 	mux.Handle("/", evaluateHandler)
 
 	var h http.Handler = mux
+	if cfg.HTTPMiddleware != nil {
+		h = cfg.HTTPMiddleware(h)
+	}
 	h = corsMiddleware.Handler(h)
 
 	server := http.Server{

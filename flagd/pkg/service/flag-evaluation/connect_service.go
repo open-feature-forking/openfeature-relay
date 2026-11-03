@@ -106,6 +106,8 @@ type ConnectService struct {
 	readinessEnabled bool
 	// withoutManagement leaves the management port to the runtime.
 	withoutManagement bool
+	// httpMiddleware is the distribution's middleware, applied after CORS and before the instrumentation.
+	httpMiddleware func(http.Handler) http.Handler
 }
 
 // DisableManagement leaves the management port, health, readiness and metrics, to the runtime: Serve then serves
@@ -255,6 +257,9 @@ func (s *ConnectService) setupHandler(svcConf service.Configuration) {
 	})
 
 	s.AddMiddleware(metricsMiddleware)
+	if s.httpMiddleware != nil {
+		s.server.Handler = s.httpMiddleware(s.server.Handler)
+	}
 
 	corsMiddleware := corsmw.New(svcConf.CORS)
 	s.AddMiddleware(corsMiddleware)
