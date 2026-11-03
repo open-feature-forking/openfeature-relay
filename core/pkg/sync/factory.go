@@ -91,3 +91,9 @@ func ValidateDeclarations(f Factory) error {
 	}
 	return errors.New(strings.Join(problems, "; "))
 }
+
+// SourceTyper is implemented by a factory whose components record the sync metrics under a source type other than
+// the factory's Type(), such as the cloud providers, which all record "blob".
+type SourceTyper interface {
+	SourceType() string
+}

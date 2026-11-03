@@ -268,6 +268,9 @@ func (p *Provider) fetchLocked(ctx context.Context, dataSync chan<- sync.DataSyn
 	}
 
 	if result.Unchanged {
+		if result.Version != "" && !force {
+			p.version = result.Version
+		}
 		p.opts.Logger.Debug(fmt.Sprintf("%s has not changed", p.opts.Source))
 		return nil
 	}

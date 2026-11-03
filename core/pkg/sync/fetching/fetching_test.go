@@ -656,3 +656,32 @@ func TestLegacy(t *testing.T) {
 		require.EqualError(t, r.result(t), "watcher closed")
 	})
 }
+
+func TestUnchangedAdoptsTheVersionItCarries(t *testing.T) {
+	var mu gosync.Mutex
+	var previous []string
+	fetcher := fetcherFunc(func(_ context.Context, p string) (sync.FetchResult, error) {
+		mu.Lock()
+		previous = append(previous, p)
+		mu.Unlock()
+		if p == "" {
+			return result("v1", flagsV1), nil
+		}
+		return sync.FetchResult{Unchanged: true, Version: "v1-moved"}, nil
+	})
+	trigger := newManualTrigger()
+	r := start(t, Options{Fetcher: fetcher, Triggers: []sync.Trigger{trigger}})
+	r.next(t)
+
+	signal := trigger.signal(t)
+	signal()
+	signal()
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(previous) >= 3
+	}, timeout, time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	require.Equal(t, []string{"", "v1", "v1-moved"}, previous[:3])
+}

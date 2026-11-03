@@ -36,7 +36,9 @@ type FetchResult struct {
 	// Version is the source version: an opaque value (an ETag, a content hash, a generation) that identifies Data. The
 	// provider hands it back as previous on the next fetch.
 	Version string
-	// Unchanged reports that the source still has the flag configuration of previous. Data is then ignored.
+	// Unchanged reports that the source still has the flag configuration of previous. Data is then ignored. A
+	// non-empty Version replaces previous for the next fetch, for a source whose validator moved while its content
+	// did not.
 	Unchanged bool
 }
 
