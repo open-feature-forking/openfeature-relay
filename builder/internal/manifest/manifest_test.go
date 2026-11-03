@@ -99,15 +99,15 @@ func TestManifestValidation(t *testing.T) {
 		},
 		"version of the distribution": {
 			strings.Replace(valid, "version: 1.2.0", "version: latest", 1),
-			[]string{`2:3 dist: version "latest" is not a semantic version`},
+			[]string{`3:12 dist: version "latest" is not a semantic version`},
 		},
 		"name of the distribution": {
 			strings.Replace(valid, "name: flagd-custom", "name: my distribution", 1),
-			[]string{`2:3 dist: name "my distribution"`},
+			[]string{`2:9 dist: name "my distribution"`},
 		},
 		"binary name": {
 			strings.Replace(valid, "output_path: ./build/custom", "output_path: ./build/custom\n  binary: bin/flagd", 1),
-			[]string{`2:3 dist: binary "bin/flagd" is not a file name`},
+			[]string{`5:11 dist: binary "bin/flagd" is not a file name`},
 		},
 		"unknown key in dist": {
 			strings.Replace(valid, "output_path: ./build/custom", "output_path: ./build/custom\n  color: red", 1),
@@ -115,15 +115,15 @@ func TestManifestValidation(t *testing.T) {
 		},
 		"moving reference": {
 			strings.Replace(valid, "version: v0.1.0", "version: latest", 1),
-			[]string{`6:5 sync_providers[0]: version "latest" is not an exact semantic version`},
+			[]string{`7:14 sync_providers[0]: version "latest" is not an exact semantic version`},
 		},
 		"version range": {
 			strings.Replace(valid, "service_endpoints:\n  - module: example.com/service/ofrep\n    version: v0.1.0", "service_endpoints:\n  - module: example.com/service/ofrep\n    version: ^0.1.0", 1),
-			[]string{`15:5 service_endpoints[0]: version "^0.1.0" is not an exact semantic version`},
+			[]string{`16:14 service_endpoints[0]: version "^0.1.0" is not an exact semantic version`},
 		},
 		"version without v": {
 			strings.Replace(valid, "evaluators:\n  - module: example.com/evaluator/flagd\n    version: v0.1.0", "evaluators:\n  - module: example.com/evaluator/flagd\n    version: 0.1.0", 1),
-			[]string{`12:5 evaluators[0]: version "0.1.0" is not an exact semantic version`},
+			[]string{`13:14 evaluators[0]: version "0.1.0" is not an exact semantic version`},
 		},
 		"no version": {
 			strings.Replace(valid, "    version: v0.1.0\nconfiguration_formats", "configuration_formats", 1),
@@ -135,23 +135,23 @@ func TestManifestValidation(t *testing.T) {
 		},
 		"module that is no path": {
 			strings.Replace(valid, "example.com/sync/file", "not a path", 1),
-			[]string{`6:5 sync_providers[0]: module "not a path" is not a module path`},
+			[]string{`6:13 sync_providers[0]: module "not a path" is not a module path`},
 		},
 		"module listed twice in a group": {
 			valid + "middleware:\n  - module: example.com/sync/file\n    version: v0.1.0\n",
-			[]string{"18:5 middleware[0]: the module example.com/sync/file is listed more than once (BR-004); it is already at 6:5, sync_providers[0]"},
+			[]string{"18:13 middleware[0]: the module example.com/sync/file is listed more than once (BR-004); it is already at 6:13, sync_providers[0]"},
 		},
 		"module listed twice across groups": {
 			strings.Replace(valid, "  - module: example.com/service/ofrep", "  - module: example.com/evaluator/flagd", 1),
-			[]string{"15:5 service_endpoints[0]: the module example.com/evaluator/flagd is listed more than once (BR-004); it is already at 12:5, evaluators[0]"},
+			[]string{"15:13 service_endpoints[0]: the module example.com/evaluator/flagd is listed more than once (BR-004); it is already at 12:13, evaluators[0]"},
 		},
 		"the runtime is a module too": {
 			valid + "runtime: {module: example.com/sync/file, version: v0.1.0}\n",
-			[]string{"6:5 sync_providers[0]: the module example.com/sync/file is listed more than once (BR-004); it is already at 17:10, runtime"},
+			[]string{"6:13 sync_providers[0]: the module example.com/sync/file is listed more than once (BR-004); it is already at 17:19, runtime"},
 		},
 		"import outside the module": {
 			strings.Replace(valid, "  - module: example.com/sync/file\n    version: v0.1.0", "  - module: example.com/sync/file\n    version: v0.1.0\n    import: example.com/other/pkg", 1),
-			[]string{`6:5 sync_providers[0]: import "example.com/other/pkg" is not a package of the module example.com/sync/file`},
+			[]string{`8:13 sync_providers[0]: import "example.com/other/pkg" is not a package of the module example.com/sync/file`},
 		},
 		"no sync provider": {
 			strings.Replace(valid, "sync_providers:\n  - module: example.com/sync/file\n    version: v0.1.0\n", "sync_providers: []\n", 1),
@@ -196,9 +196,21 @@ func TestManifestValidation(t *testing.T) {
 			strings.Replace(valid, "  - module: example.com/sync/file\n    version: v0.1.0", "  - example.com/sync/file@v0.1.0", 1),
 			[]string{"6:5 sync_providers[0]: must be a mapping"},
 		},
+		"key twice in dist": {
+			strings.Replace(valid, "  version: 1.2.0\n", "  version: 1.2.0\n  version: latest\n", 1),
+			[]string{`4:3 dist: the key "version" appears more than once; it is first at 3:3`},
+		},
+		"key twice in an entry": {
+			strings.Replace(valid, "  - module: example.com/sync/file\n    version: v0.1.0\n", "  - module: example.com/sync/file\n    version: v0.1.0\n    module: example.com/sync/http\n", 1),
+			[]string{`8:5 sync_providers[0]: the key "module" appears more than once; it is first at 6:5`},
+		},
+		"key twice in a flow entry": {
+			valid + "runtime: {module: example.com/runtime, version: v0.1.0, version: v0.2.0}\n",
+			[]string{`17:57 runtime: the key "version" appears more than once; it is first at 17:40`},
+		},
 		"key twice": {
 			valid + "dist:\n  name: again\n",
-			[]string{`17:1 : the key "dist" appears more than once`},
+			[]string{`17:1 : the key "dist" appears more than once; it is first at 1:1`},
 		},
 		"empty manifest": {
 			"",
@@ -247,17 +259,41 @@ service_endpoints:
 `
 	got := problems(t, text)
 	require.Len(t, got, 5, "problems: %v", got)
-	require.Contains(t, got[0], "2:3 dist: version \"soon\"")
-	require.Contains(t, got[1], "6:5 sync_providers[0]: version \"latest\"")
-	require.Contains(t, got[2], "8:5 sync_providers[1]: version \"v1\"")
-	require.Contains(t, got[3], "11:5 configuration_formats[0]: the module example.com/sync/file is listed more than once")
+	require.Contains(t, got[0], "3:12 dist: version \"soon\"")
+	require.Contains(t, got[1], "7:14 sync_providers[0]: version \"latest\"")
+	require.Contains(t, got[2], "9:14 sync_providers[1]: version \"v1\"")
+	require.Contains(t, got[3], "11:13 configuration_formats[0]: the module example.com/sync/file is listed more than once (BR-004); it is already at 6:13")
 	require.Contains(t, got[4], "14:5 service_endpoints[0]: module is mandatory")
 
 	m := parse(t, text)
 	err := m.Validate()
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "manifest.yaml:6:5: sync_providers[0]:")
+	require.Contains(t, err.Error(), "manifest.yaml:7:14: sync_providers[0]:")
 	require.Contains(t, err.Error(), "5 problem(s)")
+}
+
+// A problem with a field is reported at the field's own line and column, not at its block (A1), so that an editor
+// jumps to the faulty value.
+func TestFieldProblemsPointAtTheField(t *testing.T) {
+	text := `dist:
+  name: flagd-custom
+  output_path: out
+  module: "not a module"
+  version: 1.0.0
+sync_providers:
+  - version: v0.1.0
+    import: other.com/pkg
+    module: example.com/sync/file
+configuration_formats: [{module: example.com/configformat/flagd, version: v0.1.0}]
+service_endpoints:
+  - module: example.com/service/ofrep
+    version: v1.0
+`
+	got := problems(t, text)
+	require.Len(t, got, 3, "problems: %v", got)
+	require.Contains(t, got[0], `4:11 dist: module "not a module" is not a module path`)
+	require.Contains(t, got[1], `8:13 sync_providers[0]: import "other.com/pkg" is not a package of the module example.com/sync/file`)
+	require.Contains(t, got[2], `13:14 service_endpoints[0]: version "v1.0"`)
 }
 
 func TestLoadReportsAnUnreadableFileAndAnInvalidOne(t *testing.T) {
@@ -324,7 +360,7 @@ func TestReplaceToMissingOrWrongModule(t *testing.T) {
 	t.Run("the path is read relative to the manifest, not to the working directory", func(t *testing.T) {
 		got, _ := check("  - {module: example.com/sync/file, path: components/sync/file}\n")
 		require.Len(t, got, 1)
-		require.Contains(t, got[0], "18:5 replaces[0]")
+		require.Contains(t, got[0], "18:43 replaces[0]")
 		require.Contains(t, got[0], "does not exist")
 		require.Contains(t, got[0], "(BR-007)")
 	})
@@ -351,11 +387,16 @@ func TestReplaceToMissingOrWrongModule(t *testing.T) {
 	t.Run("every faulty replace is reported", func(t *testing.T) {
 		got, _ := check("  - {module: example.com/sync/file, path: ../../nowhere}\n  - {module: example.com/other, path: ../../components/sync/file}\n  - {module: example.com/sync/file, path: ../../components/sync/file}\n  - {path: x}\n  - {module: example.com/x}\n")
 		require.Len(t, got, 5, "problems: %v", got)
-		require.Contains(t, got[0], "18:5 replaces[0]")
-		require.Contains(t, got[1], "19:5 replaces[1]")
-		require.Contains(t, got[2], "20:5 replaces[2]: the module example.com/sync/file is replaced more than once")
+		require.Contains(t, got[0], "18:43 replaces[0]")
+		require.Contains(t, got[1], "19:39 replaces[1]")
+		require.Contains(t, got[2], "20:14 replaces[2]: the module example.com/sync/file is replaced more than once; it is already replaced at 18:14")
 		require.Contains(t, got[3], "21:5 replaces[3]: module is mandatory")
 		require.Contains(t, got[4], "22:5 replaces[4]: path is mandatory")
+	})
+	t.Run("a key twice", func(t *testing.T) {
+		got, _ := check("  - module: example.com/sync/file\n    path: ../../components/sync/file\n    path: ../../nowhere\n")
+		require.Len(t, got, 1)
+		require.Contains(t, got[0], `20:5 replaces[0]: the key "path" appears more than once; it is first at 19:5`)
 	})
 	t.Run("an unknown key", func(t *testing.T) {
 		got, _ := check("  - {module: example.com/sync/file, path: ../../components/sync/file, local: yes}\n")

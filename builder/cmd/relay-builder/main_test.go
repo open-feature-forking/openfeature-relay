@@ -56,8 +56,8 @@ func TestCLIValidateOnly(t *testing.T) {
 		code, stdout, stderr := exec("--manifest", path)
 		require.Equal(t, 1, code)
 		require.Empty(t, stdout)
-		require.Contains(t, stderr, path+":2:3: dist: version \"soon\"")
-		require.Contains(t, stderr, path+":6:5: sync_providers[0]: version \"latest\"")
+		require.Contains(t, stderr, path+":3:12: dist: version \"soon\"")
+		require.Contains(t, stderr, path+":7:14: sync_providers[0]: version \"latest\"")
 		require.Contains(t, stderr, "2 problem(s)")
 	})
 

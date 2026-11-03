@@ -33,14 +33,8 @@ func Parse(file string, data []byte) (*Manifest, error) {
 		return m, nil
 	}
 
-	seen := map[string]bool{}
-	for _, kv := range pairs(root) {
+	for _, kv := range m.uniquePairs(root, "") {
 		key := kv.key.Value
-		if seen[key] {
-			m.add(positionOf(kv.key), "", fmt.Sprintf("the key %q appears more than once", key))
-			continue
-		}
-		seen[key] = true
 		m.groupPos[key] = positionOf(kv.key)
 		switch key {
 		case "dist":
@@ -112,10 +106,19 @@ func (m *Manifest) add(pos Position, where, reason string) {
 	m.parseProblems = append(m.parseProblems, Problem{File: m.File, Pos: pos, Where: where, Reason: reason})
 }
 
-func pairs(n *yaml.Node) []pair {
+// uniquePairs returns the key-value pairs of a mapping node. yaml.v3 keeps a key that appears twice, so each repeat is
+// reported with the position of the first and left out: a manifest is an exact record, and no value silently wins.
+func (m *Manifest) uniquePairs(n *yaml.Node, where string) []pair {
 	out := make([]pair, 0, len(n.Content)/2)
+	first := map[string]Position{}
 	for i := 0; i+1 < len(n.Content); i += 2 {
-		out = append(out, pair{n.Content[i], n.Content[i+1]})
+		key := n.Content[i]
+		if pos, dup := first[key.Value]; dup {
+			m.add(positionOf(key), where, fmt.Sprintf("the key %q appears more than once; it is first at %s", key.Value, pos))
+			continue
+		}
+		first[key.Value] = positionOf(key)
+		out = append(out, pair{key, n.Content[i+1]})
 	}
 	return out
 }
@@ -133,14 +136,16 @@ func (m *Manifest) scalar(n *yaml.Node, where, key string) (string, bool) {
 
 func (m *Manifest) parseDist(n *yaml.Node) {
 	m.Dist.Pos = positionOf(n)
+	m.Dist.fields = fields{}
 	if n.Kind != yaml.MappingNode {
 		m.add(positionOf(n), "dist", "dist must be a mapping of name, version and output_path")
 		return
 	}
-	for _, kv := range pairs(n) {
+	for _, kv := range m.uniquePairs(n, "dist") {
 		set := func(dst *string) {
 			if v, ok := m.scalar(kv.value, "dist", kv.key.Value); ok {
 				*dst = v
+				m.Dist.fields[kv.key.Value] = positionOf(kv.value)
 			}
 		}
 		switch kv.key.Value {
@@ -182,16 +187,17 @@ func (m *Manifest) parseEntries(n *yaml.Node, group string) []Entry {
 }
 
 func (m *Manifest) parseEntry(n *yaml.Node, where string) (Entry, bool) {
-	e := Entry{Pos: positionOf(n)}
+	e := Entry{Pos: positionOf(n), fields: fields{}}
 	if n.Kind != yaml.MappingNode {
 		m.add(positionOf(n), where, "must be a mapping with a module and a version")
 		return e, false
 	}
 	ok := true
-	for _, kv := range pairs(n) {
+	for _, kv := range m.uniquePairs(n, where) {
 		set := func(dst *string) {
 			if v, good := m.scalar(kv.value, where, kv.key.Value); good {
 				*dst = v
+				e.fields[kv.key.Value] = positionOf(kv.value)
 			} else {
 				ok = false
 			}
@@ -220,16 +226,17 @@ func (m *Manifest) parseReplaces(n *yaml.Node) {
 	}
 	for i, item := range n.Content {
 		where := fmt.Sprintf("replaces[%d]", i)
-		r := Replace{Pos: positionOf(item)}
+		r := Replace{Pos: positionOf(item), fields: fields{}}
 		if item.Kind != yaml.MappingNode {
 			m.add(positionOf(item), where, "must be a mapping with a module and a path")
 			m.Replaces = append(m.Replaces, r)
 			continue
 		}
-		for _, kv := range pairs(item) {
+		for _, kv := range m.uniquePairs(item, where) {
 			set := func(dst *string) {
 				if v, ok := m.scalar(kv.value, where, kv.key.Value); ok {
 					*dst = v
+					r.fields[kv.key.Value] = positionOf(kv.value)
 				}
 			}
 			switch kv.key.Value {

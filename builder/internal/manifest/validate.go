@@ -105,24 +105,25 @@ func (m *Manifest) validateDist(add adder, anchor func(string) Position) {
 		add(anchor("dist"), "", "dist is mandatory: it names the distribution, its version and the output location (BR-001)")
 		return
 	}
+	at := func(field string) Position { return m.Dist.fields.at(field, pos) }
 	if m.Dist.Name == "" {
 		add(pos, "dist", "name is mandatory (BR-001)")
 	} else if !distName.MatchString(m.Dist.Name) {
-		add(pos, "dist", "name %q may hold letters, digits, dots, hyphens and underscores, and starts with a letter or digit", m.Dist.Name)
+		add(at("name"), "dist", "name %q may hold letters, digits, dots, hyphens and underscores, and starts with a letter or digit", m.Dist.Name)
 	}
 	if m.Dist.Version == "" {
 		add(pos, "dist", "version is mandatory (BR-001)")
 	} else if !semver.MatchString(m.Dist.Version) {
-		add(pos, "dist", "version %q is not a semantic version", m.Dist.Version)
+		add(at("version"), "dist", "version %q is not a semantic version", m.Dist.Version)
 	}
 	if m.Dist.OutputPath == "" {
 		add(pos, "dist", "output_path is mandatory (BR-001)")
 	}
 	if m.Dist.Module != "" && !modulePath.MatchString(m.Dist.Module) {
-		add(pos, "dist", "module %q is not a module path", m.Dist.Module)
+		add(at("module"), "dist", "module %q is not a module path", m.Dist.Module)
 	}
 	if m.Dist.Binary != "" && !binaryName.MatchString(m.Dist.Binary) {
-		add(pos, "dist", "binary %q is not a file name: use letters, digits, dots, hyphens and underscores", m.Dist.Binary)
+		add(at("binary"), "dist", "binary %q is not a file name: use letters, digits, dots, hyphens and underscores", m.Dist.Binary)
 	}
 }
 
@@ -140,26 +141,27 @@ func (m *Manifest) validateEntries(entries []GroupEntry, add adder) {
 		if ge.Group == "runtime" {
 			where = "runtime"
 		}
+		at := func(field string) Position { return e.fields.at(field, e.Pos) }
 		switch {
 		case e.Module == "":
 			add(e.Pos, where, "module is mandatory")
 		case !modulePath.MatchString(e.Module):
-			add(e.Pos, where, "module %q is not a module path", e.Module)
+			add(at("module"), where, "module %q is not a module path", e.Module)
 		default:
 			if prev, dup := first[e.Module]; dup {
-				add(e.Pos, where, "the module %s is listed more than once (BR-004); it is already at %s, %s", e.Module, prev.pos, prev.where)
+				add(at("module"), where, "the module %s is listed more than once (BR-004); it is already at %s, %s", e.Module, prev.pos, prev.where)
 			} else {
-				first[e.Module] = listed{e.Pos, where}
+				first[e.Module] = listed{at("module"), where}
 			}
 		}
 		switch {
 		case e.Version == "":
 			add(e.Pos, where, "version is mandatory (BR-003: every component carries an explicit version)")
 		case !exactVersion.MatchString(e.Version):
-			add(e.Pos, where, "version %q is not an exact semantic version or pseudo-version such as v1.2.3 (BR-003: no ranges and no moving references)", e.Version)
+			add(at("version"), where, "version %q is not an exact semantic version or pseudo-version such as v1.2.3 (BR-003: no ranges and no moving references)", e.Version)
 		}
 		if e.Import != "" && e.Module != "" && e.Import != e.Module && !strings.HasPrefix(e.Import, e.Module+"/") {
-			add(e.Pos, where, "import %q is not a package of the module %s", e.Import, e.Module)
+			add(at("import"), where, "import %q is not a package of the module %s", e.Import, e.Module)
 		}
 	}
 }
@@ -168,24 +170,25 @@ func (m *Manifest) validateReplaces(add adder) {
 	seen := map[string]Position{}
 	for i, r := range m.Replaces {
 		where := fmt.Sprintf("replaces[%d]", i)
+		at := func(field string) Position { return r.fields.at(field, r.Pos) }
 		switch {
 		case r.Module == "":
 			add(r.Pos, where, "module is mandatory")
 			continue
 		case !modulePath.MatchString(r.Module):
-			add(r.Pos, where, "module %q is not a module path", r.Module)
+			add(at("module"), where, "module %q is not a module path", r.Module)
 			continue
 		}
 		if prev, dup := seen[r.Module]; dup {
-			add(r.Pos, where, "the module %s is replaced more than once; it is already replaced at %s", r.Module, prev)
+			add(at("module"), where, "the module %s is replaced more than once; it is already replaced at %s", r.Module, prev)
 		}
-		seen[r.Module] = r.Pos
+		seen[r.Module] = at("module")
 		if r.Path == "" {
 			add(r.Pos, where, "path is mandatory")
 			continue
 		}
 		if reason := m.checkReplaceTarget(r); reason != "" {
-			add(r.Pos, where, "%s (BR-007)", reason)
+			add(at("path"), where, "%s (BR-007)", reason)
 		}
 	}
 }
