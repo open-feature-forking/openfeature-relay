@@ -7,9 +7,9 @@
 **Primary Actor:** Extension Author  
 **Goal:** Learn, before the component is built into any distribution, whether a component behaves as flagd expects of its component type.  
 **Trigger:** Extension Author asks to verify a component against the contract of its component type  
-**Status:** Draft  
+**Status:** Implemented  
 
-**Requirements:** [FR-015, FR-014, FR-036, FR-045, FR-054, FR-055, NFR-010, NFR-013, C-001](../requirements.md)
+**Requirements:** [FR-015, FR-014, FR-036, FR-045, FR-054, FR-055, NFR-013, C-001](../requirements.md)
 
 ## Preconditions
 
@@ -33,7 +33,7 @@
 **Trigger:** The Extension Author did not supply a test input the component type requires, such as a way to change a sync provider's source (step 1)  
 **Flow:**
 
-1. System names the missing test input and the contract cases that need it.
+1. System names the missing test input and the contract cases that need it. An optional feature of the component type counts as a missing test input unless the Extension Author named it as not applicable (BR-006).
 2. Use case ends.
 
 ### A2: Declarations Invalid
@@ -78,7 +78,7 @@
 
 ### Failure Postconditions
 
-- A run with a failed, missing or not exercised contract case is never reported as passed.
+- A run with a failed or missing contract case, or a case that was not exercised and that the Extension Author did not declare not applicable, is never reported as passed.
 - The component module, the core module and any distribution are left unchanged by the run.
 
 ## Business Rules
@@ -94,7 +94,7 @@ Each set covers what the runtime relies on for that component type; the extensio
 | Component Type     | The contract cases verify that the component …                                                                                                                                          |
 |--------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Fetcher            | fetches once per request and returns the flag configuration unchanged with its source version, reports "not changed" when given the current source version, returns a new source version after the source changed, reports a failed fetch without returning a flag configuration, abandons a running fetch on shutdown (UC-003) |
-| Fetch Trigger      | signals its source's fetcher each time the change signal arrives and never fetches or delivers itself, reconnects after losing the change signal without affecting other fetch triggers of the source, stops listening on shutdown (UC-003 A2) |
+| Fetch Trigger      | signals its source's fetcher each time the change signal arrives and never fetches or delivers itself, reconnects after losing the change signal, stops listening on shutdown (UC-003 A2); that a failing fetch trigger leaves the other fetch triggers of its source running is the fetching sync provider's, and is tested with it (UC-003 BR-003) |
 | Streaming Sync Provider | delivers the source's complete flag configuration first, delivers each change the source pushes, delivers the complete flag configuration again on request, names its source, delivers the flag configuration unchanged, reports readiness, reconnects after losing the source, stops on shutdown (UC-003 A1) |
 | Configuration Format | accepts a valid flag configuration into the store as its own documents, reports each document's flag keys, flag set and document version and the added, updated and removed flag keys against the previous document, rejects an invalid one naming the faulty entry, leaves the store unchanged after a rejection, replaces only the delivering source's flags, or only the flag sets of an incremental update (UC-018) |
 | Service Endpoint   | starts and stops with the distribution, resolves flags only through the evaluation router for the request's selector, publishes one evaluation event per resolved flag, serves only the documents of the configuration format a client requests, derives cache validators and change announcements from document versions, runs without evaluators when it declares no need for them, reacts to a configuration change event, stops on shutdown (UC-004) |
@@ -102,6 +102,8 @@ Each set covers what the runtime relies on for that component type; the extensio
 | Telemetry Provider | supplies tracing, metrics and HTTP instrumentation that service endpoints and middleware can use without further setup, never blocks a request, works under concurrent use and returns from shutdown (UC-006) |
 | Evaluator          | resolves one, several or all flags of a selector in one request and returns an untyped result per flag, with no value where the caller's default applies; the core's typed adapter turns these results into correct typed resolutions; every reason is an OpenFeature reason or a vendor reason without parameters, and every error code is one of OpenFeature's; it resolves concurrently while the store changes without seeing a half-updated store, and, when paired with flagd's configuration format, resolves as the flagd test-harness evaluation suite expects (UC-007) |
 | Event Sink         | receives the events it subscribed to, delivers them to its external system in batches, drops and counts events when its buffer is full instead of blocking the publisher, flushes buffered events on shutdown and returns from shutdown (UC-020) |
+
+A fetch trigger is checked as far as its signal goes: a trigger that reads the source without signalling cannot be seen by a contract run, which is a limit of the check and no later use case's work.
 
 ### BR-003: Only Injected Dependencies
 
@@ -114,3 +116,16 @@ The contract tests run inside the component module with the standard Go tooling.
 ### BR-005: Contract Is the Same for Official Components and Extensions
 
 The example component of each factory interface in the flagd repository passes the contract tests of its component type, so the contract is proven on a working component before an Extension Author relies on it.
+
+### BR-006: Optional Features Are Declared
+
+A component type's optional feature, such as a service endpoint's documents or an evaluator's disabled flag, is either supplied through its test input or named by the Extension Author as not applicable. The case behind a named feature is reported as not applicable, with the feature's name, never left out unseen. A feature that is neither supplied nor named fails its case, naming the test input. A feature that is both supplied and named, or one the contract does not have, is a mistake of the test inputs and no case is run. A component that differs in what a case asserts, such as one without configuration, declares it as a mode, and the case states the mode in its expected behaviour.
+
+## Delivered by Later Use Cases
+
+This use case is `Implemented`: every component type has a contract runner in the core module with the same entry point and report, the example modules run them, and `make test-contract-external` runs them from the module cache outside the repository. These parts are delivered by the use cases named here, and are accepted gaps of this one:
+
+- The evaluator contract for flagd's configuration format, the testbed's evaluator suite, from a module outside this repository: the suite is a pinned submodule of the testbed, which carries no licence to redistribute it, so `test/evaluator-testkit` runs only inside this repository. UC-012, together with releasing the modules, or an upstream change of the testbed that the project lead decides.
+- Release tags of the core module, behind BR-001's "a release of the core module that contains the contract tests": UC-012. Until then the external run fetches the core module at a commit.
+- Building the example components into a distribution and starting it (NFR-010): UC-001.
+- The names this use case changed go into the migration guide of UC-015: the `Case` and `Report` types of the runner packages, `servicetest.Result`, `ValidateDeclaration` of the telemetry, event sink and middleware factories, `Run` of the format and evaluator runners taking `*testing.T`, and the samples a format or evaluator leaves out becoming `Without` entries.
