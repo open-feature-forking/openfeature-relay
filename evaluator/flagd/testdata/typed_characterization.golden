@@ -1,0 +1,1264 @@
+## strictNumericRange=false protoVersion=false
+disabled ctx=none bool    value=false variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=none string  value="" variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=none int     value=0 variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=none float   value=0 variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=none object  value=map[string]interface {}(nil) variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=none any     value=<nil> variant="" reason=DISABLED err=<nil> metadata=map[] flagKey=disabled
+disabled ctx=match bool    value=false variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=match string  value="" variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=match int     value=0 variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=match float   value=0 variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=match object  value=map[string]interface {}(nil) variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=match any     value=<nil> variant="" reason=DISABLED err=<nil> metadata=map[] flagKey=disabled
+disabled ctx=other bool    value=false variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=other string  value="" variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=other int     value=0 variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=other float   value=0 variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=other object  value=map[string]interface {}(nil) variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=other any     value=<nil> variant="" reason=DISABLED err=<nil> metadata=map[] flagKey=disabled
+fractional ctx=none bool    value=false variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=none string  value="red" variant="red" reason=DEFAULT err=<nil> metadata=map[]
+fractional ctx=none int     value=0 variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=none float   value=0 variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=none object  value=map[string]interface {}(nil) variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=none any     value="red" variant="red" reason=DEFAULT err=<nil> metadata=map[] flagKey=fractional
+fractional ctx=match bool    value=false variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=match string  value="red" variant="red" reason=TARGETING_MATCH err=<nil> metadata=map[]
+fractional ctx=match int     value=0 variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=match float   value=0 variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=match object  value=map[string]interface {}(nil) variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=match any     value="red" variant="red" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=fractional
+fractional ctx=other bool    value=false variant="green" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=other string  value="green" variant="green" reason=TARGETING_MATCH err=<nil> metadata=map[]
+fractional ctx=other int     value=0 variant="green" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=other float   value=0 variant="green" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=other object  value=map[string]interface {}(nil) variant="green" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=other any     value="green" variant="green" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=fractional
+no-default ctx=none bool    value=false variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=none string  value="" variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=none int     value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=none float   value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=none object  value=map[string]interface {}(nil) variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=none any     value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=no-default
+no-default ctx=match bool    value=false variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=match string  value="" variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=match int     value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=match float   value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=match object  value=map[string]interface {}(nil) variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=match any     value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=no-default
+no-default ctx=other bool    value=false variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=other string  value="" variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=other int     value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=other float   value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=other object  value=map[string]interface {}(nil) variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=other any     value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=no-default
+outside-2-53 ctx=none bool    value=false variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=none string  value="" variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=none int     value=9007199254740992 variant="big" reason=STATIC err=<nil> metadata=map[]
+outside-2-53 ctx=none float   value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[]
+outside-2-53 ctx=none object  value=map[string]interface {}(nil) variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=none any     value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[] flagKey=outside-2-53
+outside-2-53 ctx=match bool    value=false variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=match string  value="" variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=match int     value=9007199254740992 variant="big" reason=STATIC err=<nil> metadata=map[]
+outside-2-53 ctx=match float   value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[]
+outside-2-53 ctx=match object  value=map[string]interface {}(nil) variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=match any     value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[] flagKey=outside-2-53
+outside-2-53 ctx=other bool    value=false variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=other string  value="" variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=other int     value=9007199254740992 variant="big" reason=STATIC err=<nil> metadata=map[]
+outside-2-53 ctx=other float   value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[]
+outside-2-53 ctx=other object  value=map[string]interface {}(nil) variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=other any     value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[] flagKey=outside-2-53
+outside-int64 ctx=none bool    value=false variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=none string  value="" variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=none int     value=0 variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=none float   value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[]
+outside-int64 ctx=none object  value=map[string]interface {}(nil) variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=none any     value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[] flagKey=outside-int64
+outside-int64 ctx=match bool    value=false variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=match string  value="" variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=match int     value=0 variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=match float   value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[]
+outside-int64 ctx=match object  value=map[string]interface {}(nil) variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=match any     value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[] flagKey=outside-int64
+outside-int64 ctx=other bool    value=false variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=other string  value="" variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=other int     value=0 variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=other float   value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[]
+outside-int64 ctx=other object  value=map[string]interface {}(nil) variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=other any     value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[] flagKey=outside-int64
+static-bool ctx=none bool    value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2]
+static-bool ctx=none string  value="" variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=none int     value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=none float   value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=none object  value=map[string]interface {}(nil) variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=none any     value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2] flagKey=static-bool
+static-bool ctx=match bool    value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2]
+static-bool ctx=match string  value="" variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=match int     value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=match float   value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=match object  value=map[string]interface {}(nil) variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=match any     value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2] flagKey=static-bool
+static-bool ctx=other bool    value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2]
+static-bool ctx=other string  value="" variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=other int     value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=other float   value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=other object  value=map[string]interface {}(nil) variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=other any     value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2] flagKey=static-bool
+static-float ctx=none bool    value=false variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=none string  value="" variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=none int     value=0 variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=none float   value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[]
+static-float ctx=none object  value=map[string]interface {}(nil) variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=none any     value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[] flagKey=static-float
+static-float ctx=match bool    value=false variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=match string  value="" variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=match int     value=0 variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=match float   value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[]
+static-float ctx=match object  value=map[string]interface {}(nil) variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=match any     value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[] flagKey=static-float
+static-float ctx=other bool    value=false variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=other string  value="" variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=other int     value=0 variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=other float   value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[]
+static-float ctx=other object  value=map[string]interface {}(nil) variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=other any     value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[] flagKey=static-float
+static-int ctx=none bool    value=false variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=none string  value="" variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=none int     value=10 variant="ten" reason=STATIC err=<nil> metadata=map[]
+static-int ctx=none float   value=10 variant="ten" reason=STATIC err=<nil> metadata=map[]
+static-int ctx=none object  value=map[string]interface {}(nil) variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=none any     value=10 variant="ten" reason=STATIC err=<nil> metadata=map[] flagKey=static-int
+static-int ctx=match bool    value=false variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=match string  value="" variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=match int     value=10 variant="ten" reason=STATIC err=<nil> metadata=map[]
+static-int ctx=match float   value=10 variant="ten" reason=STATIC err=<nil> metadata=map[]
+static-int ctx=match object  value=map[string]interface {}(nil) variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=match any     value=10 variant="ten" reason=STATIC err=<nil> metadata=map[] flagKey=static-int
+static-int ctx=other bool    value=false variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=other string  value="" variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=other int     value=10 variant="ten" reason=STATIC err=<nil> metadata=map[]
+static-int ctx=other float   value=10 variant="ten" reason=STATIC err=<nil> metadata=map[]
+static-int ctx=other object  value=map[string]interface {}(nil) variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=other any     value=10 variant="ten" reason=STATIC err=<nil> metadata=map[] flagKey=static-int
+static-object ctx=none bool    value=false variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=none string  value="" variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=none int     value=0 variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=none float   value=0 variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=none object  value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[]
+static-object ctx=none any     value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[] flagKey=static-object
+static-object ctx=match bool    value=false variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=match string  value="" variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=match int     value=0 variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=match float   value=0 variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=match object  value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[]
+static-object ctx=match any     value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[] flagKey=static-object
+static-object ctx=other bool    value=false variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=other string  value="" variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=other int     value=0 variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=other float   value=0 variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=other object  value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[]
+static-object ctx=other any     value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[] flagKey=static-object
+static-string ctx=none bool    value=false variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=none string  value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[]
+static-string ctx=none int     value=0 variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=none float   value=0 variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=none object  value=map[string]interface {}(nil) variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=none any     value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[] flagKey=static-string
+static-string ctx=match bool    value=false variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=match string  value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[]
+static-string ctx=match int     value=0 variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=match float   value=0 variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=match object  value=map[string]interface {}(nil) variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=match any     value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[] flagKey=static-string
+static-string ctx=other bool    value=false variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=other string  value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[]
+static-string ctx=other int     value=0 variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=other float   value=0 variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=other object  value=map[string]interface {}(nil) variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=other any     value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[] flagKey=static-string
+targeting-match ctx=none bool    value=false variant="off" reason=TARGETING_MATCH err=<nil> metadata=map[]
+targeting-match ctx=none string  value="" variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=none int     value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=none float   value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=none object  value=map[string]interface {}(nil) variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=none any     value=false variant="off" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-match
+targeting-match ctx=match bool    value=true variant="on" reason=TARGETING_MATCH err=<nil> metadata=map[]
+targeting-match ctx=match string  value="" variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=match int     value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=match float   value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=match object  value=map[string]interface {}(nil) variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=match any     value=true variant="on" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-match
+targeting-match ctx=other bool    value=false variant="off" reason=TARGETING_MATCH err=<nil> metadata=map[]
+targeting-match ctx=other string  value="" variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=other int     value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=other float   value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=other object  value=map[string]interface {}(nil) variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=other any     value=false variant="off" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-match
+targeting-null-no-default ctx=none bool    value=false variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=none string  value="" variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=none int     value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=none float   value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=none object  value=map[string]interface {}(nil) variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=none any     value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=targeting-null-no-default
+targeting-null-no-default ctx=match bool    value=false variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=match string  value="" variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=match int     value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=match float   value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=match object  value=map[string]interface {}(nil) variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=match any     value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=targeting-null-no-default
+targeting-null-no-default ctx=other bool    value=false variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=other string  value="" variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=other int     value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=other float   value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=other object  value=map[string]interface {}(nil) variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=other any     value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=targeting-null-no-default
+targeting-null-with-default ctx=none bool    value=false variant="off" reason=DEFAULT err=<nil> metadata=map[]
+targeting-null-with-default ctx=none string  value="" variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=none int     value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=none float   value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=none object  value=map[string]interface {}(nil) variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=none any     value=false variant="off" reason=DEFAULT err=<nil> metadata=map[] flagKey=targeting-null-with-default
+targeting-null-with-default ctx=match bool    value=false variant="off" reason=DEFAULT err=<nil> metadata=map[]
+targeting-null-with-default ctx=match string  value="" variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=match int     value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=match float   value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=match object  value=map[string]interface {}(nil) variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=match any     value=false variant="off" reason=DEFAULT err=<nil> metadata=map[] flagKey=targeting-null-with-default
+targeting-null-with-default ctx=other bool    value=false variant="off" reason=DEFAULT err=<nil> metadata=map[]
+targeting-null-with-default ctx=other string  value="" variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=other int     value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=other float   value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=other object  value=map[string]interface {}(nil) variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=other any     value=false variant="off" reason=DEFAULT err=<nil> metadata=map[] flagKey=targeting-null-with-default
+targeting-variant-no-default ctx=none bool    value=false variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-variant-no-default ctx=none string  value="" variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-variant-no-default ctx=none int     value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-variant-no-default ctx=none float   value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-variant-no-default ctx=none object  value=map[string]interface {}(nil) variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-variant-no-default ctx=none any     value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=targeting-variant-no-default
+targeting-variant-no-default ctx=match bool    value=true variant="on" reason=TARGETING_MATCH err=<nil> metadata=map[]
+targeting-variant-no-default ctx=match string  value="" variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-variant-no-default ctx=match int     value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-variant-no-default ctx=match float   value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-variant-no-default ctx=match object  value=map[string]interface {}(nil) variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-variant-no-default ctx=match any     value=true variant="on" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-variant-no-default
+targeting-variant-no-default ctx=other bool    value=false variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-variant-no-default ctx=other string  value="" variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-variant-no-default ctx=other int     value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-variant-no-default ctx=other float   value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-variant-no-default ctx=other object  value=map[string]interface {}(nil) variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-variant-no-default ctx=other any     value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=targeting-variant-no-default
+type-mismatch ctx=none bool    value=false variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=none string  value="hello" variant="text" reason=TARGETING_MATCH err=<nil> metadata=map[]
+type-mismatch ctx=none int     value=0 variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=none float   value=0 variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=none object  value=map[string]interface {}(nil) variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=none any     value="hello" variant="text" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=type-mismatch
+type-mismatch ctx=match bool    value=false variant="number" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=match string  value="" variant="number" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=match int     value=42 variant="number" reason=TARGETING_MATCH err=<nil> metadata=map[]
+type-mismatch ctx=match float   value=42 variant="number" reason=TARGETING_MATCH err=<nil> metadata=map[]
+type-mismatch ctx=match object  value=map[string]interface {}(nil) variant="number" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=match any     value=42 variant="number" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=type-mismatch
+type-mismatch ctx=other bool    value=false variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=other string  value="hello" variant="text" reason=TARGETING_MATCH err=<nil> metadata=map[]
+type-mismatch ctx=other int     value=0 variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=other float   value=0 variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=other object  value=map[string]interface {}(nil) variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=other any     value="hello" variant="text" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=type-mismatch
+bulk ctx=none err=<nil> setMetadata=map[] count=15
+  disabled value=false variant="" reason=DISABLED err=<nil> metadata=map[] flagKey=disabled
+  fractional value="red" variant="red" reason=DEFAULT err=<nil> metadata=map[] flagKey=fractional
+  no-default value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=no-default
+  outside-2-53 value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[] flagKey=outside-2-53
+  outside-int64 value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[] flagKey=outside-int64
+  static-bool value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2] flagKey=static-bool
+  static-float value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[] flagKey=static-float
+  static-int value=10 variant="ten" reason=STATIC err=<nil> metadata=map[] flagKey=static-int
+  static-object value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[] flagKey=static-object
+  static-string value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[] flagKey=static-string
+  targeting-match value=false variant="off" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-match
+  targeting-null-no-default value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=targeting-null-no-default
+  targeting-null-with-default value=false variant="off" reason=DEFAULT err=<nil> metadata=map[] flagKey=targeting-null-with-default
+  targeting-variant-no-default value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=targeting-variant-no-default
+  type-mismatch value="hello" variant="text" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=type-mismatch
+bulk ctx=match err=<nil> setMetadata=map[] count=15
+  disabled value=false variant="" reason=DISABLED err=<nil> metadata=map[] flagKey=disabled
+  fractional value="red" variant="red" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=fractional
+  no-default value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=no-default
+  outside-2-53 value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[] flagKey=outside-2-53
+  outside-int64 value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[] flagKey=outside-int64
+  static-bool value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2] flagKey=static-bool
+  static-float value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[] flagKey=static-float
+  static-int value=10 variant="ten" reason=STATIC err=<nil> metadata=map[] flagKey=static-int
+  static-object value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[] flagKey=static-object
+  static-string value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[] flagKey=static-string
+  targeting-match value=true variant="on" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-match
+  targeting-null-no-default value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=targeting-null-no-default
+  targeting-null-with-default value=false variant="off" reason=DEFAULT err=<nil> metadata=map[] flagKey=targeting-null-with-default
+  targeting-variant-no-default value=true variant="on" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-variant-no-default
+  type-mismatch value="" variant="number" reason=ERROR err=TYPE_MISMATCH metadata=map[] flagKey=type-mismatch
+bulk ctx=other err=<nil> setMetadata=map[] count=15
+  disabled value=false variant="" reason=DISABLED err=<nil> metadata=map[] flagKey=disabled
+  fractional value="green" variant="green" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=fractional
+  no-default value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=no-default
+  outside-2-53 value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[] flagKey=outside-2-53
+  outside-int64 value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[] flagKey=outside-int64
+  static-bool value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2] flagKey=static-bool
+  static-float value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[] flagKey=static-float
+  static-int value=10 variant="ten" reason=STATIC err=<nil> metadata=map[] flagKey=static-int
+  static-object value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[] flagKey=static-object
+  static-string value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[] flagKey=static-string
+  targeting-match value=false variant="off" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-match
+  targeting-null-no-default value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=targeting-null-no-default
+  targeting-null-with-default value=false variant="off" reason=DEFAULT err=<nil> metadata=map[] flagKey=targeting-null-with-default
+  targeting-variant-no-default value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=targeting-variant-no-default
+  type-mismatch value="hello" variant="text" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=type-mismatch
+## strictNumericRange=false protoVersion=true
+disabled ctx=none bool    value=false variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=none string  value="" variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=none int     value=0 variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=none float   value=0 variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=none object  value=map[string]interface {}(nil) variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=none any     value=<nil> variant="" reason=DISABLED err=<nil> metadata=map[] flagKey=disabled
+disabled ctx=match bool    value=false variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=match string  value="" variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=match int     value=0 variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=match float   value=0 variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=match object  value=map[string]interface {}(nil) variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=match any     value=<nil> variant="" reason=DISABLED err=<nil> metadata=map[] flagKey=disabled
+disabled ctx=other bool    value=false variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=other string  value="" variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=other int     value=0 variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=other float   value=0 variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=other object  value=map[string]interface {}(nil) variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=other any     value=<nil> variant="" reason=DISABLED err=<nil> metadata=map[] flagKey=disabled
+fractional ctx=none bool    value=false variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=none string  value="red" variant="red" reason=DEFAULT err=<nil> metadata=map[]
+fractional ctx=none int     value=0 variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=none float   value=0 variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=none object  value=map[string]interface {}(nil) variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=none any     value="red" variant="red" reason=DEFAULT err=<nil> metadata=map[] flagKey=fractional
+fractional ctx=match bool    value=false variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=match string  value="red" variant="red" reason=TARGETING_MATCH err=<nil> metadata=map[]
+fractional ctx=match int     value=0 variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=match float   value=0 variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=match object  value=map[string]interface {}(nil) variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=match any     value="red" variant="red" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=fractional
+fractional ctx=other bool    value=false variant="green" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=other string  value="green" variant="green" reason=TARGETING_MATCH err=<nil> metadata=map[]
+fractional ctx=other int     value=0 variant="green" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=other float   value=0 variant="green" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=other object  value=map[string]interface {}(nil) variant="green" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=other any     value="green" variant="green" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=fractional
+no-default ctx=none bool    value=false variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=none string  value="" variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=none int     value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=none float   value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=none object  value=map[string]interface {}(nil) variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=none any     value=<nil> variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[] flagKey=no-default
+no-default ctx=match bool    value=false variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=match string  value="" variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=match int     value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=match float   value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=match object  value=map[string]interface {}(nil) variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=match any     value=<nil> variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[] flagKey=no-default
+no-default ctx=other bool    value=false variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=other string  value="" variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=other int     value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=other float   value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=other object  value=map[string]interface {}(nil) variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=other any     value=<nil> variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[] flagKey=no-default
+outside-2-53 ctx=none bool    value=false variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=none string  value="" variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=none int     value=9007199254740992 variant="big" reason=STATIC err=<nil> metadata=map[]
+outside-2-53 ctx=none float   value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[]
+outside-2-53 ctx=none object  value=map[string]interface {}(nil) variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=none any     value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[] flagKey=outside-2-53
+outside-2-53 ctx=match bool    value=false variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=match string  value="" variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=match int     value=9007199254740992 variant="big" reason=STATIC err=<nil> metadata=map[]
+outside-2-53 ctx=match float   value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[]
+outside-2-53 ctx=match object  value=map[string]interface {}(nil) variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=match any     value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[] flagKey=outside-2-53
+outside-2-53 ctx=other bool    value=false variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=other string  value="" variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=other int     value=9007199254740992 variant="big" reason=STATIC err=<nil> metadata=map[]
+outside-2-53 ctx=other float   value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[]
+outside-2-53 ctx=other object  value=map[string]interface {}(nil) variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=other any     value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[] flagKey=outside-2-53
+outside-int64 ctx=none bool    value=false variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=none string  value="" variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=none int     value=0 variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=none float   value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[]
+outside-int64 ctx=none object  value=map[string]interface {}(nil) variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=none any     value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[] flagKey=outside-int64
+outside-int64 ctx=match bool    value=false variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=match string  value="" variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=match int     value=0 variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=match float   value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[]
+outside-int64 ctx=match object  value=map[string]interface {}(nil) variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=match any     value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[] flagKey=outside-int64
+outside-int64 ctx=other bool    value=false variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=other string  value="" variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=other int     value=0 variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=other float   value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[]
+outside-int64 ctx=other object  value=map[string]interface {}(nil) variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=other any     value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[] flagKey=outside-int64
+static-bool ctx=none bool    value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2]
+static-bool ctx=none string  value="" variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=none int     value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=none float   value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=none object  value=map[string]interface {}(nil) variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=none any     value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2] flagKey=static-bool
+static-bool ctx=match bool    value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2]
+static-bool ctx=match string  value="" variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=match int     value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=match float   value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=match object  value=map[string]interface {}(nil) variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=match any     value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2] flagKey=static-bool
+static-bool ctx=other bool    value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2]
+static-bool ctx=other string  value="" variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=other int     value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=other float   value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=other object  value=map[string]interface {}(nil) variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=other any     value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2] flagKey=static-bool
+static-float ctx=none bool    value=false variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=none string  value="" variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=none int     value=0 variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=none float   value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[]
+static-float ctx=none object  value=map[string]interface {}(nil) variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=none any     value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[] flagKey=static-float
+static-float ctx=match bool    value=false variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=match string  value="" variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=match int     value=0 variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=match float   value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[]
+static-float ctx=match object  value=map[string]interface {}(nil) variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=match any     value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[] flagKey=static-float
+static-float ctx=other bool    value=false variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=other string  value="" variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=other int     value=0 variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=other float   value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[]
+static-float ctx=other object  value=map[string]interface {}(nil) variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=other any     value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[] flagKey=static-float
+static-int ctx=none bool    value=false variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=none string  value="" variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=none int     value=10 variant="ten" reason=STATIC err=<nil> metadata=map[]
+static-int ctx=none float   value=10 variant="ten" reason=STATIC err=<nil> metadata=map[]
+static-int ctx=none object  value=map[string]interface {}(nil) variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=none any     value=10 variant="ten" reason=STATIC err=<nil> metadata=map[] flagKey=static-int
+static-int ctx=match bool    value=false variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=match string  value="" variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=match int     value=10 variant="ten" reason=STATIC err=<nil> metadata=map[]
+static-int ctx=match float   value=10 variant="ten" reason=STATIC err=<nil> metadata=map[]
+static-int ctx=match object  value=map[string]interface {}(nil) variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=match any     value=10 variant="ten" reason=STATIC err=<nil> metadata=map[] flagKey=static-int
+static-int ctx=other bool    value=false variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=other string  value="" variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=other int     value=10 variant="ten" reason=STATIC err=<nil> metadata=map[]
+static-int ctx=other float   value=10 variant="ten" reason=STATIC err=<nil> metadata=map[]
+static-int ctx=other object  value=map[string]interface {}(nil) variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=other any     value=10 variant="ten" reason=STATIC err=<nil> metadata=map[] flagKey=static-int
+static-object ctx=none bool    value=false variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=none string  value="" variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=none int     value=0 variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=none float   value=0 variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=none object  value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[]
+static-object ctx=none any     value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[] flagKey=static-object
+static-object ctx=match bool    value=false variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=match string  value="" variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=match int     value=0 variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=match float   value=0 variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=match object  value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[]
+static-object ctx=match any     value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[] flagKey=static-object
+static-object ctx=other bool    value=false variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=other string  value="" variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=other int     value=0 variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=other float   value=0 variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=other object  value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[]
+static-object ctx=other any     value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[] flagKey=static-object
+static-string ctx=none bool    value=false variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=none string  value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[]
+static-string ctx=none int     value=0 variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=none float   value=0 variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=none object  value=map[string]interface {}(nil) variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=none any     value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[] flagKey=static-string
+static-string ctx=match bool    value=false variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=match string  value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[]
+static-string ctx=match int     value=0 variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=match float   value=0 variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=match object  value=map[string]interface {}(nil) variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=match any     value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[] flagKey=static-string
+static-string ctx=other bool    value=false variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=other string  value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[]
+static-string ctx=other int     value=0 variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=other float   value=0 variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=other object  value=map[string]interface {}(nil) variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=other any     value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[] flagKey=static-string
+targeting-match ctx=none bool    value=false variant="off" reason=TARGETING_MATCH err=<nil> metadata=map[]
+targeting-match ctx=none string  value="" variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=none int     value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=none float   value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=none object  value=map[string]interface {}(nil) variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=none any     value=false variant="off" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-match
+targeting-match ctx=match bool    value=true variant="on" reason=TARGETING_MATCH err=<nil> metadata=map[]
+targeting-match ctx=match string  value="" variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=match int     value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=match float   value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=match object  value=map[string]interface {}(nil) variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=match any     value=true variant="on" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-match
+targeting-match ctx=other bool    value=false variant="off" reason=TARGETING_MATCH err=<nil> metadata=map[]
+targeting-match ctx=other string  value="" variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=other int     value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=other float   value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=other object  value=map[string]interface {}(nil) variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=other any     value=false variant="off" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-match
+targeting-null-no-default ctx=none bool    value=false variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=none string  value="" variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=none int     value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=none float   value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=none object  value=map[string]interface {}(nil) variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=none any     value=<nil> variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[] flagKey=targeting-null-no-default
+targeting-null-no-default ctx=match bool    value=false variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=match string  value="" variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=match int     value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=match float   value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=match object  value=map[string]interface {}(nil) variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=match any     value=<nil> variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[] flagKey=targeting-null-no-default
+targeting-null-no-default ctx=other bool    value=false variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=other string  value="" variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=other int     value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=other float   value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=other object  value=map[string]interface {}(nil) variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=other any     value=<nil> variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[] flagKey=targeting-null-no-default
+targeting-null-with-default ctx=none bool    value=false variant="off" reason=DEFAULT err=<nil> metadata=map[]
+targeting-null-with-default ctx=none string  value="" variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=none int     value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=none float   value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=none object  value=map[string]interface {}(nil) variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=none any     value=false variant="off" reason=DEFAULT err=<nil> metadata=map[] flagKey=targeting-null-with-default
+targeting-null-with-default ctx=match bool    value=false variant="off" reason=DEFAULT err=<nil> metadata=map[]
+targeting-null-with-default ctx=match string  value="" variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=match int     value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=match float   value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=match object  value=map[string]interface {}(nil) variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=match any     value=false variant="off" reason=DEFAULT err=<nil> metadata=map[] flagKey=targeting-null-with-default
+targeting-null-with-default ctx=other bool    value=false variant="off" reason=DEFAULT err=<nil> metadata=map[]
+targeting-null-with-default ctx=other string  value="" variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=other int     value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=other float   value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=other object  value=map[string]interface {}(nil) variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=other any     value=false variant="off" reason=DEFAULT err=<nil> metadata=map[] flagKey=targeting-null-with-default
+targeting-variant-no-default ctx=none bool    value=false variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-variant-no-default ctx=none string  value="" variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-variant-no-default ctx=none int     value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-variant-no-default ctx=none float   value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-variant-no-default ctx=none object  value=map[string]interface {}(nil) variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-variant-no-default ctx=none any     value=<nil> variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[] flagKey=targeting-variant-no-default
+targeting-variant-no-default ctx=match bool    value=true variant="on" reason=TARGETING_MATCH err=<nil> metadata=map[]
+targeting-variant-no-default ctx=match string  value="" variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-variant-no-default ctx=match int     value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-variant-no-default ctx=match float   value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-variant-no-default ctx=match object  value=map[string]interface {}(nil) variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-variant-no-default ctx=match any     value=true variant="on" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-variant-no-default
+targeting-variant-no-default ctx=other bool    value=false variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-variant-no-default ctx=other string  value="" variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-variant-no-default ctx=other int     value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-variant-no-default ctx=other float   value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-variant-no-default ctx=other object  value=map[string]interface {}(nil) variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-variant-no-default ctx=other any     value=<nil> variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[] flagKey=targeting-variant-no-default
+type-mismatch ctx=none bool    value=false variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=none string  value="hello" variant="text" reason=TARGETING_MATCH err=<nil> metadata=map[]
+type-mismatch ctx=none int     value=0 variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=none float   value=0 variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=none object  value=map[string]interface {}(nil) variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=none any     value="hello" variant="text" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=type-mismatch
+type-mismatch ctx=match bool    value=false variant="number" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=match string  value="" variant="number" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=match int     value=42 variant="number" reason=TARGETING_MATCH err=<nil> metadata=map[]
+type-mismatch ctx=match float   value=42 variant="number" reason=TARGETING_MATCH err=<nil> metadata=map[]
+type-mismatch ctx=match object  value=map[string]interface {}(nil) variant="number" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=match any     value=42 variant="number" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=type-mismatch
+type-mismatch ctx=other bool    value=false variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=other string  value="hello" variant="text" reason=TARGETING_MATCH err=<nil> metadata=map[]
+type-mismatch ctx=other int     value=0 variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=other float   value=0 variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=other object  value=map[string]interface {}(nil) variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=other any     value="hello" variant="text" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=type-mismatch
+bulk ctx=none err=<nil> setMetadata=map[] count=12
+  disabled value=false variant="" reason=DISABLED err=<nil> metadata=map[] flagKey=disabled
+  fractional value="red" variant="red" reason=DEFAULT err=<nil> metadata=map[] flagKey=fractional
+  outside-2-53 value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[] flagKey=outside-2-53
+  outside-int64 value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[] flagKey=outside-int64
+  static-bool value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2] flagKey=static-bool
+  static-float value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[] flagKey=static-float
+  static-int value=10 variant="ten" reason=STATIC err=<nil> metadata=map[] flagKey=static-int
+  static-object value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[] flagKey=static-object
+  static-string value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[] flagKey=static-string
+  targeting-match value=false variant="off" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-match
+  targeting-null-with-default value=false variant="off" reason=DEFAULT err=<nil> metadata=map[] flagKey=targeting-null-with-default
+  type-mismatch value="hello" variant="text" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=type-mismatch
+bulk ctx=match err=<nil> setMetadata=map[] count=12
+  disabled value=false variant="" reason=DISABLED err=<nil> metadata=map[] flagKey=disabled
+  fractional value="red" variant="red" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=fractional
+  outside-2-53 value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[] flagKey=outside-2-53
+  outside-int64 value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[] flagKey=outside-int64
+  static-bool value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2] flagKey=static-bool
+  static-float value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[] flagKey=static-float
+  static-int value=10 variant="ten" reason=STATIC err=<nil> metadata=map[] flagKey=static-int
+  static-object value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[] flagKey=static-object
+  static-string value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[] flagKey=static-string
+  targeting-match value=true variant="on" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-match
+  targeting-null-with-default value=false variant="off" reason=DEFAULT err=<nil> metadata=map[] flagKey=targeting-null-with-default
+  type-mismatch value="" variant="number" reason=ERROR err=TYPE_MISMATCH metadata=map[] flagKey=type-mismatch
+bulk ctx=other err=<nil> setMetadata=map[] count=12
+  disabled value=false variant="" reason=DISABLED err=<nil> metadata=map[] flagKey=disabled
+  fractional value="green" variant="green" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=fractional
+  outside-2-53 value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[] flagKey=outside-2-53
+  outside-int64 value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[] flagKey=outside-int64
+  static-bool value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2] flagKey=static-bool
+  static-float value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[] flagKey=static-float
+  static-int value=10 variant="ten" reason=STATIC err=<nil> metadata=map[] flagKey=static-int
+  static-object value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[] flagKey=static-object
+  static-string value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[] flagKey=static-string
+  targeting-match value=false variant="off" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-match
+  targeting-null-with-default value=false variant="off" reason=DEFAULT err=<nil> metadata=map[] flagKey=targeting-null-with-default
+  type-mismatch value="hello" variant="text" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=type-mismatch
+## strictNumericRange=true protoVersion=false
+disabled ctx=none bool    value=false variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=none string  value="" variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=none int     value=0 variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=none float   value=0 variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=none object  value=map[string]interface {}(nil) variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=none any     value=<nil> variant="" reason=DISABLED err=<nil> metadata=map[] flagKey=disabled
+disabled ctx=match bool    value=false variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=match string  value="" variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=match int     value=0 variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=match float   value=0 variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=match object  value=map[string]interface {}(nil) variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=match any     value=<nil> variant="" reason=DISABLED err=<nil> metadata=map[] flagKey=disabled
+disabled ctx=other bool    value=false variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=other string  value="" variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=other int     value=0 variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=other float   value=0 variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=other object  value=map[string]interface {}(nil) variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=other any     value=<nil> variant="" reason=DISABLED err=<nil> metadata=map[] flagKey=disabled
+fractional ctx=none bool    value=false variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=none string  value="red" variant="red" reason=DEFAULT err=<nil> metadata=map[]
+fractional ctx=none int     value=0 variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=none float   value=0 variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=none object  value=map[string]interface {}(nil) variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=none any     value="red" variant="red" reason=DEFAULT err=<nil> metadata=map[] flagKey=fractional
+fractional ctx=match bool    value=false variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=match string  value="red" variant="red" reason=TARGETING_MATCH err=<nil> metadata=map[]
+fractional ctx=match int     value=0 variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=match float   value=0 variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=match object  value=map[string]interface {}(nil) variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=match any     value="red" variant="red" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=fractional
+fractional ctx=other bool    value=false variant="green" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=other string  value="green" variant="green" reason=TARGETING_MATCH err=<nil> metadata=map[]
+fractional ctx=other int     value=0 variant="green" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=other float   value=0 variant="green" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=other object  value=map[string]interface {}(nil) variant="green" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=other any     value="green" variant="green" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=fractional
+no-default ctx=none bool    value=false variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=none string  value="" variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=none int     value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=none float   value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=none object  value=map[string]interface {}(nil) variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=none any     value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=no-default
+no-default ctx=match bool    value=false variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=match string  value="" variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=match int     value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=match float   value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=match object  value=map[string]interface {}(nil) variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=match any     value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=no-default
+no-default ctx=other bool    value=false variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=other string  value="" variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=other int     value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=other float   value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=other object  value=map[string]interface {}(nil) variant="" reason=FALLBACK err=<nil> metadata=map[]
+no-default ctx=other any     value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=no-default
+outside-2-53 ctx=none bool    value=false variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=none string  value="" variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=none int     value=0 variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=none float   value=0 variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=none object  value=map[string]interface {}(nil) variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=none any     value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[] flagKey=outside-2-53
+outside-2-53 ctx=match bool    value=false variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=match string  value="" variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=match int     value=0 variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=match float   value=0 variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=match object  value=map[string]interface {}(nil) variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=match any     value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[] flagKey=outside-2-53
+outside-2-53 ctx=other bool    value=false variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=other string  value="" variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=other int     value=0 variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=other float   value=0 variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=other object  value=map[string]interface {}(nil) variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=other any     value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[] flagKey=outside-2-53
+outside-int64 ctx=none bool    value=false variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=none string  value="" variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=none int     value=0 variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=none float   value=0 variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=none object  value=map[string]interface {}(nil) variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=none any     value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[] flagKey=outside-int64
+outside-int64 ctx=match bool    value=false variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=match string  value="" variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=match int     value=0 variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=match float   value=0 variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=match object  value=map[string]interface {}(nil) variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=match any     value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[] flagKey=outside-int64
+outside-int64 ctx=other bool    value=false variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=other string  value="" variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=other int     value=0 variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=other float   value=0 variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=other object  value=map[string]interface {}(nil) variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=other any     value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[] flagKey=outside-int64
+static-bool ctx=none bool    value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2]
+static-bool ctx=none string  value="" variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=none int     value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=none float   value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=none object  value=map[string]interface {}(nil) variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=none any     value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2] flagKey=static-bool
+static-bool ctx=match bool    value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2]
+static-bool ctx=match string  value="" variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=match int     value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=match float   value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=match object  value=map[string]interface {}(nil) variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=match any     value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2] flagKey=static-bool
+static-bool ctx=other bool    value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2]
+static-bool ctx=other string  value="" variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=other int     value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=other float   value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=other object  value=map[string]interface {}(nil) variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=other any     value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2] flagKey=static-bool
+static-float ctx=none bool    value=false variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=none string  value="" variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=none int     value=0 variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=none float   value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[]
+static-float ctx=none object  value=map[string]interface {}(nil) variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=none any     value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[] flagKey=static-float
+static-float ctx=match bool    value=false variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=match string  value="" variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=match int     value=0 variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=match float   value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[]
+static-float ctx=match object  value=map[string]interface {}(nil) variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=match any     value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[] flagKey=static-float
+static-float ctx=other bool    value=false variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=other string  value="" variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=other int     value=0 variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=other float   value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[]
+static-float ctx=other object  value=map[string]interface {}(nil) variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=other any     value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[] flagKey=static-float
+static-int ctx=none bool    value=false variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=none string  value="" variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=none int     value=10 variant="ten" reason=STATIC err=<nil> metadata=map[]
+static-int ctx=none float   value=10 variant="ten" reason=STATIC err=<nil> metadata=map[]
+static-int ctx=none object  value=map[string]interface {}(nil) variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=none any     value=10 variant="ten" reason=STATIC err=<nil> metadata=map[] flagKey=static-int
+static-int ctx=match bool    value=false variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=match string  value="" variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=match int     value=10 variant="ten" reason=STATIC err=<nil> metadata=map[]
+static-int ctx=match float   value=10 variant="ten" reason=STATIC err=<nil> metadata=map[]
+static-int ctx=match object  value=map[string]interface {}(nil) variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=match any     value=10 variant="ten" reason=STATIC err=<nil> metadata=map[] flagKey=static-int
+static-int ctx=other bool    value=false variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=other string  value="" variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=other int     value=10 variant="ten" reason=STATIC err=<nil> metadata=map[]
+static-int ctx=other float   value=10 variant="ten" reason=STATIC err=<nil> metadata=map[]
+static-int ctx=other object  value=map[string]interface {}(nil) variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=other any     value=10 variant="ten" reason=STATIC err=<nil> metadata=map[] flagKey=static-int
+static-object ctx=none bool    value=false variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=none string  value="" variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=none int     value=0 variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=none float   value=0 variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=none object  value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[]
+static-object ctx=none any     value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[] flagKey=static-object
+static-object ctx=match bool    value=false variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=match string  value="" variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=match int     value=0 variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=match float   value=0 variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=match object  value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[]
+static-object ctx=match any     value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[] flagKey=static-object
+static-object ctx=other bool    value=false variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=other string  value="" variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=other int     value=0 variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=other float   value=0 variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=other object  value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[]
+static-object ctx=other any     value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[] flagKey=static-object
+static-string ctx=none bool    value=false variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=none string  value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[]
+static-string ctx=none int     value=0 variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=none float   value=0 variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=none object  value=map[string]interface {}(nil) variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=none any     value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[] flagKey=static-string
+static-string ctx=match bool    value=false variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=match string  value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[]
+static-string ctx=match int     value=0 variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=match float   value=0 variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=match object  value=map[string]interface {}(nil) variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=match any     value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[] flagKey=static-string
+static-string ctx=other bool    value=false variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=other string  value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[]
+static-string ctx=other int     value=0 variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=other float   value=0 variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=other object  value=map[string]interface {}(nil) variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=other any     value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[] flagKey=static-string
+targeting-match ctx=none bool    value=false variant="off" reason=TARGETING_MATCH err=<nil> metadata=map[]
+targeting-match ctx=none string  value="" variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=none int     value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=none float   value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=none object  value=map[string]interface {}(nil) variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=none any     value=false variant="off" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-match
+targeting-match ctx=match bool    value=true variant="on" reason=TARGETING_MATCH err=<nil> metadata=map[]
+targeting-match ctx=match string  value="" variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=match int     value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=match float   value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=match object  value=map[string]interface {}(nil) variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=match any     value=true variant="on" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-match
+targeting-match ctx=other bool    value=false variant="off" reason=TARGETING_MATCH err=<nil> metadata=map[]
+targeting-match ctx=other string  value="" variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=other int     value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=other float   value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=other object  value=map[string]interface {}(nil) variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=other any     value=false variant="off" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-match
+targeting-null-no-default ctx=none bool    value=false variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=none string  value="" variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=none int     value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=none float   value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=none object  value=map[string]interface {}(nil) variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=none any     value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=targeting-null-no-default
+targeting-null-no-default ctx=match bool    value=false variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=match string  value="" variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=match int     value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=match float   value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=match object  value=map[string]interface {}(nil) variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=match any     value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=targeting-null-no-default
+targeting-null-no-default ctx=other bool    value=false variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=other string  value="" variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=other int     value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=other float   value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=other object  value=map[string]interface {}(nil) variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-null-no-default ctx=other any     value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=targeting-null-no-default
+targeting-null-with-default ctx=none bool    value=false variant="off" reason=DEFAULT err=<nil> metadata=map[]
+targeting-null-with-default ctx=none string  value="" variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=none int     value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=none float   value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=none object  value=map[string]interface {}(nil) variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=none any     value=false variant="off" reason=DEFAULT err=<nil> metadata=map[] flagKey=targeting-null-with-default
+targeting-null-with-default ctx=match bool    value=false variant="off" reason=DEFAULT err=<nil> metadata=map[]
+targeting-null-with-default ctx=match string  value="" variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=match int     value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=match float   value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=match object  value=map[string]interface {}(nil) variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=match any     value=false variant="off" reason=DEFAULT err=<nil> metadata=map[] flagKey=targeting-null-with-default
+targeting-null-with-default ctx=other bool    value=false variant="off" reason=DEFAULT err=<nil> metadata=map[]
+targeting-null-with-default ctx=other string  value="" variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=other int     value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=other float   value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=other object  value=map[string]interface {}(nil) variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=other any     value=false variant="off" reason=DEFAULT err=<nil> metadata=map[] flagKey=targeting-null-with-default
+targeting-variant-no-default ctx=none bool    value=false variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-variant-no-default ctx=none string  value="" variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-variant-no-default ctx=none int     value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-variant-no-default ctx=none float   value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-variant-no-default ctx=none object  value=map[string]interface {}(nil) variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-variant-no-default ctx=none any     value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=targeting-variant-no-default
+targeting-variant-no-default ctx=match bool    value=true variant="on" reason=TARGETING_MATCH err=<nil> metadata=map[]
+targeting-variant-no-default ctx=match string  value="" variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-variant-no-default ctx=match int     value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-variant-no-default ctx=match float   value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-variant-no-default ctx=match object  value=map[string]interface {}(nil) variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-variant-no-default ctx=match any     value=true variant="on" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-variant-no-default
+targeting-variant-no-default ctx=other bool    value=false variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-variant-no-default ctx=other string  value="" variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-variant-no-default ctx=other int     value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-variant-no-default ctx=other float   value=0 variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-variant-no-default ctx=other object  value=map[string]interface {}(nil) variant="" reason=FALLBACK err=<nil> metadata=map[]
+targeting-variant-no-default ctx=other any     value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=targeting-variant-no-default
+type-mismatch ctx=none bool    value=false variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=none string  value="hello" variant="text" reason=TARGETING_MATCH err=<nil> metadata=map[]
+type-mismatch ctx=none int     value=0 variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=none float   value=0 variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=none object  value=map[string]interface {}(nil) variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=none any     value="hello" variant="text" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=type-mismatch
+type-mismatch ctx=match bool    value=false variant="number" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=match string  value="" variant="number" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=match int     value=42 variant="number" reason=TARGETING_MATCH err=<nil> metadata=map[]
+type-mismatch ctx=match float   value=42 variant="number" reason=TARGETING_MATCH err=<nil> metadata=map[]
+type-mismatch ctx=match object  value=map[string]interface {}(nil) variant="number" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=match any     value=42 variant="number" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=type-mismatch
+type-mismatch ctx=other bool    value=false variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=other string  value="hello" variant="text" reason=TARGETING_MATCH err=<nil> metadata=map[]
+type-mismatch ctx=other int     value=0 variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=other float   value=0 variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=other object  value=map[string]interface {}(nil) variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=other any     value="hello" variant="text" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=type-mismatch
+bulk ctx=none err=<nil> setMetadata=map[] count=15
+  disabled value=false variant="" reason=DISABLED err=<nil> metadata=map[] flagKey=disabled
+  fractional value="red" variant="red" reason=DEFAULT err=<nil> metadata=map[] flagKey=fractional
+  no-default value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=no-default
+  outside-2-53 value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[] flagKey=outside-2-53
+  outside-int64 value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[] flagKey=outside-int64
+  static-bool value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2] flagKey=static-bool
+  static-float value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[] flagKey=static-float
+  static-int value=10 variant="ten" reason=STATIC err=<nil> metadata=map[] flagKey=static-int
+  static-object value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[] flagKey=static-object
+  static-string value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[] flagKey=static-string
+  targeting-match value=false variant="off" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-match
+  targeting-null-no-default value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=targeting-null-no-default
+  targeting-null-with-default value=false variant="off" reason=DEFAULT err=<nil> metadata=map[] flagKey=targeting-null-with-default
+  targeting-variant-no-default value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=targeting-variant-no-default
+  type-mismatch value="hello" variant="text" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=type-mismatch
+bulk ctx=match err=<nil> setMetadata=map[] count=15
+  disabled value=false variant="" reason=DISABLED err=<nil> metadata=map[] flagKey=disabled
+  fractional value="red" variant="red" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=fractional
+  no-default value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=no-default
+  outside-2-53 value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[] flagKey=outside-2-53
+  outside-int64 value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[] flagKey=outside-int64
+  static-bool value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2] flagKey=static-bool
+  static-float value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[] flagKey=static-float
+  static-int value=10 variant="ten" reason=STATIC err=<nil> metadata=map[] flagKey=static-int
+  static-object value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[] flagKey=static-object
+  static-string value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[] flagKey=static-string
+  targeting-match value=true variant="on" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-match
+  targeting-null-no-default value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=targeting-null-no-default
+  targeting-null-with-default value=false variant="off" reason=DEFAULT err=<nil> metadata=map[] flagKey=targeting-null-with-default
+  targeting-variant-no-default value=true variant="on" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-variant-no-default
+  type-mismatch value="" variant="number" reason=ERROR err=TYPE_MISMATCH metadata=map[] flagKey=type-mismatch
+bulk ctx=other err=<nil> setMetadata=map[] count=15
+  disabled value=false variant="" reason=DISABLED err=<nil> metadata=map[] flagKey=disabled
+  fractional value="green" variant="green" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=fractional
+  no-default value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=no-default
+  outside-2-53 value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[] flagKey=outside-2-53
+  outside-int64 value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[] flagKey=outside-int64
+  static-bool value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2] flagKey=static-bool
+  static-float value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[] flagKey=static-float
+  static-int value=10 variant="ten" reason=STATIC err=<nil> metadata=map[] flagKey=static-int
+  static-object value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[] flagKey=static-object
+  static-string value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[] flagKey=static-string
+  targeting-match value=false variant="off" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-match
+  targeting-null-no-default value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=targeting-null-no-default
+  targeting-null-with-default value=false variant="off" reason=DEFAULT err=<nil> metadata=map[] flagKey=targeting-null-with-default
+  targeting-variant-no-default value=<nil> variant="" reason=FALLBACK err=<nil> metadata=map[] flagKey=targeting-variant-no-default
+  type-mismatch value="hello" variant="text" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=type-mismatch
+## strictNumericRange=true protoVersion=true
+disabled ctx=none bool    value=false variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=none string  value="" variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=none int     value=0 variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=none float   value=0 variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=none object  value=map[string]interface {}(nil) variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=none any     value=<nil> variant="" reason=DISABLED err=<nil> metadata=map[] flagKey=disabled
+disabled ctx=match bool    value=false variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=match string  value="" variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=match int     value=0 variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=match float   value=0 variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=match object  value=map[string]interface {}(nil) variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=match any     value=<nil> variant="" reason=DISABLED err=<nil> metadata=map[] flagKey=disabled
+disabled ctx=other bool    value=false variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=other string  value="" variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=other int     value=0 variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=other float   value=0 variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=other object  value=map[string]interface {}(nil) variant="" reason=DISABLED err=<nil> metadata=map[]
+disabled ctx=other any     value=<nil> variant="" reason=DISABLED err=<nil> metadata=map[] flagKey=disabled
+fractional ctx=none bool    value=false variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=none string  value="red" variant="red" reason=DEFAULT err=<nil> metadata=map[]
+fractional ctx=none int     value=0 variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=none float   value=0 variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=none object  value=map[string]interface {}(nil) variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=none any     value="red" variant="red" reason=DEFAULT err=<nil> metadata=map[] flagKey=fractional
+fractional ctx=match bool    value=false variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=match string  value="red" variant="red" reason=TARGETING_MATCH err=<nil> metadata=map[]
+fractional ctx=match int     value=0 variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=match float   value=0 variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=match object  value=map[string]interface {}(nil) variant="red" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=match any     value="red" variant="red" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=fractional
+fractional ctx=other bool    value=false variant="green" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=other string  value="green" variant="green" reason=TARGETING_MATCH err=<nil> metadata=map[]
+fractional ctx=other int     value=0 variant="green" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=other float   value=0 variant="green" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=other object  value=map[string]interface {}(nil) variant="green" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+fractional ctx=other any     value="green" variant="green" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=fractional
+no-default ctx=none bool    value=false variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=none string  value="" variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=none int     value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=none float   value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=none object  value=map[string]interface {}(nil) variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=none any     value=<nil> variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[] flagKey=no-default
+no-default ctx=match bool    value=false variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=match string  value="" variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=match int     value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=match float   value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=match object  value=map[string]interface {}(nil) variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=match any     value=<nil> variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[] flagKey=no-default
+no-default ctx=other bool    value=false variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=other string  value="" variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=other int     value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=other float   value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=other object  value=map[string]interface {}(nil) variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+no-default ctx=other any     value=<nil> variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[] flagKey=no-default
+outside-2-53 ctx=none bool    value=false variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=none string  value="" variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=none int     value=0 variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=none float   value=0 variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=none object  value=map[string]interface {}(nil) variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=none any     value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[] flagKey=outside-2-53
+outside-2-53 ctx=match bool    value=false variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=match string  value="" variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=match int     value=0 variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=match float   value=0 variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=match object  value=map[string]interface {}(nil) variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=match any     value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[] flagKey=outside-2-53
+outside-2-53 ctx=other bool    value=false variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=other string  value="" variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=other int     value=0 variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=other float   value=0 variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=other object  value=map[string]interface {}(nil) variant="big" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-2-53 ctx=other any     value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[] flagKey=outside-2-53
+outside-int64 ctx=none bool    value=false variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=none string  value="" variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=none int     value=0 variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=none float   value=0 variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=none object  value=map[string]interface {}(nil) variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=none any     value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[] flagKey=outside-int64
+outside-int64 ctx=match bool    value=false variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=match string  value="" variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=match int     value=0 variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=match float   value=0 variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=match object  value=map[string]interface {}(nil) variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=match any     value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[] flagKey=outside-int64
+outside-int64 ctx=other bool    value=false variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=other string  value="" variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=other int     value=0 variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=other float   value=0 variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=other object  value=map[string]interface {}(nil) variant="huge" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+outside-int64 ctx=other any     value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[] flagKey=outside-int64
+static-bool ctx=none bool    value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2]
+static-bool ctx=none string  value="" variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=none int     value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=none float   value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=none object  value=map[string]interface {}(nil) variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=none any     value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2] flagKey=static-bool
+static-bool ctx=match bool    value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2]
+static-bool ctx=match string  value="" variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=match int     value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=match float   value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=match object  value=map[string]interface {}(nil) variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=match any     value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2] flagKey=static-bool
+static-bool ctx=other bool    value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2]
+static-bool ctx=other string  value="" variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=other int     value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=other float   value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=other object  value=map[string]interface {}(nil) variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[owner:team weight:2]
+static-bool ctx=other any     value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2] flagKey=static-bool
+static-float ctx=none bool    value=false variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=none string  value="" variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=none int     value=0 variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=none float   value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[]
+static-float ctx=none object  value=map[string]interface {}(nil) variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=none any     value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[] flagKey=static-float
+static-float ctx=match bool    value=false variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=match string  value="" variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=match int     value=0 variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=match float   value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[]
+static-float ctx=match object  value=map[string]interface {}(nil) variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=match any     value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[] flagKey=static-float
+static-float ctx=other bool    value=false variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=other string  value="" variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=other int     value=0 variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=other float   value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[]
+static-float ctx=other object  value=map[string]interface {}(nil) variant="half" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-float ctx=other any     value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[] flagKey=static-float
+static-int ctx=none bool    value=false variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=none string  value="" variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=none int     value=10 variant="ten" reason=STATIC err=<nil> metadata=map[]
+static-int ctx=none float   value=10 variant="ten" reason=STATIC err=<nil> metadata=map[]
+static-int ctx=none object  value=map[string]interface {}(nil) variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=none any     value=10 variant="ten" reason=STATIC err=<nil> metadata=map[] flagKey=static-int
+static-int ctx=match bool    value=false variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=match string  value="" variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=match int     value=10 variant="ten" reason=STATIC err=<nil> metadata=map[]
+static-int ctx=match float   value=10 variant="ten" reason=STATIC err=<nil> metadata=map[]
+static-int ctx=match object  value=map[string]interface {}(nil) variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=match any     value=10 variant="ten" reason=STATIC err=<nil> metadata=map[] flagKey=static-int
+static-int ctx=other bool    value=false variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=other string  value="" variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=other int     value=10 variant="ten" reason=STATIC err=<nil> metadata=map[]
+static-int ctx=other float   value=10 variant="ten" reason=STATIC err=<nil> metadata=map[]
+static-int ctx=other object  value=map[string]interface {}(nil) variant="ten" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-int ctx=other any     value=10 variant="ten" reason=STATIC err=<nil> metadata=map[] flagKey=static-int
+static-object ctx=none bool    value=false variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=none string  value="" variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=none int     value=0 variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=none float   value=0 variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=none object  value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[]
+static-object ctx=none any     value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[] flagKey=static-object
+static-object ctx=match bool    value=false variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=match string  value="" variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=match int     value=0 variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=match float   value=0 variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=match object  value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[]
+static-object ctx=match any     value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[] flagKey=static-object
+static-object ctx=other bool    value=false variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=other string  value="" variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=other int     value=0 variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=other float   value=0 variant="o" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-object ctx=other object  value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[]
+static-object ctx=other any     value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[] flagKey=static-object
+static-string ctx=none bool    value=false variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=none string  value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[]
+static-string ctx=none int     value=0 variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=none float   value=0 variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=none object  value=map[string]interface {}(nil) variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=none any     value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[] flagKey=static-string
+static-string ctx=match bool    value=false variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=match string  value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[]
+static-string ctx=match int     value=0 variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=match float   value=0 variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=match object  value=map[string]interface {}(nil) variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=match any     value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[] flagKey=static-string
+static-string ctx=other bool    value=false variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=other string  value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[]
+static-string ctx=other int     value=0 variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=other float   value=0 variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=other object  value=map[string]interface {}(nil) variant="a" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+static-string ctx=other any     value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[] flagKey=static-string
+targeting-match ctx=none bool    value=false variant="off" reason=TARGETING_MATCH err=<nil> metadata=map[]
+targeting-match ctx=none string  value="" variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=none int     value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=none float   value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=none object  value=map[string]interface {}(nil) variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=none any     value=false variant="off" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-match
+targeting-match ctx=match bool    value=true variant="on" reason=TARGETING_MATCH err=<nil> metadata=map[]
+targeting-match ctx=match string  value="" variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=match int     value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=match float   value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=match object  value=map[string]interface {}(nil) variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=match any     value=true variant="on" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-match
+targeting-match ctx=other bool    value=false variant="off" reason=TARGETING_MATCH err=<nil> metadata=map[]
+targeting-match ctx=other string  value="" variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=other int     value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=other float   value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=other object  value=map[string]interface {}(nil) variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-match ctx=other any     value=false variant="off" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-match
+targeting-null-no-default ctx=none bool    value=false variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=none string  value="" variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=none int     value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=none float   value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=none object  value=map[string]interface {}(nil) variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=none any     value=<nil> variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[] flagKey=targeting-null-no-default
+targeting-null-no-default ctx=match bool    value=false variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=match string  value="" variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=match int     value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=match float   value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=match object  value=map[string]interface {}(nil) variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=match any     value=<nil> variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[] flagKey=targeting-null-no-default
+targeting-null-no-default ctx=other bool    value=false variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=other string  value="" variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=other int     value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=other float   value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=other object  value=map[string]interface {}(nil) variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-null-no-default ctx=other any     value=<nil> variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[] flagKey=targeting-null-no-default
+targeting-null-with-default ctx=none bool    value=false variant="off" reason=DEFAULT err=<nil> metadata=map[]
+targeting-null-with-default ctx=none string  value="" variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=none int     value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=none float   value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=none object  value=map[string]interface {}(nil) variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=none any     value=false variant="off" reason=DEFAULT err=<nil> metadata=map[] flagKey=targeting-null-with-default
+targeting-null-with-default ctx=match bool    value=false variant="off" reason=DEFAULT err=<nil> metadata=map[]
+targeting-null-with-default ctx=match string  value="" variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=match int     value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=match float   value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=match object  value=map[string]interface {}(nil) variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=match any     value=false variant="off" reason=DEFAULT err=<nil> metadata=map[] flagKey=targeting-null-with-default
+targeting-null-with-default ctx=other bool    value=false variant="off" reason=DEFAULT err=<nil> metadata=map[]
+targeting-null-with-default ctx=other string  value="" variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=other int     value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=other float   value=0 variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=other object  value=map[string]interface {}(nil) variant="off" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-null-with-default ctx=other any     value=false variant="off" reason=DEFAULT err=<nil> metadata=map[] flagKey=targeting-null-with-default
+targeting-variant-no-default ctx=none bool    value=false variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-variant-no-default ctx=none string  value="" variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-variant-no-default ctx=none int     value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-variant-no-default ctx=none float   value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-variant-no-default ctx=none object  value=map[string]interface {}(nil) variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-variant-no-default ctx=none any     value=<nil> variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[] flagKey=targeting-variant-no-default
+targeting-variant-no-default ctx=match bool    value=true variant="on" reason=TARGETING_MATCH err=<nil> metadata=map[]
+targeting-variant-no-default ctx=match string  value="" variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-variant-no-default ctx=match int     value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-variant-no-default ctx=match float   value=0 variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-variant-no-default ctx=match object  value=map[string]interface {}(nil) variant="on" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+targeting-variant-no-default ctx=match any     value=true variant="on" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-variant-no-default
+targeting-variant-no-default ctx=other bool    value=false variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-variant-no-default ctx=other string  value="" variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-variant-no-default ctx=other int     value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-variant-no-default ctx=other float   value=0 variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-variant-no-default ctx=other object  value=map[string]interface {}(nil) variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[]
+targeting-variant-no-default ctx=other any     value=<nil> variant="" reason=ERROR err=FLAG_NOT_FOUND metadata=map[] flagKey=targeting-variant-no-default
+type-mismatch ctx=none bool    value=false variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=none string  value="hello" variant="text" reason=TARGETING_MATCH err=<nil> metadata=map[]
+type-mismatch ctx=none int     value=0 variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=none float   value=0 variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=none object  value=map[string]interface {}(nil) variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=none any     value="hello" variant="text" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=type-mismatch
+type-mismatch ctx=match bool    value=false variant="number" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=match string  value="" variant="number" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=match int     value=42 variant="number" reason=TARGETING_MATCH err=<nil> metadata=map[]
+type-mismatch ctx=match float   value=42 variant="number" reason=TARGETING_MATCH err=<nil> metadata=map[]
+type-mismatch ctx=match object  value=map[string]interface {}(nil) variant="number" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=match any     value=42 variant="number" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=type-mismatch
+type-mismatch ctx=other bool    value=false variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=other string  value="hello" variant="text" reason=TARGETING_MATCH err=<nil> metadata=map[]
+type-mismatch ctx=other int     value=0 variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=other float   value=0 variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=other object  value=map[string]interface {}(nil) variant="text" reason=ERROR err=TYPE_MISMATCH metadata=map[]
+type-mismatch ctx=other any     value="hello" variant="text" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=type-mismatch
+bulk ctx=none err=<nil> setMetadata=map[] count=12
+  disabled value=false variant="" reason=DISABLED err=<nil> metadata=map[] flagKey=disabled
+  fractional value="red" variant="red" reason=DEFAULT err=<nil> metadata=map[] flagKey=fractional
+  outside-2-53 value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[] flagKey=outside-2-53
+  outside-int64 value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[] flagKey=outside-int64
+  static-bool value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2] flagKey=static-bool
+  static-float value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[] flagKey=static-float
+  static-int value=10 variant="ten" reason=STATIC err=<nil> metadata=map[] flagKey=static-int
+  static-object value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[] flagKey=static-object
+  static-string value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[] flagKey=static-string
+  targeting-match value=false variant="off" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-match
+  targeting-null-with-default value=false variant="off" reason=DEFAULT err=<nil> metadata=map[] flagKey=targeting-null-with-default
+  type-mismatch value="hello" variant="text" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=type-mismatch
+bulk ctx=match err=<nil> setMetadata=map[] count=12
+  disabled value=false variant="" reason=DISABLED err=<nil> metadata=map[] flagKey=disabled
+  fractional value="red" variant="red" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=fractional
+  outside-2-53 value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[] flagKey=outside-2-53
+  outside-int64 value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[] flagKey=outside-int64
+  static-bool value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2] flagKey=static-bool
+  static-float value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[] flagKey=static-float
+  static-int value=10 variant="ten" reason=STATIC err=<nil> metadata=map[] flagKey=static-int
+  static-object value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[] flagKey=static-object
+  static-string value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[] flagKey=static-string
+  targeting-match value=true variant="on" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-match
+  targeting-null-with-default value=false variant="off" reason=DEFAULT err=<nil> metadata=map[] flagKey=targeting-null-with-default
+  type-mismatch value="" variant="number" reason=ERROR err=TYPE_MISMATCH metadata=map[] flagKey=type-mismatch
+bulk ctx=other err=<nil> setMetadata=map[] count=12
+  disabled value=false variant="" reason=DISABLED err=<nil> metadata=map[] flagKey=disabled
+  fractional value="green" variant="green" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=fractional
+  outside-2-53 value=9.007199254740992e+15 variant="big" reason=STATIC err=<nil> metadata=map[] flagKey=outside-2-53
+  outside-int64 value=1e+19 variant="huge" reason=STATIC err=<nil> metadata=map[] flagKey=outside-int64
+  static-bool value=true variant="on" reason=STATIC err=<nil> metadata=map[owner:team weight:2] flagKey=static-bool
+  static-float value=0.5 variant="half" reason=STATIC err=<nil> metadata=map[] flagKey=static-float
+  static-int value=10 variant="ten" reason=STATIC err=<nil> metadata=map[] flagKey=static-int
+  static-object value=map[string]interface {}{"k":1, "n":map[string]interface {}{"x":true}} variant="o" reason=STATIC err=<nil> metadata=map[] flagKey=static-object
+  static-string value="alpha" variant="a" reason=STATIC err=<nil> metadata=map[] flagKey=static-string
+  targeting-match value=false variant="off" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=targeting-match
+  targeting-null-with-default value=false variant="off" reason=DEFAULT err=<nil> metadata=map[] flagKey=targeting-null-with-default
+  type-mismatch value="hello" variant="text" reason=TARGETING_MATCH err=<nil> metadata=map[] flagKey=type-mismatch
+## context holding NaN
+targeting-match bool    value=false variant="" reason=ERROR err=ERROR metadata=map[]
+fractional string  value="" variant="" reason=ERROR err=ERROR metadata=map[]
+targeting-match int     value=0 variant="" reason=ERROR err=ERROR metadata=map[]
+targeting-match float   value=0 variant="" reason=ERROR err=ERROR metadata=map[]
+targeting-match object  value=map[string]interface {}(nil) variant="" reason=ERROR err=ERROR metadata=map[]
