@@ -71,7 +71,8 @@ type Samples struct {
 	Attribute     *AttributeSample
 	Paired        *PairedSample
 	// BulkOnly names keys whose bulk result may differ from their single result, because the evaluator
-	// documents a bulk-only rule for them.
+	// documents a bulk-only rule for them. A bulk result without a value may carry the typed zero value of the
+	// flag, which needs no entry here.
 	BulkOnly []string
 }
 
@@ -174,6 +175,7 @@ func Run(t T, factory evaluator.Factory, samples Samples) {
 	r.unknownKey()
 	r.bulkEqualsSingle()
 	r.attributes()
+	r.appendsToDst()
 	r.consistentResolution()
 }
 
@@ -254,8 +256,10 @@ func (r run) unknownKey() {
 	}
 }
 
+// same compares two results. Value counts only where HasValue is set: a bulk result may carry the typed zero value
+// of a flag that resolves to none, and a single result of that flag carries nothing.
 func same(a, b evaluator.Result) bool {
-	return a.HasValue == b.HasValue && reflect.DeepEqual(a.Value, b.Value) &&
+	return a.HasValue == b.HasValue && (!a.HasValue || reflect.DeepEqual(a.Value, b.Value)) &&
 		a.Variant == b.Variant && a.Reason == b.Reason && a.ErrorCode == b.ErrorCode
 }
 
@@ -310,6 +314,36 @@ func (r run) attributes() {
 	}
 }
 
+// appendsToDst passes a result the caller holds and expects it to stay at index 0 with the results of the
+// request after it: the typed adapter reuses its buffers and relies on evaluators appending to dst.
+func (r run) appendsToDst() {
+	r.t.Helper()
+	keys := r.samples.keys()
+	if len(keys) == 0 {
+		return
+	}
+	ev, _ := r.create()
+	sentinel := evaluator.Result{FlagKey: "contract-sentinel", Variant: "sentinel"}
+	for name, req := range map[string]evaluator.Request{
+		"single": {FlagKey: keys[0]},
+		"bulk":   {Bulk: true},
+	} {
+		dst := append(make([]evaluator.Result, 0, 8), sentinel)
+		out, _, err := ev.Evaluate(context.Background(), req, dst)
+		if err != nil {
+			r.t.Errorf("append to dst: %s request: expected no error, observed %v", name, err)
+			continue
+		}
+		r.expect("append to dst", len(out) >= 2 && out[0].FlagKey == sentinel.FlagKey && out[0].Variant == sentinel.Variant,
+			name+" request keeps the caller's result at index 0 and appends after it",
+			"the sentinel at index 0 followed by results", fmt.Sprintf("%+v", out))
+		if len(out) >= 2 && !req.Bulk {
+			r.expect("append to dst", len(out) == 2 && out[1].FlagKey == keys[0], name+" request appends its one result",
+				"2 results ending with "+keys[0], fmt.Sprintf("%+v", out))
+		}
+	}
+}
+
 // consistentResolution updates two flags together while readers resolve both in one request; with -race
 // this is also the test for data races between evaluation and delivery.
 func (r run) consistentResolution() {
@@ -336,11 +370,15 @@ func (r run) consistentResolution() {
 		}
 	}
 	done := make(chan struct{})
+	// the writer starts only after every reader has resolved once, so that readers and writer overlap
+	var started sync.WaitGroup
+	started.Add(readers)
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		defer close(done)
+		started.Wait()
 		for round := 1; round <= rounds; round++ {
 			if err := p.Write(st, round); err != nil {
 				fail("consistent resolution: writing round %d: expected no error, observed %v", round, err)
@@ -353,16 +391,9 @@ func (r run) consistentResolution() {
 		go func() {
 			defer wg.Done()
 			keys := p.Keys[:]
-			// every reader resolves at least once: a writer that finishes before the readers are scheduled
-			// must not leave the probe without an observation
-			for observed := false; ; observed = true {
-				select {
-				case <-done:
-					if observed {
-						return
-					}
-				default:
-				}
+			signal := sync.OnceFunc(started.Done)
+			defer signal()
+			for {
 				results, _, err := ev.Evaluate(context.Background(), evaluator.Request{FlagKeys: keys}, nil)
 				if err != nil || len(results) != 2 {
 					fail("consistent resolution: expected 2 results, observed %d results and error %v", len(results), err)
@@ -379,6 +410,12 @@ func (r run) consistentResolution() {
 					fail("consistent resolution: expected %s and %s from one round, observed rounds %d and %d",
 						results[0].FlagKey, results[1].FlagKey, first, second)
 					return
+				}
+				signal()
+				select {
+				case <-done:
+					return
+				default:
 				}
 			}
 		}()

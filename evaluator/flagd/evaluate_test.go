@@ -190,8 +190,6 @@ func flagdSamples() evaluatortest.Samples {
 		},
 		Disabled:      "disabled",
 		AbsentDefault: "absent",
-		// a disabled flag keeps the typed zero value of its default variant in bulk results
-		BulkOnly: []string{"disabled"},
 		Paired: &evaluatortest.PairedSample{
 			Keys:  [2]string{"pair-a", "pair-b"},
 			Write: func(st *store.Store, round int) error { return deliver(st, flags(round)) },
