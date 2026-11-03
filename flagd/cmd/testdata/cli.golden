@@ -1,0 +1,124 @@
+== flagd --help
+exit 0
+Flagd is a simple command line tool for fetching and presenting feature flags to services. It is designed to conform to Open Feature schema for flag definitions.
+
+Usage:
+  flagd [command]
+
+Available Commands:
+  completion  Generate the autocompletion script for the specified shell
+  help        Help about any command
+  start       Start flagd
+  version     Print the version number of flagd
+
+Flags:
+      --config string   config file (default is $HOME/.agent.yaml)
+  -x, --debug           verbose logging
+  -h, --help            help for flagd
+
+Use "flagd [command] --help" for more information about a command.
+== flagd start --help
+exit 0
+Start flagd
+
+Usage:
+  flagd start [flags]
+
+Flags:
+  -H, --context-from-header stringToString   add key-value pairs to map header values to context values, where key is Header name, value is context key (default [])
+  -X, --context-value stringToString         add arbitrary key value pairs to the flag evaluation context (default [])
+  -C, --cors-origin strings                  CORS allowed origins, * will allow all origins
+      --disable-sync-metadata                Disables the getMetadata endpoint of the sync service. Defaults to false, but will default to true in later versions.
+  -h, --help                                 help for start
+      --keep-alive-min-time duration         No-op, accepted for compatibility. The flag sync server is served by connect over net/http, which has no keepalive enforcement policy to configure and imposes no minimum ping interval. (default 30s)
+      --keep-alive-permit-without-stream     No-op, accepted for compatibility. The flag sync server is served by connect over net/http, which always permits keepalive pings without an active stream. (default true)
+  -z, --log-format string                    Set the logging format, e.g. console or json (default "console")
+  -m, --management-port int32                Port for management operations (default 8014)
+  -B, --max-request-body int                 Maximum allowed request body size in bytes. Requests exceeding this are rejected with HTTP 413 (OFREP) or 429 (connect). Set to 0 to disable. WARNING: disabling this limit may allow memory exhaustion from oversized requests. (default 1000000)
+  -R, --max-request-header int               Maximum allowed request header size in bytes. Requests exceeding this are rejected with HTTP 431. Set to 0 to use Go's built-in default (1 MiB). WARNING: setting a very large or zero value may allow memory exhaustion from oversized headers. (default 1000000)
+  -t, --metrics-exporter string              Set the metrics exporter. Default(if unset) is Prometheus. Can be override to otel - OpenTelemetry metric exporter. Overriding to otel require otelCollectorURI to be present
+  -r, --ofrep-port int32                     ofrep service port (default 8016)
+      --ofrep-sse-enabled                    Enable the OFREP SSE change-notification endpoint (ADR-0008) at /ofrep/v1/sse/{channel} on the ofrep port, where the channel is a selector expression. Defaults to true. (default true)
+      --ofrep-sse-inactivity-delay int       Inactivity delay (seconds) advertised to OFREP SSE clients in the eventStreams block. Clients close idle connections after this. Defaults to 120. (default 120)
+      --ofrep-sse-public-url string          Origin (scheme://host) advertised as the OFREP SSE eventStreams endpoint.origin. Omitted when empty, so clients resolve the requestUri against the OFREP base URL. Set when flagd is behind a proxy.
+  -A, --otel-ca-path string                  tls certificate authority path to use with OpenTelemetry collector
+  -D, --otel-cert-path string                tls certificate path to use with OpenTelemetry collector
+  -o, --otel-collector-uri string            Set the grpc URI of the OpenTelemetry collector for flagd runtime. If unset, the collector setup will be ignored and traces will not be exported.
+  -K, --otel-key-path string                 tls key path to use with OpenTelemetry collector
+  -I, --otel-reload-interval duration        how long between reloading the otel tls certificate from disk (default 1h0m0s)
+  -p, --port int32                           Port to listen on (default 8013)
+  -c, --server-cert-path string              Server side tls certificate path
+  -k, --server-key-path string               Server side tls key path
+  -d, --socket-path string                   Flagd unix socket path. With grpc the evaluations service will become available on this address. With http(s) the grpc-gateway proxy will use this address internally.
+  -s, --sources string                       JSON representation of an array of SourceConfig objects. Required fields: uri (string) and provider (string). Optional source-specific fields are also available, see https://flagd.dev/reference/sync-configuration/#source-configuration
+      --stream-deadline duration             Set a server-side deadline for flagd sync and event streams (default 0, means no deadline).
+      --strict-numeric-range                 Rejects numeric flag values outside [-(2^53-1), 2^53-1] with TYPE_MISMATCH. Defaults to false, but will default to true in later versions.
+      --sync-http-enabled                    Serve the flag configuration document over HTTP at /v1/flags on the sync port. Defaults to true. (default true)
+  -g, --sync-port int32                      Flag sync service port, serving gRPC, gRPC-Web and Connect (default 8015)
+  -e, --sync-socket-path string              Flagd sync service socket path. With grpc the sync service will be available on this address.
+  -f, --uri .yaml/.yml/.json                 Set a sync provider uri to read data from, this can be a filepath, URL (HTTP and gRPC), FeatureFlag custom resource, or GCS, Azure Blob or S3. When flag keys are duplicated across multiple providers the merge priority follows the index of the flag arguments, as such flags from the uri at index 0 take the lowest precedence, with duplicated keys being overwritten by those from the uri at index 1. Please note that if you are using filepath, flagd only supports files with .yaml/.yml/.json extension.
+
+Global Flags:
+      --config string   config file (default is $HOME/.agent.yaml)
+  -x, --debug           verbose logging
+== flagd version
+exit 0
+
+		 ______   __       ________   _______    ______      
+		/_____/\ /_/\     /_______/\ /______/\  /_____/\     
+		\::::_\/_\:\ \    \::: _  \ \\::::__\/__\:::_ \ \    
+		 \:\/___/\\:\ \    \::(_)  \ \\:\ /____/\\:\ \ \ \   
+		  \:::._\/ \:\ \____\:: __  \ \\:\\_  _\/ \:\ \ \ \  
+		   \:\ \    \:\/___/\\:.\ \  \ \\:\_\ \ \  \:\/.:| | 
+		    \_\/     \_____\/ \__\/\__\/ \_____\/   \____/_/ 
+
+flagd: v9.9.9 (abc1234), built at: 2026-01-02T03:04:05Z
+build variant: standard
+FIPS 140-3 mode: disabled (binary not built with GOFIPS140)
+== failure: unknown flag
+exit 1
+first error: Error: unknown flag: --nope
+== failure: unknown command
+exit 1
+first error: Error: unknown command "nope" for "flagd"
+== failure: invalid --sources JSON
+exit 1
+first error: error parsing sync providers: invalid character 'o' in literal null (expecting 'u')
+== failure: unknown URI scheme
+exit 1
+first error: invalid sync uri argument: nope://x, must start with 'file:', 'http(s)://', 'grpc(s)://', 'gs://', 'azblob://', 's3://' or 'core.openfeature.dev'
+== failure: port in use
+exit 1
+first error: fatal: errgroup closed with error: error from service endpoint "flag-evaluation": error creating listener for flag evaluation service: listen tcp <addr>: bind: address already in use
+== failure: unreadable config file
+exit 0
+first error: <no error line>
+stdout:
+
+		 ______   __       ________   _______    ______      
+		/_____/\ /_/\     /_______/\ /______/\  /_____/\     
+		\::::_\/_\:\ \    \::: _  \ \\::::__\/__\:::_ \ \    
+		 \:\/___/\\:\ \    \::(_)  \ \\:\ /____/\\:\ \ \ \   
+		  \:::._\/ \:\ \____\:: __  \ \\:\\_  _\/ \:\ \ \ \  
+		   \:\ \    \:\/___/\\:.\ \  \ \\:\_\ \ \  \:\/.:| | 
+		    \_\/     \_____\/ \__\/\__\/ \_____\/   \____/_/ 
+
+flagd: v9.9.9 (abc1234), built at: 2026-01-02T03:04:05Z
+build variant: standard
+FIPS 140-3 mode: disabled (binary not built with GOFIPS140)
+== failure: invalid config file
+exit 0
+first error: <no error line>
+stdout:
+
+		 ______   __       ________   _______    ______      
+		/_____/\ /_/\     /_______/\ /______/\  /_____/\     
+		\::::_\/_\:\ \    \::: _  \ \\::::__\/__\:::_ \ \    
+		 \:\/___/\\:\ \    \::(_)  \ \\:\ /____/\\:\ \ \ \   
+		  \:::._\/ \:\ \____\:: __  \ \\:\\_  _\/ \:\ \ \ \  
+		   \:\ \    \:\/___/\\:.\ \  \ \\:\_\ \ \  \:\/.:| | 
+		    \_\/     \_____\/ \__\/\__\/ \_____\/   \____/_/ 
+
+flagd: v9.9.9 (abc1234), built at: 2026-01-02T03:04:05Z
+build variant: standard
+FIPS 140-3 mode: disabled (binary not built with GOFIPS140)
