@@ -7,7 +7,7 @@
 **Primary Actor:** Extension Author  
 **Goal:** Publish a middleware in the Extension Author's own component module, verified against the middleware contract, so that a distribution adds cross-cutting behaviour such as authentication, rate limits or binding a credential to a selector to its HTTP service endpoints.  
 **Trigger:** Extension Author decides that flagd needs a cross-cutting behaviour none of the official middleware provides  
-**Status:** Draft  
+**Status:** Implemented  
 
 **Requirements:** [FR-012, FR-015, FR-047, FR-003, FR-008, FR-018](../requirements.md)
 
@@ -93,15 +93,15 @@ A middleware component module depends on the core module and on no other flagd m
 
 ### BR-002: HTTP Service Endpoints Only
 
-A middleware wraps the HTTP handler of every service endpoint that serves over HTTP, such as flag evaluation and OFREP. It does not cover the gRPC flag sync endpoint or any other service endpoint without an HTTP handler.
+A middleware wraps the HTTP handler of every service endpoint that serves over Go's `net/http`: flag evaluation, OFREP and flag sync. It does not cover a service endpoint without an HTTP handler.
 
 ### BR-003: Whole Distribution, Manifest Order
 
 Middleware is chosen for the whole distribution, not per service endpoint. Middleware wraps the service endpoints in the order the manifest lists it; the first listed middleware sees a request first.
 
-### BR-004: Official Middleware in flagd-full
+### BR-004: No Middleware in flagd-full
 
-h2c, CORS and HTTP metrics are official middleware. flagd-full's manifest lists them in the order that reproduces today's behaviour: h2c first and active only without TLS, then CORS, then HTTP metrics.
+flagd-full lists no middleware. h2c, CORS and HTTP metrics are layers of the service endpoints, outside the middleware: h2c serves gRPC over plaintext, CORS answers a preflight before any middleware sees it, and the HTTP metrics come from the telemetry provider's HTTP instrumentation at today's positions.
 
 ### BR-005: Bound Selector Cannot Be Widened
 
@@ -130,3 +130,12 @@ The middleware factory interface uses only Go standard library HTTP types, so th
 ### BR-011: Same Selection as Official Components
 
 An extension is referenced in a manifest by Go module path and version in the same way as an official middleware; no registration with the Maintainers is needed.
+
+## Delivered by Later Use Cases
+
+This use case is `Implemented` for the middleware side: the middleware factory interface and the chain in the core module, the middleware contract tests, the official service endpoints wrapped by the configured middleware and honouring the selector it binds, the runtime that stops on an invalid middleware configuration, and `test/middleware-example`, an API key middleware that binds each key to a selector and answers unknown keys with 401 in front of a flagd-full distribution. These parts are delivered by the use cases named here, and are accepted gaps of this one:
+
+| Gap | Delivered by |
+|-----|--------------|
+| Main scenario steps 7–8, A4, the manifest order of BR-003, BR-011, FR-003, FR-008, the manifest check of FR-018 | UC-001 |
+| An evaluator that reads request attributes (BR-006) | UC-019 |
