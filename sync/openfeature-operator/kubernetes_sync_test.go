@@ -768,7 +768,16 @@ func TestSync_ReSync(t *testing.T) {
 				wg.Wait()
 			} else {
 				defer cancel()
-				if err := tt.k.Sync(context.TODO(), dataChannel); !strings.Contains(err.Error(), "not found") {
+				// the initial fetch is repeated until the resource exists: Sync keeps running until the context is done
+				retried := make(chan error, 1)
+				go func() { retried <- tt.k.Sync(ctx, dataChannel) }()
+				select {
+				case err := <-retried:
+					t.Fatalf("Sync returned %v for a resource that does not exist", err)
+				case <-time.After(200 * time.Millisecond):
+				}
+				cancel()
+				if err := <-retried; err != nil {
 					t.Errorf("Unexpected error: %v", err)
 				}
 				if err := tt.k.ReSync(context.TODO(), dataChannel); !strings.Contains(err.Error(), "not found") {

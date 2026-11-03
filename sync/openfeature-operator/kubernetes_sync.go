@@ -11,6 +11,7 @@ import (
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/polling"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/fields"
@@ -109,13 +110,11 @@ func (k *Sync) IsReady() bool {
 func (k *Sync) Sync(ctx context.Context, dataSync chan<- sync.DataSync) error {
 	k.logger.Info(fmt.Sprintf("starting sync from %s", k.URI))
 
-	// Initial fetch
+	// Initial fetch, repeated with a backoff until the resource can be read
 	k.logger.Debug(fmt.Sprintf("initial fetch from %s", k.URI))
-	fetch, err := k.fetch(ctx)
-	if err != nil {
-		err = fmt.Errorf("error with the initial fetch: %w", err)
-		k.logger.Error(err.Error())
-		return err
+	fetch, ok := k.fetchWithRetry(ctx)
+	if !ok {
+		return nil
 	}
 
 	dataSync <- sync.DataSync{FlagData: fetch, Source: k.URI}
@@ -349,4 +348,25 @@ func parseURI(uri string) (string, string, error) {
 		return "", "", fmt.Errorf("invalid resource uri format, expected <namespace>/<crdName> but got: %s", uri)
 	}
 	return s[0], s[1], nil
+}
+
+// retryInterval is the base of the backoff between the attempts of the initial fetch.
+var retryInterval = time.Duration(polling.DefaultInterval) * time.Second
+
+// fetchWithRetry fetches the resource until it succeeds. It reports false when ctx is done first.
+func (k *Sync) fetchWithRetry(ctx context.Context) (string, bool) {
+	backoff := polling.Backoff{Interval: retryInterval}
+	for failures := 1; ; failures++ {
+		fetch, err := k.fetch(ctx)
+		if err == nil {
+			return fetch, true
+		}
+		wait := backoff.Retry(failures)
+		k.logger.Error(fmt.Sprintf("error with the initial fetch, trying again in %s: %s", wait, err.Error()))
+		select {
+		case <-ctx.Done():
+			return "", false
+		case <-time.After(wait):
+		}
+	}
 }
