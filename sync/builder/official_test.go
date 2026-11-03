@@ -27,6 +27,11 @@ const (
 	syncProviderS3         = s3.Provider
 )
 
+// k8sClient is what the tests set as the builder's Kubernetes client builder.
+type k8sClient interface {
+	GetK8sClient() (dynamic.Interface, error)
+}
+
 // clientFunc adapts a function to a client builder.
 type clientFunc func() (dynamic.Interface, error)
 
@@ -36,7 +41,7 @@ func init() {
 	defaultFactories = func(sb *SyncBuilder) []sync.Factory {
 		sb.k8sClientBuilder = &ofoperator.KubernetesClientBuilder{}
 		return official.With(official.Options{K8sClient: clientFunc(func() (dynamic.Interface, error) {
-			return sb.k8sClientBuilder.GetK8sClient()
+			return sb.k8sClientBuilder.(k8sClient).GetK8sClient()
 		})})
 	}
 }
