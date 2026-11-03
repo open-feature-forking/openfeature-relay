@@ -75,8 +75,8 @@ func (r *receiver) all() []payload {
 }
 
 // TestExtensionEventSink builds flagd-full's components with the example event sink, makes one OFREP evaluation and
-// changes the flag file. The sink's receiver gets the evaluation and the configuration change that added a flag; the
-// runtime delivers what the sink still holds when it shuts down.
+// changes the flag file. With a flush interval that never elapses, the sink's receiver stays empty until the runtime
+// shuts down, and then gets the evaluation and the configuration change that added a flag.
 func TestExtensionEventSink(t *testing.T) {
 	dir := t.TempDir()
 	source := filepath.Join(dir, "flags.json")
@@ -88,7 +88,11 @@ func TestExtensionEventSink(t *testing.T) {
 	components := runtime.Official()
 	components.EventSinks = []eventsink.Configured{{
 		Factory: eventsinkexample.Factory{},
-		Config:  map[string]any{eventsinkexample.SettingURL: webhook.URL},
+		Config: map[string]any{
+			eventsinkexample.SettingURL: webhook.URL,
+			// the age of a batch would not flush it within the test, so only the shutdown delivers
+			eventsink.KeyFlushInterval: "1h",
+		},
 	}}
 	ofrepPort := freePort(t)
 	rt, err := runtime.FromConfig(logger.NewLogger(nil, false), "test", runtime.Config{
@@ -128,6 +132,9 @@ func TestExtensionEventSink(t *testing.T) {
 	require.NoError(t, os.WriteFile(source, []byte(flagsAfter), 0o600))
 	require.Eventually(t, func() bool { return evaluate("f2") }, 20*time.Second, 50*time.Millisecond,
 		"the file change adds f2")
+
+	require.Never(t, func() bool { return len(rcv.all()) > 0 }, 500*time.Millisecond, 50*time.Millisecond,
+		"the sink holds its events until the runtime shuts down")
 
 	require.NoError(t, syscall.Kill(os.Getpid(), syscall.SIGTERM))
 	select {
