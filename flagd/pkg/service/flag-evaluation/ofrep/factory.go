@@ -16,7 +16,9 @@ const ConfigKey = "config"
 
 // EndpointConfig is what the runtime derives from the operator's settings for the endpoint.
 type EndpointConfig struct {
-	Service                    SvcConfiguration
+	Service SvcConfiguration
+	// Formats are the configuration formats whose documents the event stream tracks.
+	Formats                    []string
 	CORS                       []string
 	ContextValues              map[string]any
 	HeaderToContextKeyMappings map[string]string
@@ -42,6 +44,8 @@ func (Factory) Create(s service.Settings) (service.Endpoint, error) {
 	cfg, _ := s.Config[ConfigKey].(EndpointConfig)
 	cfg.Service.Logger = s.Logger.WithFields(zap.String("component", "OFREPService"))
 	cfg.Service.HTTPMiddleware = s.HTTPMiddleware
+	cfg.Service.Bus = s.Bus
+	cfg.Service.Formats = cfg.Formats
 	svc, err := NewOfrepService(s.Resolver, s.Store, cfg.CORS, cfg.Service, cfg.ContextValues, cfg.HeaderToContextKeyMappings)
 	if err != nil {
 		return nil, fmt.Errorf("error creating OFREP service: %w", err)
