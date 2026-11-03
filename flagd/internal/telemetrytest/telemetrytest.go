@@ -46,10 +46,10 @@ func (r *Recorder) ConnectHandlerOptions() []connect.HandlerOption {
 	return r.Provider.(*otelprovider.Provider).ConnectHandlerOptions()
 }
 
-// ProviderFor returns a telemetry provider that records its metrics to reader and does not expose its spans.
+// ProviderFor returns a telemetry provider that records its metrics to reader and drops its spans.
 func ProviderFor(reader metric.Reader) telemetry.Provider {
 	p, err := otelprovider.NewFactory(
-		otelprovider.WithoutGlobals(), otelprovider.WithSpanExporter(&exporter{}), otelprovider.WithMetricReader(reader),
+		otelprovider.WithoutGlobals(), otelprovider.WithSpanExporter(discardExporter{}), otelprovider.WithMetricReader(reader),
 	).
 		Create(context.Background(), telemetry.Settings{DistributionName: "flagd", DistributionVersion: "test"})
 	if err != nil {
@@ -150,6 +150,13 @@ func RequestDurationPoints(
 	}
 	return scopes, points
 }
+
+// discardExporter drops the spans it gets.
+type discardExporter struct{}
+
+func (discardExporter) ExportSpans(context.Context, []trace.ReadOnlySpan) error { return nil }
+
+func (discardExporter) Shutdown(context.Context) error { return nil }
 
 // exporter keeps the spans it gets. Unlike the in-memory exporter of the SDK it keeps them after Shutdown.
 type exporter struct {
