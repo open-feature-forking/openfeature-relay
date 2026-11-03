@@ -132,25 +132,35 @@ func mapResolve(stderr string, components []Component, runErr error) error {
 	if reason == "" {
 		reason = runErr.Error()
 	}
-	// the failing module is the one named last, as "module@version: reason"; the ones before it only require it
+	// the failing module is the one named last, as "module@version: reason" or as the go.mod it could not read; the
+	// ones before it only require it
+	var line, module string
 	if found := failing.FindAllStringSubmatch(reason, -1); len(found) > 0 {
-		line, module := strings.TrimSpace(found[len(found)-1][0]), found[len(found)-1][1]
-		for _, c := range components {
-			if c.Module == module {
-				return &ResolveError{Module: c.Module, Version: c.Version, Reason: line}
-			}
-		}
-		return &ResolveError{
-			Module: module, Reason: line,
-			Hint: fmt.Sprintf("a component module requires %s, which the Go Toolchain cannot fetch. A manifest in a repository "+
-				"replaces every relay module of its build list by a local path, not only the components: add "+
-				"`- {module: %s, path: <path to the module>}` to `replaces`.", module, module),
+		line, module = strings.TrimSpace(found[len(found)-1][0]), found[len(found)-1][1]
+	}
+	if found := unreadable.FindAllStringSubmatch(reason, -1); len(found) > 0 {
+		line, module = strings.TrimSpace(found[len(found)-1][0]), found[len(found)-1][1]
+	}
+	if module == "" {
+		return fmt.Errorf("go mod tidy failed: %s", reason)
+	}
+	for _, c := range components {
+		if c.Module == module {
+			return &ResolveError{Module: c.Module, Version: c.Version, Reason: line}
 		}
 	}
-	return fmt.Errorf("go mod tidy failed: %s", reason)
+	return &ResolveError{
+		Module: module, Reason: line,
+		Hint: fmt.Sprintf("a component module requires %s, which the Go Toolchain cannot fetch. A manifest in a repository "+
+			"replaces every relay module of its build list by a local path, not only the components: add "+
+			"`- {module: %s, path: <path to the module>}` to `replaces`.", module, module),
+	}
 }
 
-var failing = regexp.MustCompile(`(?m)(\S+?)@(v[^\s:]+): .*$`)
+var (
+	failing    = regexp.MustCompile(`(?m)(\S+?)@(v[^\s:]+): .*$`)
+	unreadable = regexp.MustCompile(`(?m)^.*: reading (\S+?)/go\.mod at revision .*$`)
+)
 
 // Module is one entry of the build list.
 type Module struct {
