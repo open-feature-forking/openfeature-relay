@@ -24,8 +24,22 @@ var updateCLI = flag.Bool("update-cli", false, "rewrite testdata/cli.golden from
 const cliGolden = "testdata/cli.golden"
 
 // buildFlagd builds the binary of flagd's main package into dir, with the version stamps of a release build.
+// A binary the Builder made is used when FLAGD_BINARY names it; it carries the stamps of its manifest, so the stamped
+// line of flagd version is not compared then.
+var stamp = regexp.MustCompile(`flagd: \S+ \([^)]*\), built at: \S+`)
+
+func stamped(s string) string {
+	if os.Getenv("FLAGD_BINARY") == "" {
+		return s
+	}
+	return stamp.ReplaceAllString(s, "flagd: <stamp>")
+}
+
 func buildFlagd(t *testing.T, dir string) string {
 	t.Helper()
+	if bin := os.Getenv("FLAGD_BINARY"); bin != "" {
+		return bin
+	}
 	bin := filepath.Join(dir, "flagd")
 	cmd := exec.CommandContext(context.Background(), "go", "build", "-o", bin,
 		"-ldflags", "-X main.version=v9.9.9 -X main.commit=abc1234 -X main.date=2026-01-02T03:04:05Z",
@@ -156,8 +170,8 @@ func TestCLICharacterization(t *testing.T) {
 	want, err := os.ReadFile(cliGolden)
 	require.NoError(t, err, "record the current binary with `go test -run TestCLICharacterization -update-cli`")
 	want = bytes.ReplaceAll(want, []byte("\r\n"), []byte("\n"))
-	if got := out.String(); got != string(want) {
-		wantLines, gotLines := strings.Split(string(want), "\n"), strings.Split(got, "\n")
+	if got := stamped(out.String()); got != stamped(string(want)) {
+		wantLines, gotLines := strings.Split(stamped(string(want)), "\n"), strings.Split(got, "\n")
 		for n := 0; n < len(wantLines) && n < len(gotLines); n++ {
 			if wantLines[n] != gotLines[n] {
 				t.Fatalf("the command line changed at line %d\nwant: %s\n got: %s", n+1, wantLines[n], gotLines[n])

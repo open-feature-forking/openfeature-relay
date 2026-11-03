@@ -294,6 +294,7 @@ build-flagd-full:
 	GOWORK=off ./bin/relay-builder --manifest distributions/flagd-full/manifest.yaml || exit 1; \
 	echo "flagd-full built in $$(( $$(date +%s) - start ))s"
 	test -x distributions/flagd-full/build/flagd
+	cd flagd && FLAGD_BINARY=$$(cd ../distributions/flagd-full/build && pwd)/flagd go test -count=1 -run TestCLICharacterization ./
 
 # UC-001 Q12: the source the Builder generates from the manifest of flagd-full holds the components flagd keeps in
 # hand (flagd/components): same factories, modules, schemes, evaluator format and needs.
