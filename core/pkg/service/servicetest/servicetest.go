@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"reflect"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -60,6 +61,26 @@ type Batch struct {
 	Trackings   []events.Tracking
 }
 
+// Feature is something an endpoint may have, which the contract checks through an input. The names are those
+// of the inputs.
+type Feature string
+
+const (
+	// FeatureDocuments is serving flag configurations: the input Documents.
+	FeatureDocuments Feature = "Documents"
+	// FeatureValidator is giving clients a cache validator: the input Validator.
+	FeatureValidator Feature = "Validator"
+	// FeatureListen is announcing changes to clients: the input Listen.
+	FeatureListen Feature = "Listen"
+	// FeatureSendEvents is collecting events from in-process providers: the input SendEvents.
+	FeatureSendEvents Feature = "SendEvents"
+	// FeatureHTTP is serving HTTP through Settings.WrapHTTP: the field HTTP. An endpoint that resolves flags
+	// has to set it or name it in Without.
+	FeatureHTTP Feature = "HTTP"
+)
+
+var allFeatures = []Feature{FeatureDocuments, FeatureValidator, FeatureListen, FeatureSendEvents, FeatureHTTP}
+
 // Inputs connect the harness to the endpoint's protocol. Every function receives the address the endpoint
 // listens on, "host:port" for the free port the harness put into Config under PortKey, or "" without PortKey.
 type Inputs struct {
@@ -70,6 +91,10 @@ type Inputs struct {
 	// HTTP says the endpoint serves HTTP through Settings.WrapHTTP; the harness then supplies middleware that
 	// binds a selector and attributes, and checks the effective selector.
 	HTTP bool
+	// Without names the features the endpoint does not have. A feature is either supplied through its input or
+	// named here; one that is neither fails its case, naming the input, so that leaving an input out cannot
+	// pass the contract.
+	Without []Feature
 
 	// Connect opens a client connection that stays open, for example a stream, and returns a channel that is
 	// closed when the endpoint ends the connection. It fails until the endpoint serves, and gives up on its own
@@ -114,6 +139,26 @@ type contractCase struct {
 	name       string
 	applicable func(service.Needs, Inputs) bool
 	run        func(*env) error
+	// feature is set for a case of an optional feature: it runs when the input is supplied, is left out when
+	// the feature is named in Inputs.Without, and fails otherwise.
+	feature Feature
+}
+
+// supplied reports whether the input of the feature is set.
+func (f Feature) supplied(in Inputs) bool {
+	switch f {
+	case FeatureDocuments:
+		return in.Documents != nil
+	case FeatureValidator:
+		return in.Validator != nil
+	case FeatureListen:
+		return in.Listen != nil
+	case FeatureSendEvents:
+		return in.SendEvents != nil
+	case FeatureHTTP:
+		return in.HTTP
+	}
+	return false
 }
 
 var always = func(service.Needs, Inputs) bool { return true }
@@ -123,28 +168,42 @@ func resolves(n service.Needs, _ Inputs) bool { return n.Router || n.Format != "
 // Check runs the cases and returns every result, in order, without failing a test.
 func Check(f service.Factory, in Inputs) []Result {
 	cases := []contractCase{
-		{"declarations", always, caseDeclarations},
-		{"creates from what it declared", always, caseCreates},
-		{"serves and returns within the budget with its connections ended", always, caseServesAndStops},
-		{"a serve error is returned", always, caseServeError},
-		{"resolves through the injected resolver with the effective selector", resolves, caseResolvesThroughInjection},
-		{"publishes one evaluation event per resolved flag", resolves, caseOneEvaluationEvent},
-		{"serves the documents of the requested format, unchanged, with versions",
-			func(_ service.Needs, in Inputs) bool { return in.Documents != nil }, caseDocuments},
-		{"the validator follows the document version",
-			func(_ service.Needs, in Inputs) bool { return in.Validator != nil }, caseValidator},
-		{"reacts to a configuration change event for its selector only",
-			func(_ service.Needs, in Inputs) bool { return in.Listen != nil }, caseReacts},
-		{"relays events marked in-process",
-			func(_ service.Needs, in Inputs) bool { return in.SendEvents != nil }, caseRelays},
-		{"honours the bound selector and the client's selector",
-			func(n service.Needs, in Inputs) bool { return in.HTTP && n.Router }, caseEffectiveSelector},
+		{"declarations", always, caseDeclarations, ""},
+		{"creates from what it declared", always, caseCreates, ""},
+		{"serves and returns within the budget with its connections ended", always, caseServesAndStops, ""},
+		{"a serve error is returned", always, caseServeError, ""},
+		{"resolves through the injected resolver with the effective selector", resolves, caseResolvesThroughInjection, ""},
+		{"publishes one evaluation event per resolved flag", resolves, caseOneEvaluationEvent, ""},
+		{"serves the documents of the requested format, unchanged, with versions", always, caseDocuments, FeatureDocuments},
+		{"the validator follows the document version", always, caseValidator, FeatureValidator},
+		{"reacts to a configuration change event for its selector only", always, caseReacts, FeatureListen},
+		{"relays events marked in-process", always, caseRelays, FeatureSendEvents},
+		{"honours the bound selector and the client's selector", func(n service.Needs, _ Inputs) bool { return n.Router },
+			caseEffectiveSelector, FeatureHTTP},
 	}
 
 	needs := f.Needs()
 	var results []Result
+	for _, feature := range in.Without {
+		if !slices.Contains(allFeatures, feature) {
+			results = append(results, Result{Name: "inputs", Err: fmt.Errorf(
+				"expected Without to name features of the contract: %v\nobserved: %q", allFeatures, feature)})
+		} else if feature.supplied(in) {
+			results = append(results, Result{Name: "inputs", Err: fmt.Errorf(
+				"expected Without not to name a feature whose input is set\nobserved: %q is both set and named", feature)})
+		}
+	}
 	for _, c := range cases {
 		if !c.applicable(needs, in) {
+			continue
+		}
+		if c.feature != "" && !c.feature.supplied(in) {
+			if slices.Contains(in.Without, c.feature) {
+				continue
+			}
+			results = append(results, Result{Name: c.name, Err: fmt.Errorf(
+				"the input %s is required\nexpected the endpoint to supply it, or to name %s in Without when it has no such feature\nobserved: neither",
+				c.feature, c.feature)})
 			continue
 		}
 		results = append(results, Result{Name: c.name, Err: guarded(func() error { return c.run(newEnv(f, in)) })})
