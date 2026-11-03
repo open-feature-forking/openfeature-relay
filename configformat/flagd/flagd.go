@@ -356,3 +356,6 @@ func (Factory) Create(s configformat.Settings) (configformat.ConfigurationFormat
 	}
 	return NewFormat(s.Store, s.Logger), nil
 }
+
+// NewFactory returns the factory of flagd's configuration format, as a generated main of a distribution calls it.
+func NewFactory() configformat.Factory { return Factory{} }

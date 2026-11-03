@@ -341,3 +341,99 @@ func TestSinksFlushedOnShutdown(t *testing.T) {
 	require.True(t, call.live, "the telemetry provider's context is alive")
 	require.GreaterOrEqual(t, call.left, telemetryReserve-200*time.Millisecond)
 }
+
+// flushOrderTelemetry is a telemetry factory whose provider counts what is recorded through its "flushed" counter and
+// keeps the count its Shutdown found.
+type flushOrderTelemetry struct{ provider *flushOrderProvider }
+
+func (*flushOrderTelemetry) Type() string { return "flush-order-telemetry" }
+
+func (f *flushOrderTelemetry) Create(context.Context, telemetry.Settings) (telemetry.Provider, error) {
+	f.provider = &flushOrderProvider{Provider: telemetry.Noop(), shutdownAt: -1}
+	return f.provider, nil
+}
+
+const flushedMetric = "test.sink.flushed"
+
+type flushOrderProvider struct {
+	telemetry.Provider
+	mu         sync.Mutex
+	flushed    int64
+	shutdownAt int64 // the count when Shutdown ran, -1 before
+}
+
+func (p *flushOrderProvider) Meter(scope string) telemetry.Meter {
+	return flushedMeter{Meter: p.Provider.Meter(scope), p: p}
+}
+
+func (p *flushOrderProvider) Shutdown(context.Context) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.shutdownAt = p.flushed
+	return nil
+}
+
+type flushedMeter struct {
+	telemetry.Meter
+	p *flushOrderProvider
+}
+
+func (m flushedMeter) Int64Counter(name string, opts ...telemetry.InstrumentOption) telemetry.Int64Counter {
+	if name != flushedMetric {
+		return m.Meter.Int64Counter(name, opts...)
+	}
+	return flushedCounter{m.p}
+}
+
+type flushedCounter struct{ p *flushOrderProvider }
+
+func (c flushedCounter) Add(_ context.Context, n int64, _ ...telemetry.Attribute) {
+	c.p.mu.Lock()
+	c.p.flushed += n
+	c.p.mu.Unlock()
+}
+
+// telemetrySink records every delivered event through the telemetry provider it was created with.
+type telemetrySink struct{ flushed telemetry.Int64Counter }
+
+func (s telemetrySink) Deliver(ctx context.Context, batch []events.Event) error {
+	s.flushed.Add(ctx, int64(len(batch)))
+	return nil
+}
+
+func (telemetrySink) Close() error { return nil }
+
+type telemetrySinkFactory struct{}
+
+func (telemetrySinkFactory) Type() string { return "telemetry-sink" }
+
+func (telemetrySinkFactory) Kinds() []events.Kind { return []events.Kind{events.KindEvaluation} }
+
+func (telemetrySinkFactory) Create(s eventsink.Settings) (eventsink.Sink, error) {
+	return telemetrySink{flushed: s.Telemetry.Meter("test").Int64Counter(flushedMetric)}, nil
+}
+
+// TestSinksFlushBeforeTelemetryShutdown pins S6's order: the event sinks flush first, so what they record while
+// flushing, such as an exporter's own counters, still reaches the telemetry provider before it shuts down.
+func TestSinksFlushBeforeTelemetryShutdown(t *testing.T) {
+	const published = 3
+	telemetryFactory := &flushOrderTelemetry{}
+	rt, err := fromConfigWithSinks(t, Components{
+		Telemetry: telemetryFactory,
+		EventSinks: []eventsink.Configured{{
+			Factory: telemetrySinkFactory{},
+			// the age of the batch would not flush it within the test
+			Config: map[string]any{eventsink.KeyFlushInterval: "1h"},
+		}},
+	})
+	require.NoError(t, err)
+	for range published {
+		events.PublishEvaluation(rt.Bus, events.Evaluation{FlagKey: "a"})
+	}
+
+	rt.Bus.Close()
+	rt.runShutdownHooks()
+
+	require.EqualValues(t, published, telemetryFactory.provider.shutdownAt,
+		"the telemetry provider shut down before the event sinks had flushed")
+}
