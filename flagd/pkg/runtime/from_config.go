@@ -265,7 +265,7 @@ func syncProvidersFromConfig(
 	tp telemetry.Provider,
 	factories []sync.Factory,
 ) ([]sync.ISync, error) {
-	builder := syncbuilder.NewSyncBuilderOf(factories...)
+	builder := syncbuilder.NewSyncBuilder(factories...)
 	builder.Telemetry = tp
 	builder.SyncMetricsRecorder = sync.NewMetricsRecorder(tp.Meter(sync.MetricsScope))
 	syncs, err := builder.SyncsFromConfig(sources, logger)

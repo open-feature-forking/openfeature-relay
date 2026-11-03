@@ -12,7 +12,7 @@ import (
 	flagdformat "github.com/open-feature-forking/openfeature-relay/configformat/flagd"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	flagdeval "github.com/open-feature-forking/openfeature-relay/evaluator/flagd"
-	syncbuilder "github.com/open-feature-forking/openfeature-relay/sync/builder"
+	"github.com/open-feature-forking/openfeature-relay/sync/builder/official"
 	"github.com/stretchr/testify/require"
 )
 
@@ -30,7 +30,7 @@ func TestOfficialComponentsCharacterization(t *testing.T) {
 	var out strings.Builder
 
 	out.WriteString("sync components\n")
-	for _, f := range syncbuilder.Official() {
+	for _, f := range official.Factories() {
 		fmt.Fprintf(&out, "  %s\n", f.Type())
 		if sf, ok := f.(coresync.SchemeFactory); ok {
 			fmt.Fprintf(&out, "    schemes: %q\n", sf.Schemes())

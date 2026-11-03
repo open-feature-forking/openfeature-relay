@@ -11,6 +11,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	syncbuilder "github.com/open-feature-forking/openfeature-relay/sync/builder"
+	"github.com/open-feature-forking/openfeature-relay/sync/builder/official"
 	otelprovider "github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"github.com/open-feature/flagd/flagd/pkg/runtime"
 	"github.com/spf13/cobra"
@@ -183,7 +184,7 @@ var startCmd = &cobra.Command{
 			rtLogger.Fatal("refusing to start", zap.Error(err))
 		}
 
-		syncProviders, err := syncbuilder.ParseSyncProviderURIs(viper.GetStringSlice(uriFlagName), syncbuilder.Official()...)
+		syncProviders, err := syncbuilder.ParseSyncProviderURIs(viper.GetStringSlice(uriFlagName), official.Factories()...)
 		if err != nil {
 			log.Fatal(err)
 		}

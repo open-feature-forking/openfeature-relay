@@ -10,67 +10,17 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/fetching"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/polling"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
-	"github.com/open-feature-forking/openfeature-relay/sync/azblob"
-	"github.com/open-feature-forking/openfeature-relay/sync/file"
-	flagdgrpc "github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc"
-	"github.com/open-feature-forking/openfeature-relay/sync/gcs"
-	httpSync "github.com/open-feature-forking/openfeature-relay/sync/http"
-	ofoperator "github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator"
-	"github.com/open-feature-forking/openfeature-relay/sync/s3"
-	googlegrpc "google.golang.org/grpc"
 	"k8s.io/client-go/dynamic"
 )
 
 const (
-	syncProviderFile       = file.Provider
-	syncProviderFsNotify   = file.FSNOTIFY
-	syncProviderFileInfo   = file.FILEINFO
-	syncProviderGrpc       = flagdgrpc.Provider
-	syncProviderKubernetes = ofoperator.Provider
-	syncProviderHTTP       = httpSync.Provider
-	syncProviderGcs        = gcs.Provider
-	syncProviderAzblob     = azblob.Provider
-	syncProviderS3         = s3.Provider
+	providerFile       = "file"
+	providerKubernetes = "kubernetes"
 )
 
 type ISyncBuilder interface {
 	SyncFromURI(uri string, logger *logger.Logger) (sync.ISync, error)
 	SyncsFromConfig(sourceConfig []sync.SourceConfig, logger *logger.Logger) ([]sync.ISync, error)
-}
-
-// OfficialOptions are what a distribution injects into the official sync components.
-type OfficialOptions struct {
-	// StreamMetrics records the lifecycle of the gRPC sync streams.
-	StreamMetrics flagdgrpc.StreamMetricsRecorder
-	// GRPCDialOptions are added to the client connection of every gRPC sync source.
-	GRPCDialOptions []googlegrpc.DialOption
-	// K8sClient builds the Kubernetes client; nil reads the cluster configuration from the environment.
-	K8sClient ofoperator.ClientBuilder
-}
-
-// Official returns the official sync components: their factories and the factories of the fetch triggers they
-// attach, in the order the Operator is shown their provider names.
-func Official() []sync.Factory {
-	return OfficialWith(OfficialOptions{})
-}
-
-// OfficialWith returns the official sync components with what a distribution injects into them.
-func OfficialWith(opts OfficialOptions) []sync.Factory {
-	k8s := opts.K8sClient
-	if k8s == nil {
-		k8s = &KubernetesClientBuilder{}
-	}
-	return []sync.Factory{
-		file.Factory{},
-		file.FSNotifyTriggerFactory(),
-		file.FileInfoTriggerFactory(),
-		ofoperator.Factory{Client: k8s},
-		httpSync.Factory{},
-		flagdgrpc.Factory{DialOptions: opts.GRPCDialOptions, StreamMetrics: opts.StreamMetrics},
-		gcs.NewFactory(),
-		azblob.NewFactory(),
-		s3.NewFactory(),
-	}
 }
 
 // SyncBuilder creates the sync providers of sources from the factories of the sync components it knows.
@@ -86,33 +36,23 @@ type SyncBuilder struct {
 	Telemetry telemetry.Provider
 }
 
-// clientFunc adapts a function to a client builder.
-type clientFunc func() (dynamic.Interface, error)
-
-func (f clientFunc) GetK8sClient() (dynamic.Interface, error) { return f() }
-
-// NewSyncBuilder creates a builder for the given factories; without any it knows the official components.
+// NewSyncBuilder creates a builder for the given factories. It imports no sync module: a distribution passes the
+// factories of its components, such as those of the official package.
 func NewSyncBuilder(factories ...sync.Factory) *SyncBuilder {
-	sb := &SyncBuilder{k8sClientBuilder: &KubernetesClientBuilder{}}
-	if len(factories) == 0 {
-		factories = OfficialWith(OfficialOptions{K8sClient: clientFunc(func() (dynamic.Interface, error) {
-			return sb.k8sClientBuilder.GetK8sClient()
-		})})
+	sb := &SyncBuilder{factories: factories}
+	if len(factories) == 0 && defaultFactories != nil {
+		sb.factories = defaultFactories(sb)
 	}
-	sb.factories = factories
 	return sb
 }
 
-// NewSyncBuilderOf creates a builder for exactly the given factories: without any, no source can be created. It is how a
-// distribution builds sync providers from its own components.
-func NewSyncBuilderOf(factories ...sync.Factory) *SyncBuilder {
-	return &SyncBuilder{k8sClientBuilder: &KubernetesClientBuilder{}, factories: factories}
-}
+// defaultFactories supplies the factories of a builder created without any. It is set by tests only.
+var defaultFactories func(*SyncBuilder) []sync.Factory
 
 // SyncFromURI creates the sync provider of a file or FeatureFlag source given as a --uri; the configuration proxy
 // uses it.
 func (sb *SyncBuilder) SyncFromURI(uri string, logger *logger.Logger) (sync.ISync, error) {
-	for _, provider := range []string{syncProviderFile, syncProviderKubernetes} {
+	for _, provider := range []string{providerFile, providerKubernetes} {
 		f, ok := sb.schemeFactory(provider)
 		if !ok {
 			continue
@@ -251,7 +191,3 @@ func quoteAnd(names []string) string {
 type IK8sClientBuilder interface {
 	GetK8sClient() (dynamic.Interface, error)
 }
-
-// KubernetesClientBuilder builds the Kubernetes client from the cluster configuration of the environment. It lives in
-// the Kubernetes sync module, whose factory uses it when no builder is set.
-type KubernetesClientBuilder = ofoperator.KubernetesClientBuilder
