@@ -234,7 +234,7 @@ func telemetryProvider(
 	if components.Telemetry == nil {
 		return telemetry.Noop(), nil, nil
 	}
-	if err := telemetry.ValidateDeclaration(components.Telemetry); err != nil {
+	if err := telemetry.ValidateDeclarations(components.Telemetry); err != nil {
 		return nil, nil, fmt.Errorf("the telemetry provider declares: %w", err)
 	}
 	tp, err := components.Telemetry.Create(context.Background(), telemetry.Settings{
