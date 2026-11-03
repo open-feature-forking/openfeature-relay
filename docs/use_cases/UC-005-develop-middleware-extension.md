@@ -6,7 +6,7 @@
 **Use Case Name:** Develop Middleware Extension  
 **Primary Actor:** Extension Author  
 **Goal:** Publish a middleware in the Extension Author's own component module, verified against the middleware contract, so that a distribution adds cross-cutting behaviour such as authentication, rate limits or binding a credential to a selector to its HTTP service endpoints.  
-**Trigger:** Extension Author decides that flagd needs a cross-cutting behaviour none of the official middleware provides  
+**Trigger:** Extension Author decides that flagd needs a cross-cutting behaviour flagd's service endpoints do not provide  
 **Status:** Implemented  
 
 **Requirements:** [FR-012, FR-015, FR-047, FR-003, FR-008, FR-018](../requirements.md)
@@ -25,7 +25,7 @@
 5. Extension Author runs the middleware contract tests (include UC-008 Run Contract Tests).
 6. System reports that the middleware meets every case of the middleware contract.
 7. Extension Author tags and publishes the component module under its Go module path and version.
-8. The middleware is available as an extension that a Distribution Builder selects in a manifest by module path and version, exactly like an official middleware.
+8. The middleware is available as an extension that a Distribution Builder selects in a manifest by module path and version, exactly like an official component.
 
 ## Alternative Flows
 
@@ -129,7 +129,7 @@ The middleware factory interface uses only Go standard library HTTP types, so th
 
 ### BR-011: Same Selection as Official Components
 
-An extension is referenced in a manifest by Go module path and version in the same way as an official middleware; no registration with the Maintainers is needed.
+An extension is referenced in a manifest by Go module path and version in the same way as an official component; no registration with the Maintainers is needed.
 
 ## Delivered by Later Use Cases
 
