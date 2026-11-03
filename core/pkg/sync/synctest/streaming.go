@@ -78,7 +78,6 @@ func newCollector(ch <-chan sync.DataSync, done <-chan struct{}) *collector {
 	return c
 }
 
-
 // await waits for the delivery with the given index.
 func (c *collector) await(index int, d time.Duration) (sync.DataSync, bool) {
 	deadline := time.After(d)

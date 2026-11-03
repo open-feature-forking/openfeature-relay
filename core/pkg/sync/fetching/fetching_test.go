@@ -176,22 +176,40 @@ func (r *receivedRecorder) count() int {
 	return len(r.calls)
 }
 
-func TestFirstFetchBeforeTriggers(t *testing.T) {
-	events := make(chan string, 8)
+// TestSignalBeforeTheFirstFetchIsHandledAfterIt: the triggers run before the first fetch, so that no change falls
+// between it and the moment they watch the source; what they signal meanwhile follows the first fetch, never
+// overlaps it.
+func TestSignalBeforeTheFirstFetchIsHandledAfterIt(t *testing.T) {
+	var calls, active, maxActive atomic.Int32
+	gate := make(chan struct{})
 	fetcher := fetcherFunc(func(context.Context, string) (sync.FetchResult, error) {
-		events <- "fetch"
-		return result("v1", flagsV1), nil
+		n := calls.Add(1)
+		a := active.Add(1)
+		defer active.Add(-1)
+		if a > maxActive.Load() {
+			maxActive.Store(a)
+		}
+		if n == 1 {
+			<-gate
+		}
+		return result(fmt.Sprint("v", n), fmt.Sprintf(`{"n":%d}`, n)), nil
 	})
-	trigger := funcTrigger(func(ctx context.Context, _ func()) error {
-		events <- "trigger"
+	signalled := make(chan struct{})
+	trigger := funcTrigger(func(ctx context.Context, signal func()) error {
+		signal()
+		close(signalled)
 		<-ctx.Done()
 		return nil
 	})
 	r := start(t, Options{Fetcher: fetcher, Triggers: []sync.Trigger{trigger}})
 
-	require.Equal(t, sync.DataSync{FlagData: flagsV1, Source: source}, r.next(t))
-	require.Equal(t, "fetch", <-events)
-	require.Equal(t, "trigger", <-events)
+	<-signalled
+	require.Eventually(t, func() bool { return calls.Load() == 1 }, timeout, time.Millisecond)
+	close(gate)
+
+	require.Equal(t, `{"n":1}`, r.next(t).FlagData)
+	require.Equal(t, `{"n":2}`, r.next(t).FlagData)
+	require.Equal(t, int32(1), maxActive.Load())
 }
 
 func TestFirstFetchRetriesWithoutPoller(t *testing.T) {

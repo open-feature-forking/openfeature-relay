@@ -129,14 +129,8 @@ func (p *Provider) ReSync(ctx context.Context, dataSync chan<- sync.DataSync) er
 func (p *Provider) Sync(ctx context.Context, dataSync chan<- sync.DataSync) error {
 	p.opts.Logger.Info(fmt.Sprintf("starting sync from %s", p.opts.Source))
 
-	if err := p.firstFetch(ctx, dataSync); err != nil {
-		return err
-	}
-	if ctx.Err() != nil {
-		return p.shutdown(nil)
-	}
-	p.ready.Store(true)
-
+	// The triggers start before the first fetch, so that no change falls between that fetch and the moment they
+	// watch the source. What they signal meanwhile is handled after the first fetch.
 	triggerErr := make(chan error, len(p.opts.Triggers))
 	triggerCtx, cancelTriggers := context.WithCancel(ctx)
 	defer cancelTriggers()
@@ -148,6 +142,21 @@ func (p *Provider) Sync(ctx context.Context, dataSync chan<- sync.DataSync) erro
 			p.runTrigger(triggerCtx, trigger, triggerErr)
 		}()
 	}
+	// the triggers stop with the context, or with the provider when it stops for another reason
+	stopTriggers := func() {
+		cancelTriggers()
+		running.Wait()
+	}
+
+	if err := p.firstFetch(ctx, dataSync); err != nil {
+		stopTriggers()
+		return p.shutdown(err)
+	}
+	if ctx.Err() != nil {
+		stopTriggers()
+		return p.shutdown(nil)
+	}
+	p.ready.Store(true)
 
 	var result error
 loop:
@@ -164,9 +173,7 @@ loop:
 		}
 	}
 
-	// the triggers stop with the context, or with the provider when one of them failed
-	cancelTriggers()
-	running.Wait()
+	stopTriggers()
 	return p.shutdown(result)
 }
 
