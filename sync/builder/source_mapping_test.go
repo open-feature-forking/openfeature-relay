@@ -12,43 +12,35 @@ import (
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	"github.com/open-feature-forking/openfeature-relay/sync/blob"
-	"github.com/open-feature-forking/openfeature-relay/sync/blob/bloburi"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/bloburi"
 	buildermock "github.com/open-feature-forking/openfeature-relay/sync/builder/mock"
-	"github.com/open-feature-forking/openfeature-relay/sync/file"
-	flagdgrpc "github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc"
-	httpsync "github.com/open-feature-forking/openfeature-relay/sync/http"
-	ofoperator "github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
-// providerKind names the provider a builder made. Only this function knows the provider types.
-func providerKind(s sync.ISync) string {
-	switch s.(type) {
-	case *file.Sync:
-		return "file"
-	case *httpsync.Sync:
-		return "http"
-	case *flagdgrpc.Sync:
-		return "grpc"
-	case *ofoperator.Sync:
-		return "kubernetes"
-	case *blob.Sync:
+// providerKind names the kind of provider a source resolved to.
+func providerKind(res Resolution) string {
+	switch res.Factory.Type() {
+	case "gcs", "azblob", "s3":
 		return "blob"
 	default:
-		return "unknown"
+		return res.Factory.Type()
 	}
 }
 
-// blobSourceName returns the source name a blob provider delivers with. Only this function reads the
-// provider's fields.
-func blobSourceName(t *testing.T, s sync.ISync) string {
+// bucketObject is what a blob fetcher tells about its source.
+type bucketObject interface {
+	Bucket() string
+	Object() string
+}
+
+// blobSourceName returns the source name a blob source delivers with.
+func blobSourceName(t *testing.T, res Resolution) string {
 	t.Helper()
 
-	b, ok := s.(*blob.Sync)
-	require.True(t, ok)
-	return bloburi.Join(b.Bucket, b.Object)
+	f, ok := res.Fetcher.(bucketObject)
+	require.True(t, ok, "want a blob fetcher, got %T", res.Fetcher)
+	return bloburi.Join(f.Bucket(), f.Object())
 }
 
 // TestSourceMappingCharacterization pins how sources are mapped to providers: the URI forms and their
@@ -120,8 +112,8 @@ func TestSourceMappingCharacterization(t *testing.T) {
 			{sync.SourceConfig{URI: "s3://b/o", Provider: "s3"}, nil, "blob"},
 		}
 		for _, tt := range tests {
-			provider, _ := buildSource(t, tt.cfg, tt.opts...)
-			require.Equal(t, tt.want, providerKind(provider), tt.cfg.Provider)
+			res := resolveSource(t, tt.cfg, tt.opts...)
+			require.Equal(t, tt.want, providerKind(res), tt.cfg.Provider)
 		}
 	})
 
@@ -133,8 +125,8 @@ func TestSourceMappingCharacterization(t *testing.T) {
 			{URI: "s3://bucket/flags.json", Provider: "s3"},
 			{URI: "s3://bucket/path/flags.json?use_path_style=true&region=eu&endpoint=http://127.0.0.1:3900", Provider: "s3"},
 		} {
-			provider, _ := buildSource(t, cfg)
-			require.Equal(t, cfg.URI, blobSourceName(t, provider), cfg.URI)
+			res := resolveSource(t, cfg)
+			require.Equal(t, cfg.URI, blobSourceName(t, res), cfg.URI)
 		}
 	})
 
@@ -156,9 +148,9 @@ func TestSourceMappingCharacterization(t *testing.T) {
 		watcherOf := func(t *testing.T, provider string) string {
 			src := startSource(t, sync.SourceConfig{URI: path, Provider: provider})
 			src.requireDelivery(t, sync.DataSync{FlagData: `{}`, Source: path})
-			entries := src.logs.FilterMessage("Starting filepath sync notifier").All()
-			require.Len(t, entries, 1)
-			return entries[0].ContextMap()["sync"].(string)
+			res := resolveSource(t, sync.SourceConfig{URI: path, Provider: provider})
+			require.Len(t, res.Triggers, 1)
+			return res.Triggers[0].Type
 		}
 
 		t.Setenv("KUBERNETES_SERVICE_HOST", "")

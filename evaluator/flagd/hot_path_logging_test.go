@@ -73,7 +73,7 @@ func TestHotPathLoggingIsDebugOnly(t *testing.T) {
 			}}, model.Metadata{}, false)
 			logs.TakeAll()
 
-			value, _, _, _, err := resolve[string](context.Background(), "default", flagKey, tt.context, je.evaluateVariant)
+			value, _, _, _, err := je.ResolveStringValue(context.Background(), "default", flagKey, tt.context)
 			require.NoError(t, err)
 			assert.Equal(t, "off", value)
 

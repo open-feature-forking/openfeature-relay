@@ -55,6 +55,11 @@ func CheckTrigger(t testing.TB, f sync.TriggerFactory, in TriggerInputs) Report 
 	if err != nil || trigger == nil {
 		return Report{Aborted: fmt.Sprintf("the factory cannot create the fetch trigger (trigger %v, error %v)", trigger, err)}
 	}
+	if init, ok := trigger.(sync.InitializingTrigger); ok {
+		if err := init.Init(context.Background()); err != nil {
+			return Report{Aborted: fmt.Sprintf("the fetch trigger cannot be initialized: %v", err)}
+		}
+	}
 
 	limit := timeoutOr(in.Timeout)
 	signals := make(chan struct{}, 64)
@@ -108,18 +113,26 @@ func CheckTrigger(t testing.TB, f sync.TriggerFactory, in TriggerInputs) Report 
 
 	var cases []Case
 
-	in.Signal(t)
-	one := awaitSignal(limit)
-	in.Signal(t)
-	two := awaitSignal(limit)
+	// the change signal may arrive before the trigger listens to it, so it is sent again until it is seen
+	arrive := func() bool {
+		deadline := time.Now().Add(limit)
+		for time.Now().Before(deadline) {
+			in.Signal(t)
+			if awaitSignal(min(max(limit/8, 50*time.Millisecond), time.Until(deadline))) {
+				return true
+			}
+		}
+		return false
+	}
+	one := arrive()
+	two := arrive()
 	cases = append(cases, check(CaseSignalsEachTime, one && two,
 		"one signal for each arrival of the change signal, here two",
 		fmt.Sprintf("first arrival signalled: %v, second arrival signalled: %v", one, two)))
 
 	drain()
 	in.Interrupt(t)
-	in.Signal(t)
-	after := awaitSignal(limit)
+	after := arrive()
 	cases = append(cases, check(CaseReconnects, after,
 		"a signal for a change signal that arrives after the connection was lost",
 		fmt.Sprintf("signalled: %v", after)))

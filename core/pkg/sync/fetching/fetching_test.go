@@ -176,22 +176,40 @@ func (r *receivedRecorder) count() int {
 	return len(r.calls)
 }
 
-func TestFirstFetchBeforeTriggers(t *testing.T) {
-	events := make(chan string, 8)
+// TestSignalBeforeTheFirstFetchIsHandledAfterIt: the triggers run before the first fetch, so that no change falls
+// between it and the moment they watch the source; what they signal meanwhile follows the first fetch, never
+// overlaps it.
+func TestSignalBeforeTheFirstFetchIsHandledAfterIt(t *testing.T) {
+	var calls, active, maxActive atomic.Int32
+	gate := make(chan struct{})
 	fetcher := fetcherFunc(func(context.Context, string) (sync.FetchResult, error) {
-		events <- "fetch"
-		return result("v1", flagsV1), nil
+		n := calls.Add(1)
+		a := active.Add(1)
+		defer active.Add(-1)
+		if a > maxActive.Load() {
+			maxActive.Store(a)
+		}
+		if n == 1 {
+			<-gate
+		}
+		return result(fmt.Sprint("v", n), fmt.Sprintf(`{"n":%d}`, n)), nil
 	})
-	trigger := funcTrigger(func(ctx context.Context, _ func()) error {
-		events <- "trigger"
+	signalled := make(chan struct{})
+	trigger := funcTrigger(func(ctx context.Context, signal func()) error {
+		signal()
+		close(signalled)
 		<-ctx.Done()
 		return nil
 	})
 	r := start(t, Options{Fetcher: fetcher, Triggers: []sync.Trigger{trigger}})
 
-	require.Equal(t, sync.DataSync{FlagData: flagsV1, Source: source}, r.next(t))
-	require.Equal(t, "fetch", <-events)
-	require.Equal(t, "trigger", <-events)
+	<-signalled
+	require.Eventually(t, func() bool { return calls.Load() == 1 }, timeout, time.Millisecond)
+	close(gate)
+
+	require.Equal(t, `{"n":1}`, r.next(t).FlagData)
+	require.Equal(t, `{"n":2}`, r.next(t).FlagData)
+	require.Equal(t, int32(1), maxActive.Load())
 }
 
 func TestFirstFetchRetriesWithoutPoller(t *testing.T) {
@@ -290,7 +308,7 @@ func TestUnchangedDeliversNothing(t *testing.T) {
 	// A result that is unchanged would deliver if the check were missing: the first carries data the core can decode,
 	// the second none, which would be delivered as an empty flag configuration.
 	for name, unchanged := range map[string]sync.FetchResult{
-		"the fetcher reports unchanged with data": {Unchanged: true, Data: []byte(flagsV2), Extension: ".json"},
+		"the fetcher reports unchanged with data":    {Unchanged: true, Data: []byte(flagsV2), Extension: ".json"},
 		"the fetcher reports unchanged without data": {Unchanged: true},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -550,116 +568,126 @@ func TestOutcomeObserverIsNotified(t *testing.T) {
 	require.EqualError(t, <-trigger.outcomes, "error fetching "+source+": down")
 }
 
-func TestLegacy(t *testing.T) {
-	t.Run("ExitOnFirstFailure", func(t *testing.T) {
-		fetcher := fetcherFunc(func(context.Context, string) (sync.FetchResult, error) {
-			return sync.FetchResult{}, errors.New("down")
-		})
-		r := start(t, Options{Fetcher: fetcher, Legacy: Legacy{ExitOnFirstFailure: true}})
-		require.EqualError(t, r.result(t), "error fetching "+source+": down")
-		require.False(t, r.provider.IsReady())
+func TestReadErrorKeepsTheFlags(t *testing.T) {
+	var calls atomic.Int32
+	fetcher := fetcherFunc(func(context.Context, string) (sync.FetchResult, error) {
+		if calls.Add(1) == 1 {
+			return result("v1", flagsV1), nil
+		}
+		return sync.FetchResult{}, errors.New("permission denied")
+	})
+	trigger := newManualTrigger()
+	r := start(t, Options{Fetcher: fetcher, Triggers: []sync.Trigger{trigger}})
+	r.next(t)
+	trigger.signal(t)()
+	r.none(t)
+}
+
+func TestEmptyDataIsDeliveredAndCounted(t *testing.T) {
+	recorder := &receivedRecorder{}
+	var calls atomic.Int32
+	fetcher := fetcherFunc(func(context.Context, string) (sync.FetchResult, error) {
+		if calls.Add(1) == 2 {
+			return sync.FetchResult{Version: "empty"}, nil
+		}
+		return result(fmt.Sprint("v", calls.Load()), flagsV1), nil
+	})
+	trigger := newManualTrigger()
+	r := start(t, Options{Fetcher: fetcher, Triggers: []sync.Trigger{trigger}, Metrics: recorder})
+	r.next(t)
+	trigger.signal(t)()
+	require.Equal(t, "{}", r.next(t).FlagData)
+	require.Equal(t, 2, recorder.count())
+}
+
+func TestUndecodableDataKeepsTheFlags(t *testing.T) {
+	var calls atomic.Int32
+	fetcher := fetcherFunc(func(context.Context, string) (sync.FetchResult, error) {
+		if calls.Add(1) == 1 {
+			return result("v1", flagsV1), nil
+		}
+		return sync.FetchResult{Data: []byte("flags: [\n"), Extension: ".yaml", Version: "v2"}, nil
+	})
+	trigger := newManualTrigger()
+	r := start(t, Options{Fetcher: fetcher, Triggers: []sync.Trigger{trigger}})
+	r.next(t)
+	trigger.signal(t)()
+	r.none(t)
+}
+
+func TestUnchangedAdoptsTheVersionItCarries(t *testing.T) {
+	var mu gosync.Mutex
+	var previous []string
+	fetcher := fetcherFunc(func(_ context.Context, p string) (sync.FetchResult, error) {
+		mu.Lock()
+		previous = append(previous, p)
+		mu.Unlock()
+		if p == "" {
+			return result("v1", flagsV1), nil
+		}
+		return sync.FetchResult{Unchanged: true, Version: "v1-moved"}, nil
+	})
+	trigger := newManualTrigger()
+	r := start(t, Options{Fetcher: fetcher, Triggers: []sync.Trigger{trigger}})
+	r.next(t)
+
+	fetches := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(previous)
+	}
+	// a signal that arrives before the fetch of the one before it has started is coalesced with it, so each waits
+	signal := trigger.signal(t)
+	signal()
+	require.Eventually(t, func() bool { return fetches() >= 2 }, timeout, time.Millisecond)
+	signal()
+	require.Eventually(t, func() bool { return fetches() >= 3 }, timeout, time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	require.Equal(t, []string{"", "v1", "v1-moved"}, previous[:3])
+}
+
+type initializingTrigger struct {
+	*manualTrigger
+	err    error
+	inited atomic.Int32
+}
+
+func (i *initializingTrigger) Init(context.Context) error {
+	i.inited.Add(1)
+	return i.err
+}
+
+func TestInitInitializesTriggers(t *testing.T) {
+	trigger := &initializingTrigger{manualTrigger: newManualTrigger(), err: errors.New("no such path")}
+	provider := New(Options{
+		Fetcher: constantFetcher(), Triggers: []sync.Trigger{trigger}, Logger: logger.NewLogger(nil, false), Source: source,
 	})
 
-	t.Run("RedeliverUnchanged", func(t *testing.T) {
-		trigger := newManualTrigger()
-		r := start(t, Options{
-			Fetcher: constantFetcher(), Triggers: []sync.Trigger{trigger}, Legacy: Legacy{RedeliverUnchanged: true},
-		})
-		r.next(t)
-		trigger.signal(t)()
-		require.Equal(t, flagsV1, r.next(t).FlagData)
+	err := provider.Init(context.Background())
+	require.ErrorContains(t, err, "no such path")
+	require.Equal(t, int32(1), trigger.inited.Load())
+}
+
+// TestRestartedTriggerQueuesAFetch: what a trigger would have signalled while it was not running is lost, so the
+// provider fetches once when it runs the trigger again.
+func TestRestartedTriggerQueuesAFetch(t *testing.T) {
+	var fetches, runs atomic.Int32
+	fetcher := fetcherFunc(func(context.Context, string) (sync.FetchResult, error) {
+		if fetches.Add(1) == 1 {
+			return result("v1", flagsV1), nil
+		}
+		return result("v2", flagsV2), nil
 	})
-
-	t.Run("EmptyOnReadError", func(t *testing.T) {
-		var calls atomic.Int32
-		fetcher := fetcherFunc(func(context.Context, string) (sync.FetchResult, error) {
-			switch calls.Add(1) {
-			case 1:
-				return result("v1", flagsV1), nil
-			case 2:
-				return sync.FetchResult{}, fmt.Errorf("%w: permission denied", sync.ErrRead)
-			default:
-				return sync.FetchResult{Data: []byte("flags: [\n"), Extension: ".yaml", Version: "v3"}, nil
-			}
-		})
-		trigger := newManualTrigger()
-		r := start(t, Options{Fetcher: fetcher, Triggers: []sync.Trigger{trigger}, Legacy: Legacy{EmptyOnReadError: true}})
-		r.next(t)
-
-		signal := trigger.signal(t)
-		signal()
-		require.Equal(t, "{}", r.next(t).FlagData)
-		signal()
-		require.Equal(t, "{}", r.next(t).FlagData, "so does data that cannot be decoded")
+	trigger := funcTrigger(func(ctx context.Context, _ func()) error {
+		if runs.Add(1) == 1 {
+			return errors.New("the watch closed")
+		}
+		<-ctx.Done()
+		return nil
 	})
+	r := start(t, Options{Fetcher: fetcher, Triggers: []sync.Trigger{trigger}, Interval: 5 * time.Millisecond})
 
-	t.Run("a read error without EmptyOnReadError keeps the flags", func(t *testing.T) {
-		var calls atomic.Int32
-		fetcher := fetcherFunc(func(context.Context, string) (sync.FetchResult, error) {
-			if calls.Add(1) == 1 {
-				return result("v1", flagsV1), nil
-			}
-			return sync.FetchResult{}, fmt.Errorf("%w: permission denied", sync.ErrRead)
-		})
-		trigger := newManualTrigger()
-		r := start(t, Options{Fetcher: fetcher, Triggers: []sync.Trigger{trigger}})
-		r.next(t)
-		trigger.signal(t)()
-		r.none(t)
-	})
-
-	t.Run("NoDeadline", func(t *testing.T) {
-		var calls atomic.Int32
-		fetcher := fetcherFunc(func(ctx context.Context, _ string) (sync.FetchResult, error) {
-			if calls.Add(1) == 2 {
-				<-ctx.Done()
-				return sync.FetchResult{}, ctx.Err()
-			}
-			return result(fmt.Sprint("v", calls.Load()), flagsV1), nil
-		})
-		trigger := newManualTrigger()
-		r := start(t, Options{
-			Fetcher: fetcher, Triggers: []sync.Trigger{trigger}, Timeout: 20 * time.Millisecond, Legacy: Legacy{NoDeadline: true},
-		})
-		r.next(t)
-
-		signal := trigger.signal(t)
-		signal()
-		require.Eventually(t, func() bool { return calls.Load() == 2 }, timeout, time.Millisecond)
-		time.Sleep(200 * time.Millisecond)
-		signal()
-		time.Sleep(quiet)
-		require.Equal(t, int32(2), calls.Load(), "the hung fetch still blocks the next one")
-	})
-
-	t.Run("IgnoreIncremental", func(t *testing.T) {
-		r := start(t, Options{Fetcher: constantFetcher(), IncrementalUpdates: true, Legacy: Legacy{IgnoreIncremental: true}})
-		require.False(t, r.next(t).IncrementalUpdates)
-	})
-
-	t.Run("CountOnlyRead", func(t *testing.T) {
-		recorder := &receivedRecorder{}
-		var calls atomic.Int32
-		fetcher := fetcherFunc(func(context.Context, string) (sync.FetchResult, error) {
-			if calls.Add(1) == 2 {
-				return sync.FetchResult{Version: "empty"}, nil // empty data
-			}
-			return result(fmt.Sprint("v", calls.Load()), flagsV1), nil
-		})
-		trigger := newManualTrigger()
-		r := start(t, Options{
-			Fetcher: fetcher, Triggers: []sync.Trigger{trigger}, Metrics: recorder, Legacy: Legacy{CountOnlyRead: true},
-		})
-		r.next(t)
-		trigger.signal(t)()
-		require.Equal(t, "{}", r.next(t).FlagData)
-		require.Equal(t, 1, recorder.count(), "the empty flag configuration is not counted")
-	})
-
-	t.Run("ExitOnTriggerError", func(t *testing.T) {
-		trigger := funcTrigger(func(context.Context, func()) error { return errors.New("watcher closed") })
-		r := start(t, Options{Fetcher: constantFetcher(), Triggers: []sync.Trigger{trigger}, Legacy: Legacy{ExitOnTriggerError: true}})
-		r.next(t)
-		require.EqualError(t, r.result(t), "watcher closed")
-	})
+	require.Equal(t, flagsV1, r.next(t).FlagData)
+	require.Equal(t, flagsV2, r.next(t).FlagData, "the change made while the trigger was not running is fetched")
 }

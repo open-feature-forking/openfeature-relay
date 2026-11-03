@@ -44,8 +44,14 @@ type Runtime struct {
 	mu msync.Mutex
 }
 
-//nolint:funlen
 func (r *Runtime) Start() error {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	return r.start(ctx)
+}
+
+//nolint:funlen
+func (r *Runtime) start(ctx context.Context) error {
 	if r.EvaluationService == nil {
 		return errors.New("no service set")
 	}
@@ -55,8 +61,6 @@ func (r *Runtime) Start() error {
 	if r.Evaluator == nil {
 		return errors.New("no evaluator set")
 	}
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
 	g, gCtx := errgroup.WithContext(ctx)
 	dataSync := make(chan sync.DataSync, len(r.Syncs))
 	// Initialize DataSync channel watcher

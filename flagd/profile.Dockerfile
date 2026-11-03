@@ -30,8 +30,6 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=bind,source=./sync/http/go.sum,target=./sync/http/go.sum \
     --mount=type=bind,source=./sync/openfeature-operator/go.mod,target=./sync/openfeature-operator/go.mod \
     --mount=type=bind,source=./sync/openfeature-operator/go.sum,target=./sync/openfeature-operator/go.sum \
-    --mount=type=bind,source=./sync/blob/go.mod,target=./sync/blob/go.mod \
-    --mount=type=bind,source=./sync/blob/go.sum,target=./sync/blob/go.sum \
     --mount=type=bind,source=./sync/gcs/go.mod,target=./sync/gcs/go.mod \
     --mount=type=bind,source=./sync/gcs/go.sum,target=./sync/gcs/go.sum \
     --mount=type=bind,source=./sync/azblob/go.mod,target=./sync/azblob/go.mod \
@@ -48,7 +46,7 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=bind,source=./configformat/flagd/go.sum,target=./configformat/flagd/go.sum \
     --mount=type=bind,source=./flagd/go.mod,target=./flagd/go.mod \
     --mount=type=bind,source=./flagd/go.sum,target=./flagd/go.sum \
-    go work init ./core ./sync/file ./sync/flagd-grpc ./sync/http ./sync/openfeature-operator ./sync/blob ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel ./evaluator/flagd ./configformat/flagd ./flagd && go mod download
+    go work init ./core ./sync/file ./sync/flagd-grpc ./sync/http ./sync/openfeature-operator ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel ./evaluator/flagd ./configformat/flagd ./flagd && go mod download
 
 # Build the application.
 # Leverage a cache mount to /go/pkg/mod/ to speed up subsequent builds.

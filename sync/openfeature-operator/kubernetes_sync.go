@@ -11,6 +11,7 @@ import (
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/polling"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/fields"
@@ -109,13 +110,11 @@ func (k *Sync) IsReady() bool {
 func (k *Sync) Sync(ctx context.Context, dataSync chan<- sync.DataSync) error {
 	k.logger.Info(fmt.Sprintf("starting sync from %s", k.URI))
 
-	// Initial fetch
+	// Initial fetch, repeated with a backoff until the resource can be read
 	k.logger.Debug(fmt.Sprintf("initial fetch from %s", k.URI))
-	fetch, err := k.fetch(ctx)
-	if err != nil {
-		err = fmt.Errorf("error with the initial fetch: %w", err)
-		k.logger.Error(err.Error())
-		return err
+	fetch, ok := k.fetchWithRetry(ctx)
+	if !ok {
+		return nil
 	}
 
 	dataSync <- sync.DataSync{FlagData: fetch, Source: k.URI}
@@ -193,13 +192,14 @@ func (k *Sync) fetch(ctx context.Context) (string, error) {
 	}
 
 	if exist {
-		configuration, err := toFFCfg(item)
+		// the resource is checked to be a FeatureFlag, and delivered as it was written
+		_, err := toFFCfg(item)
 		if err != nil {
 			return "", err
 		}
 
 		k.logger.Debug(fmt.Sprintf("resource %s served from the informer cache", k.URI))
-		return marshallFeatureFlagSpec(configuration)
+		return marshalFlagSpec(item)
 	}
 
 	// fallback to API access - this is an informer cache miss. Could happen at the startup where cache is not filled
@@ -214,11 +214,11 @@ func (k *Sync) fetch(ctx context.Context) (string, error) {
 
 	k.logger.Debug(fmt.Sprintf("resource %s served from API server", k.URI))
 
-	ff, err := toFFCfg(ffObj)
+	_, err = toFFCfg(ffObj)
 	if err != nil {
 		return "", fmt.Errorf("unable to convert object %s/%s to FeatureFlag: %w", k.namespace, k.crdName, err)
 	}
-	return marshallFeatureFlagSpec(ff)
+	return marshalFlagSpec(ffObj)
 }
 
 func (k *Sync) notify(ctx context.Context, c chan<- INotify) {
@@ -332,11 +332,27 @@ func toFFCfg(object interface{}) (*v1beta1.FeatureFlag, error) {
 	return ff, nil
 }
 
-// marshallFeatureFlagSpec marshals the FlagSpec of a FeatureFlag to JSON
-func marshallFeatureFlagSpec(ff *v1beta1.FeatureFlag) (string, error) {
-	b, err := json.Marshal(ff.Spec.FlagSpec)
+// marshalFlagSpec returns the flag configuration of a FeatureFlag as written in the resource: its spec.flagSpec, not
+// the operator's typed view of it, which has no place for fields it does not define. A resource without one holds no
+// flags.
+func marshalFlagSpec(resource any) (string, error) {
+	if tombstone, ok := resource.(cache.DeletedFinalStateUnknown); ok {
+		resource = tombstone.Obj
+	}
+	u, ok := resource.(*unstructured.Unstructured)
+	if !ok {
+		return "", fmt.Errorf("provided value is not of type *unstructured.Unstructured")
+	}
+	flagSpec, found, err := unstructured.NestedFieldNoCopy(u.Object, "spec", "flagSpec")
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal FlagSpec: %w", err)
+		return "", fmt.Errorf("unable to read spec.flagSpec: %w", err)
+	}
+	if !found || flagSpec == nil {
+		return "{}", nil
+	}
+	b, err := json.Marshal(flagSpec)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal spec.flagSpec: %w", err)
 	}
 	return string(b), nil
 }
@@ -349,4 +365,25 @@ func parseURI(uri string) (string, string, error) {
 		return "", "", fmt.Errorf("invalid resource uri format, expected <namespace>/<crdName> but got: %s", uri)
 	}
 	return s[0], s[1], nil
+}
+
+// retryInterval is the base of the backoff between the attempts of the initial fetch.
+var retryInterval = time.Duration(polling.DefaultInterval) * time.Second
+
+// fetchWithRetry fetches the resource until it succeeds. It reports false when ctx is done first.
+func (k *Sync) fetchWithRetry(ctx context.Context) (string, bool) {
+	backoff := polling.Backoff{Interval: retryInterval}
+	for failures := 1; ; failures++ {
+		fetch, err := k.fetch(ctx)
+		if err == nil {
+			return fetch, true
+		}
+		wait := backoff.Retry(failures)
+		k.logger.Error(fmt.Sprintf("error with the initial fetch, trying again in %s: %s", wait, err.Error()))
+		select {
+		case <-ctx.Done():
+			return "", false
+		case <-time.After(wait):
+		}
+	}
 }

@@ -99,3 +99,29 @@ func (s *runningSource) requireNoDelivery(t *testing.T) {
 	case <-time.After(quietPeriod):
 	}
 }
+
+// resolveSource resolves the provider of one source through the builder.
+func resolveSource(t *testing.T, cfg sync.SourceConfig, opts ...func(*SyncBuilder)) Resolution {
+	t.Helper()
+
+	sb := NewSyncBuilder()
+	for _, opt := range opts {
+		opt(sb)
+	}
+	res, err := sb.Resolve(cfg, logger.NewLogger(nil, false))
+	require.NoError(t, err)
+	return res
+}
+
+func loggerForTests() *logger.Logger { return logger.NewLogger(nil, false) }
+
+// requireNoDeliveryWithin waits for the given time and checks that nothing was delivered in it.
+func (s *runningSource) requireNoDeliveryWithin(t *testing.T, d time.Duration) {
+	t.Helper()
+
+	select {
+	case got := <-s.deliveries:
+		t.Fatalf("unexpected delivery of %q from %s", got.FlagData, got.Source)
+	case <-time.After(d):
+	}
+}

@@ -1,6 +1,8 @@
 package store
 
 import (
+	"slices"
+
 	"github.com/hashicorp/go-memdb"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 )
@@ -32,3 +34,6 @@ func (v View) GetAll(selector *Selector) ([]model.Flag, model.Metadata, error) {
 func (v View) Documents(format, source string) []Document {
 	return v.store.documents(v.txn, format, source)
 }
+
+// Sources returns the registered sources in priority order: a later source has the higher priority.
+func (s *Store) Sources() []string { return slices.Clone(s.sources) }

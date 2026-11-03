@@ -4,7 +4,6 @@ package fetching
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	gosync "sync"
@@ -29,30 +28,6 @@ const (
 	healthyRun = time.Minute
 )
 
-// Legacy restores the behaviour the sync providers had before they became fetchers, one switch per difference. The
-// zero value is the behaviour of the fetching sync provider.
-type Legacy struct {
-	// ExitOnFirstFailure makes Sync return the error of a failed first fetch, which stops the distribution, instead
-	// of retrying with a backoff.
-	ExitOnFirstFailure bool
-	// RedeliverUnchanged delivers every fetch the fetcher does not report as unchanged, even when its source
-	// version equals the previous one.
-	RedeliverUnchanged bool
-	// EmptyOnReadError delivers an empty flag configuration for a fetch that failed with sync.ErrRead, and for data
-	// that cannot be decoded, instead of keeping the previous flags.
-	EmptyOnReadError bool
-	// NoDeadline fetches without a deadline.
-	NoDeadline bool
-	// IgnoreIncremental never marks a delivery as an incremental update.
-	IgnoreIncremental bool
-	// CountOnlyRead records a delivery as received only when it carries data read from the source: not an empty
-	// flag configuration that stands in for empty data or a failed read.
-	CountOnlyRead bool
-	// ExitOnTriggerError makes Sync return the error of a fetch trigger, which stops the distribution, instead of
-	// running the trigger again.
-	ExitOnTriggerError bool
-}
-
 // Options configure a Provider.
 type Options struct {
 	Fetcher  sync.Fetcher
@@ -69,7 +44,6 @@ type Options struct {
 	Timeout time.Duration
 	// IncrementalUpdates marks deliveries as incremental updates (BR-007).
 	IncrementalUpdates bool
-	Legacy             Legacy
 }
 
 // Provider is a sync.StreamingSyncProvider that fetches a source on request.
@@ -105,11 +79,18 @@ func New(opts Options) *Provider {
 	}
 }
 
-// Init initializes the fetcher, if it needs it.
+// Init initializes the fetcher and the triggers, if they need it.
 func (p *Provider) Init(ctx context.Context) error {
 	if f, ok := p.opts.Fetcher.(sync.InitializingFetcher); ok {
 		if err := f.Init(ctx); err != nil {
 			return fmt.Errorf("error initializing the fetcher of %s: %w", p.opts.Source, err)
+		}
+	}
+	for _, trigger := range p.opts.Triggers {
+		if t, ok := trigger.(sync.InitializingTrigger); ok {
+			if err := t.Init(ctx); err != nil {
+				return fmt.Errorf("error initializing a fetch trigger of %s: %w", p.opts.Source, err)
+			}
 		}
 	}
 	return nil
@@ -129,15 +110,8 @@ func (p *Provider) ReSync(ctx context.Context, dataSync chan<- sync.DataSync) er
 func (p *Provider) Sync(ctx context.Context, dataSync chan<- sync.DataSync) error {
 	p.opts.Logger.Info(fmt.Sprintf("starting sync from %s", p.opts.Source))
 
-	if err := p.firstFetch(ctx, dataSync); err != nil {
-		return err
-	}
-	if ctx.Err() != nil {
-		return p.shutdown(nil)
-	}
-	p.ready.Store(true)
-
-	triggerErr := make(chan error, len(p.opts.Triggers))
+	// The triggers start before the first fetch, so that no change falls between that fetch and the moment they
+	// watch the source. What they signal meanwhile is handled after the first fetch.
 	triggerCtx, cancelTriggers := context.WithCancel(ctx)
 	defer cancelTriggers()
 	var running gosync.WaitGroup
@@ -145,17 +119,27 @@ func (p *Provider) Sync(ctx context.Context, dataSync chan<- sync.DataSync) erro
 		running.Add(1)
 		go func() {
 			defer running.Done()
-			p.runTrigger(triggerCtx, trigger, triggerErr)
+			p.runTrigger(triggerCtx, trigger)
 		}()
 	}
+	// the triggers stop with the context, or with the provider when it stops for another reason
+	stopTriggers := func() {
+		cancelTriggers()
+		running.Wait()
+	}
 
-	var result error
+	p.firstFetch(ctx, dataSync)
+	if ctx.Err() != nil {
+		stopTriggers()
+		p.closeFetcher()
+		return nil
+	}
+	p.ready.Store(true)
+
 loop:
 	for {
 		select {
 		case <-ctx.Done():
-			break loop
-		case result = <-triggerErr:
 			break loop
 		case <-p.pending:
 			if err := p.fetch(ctx, dataSync, false); err != nil && ctx.Err() == nil {
@@ -164,42 +148,37 @@ loop:
 		}
 	}
 
-	// the triggers stop with the context, or with the provider when one of them failed
-	cancelTriggers()
-	running.Wait()
-	return p.shutdown(result)
+	stopTriggers()
+	p.closeFetcher()
+	return nil
 }
 
-func (p *Provider) shutdown(result error) error {
+func (p *Provider) closeFetcher() {
 	if closer, ok := p.opts.Fetcher.(io.Closer); ok {
 		if err := closer.Close(); err != nil {
 			p.opts.Logger.Warn(fmt.Sprintf("closing the fetcher of %s failed: %v", p.opts.Source, err))
 		}
 	}
-	return result
 }
 
 // firstFetch fetches until it succeeds, waiting with a backoff in between, unless ctx is done.
-func (p *Provider) firstFetch(ctx context.Context, dataSync chan<- sync.DataSync) error {
+func (p *Provider) firstFetch(ctx context.Context, dataSync chan<- sync.DataSync) {
 	p.opts.Logger.Debug(fmt.Sprintf("initial fetch from %s", p.opts.Source))
 	for failures := 1; ; failures++ {
 		err := p.fetch(ctx, dataSync, false)
 		if err == nil || ctx.Err() != nil {
-			return nil
-		}
-		if p.opts.Legacy.ExitOnFirstFailure {
-			return err
+			return
 		}
 		wait := p.backoff.Retry(failures)
 		p.opts.Logger.Warn(fmt.Sprintf("the initial fetch from %s failed, retrying in %s: %v", p.opts.Source, wait, err))
 		if !sleep(ctx, wait) {
-			return nil
+			return
 		}
 	}
 }
 
 // runTrigger runs a trigger until ctx is done, running it again after a backoff when it fails.
-func (p *Provider) runTrigger(ctx context.Context, trigger sync.Trigger, failed chan<- error) {
+func (p *Provider) runTrigger(ctx context.Context, trigger sync.Trigger) {
 	signal := func() {
 		select {
 		case p.pending <- struct{}{}:
@@ -213,10 +192,6 @@ func (p *Provider) runTrigger(ctx context.Context, trigger sync.Trigger, failed 
 		if ctx.Err() != nil || err == nil {
 			return
 		}
-		if p.opts.Legacy.ExitOnTriggerError {
-			failed <- err
-			return
-		}
 		if time.Since(started) >= healthyRun {
 			failures = 0
 		}
@@ -226,6 +201,8 @@ func (p *Provider) runTrigger(ctx context.Context, trigger sync.Trigger, failed 
 		if !sleep(ctx, wait) {
 			return
 		}
+		// whatever the trigger would have signalled while it was not running is lost, so fetch once
+		signal()
 	}
 }
 
@@ -252,66 +229,53 @@ func (p *Provider) fetchLocked(ctx context.Context, dataSync chan<- sync.DataSyn
 		previous = ""
 	}
 
-	fetchCtx := ctx
-	if !p.opts.Legacy.NoDeadline {
-		var cancel context.CancelFunc
-		fetchCtx, cancel = context.WithTimeout(ctx, p.timeout)
-		defer cancel()
-	}
+	fetchCtx, cancel := context.WithTimeout(ctx, p.timeout)
+	defer cancel()
 	result, err := p.opts.Fetcher.Fetch(fetchCtx, previous)
 	if err != nil {
-		if p.opts.Legacy.EmptyOnReadError && errors.Is(err, sync.ErrRead) {
-			p.opts.Logger.Error(fmt.Sprintf("error fetching %s: %v", p.opts.Source, err))
-			return p.deliver(ctx, dataSync, "{}", true)
-		}
 		return fmt.Errorf("error fetching %s: %w", p.opts.Source, err)
 	}
 
 	if result.Unchanged {
+		if result.Version != "" && !force {
+			p.version = result.Version
+		}
 		p.opts.Logger.Debug(fmt.Sprintf("%s has not changed", p.opts.Source))
 		return nil
 	}
-	if !force && !p.opts.Legacy.RedeliverUnchanged && previous != "" && result.Version == previous {
+	if !force && previous != "" && result.Version == previous {
 		p.opts.Logger.Debug(fmt.Sprintf("%s has the version it had", p.opts.Source))
 		return nil
 	}
 
-	flags, fallback := "{}", true
+	flags := "{}"
 	if len(result.Data) > 0 {
-		fallback = false
 		flags, err = utils.ConvertToJSON(result.Data, result.Extension, result.ContentType)
 		if err != nil {
-			if p.opts.Legacy.EmptyOnReadError {
-				p.opts.Logger.Error(fmt.Sprintf("error decoding %s: %v", p.opts.Source, err))
-				return p.deliver(ctx, dataSync, "{}", true)
-			}
 			return fmt.Errorf("error decoding %s: %w", p.opts.Source, err)
 		}
 	}
 
-	if err := p.deliver(ctx, dataSync, flags, fallback); err != nil {
+	if err := p.deliver(ctx, dataSync, flags); err != nil {
 		return err
 	}
 	p.version = result.Version
 	return nil
 }
 
-// deliver sends a flag configuration, unless ctx is done first. A fallback stands in for data that was empty or could
-// not be read.
-func (p *Provider) deliver(ctx context.Context, dataSync chan<- sync.DataSync, flags string, fallback bool) error {
+// deliver sends a flag configuration, unless ctx is done first.
+func (p *Provider) deliver(ctx context.Context, dataSync chan<- sync.DataSync, flags string) error {
 	update := sync.DataSync{
 		FlagData:           flags,
 		Source:             p.opts.Source,
-		IncrementalUpdates: p.opts.IncrementalUpdates && !p.opts.Legacy.IgnoreIncremental,
+		IncrementalUpdates: p.opts.IncrementalUpdates,
 	}
 	select {
 	case dataSync <- update:
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-	if !fallback || !p.opts.Legacy.CountOnlyRead {
-		sync.RecordFlagConfigReceived(ctx, p.opts.Metrics, p.opts.SourceType, p.opts.Source, "")
-	}
+	sync.RecordFlagConfigReceived(ctx, p.opts.Metrics, p.opts.SourceType, p.opts.Source, "")
 	return nil
 }
 

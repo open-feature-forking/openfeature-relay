@@ -100,7 +100,7 @@ func evaluationMetricRoute(request *http.Request) string {
 
 type ConnectService struct {
 	logger                *logger.Logger
-	eval                  evaluator.IEvaluator
+	eval                  evaluator.IResolver
 	metrics               telemetry.IMetricsRecorder
 	eventingConfiguration IEvents
 	handlerOptions        []connect.HandlerOption
@@ -114,7 +114,7 @@ type ConnectService struct {
 // NewConnectService creates a ConnectService with provided parameters
 // NewConnectService creates the connect service; handlerOptions are applied to each of its handlers.
 func NewConnectService(
-	logger *logger.Logger, evaluator evaluator.IEvaluator, store store.IStore, mRecorder telemetry.IMetricsRecorder,
+	logger *logger.Logger, evaluator evaluator.IResolver, store store.IStore, mRecorder telemetry.IMetricsRecorder,
 	handlerOptions ...connect.HandlerOption,
 ) *ConnectService {
 	cs := &ConnectService{

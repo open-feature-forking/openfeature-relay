@@ -42,7 +42,7 @@ type configVersioner interface {
 
 type handler struct {
 	Logger                     *logger.Logger
-	evaluator                  evaluator.IEvaluator
+	evaluator                  evaluator.IResolver
 	contextValues              map[string]any
 	headerToContextKeyMappings map[string]string
 	metricsRecorder            telemetry.IMetricsRecorder
@@ -65,7 +65,7 @@ type SSEConfig struct {
 
 func NewOfrepHandler(
 	logger *logger.Logger,
-	evaluator evaluator.IEvaluator,
+	evaluator evaluator.IResolver,
 	contextValues map[string]any,
 	headerToContextKeyMappings map[string]string,
 	metricsRecorder telemetry.IMetricsRecorder,

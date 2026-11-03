@@ -1,10 +1,8 @@
 package polling
 
 import (
-	"context"
 	"fmt"
 	"hash/fnv"
-	"sync"
 	"time"
 )
 
@@ -64,78 +62,17 @@ func pollOffset(seed string, interval uint32) uint32 {
 	return h.Sum32() % interval
 }
 
-// Poller schedules a recurring callback. Start blocks until ctx is cancelled.
-type Poller interface {
-	Start(ctx context.Context, callback func())
-	// Offset returns the schedule offset in seconds (0 when no seed is configured).
-	Offset() uint32
-}
-
-// CronPoller is a Poller that fires on a wall-clock-aligned schedule with a deterministic offset derived from a
-// seed. Every run of the callback is a goroutine of its own, so a slow callback does not delay the next one.
-type CronPoller struct {
-	interval uint32
-	offset   uint32
-	now      func() time.Time
-}
-
-// NewCronPoller creates a CronPoller. If intervalSeed is empty, offset defaults to
-// 0 (equivalent to the legacy wall-clock-aligned behavior).
-// Returns an error if interval exceeds MaxInterval.
-func NewCronPoller(interval uint32, intervalSeed string) (*CronPoller, error) {
-	if interval > MaxInterval {
-		return nil, fmt.Errorf("polling interval %ds exceeds maximum %ds", interval, MaxInterval)
-	}
-	return &CronPoller{
-		interval: interval,
-		offset:   pollOffset(intervalSeed, interval),
-		now:      time.Now,
-	}, nil
-}
-
-// Offset returns the computed schedule offset in seconds.
-func (p *CronPoller) Offset() uint32 {
-	return p.offset
-}
-
-// Start runs the callback on the schedule and blocks until ctx is cancelled and the running callbacks have returned.
-func (p *CronPoller) Start(ctx context.Context, callback func()) {
-	schedule := OffsetSchedule{
-		Interval: p.interval,
-		Offset:   p.offset,
-	}
-	var running sync.WaitGroup
-	defer running.Wait()
-
-	for {
-		now := p.now()
-		timer := time.NewTimer(schedule.Next(now).Sub(now))
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return
-		case <-timer.C:
-		}
-		running.Add(1)
-		go func() {
-			defer running.Done()
-			callback()
-		}()
-	}
-}
-
 // DefaultInterval is the polling interval, in seconds, of a source that configures none.
 const DefaultInterval uint32 = 5
 
-// NewSourcePoller returns the interval of a source, DefaultInterval if it configures none, with a
-// poller for it. It fails for an interval beyond MaxInterval.
-func NewSourcePoller(interval uint32, intervalSeed string) (uint32, *CronPoller, error) {
+// ResolveInterval returns the polling interval of a source: DefaultInterval if it configures none. It fails for an
+// interval beyond MaxInterval.
+func ResolveInterval(interval uint32) (uint32, error) {
 	if interval == 0 {
 		interval = DefaultInterval
 	}
-	poller, err := NewCronPoller(interval, intervalSeed)
-	if err != nil {
-		return 0, nil, err
+	if interval > MaxInterval {
+		return 0, fmt.Errorf("polling interval %ds exceeds maximum %ds", interval, MaxInterval)
 	}
-	return interval, poller, nil
+	return interval, nil
 }

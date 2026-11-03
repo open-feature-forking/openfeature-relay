@@ -15,6 +15,7 @@ import (
 	flagdformat "github.com/open-feature-forking/openfeature-relay/configformat/flagd"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator/typed"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
@@ -33,7 +34,7 @@ type Provider struct {
 
 	store  *store.Store
 	format *flagdformat.Format
-	eval   evaluator.IEvaluator
+	eval   evaluator.IResolver
 	syncer coresync.ISync
 }
 
@@ -44,10 +45,14 @@ func New(log *logger.Logger, source string, syncer coresync.ISync) (*Provider, e
 	if err != nil {
 		return nil, fmt.Errorf("creating the store: %w", err)
 	}
+	ev, err := flagdeval.Factory{}.Create(evaluator.Settings{Store: st, Logger: log})
+	if err != nil {
+		return nil, fmt.Errorf("creating the evaluator: %w", err)
+	}
 	return &Provider{
 		store:  st,
 		format: flagdformat.NewFormat(st, log),
-		eval:   flagdeval.NewJSON(log, st),
+		eval:   typed.New(ev),
 		syncer: syncer,
 	}, nil
 }

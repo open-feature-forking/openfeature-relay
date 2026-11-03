@@ -5,7 +5,6 @@ go 1.26.0
 require github.com/open-feature-forking/openfeature-relay/core v0.20.0
 
 require (
-	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/stretchr/testify v1.12.1
 	go.uber.org/mock v0.5.2
 	go.uber.org/multierr v1.11.0 // indirect
@@ -21,7 +20,6 @@ replace (
 	github.com/open-feature-forking/openfeature-relay/core => ../../core
 	github.com/open-feature-forking/openfeature-relay/evaluator/flagd => ../../evaluator/flagd
 	github.com/open-feature-forking/openfeature-relay/sync/azblob => ../azblob
-	github.com/open-feature-forking/openfeature-relay/sync/blob => ../blob
 	github.com/open-feature-forking/openfeature-relay/sync/builder => ../builder
 	github.com/open-feature-forking/openfeature-relay/sync/file => ../file
 	github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc => ../flagd-grpc

@@ -30,7 +30,7 @@ type resolverSignature[T constraints] func(context context.Context, reqID, flagK
 // this can be removed as a part of https://github.com/open-feature/flagd/issues/1088
 type OldFlagEvaluationService struct {
 	logger                *logger.Logger
-	eval                  evaluator.IEvaluator
+	eval                  evaluator.IResolver
 	metrics               telemetry.IMetricsRecorder
 	eventingConfiguration IEvents
 	flagEvalTracer        trace.Tracer
@@ -40,7 +40,7 @@ type OldFlagEvaluationService struct {
 // NewOldFlagEvaluationService creates a OldFlagEvaluationService with provided parameters
 func NewOldFlagEvaluationService(
 	log *logger.Logger,
-	eval evaluator.IEvaluator,
+	eval evaluator.IResolver,
 	eventingCfg IEvents,
 	metricsRecorder telemetry.IMetricsRecorder,
 	contextValues map[string]any,

@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -20,10 +21,41 @@ type Settings struct {
 	Config map[string]any
 }
 
-// TriggerConfig names a fetch trigger and its settings in the configuration of a source.
+// TriggerConfig names a fetch trigger and its settings in the configuration of a source. In JSON it is an object
+// whose "type" is the trigger type and whose other members are the settings.
 type TriggerConfig struct {
-	Type   string
-	Config map[string]any
+	Type string
+	// Config holds the other members of the trigger's entry; a configuration file read with mapstructure collects
+	// them there.
+	Config map[string]any `mapstructure:",remain"`
+}
+
+// UnmarshalJSON reads {"type": "<trigger type>", ...settings}.
+func (c *TriggerConfig) UnmarshalJSON(data []byte) error {
+	var members map[string]any
+	if err := json.Unmarshal(data, &members); err != nil {
+		return fmt.Errorf("a fetch trigger must be an object: %w", err)
+	}
+	triggerType, ok := members["type"].(string)
+	if !ok || triggerType == "" {
+		return errors.New(`a fetch trigger needs a "type"`)
+	}
+	delete(members, "type")
+	c.Type, c.Config = triggerType, nil
+	if len(members) > 0 {
+		c.Config = members
+	}
+	return nil
+}
+
+// MarshalJSON writes the form UnmarshalJSON reads.
+func (c TriggerConfig) MarshalJSON() ([]byte, error) {
+	members := make(map[string]any, len(c.Config)+1)
+	for k, v := range c.Config {
+		members[k] = v
+	}
+	members["type"] = c.Type
+	return json.Marshal(members)
 }
 
 // Factory is what every sync component's factory declares.
@@ -90,4 +122,23 @@ func ValidateDeclarations(f Factory) error {
 		return nil
 	}
 	return errors.New(strings.Join(problems, "; "))
+}
+
+// SourceTyper is implemented by a factory whose components record the sync metrics under a source type other than
+// the factory's Type(), such as the cloud providers, which all record "blob".
+type SourceTyper interface {
+	SourceType() string
+}
+
+// Alias is a provider name that selects a fetcher factory together with the only fetch trigger attached to the
+// sources it selects.
+type Alias struct {
+	Name    string
+	Trigger TriggerConfig
+}
+
+// Aliased is implemented by a FetcherFactory that is also selected by other provider names, in the order they are
+// listed to the Operator.
+type Aliased interface {
+	Aliases() []Alias
 }

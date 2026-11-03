@@ -189,3 +189,16 @@ func internalFlagSetID(id string) string {
 	}
 	return id
 }
+
+// DocumentFlagSet returns the flag set the selector names as a document's FlagSet, and whether it names one.
+// A selector for the unnamed flag set (flagSetId=) names "".
+func (s Selector) DocumentFlagSet() (string, bool) {
+	id, ok := s.indexMap[flagSetIdIndex]
+	if !ok {
+		return "", false
+	}
+	if id == nilFlagSetId {
+		return "", true
+	}
+	return id, true
+}
