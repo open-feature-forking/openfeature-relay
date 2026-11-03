@@ -49,6 +49,9 @@ func newConnectServer(
 	}
 
 	var h http.Handler = mux
+	if cfg.HTTPMiddleware != nil {
+		h = cfg.HTTPMiddleware(h)
+	}
 	h = corsmw.New(cfg.CORS).Handler(h)
 	if cfg.CertPath == "" || cfg.KeyPath == "" {
 		// no ALPN to negotiate over plaintext, so gRPC clients need h2c

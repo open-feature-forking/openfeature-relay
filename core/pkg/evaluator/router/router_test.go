@@ -245,6 +245,60 @@ func TestRouterSingleEvaluatorFastPath(t *testing.T) {
 	require.Equal(t, direct, routed)
 }
 
+// TestRouterStampsFormat pins that every result carries the format of the evaluator that resolved it, on the
+// single-evaluator fast path and on every path of several evaluators.
+func TestRouterStampsFormat(t *testing.T) {
+	t.Run("fast path", func(t *testing.T) {
+		a := &fake{name: "a", flags: map[string][]string{"k": {""}}}
+		r, err := New(nil, Route{"a", a})
+		require.NoError(t, err)
+
+		out, _, err := r.Evaluate(context.Background(), evaluator.Request{FlagKey: "k"}, nil)
+		require.NoError(t, err)
+		require.Equal(t, "a", out[0].Format)
+	})
+
+	t.Run("several evaluators", func(t *testing.T) {
+		st := newStore(t, []string{"low", "high"},
+			delivery{"a", "low", map[string][]string{"": {"shared", "only-a"}}},
+			delivery{"b", "high", map[string][]string{"": {"shared", "only-b"}}},
+		)
+		a := &fake{name: "a", flags: map[string][]string{"shared": {""}, "only-a": {""}}}
+		b := &fake{name: "b", flags: map[string][]string{"shared": {""}, "only-b": {""}}}
+		r, err := New(st, Route{"a", a}, Route{"b", b})
+		require.NoError(t, err)
+
+		single, _, err := r.Evaluate(context.Background(), evaluator.Request{FlagKey: "shared"}, nil)
+		require.NoError(t, err)
+		require.Equal(t, "b", single[0].Format, "the evaluator of the higher-priority source")
+
+		bulk, _, err := r.Evaluate(context.Background(), evaluator.Request{Bulk: true}, nil)
+		require.NoError(t, err)
+		formats := map[string]string{}
+		for _, res := range bulk {
+			formats[res.FlagKey] = res.Format
+		}
+		require.Equal(t, map[string]string{"shared": "b", "only-a": "a", "only-b": "b"}, formats)
+
+		missing, _, err := r.Evaluate(context.Background(), evaluator.Request{FlagKey: "none"}, nil)
+		require.NoError(t, err)
+		require.Empty(t, missing[0].Format, "no format resolved a flag no document holds")
+	})
+}
+
+func TestRouterEvaluatorByFormat(t *testing.T) {
+	a, b := &fake{name: "a"}, &fake{name: "b"}
+	st := newStore(t, []string{"s"})
+	r, err := New(st, Route{"a", a}, Route{"b", b})
+	require.NoError(t, err)
+
+	got, ok := r.Evaluator("b")
+	require.True(t, ok)
+	require.Same(t, b, got)
+	_, ok = r.Evaluator("c")
+	require.False(t, ok)
+}
+
 func TestNewRejectsBadRoutes(t *testing.T) {
 	a := &fake{}
 	_, err := New(nil)

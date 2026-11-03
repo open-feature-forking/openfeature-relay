@@ -80,7 +80,7 @@ func TestManagementPort(t *testing.T) {
 			{URI: file, Provider: "file"},
 			{URI: remote.URL, Provider: "http", Interval: 60},
 		},
-	})
+	}, runtime.Official())
 	require.NoError(t, err)
 
 	done := make(chan error, 1)

@@ -48,6 +48,11 @@ type SvcConfigurations struct {
 	Options               []connect.HandlerOption
 	MaxRequestHeaderBytes int64
 	MaxRequestBodyBytes   int64
+
+	// HTTPMiddleware wraps the routes after CORS and before their instrumentation. Nil means none.
+	HTTPMiddleware func(http.Handler) http.Handler
+	// Initialized, when set, ends the wait for the first delivery of every source once it is closed.
+	Initialized <-chan struct{}
 }
 
 type Service struct {
@@ -57,6 +62,7 @@ type Service struct {
 	modTime  *modTime
 
 	startupTracker syncTracker
+	initialized    <-chan struct{}
 }
 
 func loadTLSConfig(certPath string, keyPath string) (*tls.Config, error) {
@@ -126,6 +132,7 @@ func NewSyncService(cfg SvcConfigurations) (*Service, error) {
 		logger:   l,
 		server:   server,
 		modTime:  stamp,
+		initialized: cfg.Initialized,
 		startupTracker: syncTracker{
 			sources:  slices.Clone(cfg.Sources),
 			doneChan: make(chan interface{}),
@@ -192,6 +199,11 @@ func (s *Service) waitForInitialSync() {
 		s.logger.Warn("timeout while waiting for all sync sources to complete their initial sync. " +
 			"continuing sync service")
 	case <-s.startupTracker.getDone():
+	case <-s.initialized:
+		// every source delivered; the first delivery dates the flags
+		if s.modTime.get().IsZero() {
+			s.modTime.set(time.Now())
+		}
 	}
 }
 
