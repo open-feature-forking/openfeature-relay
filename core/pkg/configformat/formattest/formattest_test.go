@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -152,16 +153,6 @@ func TestContractAcceptsConformingFormat(t *testing.T) {
 	Run(t, kvFactory{}, kvSamples)
 }
 
-type fakeTB struct {
-	testing.TB
-	messages []string
-}
-
-func (f *fakeTB) Helper() {}
-func (f *fakeTB) Errorf(format string, args ...any) {
-	f.messages = append(f.messages, fmt.Sprintf(format, args...))
-}
-
 func TestContractReportsExpectedAndObserved(t *testing.T) {
 	counter := 0
 	tests := []struct {
@@ -180,21 +171,96 @@ func TestContractReportsExpectedAndObserved(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ft := &fakeTB{}
 			samples := kvSamples
 			if tt.format.plainRejection {
 				// the plain error comes from a parse failure, so give it an unparsable payload
 				samples.Invalid = Faulty{Data: `{`, Entries: []string{"flags"}}
 			}
-			Run(ft, kvFactory{tt.format}, samples)
+			report := Check(t, kvFactory{tt.format}, samples)
 
-			all := strings.Join(ft.messages, "\n---\n")
-			if len(ft.messages) == 0 {
+			var messages []string
+			for _, c := range report.Cases {
+				if !c.Passed && c.NotApplicable == "" {
+					messages = append(messages, c.Observed)
+				}
+			}
+			all := strings.Join(messages, "\n---\n")
+			if len(messages) == 0 {
 				t.Fatalf("the contract accepted a broken format")
 			}
 			if !strings.Contains(all, tt.wantMsg) {
 				t.Fatalf("failure text lacks expected/observed detail\nwant to contain: %q\ngot: %s", tt.wantMsg, all)
 			}
 		})
+	}
+}
+
+type failingFactory struct{ kvFactory }
+
+func (failingFactory) Create(configformat.Settings) (configformat.ConfigurationFormat, error) {
+	return nil, errors.New("no backend")
+}
+
+func TestAFactoryThatCannotCreateTheFormatAbortsTheRun(t *testing.T) {
+	report := Check(t, failingFactory{}, kvSamples)
+
+	if !report.Failed() || len(report.Cases) != 0 {
+		t.Fatalf("a factory error must abort the run without cases, got %+v", report)
+	}
+	if !strings.Contains(report.Aborted, "no backend") {
+		t.Errorf("the abort does not name the error: %q", report.Aborted)
+	}
+}
+
+func TestInvalidDeclarationsAbortTheRun(t *testing.T) {
+	report := Check(t, kvFactory{kvFormat{factoryType: " "}}, kvSamples)
+
+	if !strings.Contains(report.Aborted, "the type name is empty") {
+		t.Errorf("aborted %q", report.Aborted)
+	}
+}
+
+func TestAFeatureNeitherSuppliedNorNamedFails(t *testing.T) {
+	samples := kvSamples
+	samples.Incremental = nil
+	samples.Without = []Feature{FeatureDropped}
+	samples.Dropped = nil
+
+	report := Check(t, kvFactory{}, samples)
+
+	if got, want := report.FailedCases(), []string{"replaces only the flag sets of an incremental update"}; len(got) != 1 || got[0] != want[0] {
+		t.Fatalf("failed cases %q, want %q", got, want)
+	}
+	for _, c := range report.Cases {
+		if c.Name == "names dropped entries" && c.NotApplicable == "" {
+			t.Errorf("the named feature was exercised or failed: %+v", c)
+		}
+		if !c.Passed && c.NotApplicable == "" && !strings.Contains(c.Expected, "Samples.Incremental") {
+			t.Errorf("the failure does not name the input: %+v", c)
+		}
+	}
+}
+
+func TestAFeatureBothSuppliedAndNamedAbortsTheRun(t *testing.T) {
+	samples := kvSamples
+	samples.Without = []Feature{FeatureIncremental}
+
+	if report := Check(t, kvFactory{}, samples); !strings.Contains(report.Aborted, `"Incremental" is both set and named`) {
+		t.Errorf("aborted %q", report.Aborted)
+	}
+
+	samples.Without = []Feature{"Colour"}
+	if report := Check(t, kvFactory{}, samples); !strings.Contains(report.Aborted, `observed: "Colour"`) {
+		t.Errorf("aborted %q", report.Aborted)
+	}
+}
+
+func TestMissingSamplesAbortTheRunNamingThem(t *testing.T) {
+	report := Check(t, kvFactory{}, Samples{})
+
+	for _, input := range []string{"Samples.Valid", "Samples.Changed", "Samples.Invalid"} {
+		if !strings.Contains(report.Aborted, input) {
+			t.Errorf("%q does not name %q", report.Aborted, input)
+		}
 	}
 }

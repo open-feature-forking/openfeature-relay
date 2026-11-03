@@ -6,12 +6,10 @@ import (
 
 	"buf.build/gen/go/open-feature/flagd/connectrpc/go/flagd/sync/v1/syncv1connect"
 	"connectrpc.com/connect"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	flagdService "github.com/open-feature/flagd/flagd/pkg/service"
 	corsmw "github.com/open-feature/flagd/flagd/pkg/service/middleware/cors"
 	h2cmw "github.com/open-feature/flagd/flagd/pkg/service/middleware/h2c"
-	metricsmw "github.com/open-feature/flagd/flagd/pkg/service/middleware/metrics"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"go.opentelemetry.io/otel/metric/noop"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -39,7 +37,7 @@ func newConnectServer(
 
 	// Traced by the interceptor in cfg.Options; an otelhttp wrapper here would double every span.
 	connectPath, connectHandler := syncv1connect.NewFlagSyncServiceHandler(handler, opts...)
-	mux.Handle(connectPath, httpMetrics(cfg, connectPath).Handler(connectHandler))
+	mux.Handle(connectPath, httpMetrics(cfg, connectPath, connectHandler))
 
 	if flagsHandler != nil {
 		// registering "GET" also serves HEAD
@@ -73,8 +71,7 @@ func newConnectServer(
 // instrumentFlagsRoute wraps a flag configuration route, which the connect interceptor does not cover.
 func instrumentFlagsRoute(cfg SvcConfigurations, route string, handler http.Handler) http.Handler {
 	// tracing only; metrics are recorded by httpMetrics
-	return otelhttp.NewHandler(httpMetrics(cfg, route).Handler(handler), "flagd.sync.http",
-		otelhttp.WithMeterProvider(noop.NewMeterProvider()))
+	return telemetry.OrNoop(cfg.Telemetry).HTTPServerSpans(httpMetrics(cfg, route, handler), "flagd.sync.http")
 }
 
 func methodNotAllowed(w http.ResponseWriter, _ *http.Request) {
@@ -82,13 +79,11 @@ func methodNotAllowed(w http.ResponseWriter, _ *http.Request) {
 	http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 }
 
-// httpMetrics pins the handler ID to the route; the URL path default would make a path-segment
-// selector an unbounded metric dimension.
-func httpMetrics(cfg SvcConfigurations, handlerID string) metricsmw.Middleware {
-	return metricsmw.NewHTTPMetric(metricsmw.Config{
-		Service:        cfg.ServiceName,
-		MetricRecorder: cfg.MetricsRecorder,
-		Logger:         cfg.Logger,
-		HandlerID:      handlerID,
+// httpMetrics pins the route of the handler; the URL path default would make a path-segment selector an
+// unbounded metric dimension.
+func httpMetrics(cfg SvcConfigurations, route string, handler http.Handler) http.Handler {
+	return telemetry.OrNoop(cfg.Telemetry).HTTPServerMetrics(handler, telemetry.HTTPMetricsOptions{
+		Service: cfg.ServiceName,
+		Route:   route,
 	})
 }

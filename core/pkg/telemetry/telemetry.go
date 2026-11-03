@@ -111,6 +111,17 @@ type Meter interface {
 	Float64Histogram(name string, opts ...InstrumentOption) Float64Histogram
 }
 
+// GaugeMeter is implemented by a Meter that also creates gauges. A telemetry provider without gauges leaves them
+// out, and what is recorded in gauges is not recorded.
+type GaugeMeter interface {
+	Int64Gauge(name string, opts ...InstrumentOption) Int64Gauge
+}
+
+// Int64Gauge records the latest value of a measurement.
+type Int64Gauge interface {
+	Record(ctx context.Context, value int64, attrs ...Attribute)
+}
+
 // Int64Counter records non-negative increments.
 type Int64Counter interface {
 	Add(ctx context.Context, incr int64, attrs ...Attribute)
@@ -190,8 +201,8 @@ type Settings struct {
 	Config              map[string]any
 }
 
-// ValidateDeclaration checks what a factory declares: a non-empty type name.
-func ValidateDeclaration(f Factory) error {
+// ValidateDeclarations checks what a factory declares: a non-empty type name.
+func ValidateDeclarations(f Factory) error {
 	if f == nil {
 		return errors.New("the factory is nil")
 	}

@@ -10,7 +10,6 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
-	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"go.uber.org/zap"
 )
 
@@ -23,9 +22,11 @@ const ConfigKey = "config"
 // EndpointConfig is what the runtime derives from the operator's settings for the endpoint.
 type EndpointConfig struct {
 	Configuration service.Configuration
-	Metrics       telemetry.IMetricsRecorder
-	// Options are applied to each of the connect handlers.
-	Options []connect.HandlerOption
+}
+
+// connectInstrumentation is implemented by a telemetry provider that instruments ConnectRPC handlers.
+type connectInstrumentation interface {
+	ConnectHandlerOptions() []connect.HandlerOption
 }
 
 // Factory creates the flag evaluation service endpoint: the legacy, v1 and v2 flag evaluation services over
@@ -46,7 +47,14 @@ func (Factory) Create(s service.Settings) (service.Endpoint, error) {
 		return nil, fmt.Errorf("the %s endpoint needs a resolver", Type)
 	}
 	cfg, _ := s.Config[ConfigKey].(EndpointConfig)
-	svc := NewConnectService(s.Logger.WithFields(zap.String("component", "service")), s.Resolver, s.Store, cfg.Metrics, cfg.Options...)
+	if port, ok := s.Config["port"].(int); ok {
+		cfg.Configuration.Port = uint16(port)
+	}
+	var options []connect.HandlerOption
+	if p, ok := s.Telemetry.(connectInstrumentation); ok {
+		options = p.ConnectHandlerOptions()
+	}
+	svc := NewConnectService(s.Logger.WithFields(zap.String("component", "service")), s.Resolver, s.Store, s.Telemetry, options...)
 	svc.httpMiddleware = s.HTTPMiddleware
 	return &endpoint{svc: svc, cfg: cfg.Configuration}, nil
 }

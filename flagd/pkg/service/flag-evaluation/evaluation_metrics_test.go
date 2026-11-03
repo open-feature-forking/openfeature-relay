@@ -13,7 +13,8 @@ import (
 	evaluatormock "github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator/mock"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
-	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
+	"github.com/open-feature/flagd/flagd/internal/telemetrytest"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -28,7 +29,6 @@ type capturedEvaluation struct {
 }
 
 type capturingEvaluationMetrics struct {
-	telemetry.NoopMetricsRecorder
 	evaluations []capturedEvaluation
 }
 
@@ -45,6 +45,14 @@ func (m *capturingEvaluationMetrics) RecordEvaluation(
 	})
 }
 
+// testSpan is a span the evaluation hands to resolve; these tests read nothing from it.
+func testSpan(t *testing.T) telemetry.Span {
+	t.Helper()
+
+	_, span := telemetry.Noop().Tracer("test").Start(t.Context(), "test")
+	return span
+}
+
 type boolResponseCapture struct{}
 
 func (boolResponseCapture) SetResult(bool, string, string, map[string]interface{}) error {
@@ -54,15 +62,15 @@ func (boolResponseCapture) SetResult(bool, string, string, map[string]interface{
 func TestTypedSingleEvaluationRecordsFlagSetID(t *testing.T) {
 	tests := []struct {
 		name    string
-		resolve func(telemetry.IMetricsRecorder) error
+		resolve func(evaluationRecorder) error
 		wantID  string
 		wantErr bool
 	}{
 		{
 			name: "legacy success",
-			resolve: func(metrics telemetry.IMetricsRecorder) error {
+			resolve: func(metrics evaluationRecorder) error {
 				return resolve(
-					t.Context(), logger.NewLogger(nil, false),
+					t.Context(), testSpan(t), logger.NewLogger(nil, false),
 					func(context.Context, string, string, map[string]any) (bool, string, string, map[string]interface{}, error) {
 						return true, "on", model.StaticReason, model.Metadata{"flagSetId": "set-a"}, nil
 					},
@@ -73,9 +81,9 @@ func TestTypedSingleEvaluationRecordsFlagSetID(t *testing.T) {
 		},
 		{
 			name: "v2 selected lookup error passes metadata to recorder",
-			resolve: func(metrics telemetry.IMetricsRecorder) error {
+			resolve: func(metrics evaluationRecorder) error {
 				return resolveV2(
-					t.Context(), logger.NewLogger(nil, false),
+					t.Context(), testSpan(t), logger.NewLogger(nil, false),
 					func(context.Context, string, string, map[string]any) (bool, string, string, map[string]interface{}, error) {
 						return false, "", model.ErrorReason, model.Metadata{"flagSetId": "selected-set"}, errors.New(model.FlagNotFoundErrorCode)
 					},
@@ -101,13 +109,13 @@ func TestTypedSingleEvaluationRecordsFlagSetID(t *testing.T) {
 func TestTypedBulkEvaluationRecordsEachFlagSetID(t *testing.T) {
 	tests := []struct {
 		name string
-		call func(*evaluatormock.MockIEvaluator, telemetry.IMetricsRecorder) error
+		call func(*evaluatormock.MockIEvaluator, telemetry.Provider) error
 	}{
 		{
 			name: "legacy schema",
-			call: func(eval *evaluatormock.MockIEvaluator, metrics telemetry.IMetricsRecorder) error {
+			call: func(eval *evaluatormock.MockIEvaluator, tp telemetry.Provider) error {
 				service := NewOldFlagEvaluationService(
-					logger.NewLogger(nil, false), eval, &eventingConfiguration{}, metrics, nil,
+					logger.NewLogger(nil, false), eval, &eventingConfiguration{}, tp, nil,
 				)
 				_, err := service.ResolveAll(t.Context(), connect.NewRequest(&schemaV1.ResolveAllRequest{}))
 				return err
@@ -115,9 +123,9 @@ func TestTypedBulkEvaluationRecordsEachFlagSetID(t *testing.T) {
 		},
 		{
 			name: "evaluation v1",
-			call: func(eval *evaluatormock.MockIEvaluator, metrics telemetry.IMetricsRecorder) error {
+			call: func(eval *evaluatormock.MockIEvaluator, tp telemetry.Provider) error {
 				service := NewFlagEvaluationService(
-					logger.NewLogger(nil, false), eval, &eventingConfiguration{}, metrics, nil, nil, 0,
+					logger.NewLogger(nil, false), eval, &eventingConfiguration{}, tp, nil, nil, 0,
 				)
 				_, err := service.ResolveAll(t.Context(), connect.NewRequest(&evalV1.ResolveAllRequest{}))
 				return err
@@ -145,14 +153,15 @@ func TestTypedBulkEvaluationRecordsEachFlagSetID(t *testing.T) {
 			eval := evaluatormock.NewMockIEvaluator(gomock.NewController(t))
 			eval.EXPECT().ResolveAllValues(gomock.Any(), gomock.Any(), gomock.Any()).
 				Return(values, model.Metadata{}, nil)
-			metrics := &capturingEvaluationMetrics{}
+			tel := telemetrytest.New()
 
-			require.NoError(t, test.call(eval, metrics))
-			require.Len(t, metrics.evaluations, 3)
-			require.Equal(t, []string{"set-a", "set-b", ""}, []string{
-				metrics.evaluations[0].flagSetID,
-				metrics.evaluations[1].flagSetID,
-				metrics.evaluations[2].flagSetID,
+			require.NoError(t, test.call(eval, tel))
+			evaluations := telemetrytest.Evaluations(t, tel.Metrics)
+			require.Len(t, evaluations, 3)
+			require.ElementsMatch(t, []string{"set-a", "set-b", ""}, []string{
+				evaluations[0].FlagSetID,
+				evaluations[1].FlagSetID,
+				evaluations[2].FlagSetID,
 			})
 		})
 	}

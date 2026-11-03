@@ -2,7 +2,7 @@
 
 // Package managementport pins what the runtime serves on the management port. It is its own test
 // binary because the Prometheus exporter registers with the default registry once per process; no
-// other test scrapes /metrics.
+// other test scrapes /metrics. Run it with -count=1: a second run in the same process fails on that registration.
 //
 // The test starts the runtime and stops it with SIGTERM, which Start handles itself.
 package managementport
@@ -22,8 +22,10 @@ import (
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	otelprovider "github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"github.com/open-feature/flagd/flagd/pkg/runtime"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
 )
 
 const flags = `{"flags":{"f1":{"state":"ENABLED","defaultVariant":"on","variants":{"on":true,"off":false}}}}`
@@ -67,12 +69,13 @@ func TestManagementPort(t *testing.T) {
 		}
 	}()
 
-	managementPort, servicePort := freePort(t), freePort(t)
+	managementPort, servicePort, ofrepPort, syncPort := freePort(t), freePort(t), freePort(t), freePort(t)
 	rt, err := runtime.FromConfig(logger.NewLogger(nil, false), "test", runtime.Config{
 		ManagementPort:               managementPort,
 		ServicePort:                  servicePort,
-		OfrepServicePort:             freePort(t),
-		SyncServicePort:              freePort(t),
+		OfrepServicePort:             ofrepPort,
+		SyncServicePort:              syncPort,
+		SyncServiceHTTPEnabled:       true,
 		StreamDeadline:               5 * time.Second,
 		KeepAliveMinTime:             runtime.KeepAliveMinTimeDefault,
 		KeepAlivePermitWithoutStream: runtime.KeepAlivePermitWithoutStreamDefault,
@@ -80,8 +83,11 @@ func TestManagementPort(t *testing.T) {
 			{URI: file, Provider: "file"},
 			{URI: remote.URL, Provider: "http", Interval: 60},
 		},
-	}, runtime.Official())
+	}, withOpenTelemetry(runtime.Official()))
 	require.NoError(t, err)
+	// with OTEL_TRACES_EXPORTER unset, autoexport selects the OTLP span exporter, so FromConfig installs the trace
+	// provider and the W3C propagators; only OTEL_TRACES_EXPORTER=none leaves both noop
+	require.ElementsMatch(t, []string{"traceparent", "tracestate", "baggage"}, otel.GetTextMapPropagator().Fields())
 
 	done := make(chan error, 1)
 	go func() { done <- rt.Start() }()
@@ -137,4 +143,17 @@ func TestManagementPort(t *testing.T) {
 		resp, _ := get(t, fmt.Sprintf("http://127.0.0.1:%d%s", servicePort, path))
 		require.Equal(t, http.StatusNotFound, resp.StatusCode, "%s is served on the management port only", path)
 	}
+
+	t.Run("inventory", func(t *testing.T) {
+		callEveryEndpoint(t, servicePort, ofrepPort, syncPort)
+		_, body := get(t, management+"/metrics")
+		checkGolden(t, "inventory.golden", inventory(body, file, remote.URL))
+	})
+}
+
+// withOpenTelemetry is the components of flagd-full with the OpenTelemetry telemetry provider, as flagd's command
+// line selects it.
+func withOpenTelemetry(components runtime.Components) runtime.Components {
+	components.Telemetry = otelprovider.NewFactory()
+	return components
 }

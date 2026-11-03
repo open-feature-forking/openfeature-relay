@@ -5,21 +5,21 @@ import (
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 )
 
-const evaluatorTracerName = "jsonEvaluator"
+// EvaluatorTracerName is the instrumentation scope of the evaluation spans.
+const EvaluatorTracerName = "jsonEvaluator"
 
 type tracedEvaluator struct {
 	evaluator.IResolver
-	tracer trace.Tracer
+	tracer telemetry.Tracer
 }
 
 // TraceEvaluations wraps an evaluator so that every evaluation request is recorded as an internal span
-// of the "jsonEvaluator" instrumentation scope.
-func TraceEvaluations(e evaluator.IResolver) evaluator.IResolver {
-	return &tracedEvaluator{IResolver: e, tracer: otel.Tracer(evaluatorTracerName)}
+// recorded by tracer, which belongs to the EvaluatorTracerName instrumentation scope.
+func TraceEvaluations(e evaluator.IResolver, tracer telemetry.Tracer) evaluator.IResolver {
+	return &tracedEvaluator{IResolver: e, tracer: tracer}
 }
 
 func (t *tracedEvaluator) ResolveBooleanValue(

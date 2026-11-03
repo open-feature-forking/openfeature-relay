@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"sync"
 
 	"connectrpc.com/connect"
 	"connectrpc.com/otelconnect"
@@ -30,8 +31,10 @@ type Provider struct {
 	sdkTracerProvider *trace.TracerProvider
 	tracerProvider    oteltrace.TracerProvider
 	propagator        propagation.TextMapPropagator
-	meterProvider     *msdk.MeterProvider
-	recorder          *MetricsRecorder
+	meterProvider     metric.MeterProvider
+	// sdkMeterProvider is nil for a provider over the global state; see FromGlobals.
+	sdkMeterProvider *msdk.MeterProvider
+	recorder         *MetricsRecorder
 }
 
 var _ coretel.Provider = (*Provider)(nil)
@@ -40,7 +43,7 @@ var _ coretel.Provider = (*Provider)(nil)
 // before the telemetry provider existed: the meter provider always, the tracer provider and the propagator only
 // with a span exporter.
 func (p *Provider) installGlobals() {
-	otel.SetMeterProvider(p.meterProvider)
+	otel.SetMeterProvider(p.sdkMeterProvider)
 	if p.sdkTracerProvider != nil {
 		otel.SetTracerProvider(p.sdkTracerProvider)
 		otel.SetTextMapPropagator(p.propagator)
@@ -76,8 +79,18 @@ func (p *Provider) Shutdown(ctx context.Context) error {
 	if p.sdkTracerProvider != nil {
 		errs = append(errs, p.sdkTracerProvider.Shutdown(ctx))
 	}
-	errs = append(errs, p.meterProvider.Shutdown(ctx))
+	if p.sdkMeterProvider != nil {
+		errs = append(errs, p.sdkMeterProvider.Shutdown(ctx))
+	}
 	return errors.Join(errs...)
+}
+
+// ForceFlush exports the spans the provider still holds.
+func (p *Provider) ForceFlush(ctx context.Context) error {
+	if p.sdkTracerProvider == nil {
+		return nil
+	}
+	return p.sdkTracerProvider.ForceFlush(ctx)
 }
 
 // ConnectHandlerOptions instrument a ConnectRPC handler with otelconnect, as flagd's flag evaluation and flag sync
@@ -117,13 +130,30 @@ type tracer struct{ t oteltrace.Tracer }
 
 func (t tracer) Start(ctx context.Context, name string, opts ...coretel.SpanOption) (context.Context, coretel.Span) {
 	cfg := coretel.NewSpanConfig(opts...)
-	startOpts := []oteltrace.SpanStartOption{oteltrace.WithSpanKind(spanKind(cfg.Kind))}
+	st := startPool.Get().(*start)
+	st.opts = append(st.opts[:0], oteltrace.WithSpanKind(spanKind(cfg.Kind)))
 	if len(cfg.Attributes) > 0 {
-		startOpts = append(startOpts, oteltrace.WithAttributes(convert(cfg.Attributes)...))
+		st.kvs = convertInto(st.kvs[:0], cfg.Attributes)
+		st.opts = append(st.opts, oteltrace.WithAttributes(st.kvs...))
 	}
-	ctx, s := t.t.Start(ctx, name, startOpts...)
+	ctx, s := t.t.Start(ctx, name, st.opts...)
+	clear(st.kvs)
+	clear(st.opts)
+	st.kvs, st.opts = st.kvs[:0], st.opts[:0]
+	startPool.Put(st)
 	return ctx, span{s}
 }
+
+// start is a pooled buffer for the options of one span start. The SDK reads the options and copies the attributes
+// while the span starts, so the buffer is reused once Start has returned.
+type start struct {
+	opts []oteltrace.SpanStartOption
+	kvs  []attribute.KeyValue
+}
+
+var startPool = sync.Pool{New: func() any {
+	return &start{opts: make([]oteltrace.SpanStartOption, 0, 2), kvs: make([]attribute.KeyValue, 0, 8)}
+}}
 
 func spanKind(k coretel.SpanKind) oteltrace.SpanKind {
 	switch k {
@@ -138,7 +168,11 @@ func spanKind(k coretel.SpanKind) oteltrace.SpanKind {
 
 type span struct{ s oteltrace.Span }
 
-func (s span) SetAttributes(attrs ...coretel.Attribute) { s.s.SetAttributes(convert(attrs)...) }
+func (s span) SetAttributes(attrs ...coretel.Attribute) {
+	kvs := converted(attrs)
+	s.s.SetAttributes(*kvs...)
+	release(kvs)
+}
 
 func (s span) RecordError(err error) { s.s.RecordError(err) }
 
@@ -184,24 +218,108 @@ func (m meter) Float64Histogram(name string, opts ...coretel.InstrumentOption) c
 	return float64Histogram{h}
 }
 
+func (m meter) Int64Gauge(name string, opts ...coretel.InstrumentOption) coretel.Int64Gauge {
+	description, unit, _ := instrumentOptions(opts)
+	g, err := m.m.Int64Gauge(name, metric.WithDescription(description), metric.WithUnit(unit))
+	if err != nil {
+		otel.Handle(err)
+	}
+	return int64Gauge{g}
+}
+
 // The SDK returns a usable instrument together with an error, so the instruments below are never nil.
 
 type int64Counter struct{ c metric.Int64Counter }
 
 func (c int64Counter) Add(ctx context.Context, incr int64, attrs ...coretel.Attribute) {
-	c.c.Add(ctx, incr, metric.WithAttributes(convert(attrs)...))
+	m := newMeasurement(attrs)
+	c.c.Add(ctx, incr, m.addOptions()...)
+	m.release()
+}
+
+type int64Gauge struct{ g metric.Int64Gauge }
+
+func (g int64Gauge) Record(ctx context.Context, value int64, attrs ...coretel.Attribute) {
+	m := newMeasurement(attrs)
+	g.g.Record(ctx, value, m.recordOptions()...)
+	m.release()
 }
 
 type int64UpDownCounter struct{ c metric.Int64UpDownCounter }
 
 func (c int64UpDownCounter) Add(ctx context.Context, incr int64, attrs ...coretel.Attribute) {
-	c.c.Add(ctx, incr, metric.WithAttributes(convert(attrs)...))
+	m := newMeasurement(attrs)
+	c.c.Add(ctx, incr, m.addOptions()...)
+	m.release()
 }
 
 type float64Histogram struct{ h metric.Float64Histogram }
 
 func (h float64Histogram) Record(ctx context.Context, value float64, attrs ...coretel.Attribute) {
-	h.h.Record(ctx, value, metric.WithAttributes(convert(attrs)...))
+	m := newMeasurement(attrs)
+	h.h.Record(ctx, value, m.recordOptions()...)
+	m.release()
+}
+
+// measurement is a pooled buffer for one measurement: its converted attributes and the one-element option slice
+// the SDK's variadic parameter takes. The SDK copies the attributes and keeps neither, so the buffer is reused
+// once the call that received it returns.
+type measurement struct {
+	kvs    []attribute.KeyValue
+	add    []metric.AddOption
+	record []metric.RecordOption
+}
+
+var measurementPool = sync.Pool{New: func() any {
+	return &measurement{
+		kvs:    make([]attribute.KeyValue, 0, 8),
+		add:    make([]metric.AddOption, 1),
+		record: make([]metric.RecordOption, 1),
+	}
+}}
+
+// newMeasurement returns a pooled buffer holding attrs as OpenTelemetry attributes; release returns it.
+func newMeasurement(attrs []coretel.Attribute) *measurement {
+	m := measurementPool.Get().(*measurement)
+	m.kvs = convertInto(m.kvs[:0], attrs)
+	return m
+}
+
+func (m *measurement) addOptions() []metric.AddOption {
+	m.add[0] = metric.WithAttributes(m.kvs...)
+	return m.add
+}
+
+func (m *measurement) recordOptions() []metric.RecordOption {
+	m.record[0] = metric.WithAttributes(m.kvs...)
+	return m.record
+}
+
+func (m *measurement) release() {
+	clear(m.kvs)
+	m.kvs = m.kvs[:0]
+	m.add[0], m.record[0] = nil, nil
+	measurementPool.Put(m)
+}
+
+// kvPool holds the buffers of the converted attributes of a span. The SDK copies them, so a buffer is reused once
+// the call that received it returns.
+var kvPool = sync.Pool{New: func() any {
+	kvs := make([]attribute.KeyValue, 0, 8)
+	return &kvs
+}}
+
+// converted returns attrs as OpenTelemetry attributes in a pooled buffer; release returns the buffer.
+func converted(attrs []coretel.Attribute) *[]attribute.KeyValue {
+	kvs := kvPool.Get().(*[]attribute.KeyValue)
+	*kvs = convertInto((*kvs)[:0], attrs)
+	return kvs
+}
+
+func release(kvs *[]attribute.KeyValue) {
+	clear(*kvs)
+	*kvs = (*kvs)[:0]
+	kvPool.Put(kvs)
 }
 
 // convert turns core attributes into OpenTelemetry attributes; an Invalid value becomes an empty string.
@@ -209,19 +327,23 @@ func convert(attrs []coretel.Attribute) []attribute.KeyValue {
 	if len(attrs) == 0 {
 		return nil
 	}
-	kvs := make([]attribute.KeyValue, len(attrs))
-	for i, a := range attrs {
+	return convertInto(make([]attribute.KeyValue, 0, len(attrs)), attrs)
+}
+
+// convertInto appends attrs, as OpenTelemetry attributes, to dst.
+func convertInto(dst []attribute.KeyValue, attrs []coretel.Attribute) []attribute.KeyValue {
+	for _, a := range attrs {
 		key := attribute.Key(a.Key)
 		switch a.Value.Type() {
 		case coretel.Int64Type:
-			kvs[i] = key.Int64(a.Value.AsInt64())
+			dst = append(dst, key.Int64(a.Value.AsInt64()))
 		case coretel.Float64Type:
-			kvs[i] = key.Float64(a.Value.AsFloat64())
+			dst = append(dst, key.Float64(a.Value.AsFloat64()))
 		case coretel.BoolType:
-			kvs[i] = key.Bool(a.Value.AsBool())
+			dst = append(dst, key.Bool(a.Value.AsBool()))
 		default:
-			kvs[i] = key.String(a.Value.AsString())
+			dst = append(dst, key.String(a.Value.AsString()))
 		}
 	}
-	return kvs
+	return dst
 }

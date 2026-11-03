@@ -10,6 +10,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	syncbuilder "github.com/open-feature-forking/openfeature-relay/sync/builder"
+	otelprovider "github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"github.com/open-feature/flagd/flagd/pkg/runtime"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -52,6 +53,9 @@ const (
 	keepAliveMinTimeFlagName             = "keep-alive-min-time"
 	keepAlivePermitWithoutStreamFlagName = "keep-alive-permit-without-stream"
 )
+
+// fromConfig builds the runtime `flagd start` runs; tests replace it to see the settings it is given.
+var fromConfig = runtime.FromConfig
 
 func init() {
 	flags := startCmd.Flags()
@@ -221,19 +225,14 @@ var startCmd = &cobra.Command{
 		}
 
 		// Build Runtime -----------------------------------------------------------
-		rt, err := runtime.FromConfig(logger, Version, runtime.Config{
+		components := officialComponents()
+		rt, err := fromConfig(logger, Version, runtime.Config{
 			CORS:                   viper.GetStringSlice(corsFlagName),
-			MetricExporter:         viper.GetString(metricsExporter),
 			ManagementPort:         viper.GetUint16(managementPortFlagName),
 			OfrepServicePort:       viper.GetUint16(ofrepPortFlagName),
 			OfrepSSEEnabled:        viper.GetBool(ofrepSSEEnabledFlagName),
 			OfrepSSEInactivityDel:  viper.GetInt(ofrepSSEInactivityFlagName),
 			OfrepSSEPublicURL:      viper.GetString(ofrepSSEPublicURLFlagName),
-			OtelCollectorURI:       viper.GetString(otelCollectorURI),
-			OtelCertPath:           viper.GetString(otelCertPathFlagName),
-			OtelKeyPath:            viper.GetString(otelKeyPathFlagName),
-			OtelReloadInterval:     viper.GetDuration(otelReloadIntervalFlagName),
-			OtelCAPath:             viper.GetString(otelCAPathFlagName),
 			ServiceCertPath:        viper.GetString(serverCertPathFlagName),
 			ServiceKeyPath:         viper.GetString(serverKeyPathFlagName),
 			ServicePort:            viper.GetUint16(portFlagName),
@@ -253,7 +252,7 @@ var startCmd = &cobra.Command{
 			HeaderToContextKeyMappings:   headerToContextKeyMappings,
 			MaxRequestBodyBytes:          maxRequestBodyBytes,
 			MaxRequestHeaderBytes:        maxRequestHeaderBytes,
-		}, runtime.Official())
+		}, components)
 		if err != nil {
 			rtLogger.Fatal(err.Error())
 		}
@@ -262,4 +261,20 @@ var startCmd = &cobra.Command{
 			rtLogger.Fatal(err.Error())
 		}
 	},
+}
+
+// officialComponents are the components of flagd-full: the official ones with the OpenTelemetry telemetry
+// provider, configured from the telemetry flags.
+func officialComponents() runtime.Components {
+	components := runtime.Official()
+	components.Telemetry = otelprovider.NewFactory()
+	components.TelemetryConfig = map[string]any{
+		otelprovider.SettingMetricsExporter: viper.GetString(metricsExporter),
+		otelprovider.SettingCollectorURI:    viper.GetString(otelCollectorURI),
+		otelprovider.SettingCertPath:        viper.GetString(otelCertPathFlagName),
+		otelprovider.SettingKeyPath:         viper.GetString(otelKeyPathFlagName),
+		otelprovider.SettingCAPath:          viper.GetString(otelCAPathFlagName),
+		otelprovider.SettingReloadInterval:  viper.GetDuration(otelReloadIntervalFlagName),
+	}
+	return components
 }

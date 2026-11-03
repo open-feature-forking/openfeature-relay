@@ -54,8 +54,8 @@ func (named) Create(middleware.Settings) (middleware.Middleware, error) {
 	return tag("x"), nil
 }
 
-func TestValidateDeclaration(t *testing.T) {
-	require.NoError(t, middleware.ValidateDeclaration(named("api-key")))
-	require.Error(t, middleware.ValidateDeclaration(named(" ")))
-	require.Error(t, middleware.ValidateDeclaration(nil))
+func TestValidateDeclarations(t *testing.T) {
+	require.NoError(t, middleware.ValidateDeclarations(named("api-key")))
+	require.Error(t, middleware.ValidateDeclarations(named(" ")))
+	require.Error(t, middleware.ValidateDeclarations(nil))
 }
