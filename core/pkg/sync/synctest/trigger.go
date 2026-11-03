@@ -55,6 +55,11 @@ func CheckTrigger(t testing.TB, f sync.TriggerFactory, in TriggerInputs) Report 
 	if err != nil || trigger == nil {
 		return Report{Aborted: fmt.Sprintf("the factory cannot create the fetch trigger (trigger %v, error %v)", trigger, err)}
 	}
+	if init, ok := trigger.(sync.InitializingTrigger); ok {
+		if err := init.Init(context.Background()); err != nil {
+			return Report{Aborted: fmt.Sprintf("the fetch trigger cannot be initialized: %v", err)}
+		}
+	}
 
 	limit := timeoutOr(in.Timeout)
 	signals := make(chan struct{}, 64)

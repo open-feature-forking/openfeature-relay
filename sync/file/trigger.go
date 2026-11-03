@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	gosync "sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -28,6 +29,9 @@ type watchTrigger struct {
 	logger        *logger.Logger
 	newWatcher    func(ctx context.Context) (Watcher, error)
 	signalOnChmod bool
+
+	mu      gosync.Mutex
+	watcher Watcher // established by Init, taken by Run
 }
 
 var _ sync.Trigger = (*watchTrigger)(nil)
@@ -78,16 +82,44 @@ func intSetting(settings map[string]any, key string) int {
 	}
 }
 
-// Run watches the file until ctx is done. It returns an error when the watcher closes its channels.
-func (w *watchTrigger) Run(ctx context.Context, signal func()) error {
-	watcher, err := w.newWatcher(ctx)
+// Init establishes the watch, so that a change from now on is not missed.
+func (w *watchTrigger) Init(ctx context.Context) error {
+	watcher, err := w.openWatcher(ctx)
 	if err != nil {
 		return err
 	}
-	defer watcher.Close()
-	if err := watcher.Add(w.path); err != nil {
-		return fmt.Errorf("error adding watcher %s: %w", w.path, err)
+	w.mu.Lock()
+	w.watcher = watcher
+	w.mu.Unlock()
+	return nil
+}
+
+func (w *watchTrigger) openWatcher(ctx context.Context) (Watcher, error) {
+	watcher, err := w.newWatcher(ctx)
+	if err != nil {
+		return nil, err
 	}
+	if err := watcher.Add(w.path); err != nil {
+		_ = watcher.Close()
+		return nil, fmt.Errorf("error adding watcher %s: %w", w.path, err)
+	}
+	return watcher, nil
+}
+
+// Run watches the file until ctx is done, on the watch Init established or else on a new one. It returns an error
+// when the watcher closes its channels.
+func (w *watchTrigger) Run(ctx context.Context, signal func()) error {
+	w.mu.Lock()
+	watcher := w.watcher
+	w.watcher = nil
+	w.mu.Unlock()
+	if watcher == nil {
+		var err error
+		if watcher, err = w.openWatcher(ctx); err != nil {
+			return err
+		}
+	}
+	defer watcher.Close()
 
 	w.logger.Debug(fmt.Sprintf("watching %s for changes", w.path))
 	for {

@@ -154,3 +154,6 @@ func (t *IntervalTrigger) WithoutBackoff() *IntervalTrigger {
 	t.noBackoff = true
 	return t
 }
+
+// TriggerType is the type of the core's interval trigger in the `triggers` of a source.
+const TriggerType = "poller"

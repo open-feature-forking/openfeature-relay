@@ -105,11 +105,18 @@ func New(opts Options) *Provider {
 	}
 }
 
-// Init initializes the fetcher, if it needs it.
+// Init initializes the fetcher and the triggers, if they need it.
 func (p *Provider) Init(ctx context.Context) error {
 	if f, ok := p.opts.Fetcher.(sync.InitializingFetcher); ok {
 		if err := f.Init(ctx); err != nil {
 			return fmt.Errorf("error initializing the fetcher of %s: %w", p.opts.Source, err)
+		}
+	}
+	for _, trigger := range p.opts.Triggers {
+		if t, ok := trigger.(sync.InitializingTrigger); ok {
+			if err := t.Init(ctx); err != nil {
+				return fmt.Errorf("error initializing a fetch trigger of %s: %w", p.opts.Source, err)
+			}
 		}
 	}
 	return nil

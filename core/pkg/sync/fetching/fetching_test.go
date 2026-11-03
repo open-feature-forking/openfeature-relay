@@ -703,3 +703,25 @@ func TestUnchangedAdoptsTheVersionItCarries(t *testing.T) {
 	defer mu.Unlock()
 	require.Equal(t, []string{"", "v1", "v1-moved"}, previous[:3])
 }
+
+type initializingTrigger struct {
+	*manualTrigger
+	err    error
+	inited atomic.Int32
+}
+
+func (i *initializingTrigger) Init(context.Context) error {
+	i.inited.Add(1)
+	return i.err
+}
+
+func TestInitInitializesTriggers(t *testing.T) {
+	trigger := &initializingTrigger{manualTrigger: newManualTrigger(), err: errors.New("no such path")}
+	provider := New(Options{
+		Fetcher: constantFetcher(), Triggers: []sync.Trigger{trigger}, Logger: logger.NewLogger(nil, false), Source: source,
+	})
+
+	err := provider.Init(context.Background())
+	require.ErrorContains(t, err, "no such path")
+	require.Equal(t, int32(1), trigger.inited.Load())
+}

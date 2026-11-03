@@ -60,3 +60,10 @@ type Trigger interface {
 type OutcomeObserver interface {
 	Observe(err error)
 }
+
+// InitializingTrigger is a Trigger that needs a step before the first fetch, such as establishing a watch, so that no
+// change falls between that fetch and the moment the trigger listens. An error stops the distribution, as an error of
+// a sync provider's Init does.
+type InitializingTrigger interface {
+	Init(ctx context.Context) error
+}
