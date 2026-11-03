@@ -222,8 +222,7 @@ func TestInvalidConfigurationKeepsFlags(t *testing.T) {
 	}
 }
 
-// TestUnresolvableFlags covers the part of A6 that does not involve the typed adapter: an unknown flag and a
-// disabled one resolve to the caller's default with the error code and reason remote evaluation returns.
+// TestUnresolvableFlags covers the first part of A6: an unknown flag and a disabled one resolve to the caller's default with the error code and reason remote evaluation returns.
 func TestUnresolvableFlags(t *testing.T) {
 	syncer := channelSync{source: "custom://flags", payloads: make(chan string, 4)}
 	p, o := newProvider(t, syncer.source, syncer)
@@ -237,6 +236,24 @@ func TestUnresolvableFlags(t *testing.T) {
 	disabled := p.Boolean(context.Background(), "off-flag", true, nil)
 	if !disabled.Value || disabled.Reason != "DISABLED" || disabled.ErrorCode != "" {
 		t.Fatalf("disabled flag: want the default with reason DISABLED, got %+v", disabled)
+	}
+}
+
+// TestResolveThroughAdapter covers steps 7 and 8 and the adapter half of A6: the provider resolves every type
+// through the core module's typed adapter, which finds a value of another type than the requested one and
+// returns the error code remote evaluation returns.
+func TestResolveThroughAdapter(t *testing.T) {
+	syncer := channelSync{source: "custom://flags", payloads: make(chan string, 4)}
+	p, o := newProvider(t, syncer.source, syncer)
+	syncer.payloads <- `{"flags":{"text":{"state":"ENABLED","defaultVariant":"v","variants":{"v":"hello"}}}}`
+	o.nextChange(t)
+
+	if got := p.String(context.Background(), "text", "default", nil); got.Value != "hello" || got.Variant != "v" || got.Reason != "STATIC" {
+		t.Fatalf("string flag: want hello with variant v and reason STATIC, got %+v", got)
+	}
+	mismatch := p.Boolean(context.Background(), "text", true, nil)
+	if !mismatch.Value || mismatch.ErrorCode != "TYPE_MISMATCH" || mismatch.Reason != "ERROR" {
+		t.Fatalf("string flag as boolean: want the default with TYPE_MISMATCH and ERROR, got %+v", mismatch)
 	}
 }
 
