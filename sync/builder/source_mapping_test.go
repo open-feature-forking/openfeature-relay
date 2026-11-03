@@ -138,6 +138,17 @@ func TestSourceMappingCharacterization(t *testing.T) {
 		}
 	})
 
+	t.Run("a file: prefix in --sources is stripped to the path", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "flags.json")
+		require.NoError(t, os.WriteFile(path, []byte(`{}`), 0o600))
+
+		for _, provider := range []string{"file", "fsnotify", "fileinfo"} {
+			src := startSource(t, sync.SourceConfig{URI: "file:" + path, Provider: provider})
+			// the provider reads the path, and names its deliveries by the path
+			src.requireDelivery(t, sync.DataSync{FlagData: `{}`, Source: path})
+		}
+	})
+
 	t.Run("file watcher by environment", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "flags.json")
 		require.NoError(t, os.WriteFile(path, []byte(`{}`), 0o600))
