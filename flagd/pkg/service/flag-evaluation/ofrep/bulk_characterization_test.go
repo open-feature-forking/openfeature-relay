@@ -14,7 +14,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	flagdEvaluator "github.com/open-feature-forking/openfeature-relay/evaluator/flagd"
+	"github.com/open-feature/flagd/flagd/pkg/evaluation"
 	"github.com/stretchr/testify/require"
 )
 
@@ -94,7 +94,7 @@ func TestBulkResponseCharacterization(t *testing.T) {
 		}
 		st, err := store.NewStore(log, sources)
 		require.NoError(t, err)
-		ev := flagdEvaluator.NewJSON(log, st)
+		ev := evaluation.NewEvaluator(log, st)
 		for _, p := range setup.payloads {
 			require.NoError(t, ev.SetState(p))
 		}
