@@ -172,7 +172,7 @@ check-package-coverage:
 flagd-full-modules:
 	@go list -deps -f '{{with .Module}}{{.Path}}{{end}}' ./flagd | grep -v '^$$' | LC_ALL=C sort -u
 check-flagd-full-modules:
-	@$(MAKE) --no-print-directory flagd-full-modules > .flagd-full-modules.tmp; 	tr -d '' < testdata/flagd-full-modules.txt > .flagd-full-modules.want; 	if ! diff -u .flagd-full-modules.want .flagd-full-modules.tmp; then rm -f .flagd-full-modules.tmp .flagd-full-modules.want; 		echo "the modules flagd-full links differ from testdata/flagd-full-modules.txt"; exit 1; fi; 	rm -f .flagd-full-modules.tmp .flagd-full-modules.want
+	@$(MAKE) --no-print-directory flagd-full-modules > .flagd-full-modules.tmp; 	tr -d '' < testdata/flagd-full-modules.txt > .flagd-full-modules.want; 	if ! diff -u .flagd-full-modules.want .flagd-full-modules.tmp; then rm -f .flagd-full-modules.tmp .flagd-full-modules.want; 		echo "the modules flagd-full links differ from testdata/flagd-full-modules.txt"; exit 1; fi; 	rm -f .flagd-full-modules.tmp .flagd-full-modules.want
 
 # testdata/module-boundaries.txt lists <module dir>:<packages>:<forbidden import path regexp>; no package of
 # <packages>, nor anything it imports, may match.
@@ -284,3 +284,13 @@ playground-build:
 .PHONY: playground-publish
 playground-publish: playground-build
 	cp playground-app/dist/assets/index-*.js docs/playground/playground.js
+
+# UC-001 7a: the Builder builds flagd-full from its manifest, the binary is named flagd, and the duration is printed
+# (NFR-008 asks for under three minutes). Run it with a warm module cache.
+.PHONY: build-flagd-full
+build-flagd-full:
+	cd builder && go build -o ../bin/relay-builder ./cmd/relay-builder
+	start=$$(date +%s); \
+	GOWORK=off ./bin/relay-builder --manifest distributions/flagd-full/manifest.yaml || exit 1; \
+	echo "flagd-full built in $$(( $$(date +%s) - start ))s"
+	test -x distributions/flagd-full/build/flagd
