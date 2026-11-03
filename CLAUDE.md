@@ -103,6 +103,7 @@ All work stays in this repository until the project lead says otherwise. No push
 
 ## Conventions
 
+- flagd built from this repository is a drop-in replacement for today's flagd. Internals change freely; what operators and clients observe does not: CLI, configuration, ports, endpoints, payloads, headers, readiness, startup and exit behaviour, metrics, spans, shutdown. A plan that changes any of it raises a question for the project lead with "keep today's behaviour" as the recommended default, and new behaviour goes behind opt-in configuration. The changes accepted before this rule are tracked in #78 for the migration guide.
 - Conventional commits, `git commit -s` signed off with the committer's own identity (DCO); no AI co-author trailers.
 - Stage files by name; parallel sessions share checkouts.
 - Code comments keep only facts a reader cannot derive; measurements and history go in the PR description.

@@ -56,9 +56,12 @@ type Provider struct {
 	version string       // the source version of the last accepted fetch; guarded by fetchMu
 	pending chan struct{}
 	ready   atomic.Bool
+
+	lastContact atomic.Int64 // unix nanoseconds of the last successful fetch; zero before the first
 }
 
 var _ sync.StreamingSyncProvider = (*Provider)(nil)
+var _ sync.ContactReporter = (*Provider)(nil)
 
 // New creates a Provider.
 func New(opts Options) *Provider {
@@ -94,6 +97,14 @@ func (p *Provider) Init(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// LastContact is when a fetch last succeeded, whether or not the source had changed; the zero time before the first.
+func (p *Provider) LastContact() time.Time {
+	if n := p.lastContact.Load(); n != 0 {
+		return time.Unix(0, n)
+	}
+	return time.Time{}
 }
 
 // IsReady reports whether the first fetch has succeeded.
@@ -235,6 +246,7 @@ func (p *Provider) fetchLocked(ctx context.Context, dataSync chan<- sync.DataSyn
 	if err != nil {
 		return fmt.Errorf("error fetching %s: %w", p.opts.Source, err)
 	}
+	p.lastContact.Store(time.Now().UnixNano())
 
 	if result.Unchanged {
 		if result.Version != "" && !force {

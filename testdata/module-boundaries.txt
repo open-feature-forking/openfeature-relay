@@ -12,6 +12,7 @@ core:./pkg/telemetry/...:robfig|opentelemetry|grpc|connectrpc|k8s.io|gocloud|clo
 core:./...:robfig|opentelemetry|grpc|connectrpc|k8s.io|gocloud|cloud.google.com|github.com/Azure|github.com/aws|jsonlogic|jsonschema|openfeature-relay/(sync|telemetry|evaluator|configformat)/
 # The event bus, the selector functions and the service endpoint contract stay light: no metrics or tracing library.
 core:./pkg/events/...:prometheus|otelconnect|go.opentelemetry.io|grpc|connectrpc|k8s.io|gocloud|jsonlogic|jsonschema|openfeature-relay/(sync|telemetry|evaluator|configformat)/
+core:./pkg/eventsink/...:prometheus|otelconnect|go.opentelemetry.io|grpc|connectrpc|k8s.io|gocloud|jsonlogic|jsonschema|openfeature-relay/(sync|telemetry|evaluator|configformat)/
 core:./pkg/middleware/...:prometheus|otelconnect|go.opentelemetry.io|grpc|connectrpc|k8s.io|gocloud|jsonlogic|jsonschema|openfeature-relay/(sync|telemetry|evaluator|configformat)/
 core:./pkg/service/servicetest/...:prometheus|otelconnect|go.opentelemetry.io|grpc|connectrpc|k8s.io|gocloud|jsonlogic|jsonschema|openfeature-relay/(sync|telemetry|evaluator|configformat)/
 # NFR-005, NFR-011: the embeddable modules import no telemetry, transport or platform clients, and flagd's
@@ -40,3 +41,5 @@ test/telemetry-example:./...:opentelemetry|google.golang.org/grpc|connectrpc|k8s
 # BR-009 and FR-048: an engine module's format and evaluator import core only, no telemetry, transport, platform client,
 # JsonLogic engine or other library module (the module's tests run a distribution and carry flagd's runtime).
 test/configformat-example:. ./evaluator:opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud|jsonlogic|jsonschema|openfeature-relay/(sync|telemetry|evaluator|configformat)/
+# The example event sink requires the core only: no vendor client, transport or flagd module.
+test/eventsink-example:./...:opentelemetry|google.golang.org/grpc|connectrpc|k8s.io|gocloud|open-feature/flagd/flagd|openfeature-relay/(sync|telemetry|evaluator|configformat)/

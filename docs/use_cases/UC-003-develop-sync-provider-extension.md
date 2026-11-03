@@ -116,7 +116,7 @@ A fetcher reports "not changed" when the source version of the source equals the
 
 ### BR-005: First Delivery as Soon as Possible
 
-The source's complete flag configuration is delivered as soon as it can be read: a fetcher is asked to fetch once at startup before any fetch trigger signals, and a streaming sync provider delivers as soon as it has connected. A distribution reaches readiness only after every configured source has delivered a flag configuration that its configuration format accepted, and loses it again when a source's last accepted delivery exceeds the configured staleness limit.
+The source's complete flag configuration is delivered as soon as it can be read: a fetcher is asked to fetch once at startup before any fetch trigger signals, and a streaming sync provider delivers as soon as it has connected. A distribution reaches readiness only after every configured source has delivered a flag configuration that its configuration format accepted, and, for a source with a staleAfter setting, loses it again while the last contact with that source is older than staleAfter. The last contact is a successful fetch, whether or not it changed anything, or the time a stream was last open; a source that delivers only when it changes is therefore not stale while it is reachable. A source without the setting never goes stale.
 
 ### BR-006: Every Delivery Names Its Source
 
@@ -128,7 +128,7 @@ Each delivery replaces all flags of its source, unless the Operator has enabled 
 
 ### BR-008: Recoverable Source Errors Do Not Stop flagd
 
-Errors the extension can recover from, such as an unreachable source, never stop the distribution, not even a failed first fetch or first connection: a fetcher reports the failed fetch and is fetched again after a backoff; a streaming sync provider reconnects. The sync provider stays up and not ready until its first delivery. A sync provider that loses its source after a first delivery reconnects and stays ready with its last accepted flag configuration; readiness is lost only when the source's last accepted delivery exceeds the staleness limit (BR-005). A streaming sync provider ends with an error only when it can never deliver again, because that error stops the whole distribution. A source that cannot be configured, such as a file path that does not exist at startup, is a configuration error and still stops flagd at startup.
+Errors the extension can recover from, such as an unreachable source, never stop the distribution, not even a failed first fetch or first connection: a fetcher reports the failed fetch and is fetched again after a backoff; a streaming sync provider reconnects. The sync provider stays up and not ready until its first delivery. A sync provider that loses its source after a first delivery reconnects and stays ready with its last accepted flag configuration; readiness is lost only while the last contact with a source that sets staleAfter is older than that (BR-005). A streaming sync provider ends with an error only when it can never deliver again, because that error stops the whole distribution. A source that cannot be configured, such as a file path that does not exist at startup, is a configuration error and still stops flagd at startup.
 
 ### BR-009: Stop on Shutdown
 
@@ -151,7 +151,6 @@ A deleted file is an empty flag configuration: the sync provider delivers `{}`, 
 This use case is `Implemented` for the sync provider side: the factory interfaces, the fetching sync provider, the fetch triggers and the contract tests are in the core module, the official sync providers are created through their factories, and `test/sync-example` shows an Extension Author's module. These parts are delivered by the use cases named here, and are accepted gaps of this one:
 
 - Steps 7–8 (publishing, and selecting the extension in a manifest), A5, BR-011 and the scheme clash of BR-002 at build time: UC-001.
-- Staleness (FR-052), the readiness half of BR-005: UC-004.
 - Telemetry injected generically: the gRPC dial options and the stream recorder stay fields of the `flagd-grpc` factory until UC-006 supplies them through the telemetry provider.
 - Fetch triggers that need an inbound endpoint or a vendor: a webhook, server-sent events and vendor change events (UC-019). Notifying a system of a change is an event sink (UC-020).
 - The official `http` fetcher answers conditionally with the ETag and the body digest only; sources that answer `If-Modified-Since`, such as the Flagsmith environment document, need their own fetcher (UC-019).
