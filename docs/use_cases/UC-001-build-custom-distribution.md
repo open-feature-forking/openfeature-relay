@@ -236,4 +236,4 @@ This use case is `Implemented`: the manifest and its validation, the generated s
 | `flagd components` (the inventory and the identity exist) | UC-011 |
 | Operator settings for extension components | UC-021 |
 | Reference Dockerfile (FR-009) | UC-002 |
-| Middleware and event sinks applied by the runtime (the generated source lists their factories) | UC-005, UC-020 |
+| Compiling a distribution with middleware or event sinks, which no repository manifest does yet: the generated source lists their factories without configuration, and the example components need some, so it waits for operator settings for extension components | UC-021 |
