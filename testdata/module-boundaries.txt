@@ -29,6 +29,8 @@ sync/builder:./...:openfeature-relay/telemetry/
 telemetry/otel:./...:openfeature-relay/sync/|k8s.io|gocloud|cloud.google.com|github.com/Azure|github.com/aws
 # BR-001 of UC-003: the example sync extension imports no sync provider, telemetry, transport or platform client.
 test/sync-example:./...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|open-feature/flagd/flagd|openfeature-relay/(sync|telemetry|evaluator|configformat)/
+# The example telemetry provider requires the core only: no telemetry SDK, transport or flagd module.
+test/telemetry-example:./...:opentelemetry|google.golang.org/grpc|connectrpc|k8s.io|gocloud|open-feature/flagd/flagd|openfeature-relay/(sync|telemetry|evaluator|configformat)/
 # BR-009 and FR-048: an engine module's format and evaluator import core only, no telemetry, transport, platform client,
 # JsonLogic engine or other library module (the module's tests run a distribution and carry flagd's runtime).
 test/configformat-example:. ./evaluator:opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud|jsonlogic|jsonschema|openfeature-relay/(sync|telemetry|evaluator|configformat)/
