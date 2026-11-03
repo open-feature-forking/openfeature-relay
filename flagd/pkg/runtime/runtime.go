@@ -29,7 +29,7 @@ type Runtime struct {
 	Logger            *logger.Logger
 	SyncService       flagsync.ISyncService
 	OfrepService      ofrep.IOfrepService
-	EvaluationService service.IFlagEvaluationService
+	EvaluationService service.IFlagEvaluationService //nolint:staticcheck // the runtime serves endpoints instead from the runtime change on
 	ServiceConfig     service.Configuration
 	Syncs             []sync.ISync
 	// Formats holds the configuration format of each source that names one other than flagd's, keyed

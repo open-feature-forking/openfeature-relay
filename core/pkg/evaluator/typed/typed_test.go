@@ -300,3 +300,37 @@ func (g *grabber) Evaluate(_ context.Context, _ evaluator.Request, dst []evaluat
 	g.dst = dst
 	return append(dst, static(map[string]any{})), nil, nil
 }
+
+func TestObserverSeesTheFinalResult(t *testing.T) {
+	var got []evaluator.Result
+	var req evaluator.Request
+	a := New(one(static(3.0)), WithObserver(func(_ context.Context, r evaluator.Request, res evaluator.Result) {
+		req = r
+		got = append(got, res)
+	}))
+
+	value, _, _, _, err := a.ResolveIntValue(context.Background(), "", "k", nil)
+	require.NoError(t, err)
+	require.Equal(t, int64(3), value)
+	require.Equal(t, "k", req.FlagKey)
+	require.Equal(t, evaluator.TypeInt, req.TypeHint)
+	require.Equal(t, []evaluator.Result{{FlagKey: "k", Value: int64(3), HasValue: true, Variant: "v", Reason: model.StaticReason}}, got)
+}
+
+func TestObserverIsCalledOncePerBulkFlag(t *testing.T) {
+	f := &fake{results: []evaluator.Result{
+		{FlagKey: "a", Value: true, HasValue: true, Format: "flagd"},
+		{FlagKey: "b", ErrorCode: model.FlagNotFoundErrorCode},
+	}}
+	var keys []string
+	var bulk bool
+	a := New(f, WithObserver(func(_ context.Context, r evaluator.Request, res evaluator.Result) {
+		bulk = r.Bulk
+		keys = append(keys, res.FlagKey)
+	}))
+
+	_, _, err := a.ResolveAllValues(context.Background(), "", nil)
+	require.NoError(t, err)
+	require.Equal(t, []string{"a", "b"}, keys)
+	require.True(t, bulk)
+}
