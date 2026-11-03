@@ -27,5 +27,10 @@ func Matches(uri string) bool {
 // path/to/object the object name. A query string (e.g. use_path_style, region) is moved onto the
 // bucket URL so gocloud's s3blob driver reads it.
 func New(config sync.SourceConfig, log *logger.Logger, recorder sync.MetricsRecorder) (*blob.Sync, error) {
-	return blob.NewSync(Provider, scheme, config, log, recorder, gocloud.DefaultURLMux())
+	return blob.NewLegacy(Provider, scheme, config, log, recorder, gocloud.DefaultURLMux())
+}
+
+// NewFactory creates the factory of s3:// sources.
+func NewFactory() blob.Factory {
+	return blob.Factory{Kind: Provider, Prefix: "s3://", Scheme: scheme, Mux: gocloud.DefaultURLMux()}
 }

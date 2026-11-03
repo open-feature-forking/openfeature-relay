@@ -2,9 +2,11 @@ package blob
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"regexp"
 	stdsync "sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -169,4 +171,25 @@ func (r *receivedRecorder) snapshot() []receivedCall {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return append([]receivedCall(nil), r.calls...)
+}
+
+// brokenDriver fails every call once broken.
+type brokenDriver struct {
+	*lockedDriver
+	failed atomic.Bool
+}
+
+func (d *brokenDriver) fail() { d.failed.Store(true) }
+
+func (d *brokenDriver) Attributes(ctx context.Context, key string) (*driver.Attributes, error) {
+	if d.failed.Load() {
+		return nil, errors.New("the bucket is down")
+	}
+	return d.lockedDriver.Attributes(ctx, key)
+}
+
+type brokenOpener struct{ drv *brokenDriver }
+
+func (o brokenOpener) OpenBucketURL(context.Context, *url.URL) (*blob.Bucket, error) {
+	return blob.NewBucket(o.drv), nil
 }

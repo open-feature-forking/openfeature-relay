@@ -37,5 +37,22 @@ func New(config sync.SourceConfig, log *logger.Logger, recorder sync.MetricsReco
 		return nil, fmt.Errorf("environment variable AZURE_STORAGE_ACCOUNT contains whitespace")
 	}
 
-	return blob.NewSync(Provider, scheme, config, log, recorder, gocloud.DefaultURLMux())
+	return blob.NewLegacy(Provider, scheme, config, log, recorder, gocloud.DefaultURLMux())
+}
+
+// checkEnvironment validates the storage account, which generates the azblob service URL.
+func checkEnvironment() error {
+	storageAccountName := os.Getenv("AZURE_STORAGE_ACCOUNT")
+	if storageAccountName == "" {
+		return fmt.Errorf("environment variable AZURE_STORAGE_ACCOUNT not set or is blank")
+	}
+	if regexp.MustCompile(`\s`).MatchString(storageAccountName) {
+		return fmt.Errorf("environment variable AZURE_STORAGE_ACCOUNT contains whitespace")
+	}
+	return nil
+}
+
+// NewFactory creates the factory of azblob:// sources.
+func NewFactory() blob.Factory {
+	return blob.Factory{Kind: Provider, Prefix: "azblob://", Scheme: scheme, Mux: gocloud.DefaultURLMux(), Check: checkEnvironment}
 }

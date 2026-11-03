@@ -19,11 +19,11 @@ import (
 	"gocloud.dev/blob"
 )
 
-// NewSync builds the sync of a blob source from its configuration. kind names the cloud ("gcs",
+// NewLegacy builds the sync of a blob source from its configuration. kind names the cloud ("gcs",
 // "azblob", "s3") in logs and errors, and scheme matches through the first "/" after the scheme of the
 // source URI ("^s3://.+?/"). The mux must have the cloud's driver registered; each cloud package
 // passes the default mux after registering its own driver.
-func NewSync(
+func NewLegacy(
 	kind string, scheme *regexp.Regexp, config sync.SourceConfig, log *logger.Logger,
 	recorder sync.MetricsRecorder, mux *blob.URLMux,
 ) (*Sync, error) {
