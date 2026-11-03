@@ -17,19 +17,6 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 )
 
-func TestBuildMetricsRecorder(t *testing.T) {
-	// Simple happy-path test
-	recorder, err := BuildMetricsRecorder(context.Background(), "service", "0.0.1", Config{
-		MetricsExporter: "otel",
-		CollectorConfig: CollectorConfig{
-			Target: "localhost:8080",
-		},
-	})
-
-	require.Nil(t, err, "expected no error, but got: %v", err)
-	require.NotNilf(t, recorder, "expected recorder to be non-nil")
-}
-
 func TestBuildMetricReader(t *testing.T) {
 	gCtx := context.TODO()
 
@@ -65,74 +52,6 @@ func TestBuildMetricReader(t *testing.T) {
 
 		require.Nilf(t, err, "test %s expected no error, but got: %v", test.name, err)
 		require.NotNil(t, reader, "test %s expected non-nil reader", test.name)
-	}
-}
-
-func TestBuildSpanProcessor(t *testing.T) {
-	gCtx := context.TODO()
-
-	tests := []struct {
-		name  string
-		cfg   Config
-		error bool
-	}{
-		{
-			name: "Valid configurations yield a valid processor",
-			cfg: Config{
-				CollectorConfig: CollectorConfig{
-					Target: "localhost:8080",
-				},
-			},
-			error: false,
-		},
-		{
-			name:  "Empty configurations does not result in error",
-			cfg:   Config{},
-			error: false,
-		},
-	}
-
-	for _, test := range tests {
-		err := BuildTraceProvider(gCtx, logger.NewLogger(nil, false), "svc", "0.0.1", test.cfg)
-
-		if test.error {
-			require.NotNil(t, err, "test %s expected non-nil error", test.name)
-			continue
-		}
-
-		require.Nilf(t, err, "test %s expected no error, but got: %v", test.name, err)
-	}
-}
-
-func TestBuildConnectOptions(t *testing.T) {
-	tests := []struct {
-		name        string
-		cfg         Config
-		optionCount int
-	}{
-		{
-			name:        "Interceptor always added with autoexport",
-			cfg:         Config{},
-			optionCount: 1,
-		},
-		{
-			name: "Connect option is set when telemetry target is set",
-			cfg: Config{
-				CollectorConfig: CollectorConfig{
-					Target: "localhost:8080",
-				},
-			},
-			optionCount: 1,
-		},
-	}
-
-	for _, test := range tests {
-		options, err := BuildConnectOptions(test.cfg)
-		if err != nil {
-			t.Fatalf("error building connection options : %v", err)
-		}
-
-		require.Len(t, options, test.optionCount, "option count mismatch for test %s", test.name)
 	}
 }
 

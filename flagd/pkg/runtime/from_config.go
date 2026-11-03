@@ -21,7 +21,6 @@ import (
 	flagdeval "github.com/open-feature-forking/openfeature-relay/evaluator/flagd"
 	syncbuilder "github.com/open-feature-forking/openfeature-relay/sync/builder"
 	flagdgrpc "github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc"
-	otelprovider "github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	flageval "github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation"
 	"github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation/ofrep"
 	flagsync "github.com/open-feature/flagd/flagd/pkg/service/flag-sync"
@@ -35,17 +34,11 @@ const svcName = "flagd"
 
 // Config is the configuration structure derived from startup arguments.
 type Config struct {
-	MetricExporter         string
 	ManagementPort         uint16
 	OfrepServicePort       uint16
 	OfrepSSEEnabled        bool
 	OfrepSSEInactivityDel  int
 	OfrepSSEPublicURL      string
-	OtelCollectorURI       string
-	OtelCertPath           string
-	OtelKeyPath            string
-	OtelCAPath             string
-	OtelReloadInterval     time.Duration
 	ServiceCertPath        string
 	ServiceKeyPath         string
 	ServicePort            uint16
@@ -104,7 +97,7 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 	config = withComponents(config, components)
 	warnOnNoOpConfig(logger, config)
 
-	tp, shutdownTelemetry, err := telemetryProvider(logger, version, config, components)
+	tp, shutdownTelemetry, err := telemetryProvider(logger, version, components)
 	if err != nil {
 		return nil, err
 	}
@@ -218,14 +211,13 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 	return rt, nil
 }
 
-// telemetryProvider returns the telemetry provider of the runtime, and how to shut it down. With a telemetry factory
-// in the components it is the factory's provider; without one, it is the provider over the global OpenTelemetry
-// state that the runtime installs itself from Config, which logs what it cannot build and goes on without it.
+// telemetryProvider returns the telemetry provider of the runtime, and how to shut it down. It is the provider of the
+// factory in the components, or the noop telemetry provider without one.
 func telemetryProvider(
-	logger *logger.Logger, version string, config Config, components Components,
+	logger *logger.Logger, version string, components Components,
 ) (telemetry.Provider, func(context.Context) error, error) {
 	if components.Telemetry == nil {
-		return legacyTelemetryProvider(logger, version, config), nil, nil
+		return telemetry.Noop(), nil, nil
 	}
 	if err := telemetry.ValidateDeclaration(components.Telemetry); err != nil {
 		return nil, nil, fmt.Errorf("the telemetry provider declares: %w", err)
@@ -240,36 +232,6 @@ func telemetryProvider(
 		return nil, nil, fmt.Errorf("error creating the telemetry provider %q: %w", components.Telemetry.Type(), err)
 	}
 	return tp, tp.Shutdown, nil
-}
-
-func legacyTelemetryProvider(logger *logger.Logger, version string, config Config) telemetry.Provider {
-	telCfg := otelprovider.Config{
-		MetricsExporter: config.MetricExporter,
-		CollectorConfig: otelprovider.CollectorConfig{
-			Target:         config.OtelCollectorURI,
-			CertPath:       config.OtelCertPath,
-			KeyPath:        config.OtelKeyPath,
-			CAPath:         config.OtelCAPath,
-			ReloadInterval: config.OtelReloadInterval,
-		},
-	}
-
-	// register error handling for OpenTelemetry
-	otelprovider.RegisterErrorHandling(logger)
-
-	// register trace provider for the runtime
-	if err := otelprovider.BuildTraceProvider(context.Background(), logger, svcName, version, telCfg); err != nil {
-		// log the error but continue
-		logger.Error(fmt.Sprintf("error building trace provider: %v", err))
-	}
-
-	// build metrics recorder with startup configurations
-	if _, err := otelprovider.BuildMetricsRecorder(context.Background(), svcName, version, telCfg); err != nil {
-		// log the error but continue
-		logger.Error(fmt.Sprintf("error building metrics recorder: %v", err))
-	}
-	// the providers built above are global state; the components record through the telemetry provider over it
-	return otelprovider.FromGlobals(svcName)
 }
 
 // endpointConfigs derives the settings of the official endpoints from the operator's configuration.
