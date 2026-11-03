@@ -14,7 +14,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service/ofrep"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
-	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	"github.com/open-feature/flagd/flagd/pkg/service"
 	evalservice "github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation"
 	"github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation/ofrep/sse"
@@ -22,9 +22,7 @@ import (
 	metricsmw "github.com/open-feature/flagd/flagd/pkg/service/middleware/metrics"
 	"github.com/rs/xid"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/metric/noop"
-	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -45,8 +43,7 @@ type handler struct {
 	evaluator                  evaluator.IResolver
 	contextValues              map[string]any
 	headerToContextKeyMappings map[string]string
-	metricsRecorder            telemetry.IMetricsRecorder
-	tracer                     trace.Tracer
+	metricsRecorder            *service.Metrics
 
 	versioner             configVersioner
 	sseEnabled            bool
@@ -68,7 +65,7 @@ func NewOfrepHandler(
 	evaluator evaluator.IResolver,
 	contextValues map[string]any,
 	headerToContextKeyMappings map[string]string,
-	metricsRecorder telemetry.IMetricsRecorder,
+	tp telemetry.Provider,
 	serviceName string,
 	sseCfg SSEConfig,
 	compression middleware.IMiddleware,
@@ -78,8 +75,7 @@ func NewOfrepHandler(
 		evaluator:                  evalservice.TraceEvaluations(evaluator),
 		contextValues:              contextValues,
 		headerToContextKeyMappings: headerToContextKeyMappings,
-		metricsRecorder:            metricsRecorder,
-		tracer:                     otel.Tracer("flagd.ofrep.v1"),
+		metricsRecorder:            service.NewMetrics(telemetry.OrNoop(tp).Meter(service.MetricsScope)),
 		versioner:                  sseCfg.Versioner,
 		sseEnabled:                 sseCfg.Enabled,
 		sseInactivityDelaySec:      sseCfg.InactivityDelaySec,
@@ -94,7 +90,7 @@ func NewOfrepHandler(
 	withMetrics := func(handlerID string, next http.Handler) http.Handler {
 		return metricsmw.NewHTTPMetric(metricsmw.Config{
 			Service:        serviceName,
-			MetricRecorder: metricsRecorder,
+			MetricRecorder: h.metricsRecorder,
 			Logger:         logger,
 			HandlerID:      handlerID,
 		}).Handler(next)

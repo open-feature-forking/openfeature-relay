@@ -13,7 +13,8 @@ import (
 	"connectrpc.com/connect"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
-	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
+	flagdService "github.com/open-feature/flagd/flagd/pkg/service"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
@@ -40,7 +41,7 @@ type SvcConfigurations struct {
 	SocketPath          string
 	StreamDeadline      time.Duration
 	DisableSyncMetadata bool
-	MetricsRecorder     telemetry.IMetricsRecorder
+	Telemetry           telemetry.Provider
 
 	HTTPEnabled           bool
 	ServiceName           string
@@ -84,10 +85,7 @@ func NewSyncService(cfg SvcConfigurations) (*Service, error) {
 	var err error
 	l := cfg.Logger
 
-	// Normalized on cfg so the server built below sees the same recorder.
-	if cfg.MetricsRecorder == nil {
-		cfg.MetricsRecorder = &telemetry.NoopMetricsRecorder{}
-	}
+	cfg.Telemetry = telemetry.OrNoop(cfg.Telemetry)
 
 	stamp := &modTime{}
 
@@ -103,7 +101,7 @@ func NewSyncService(cfg SvcConfigurations) (*Service, error) {
 		contextValues:       cfg.ContextValues,
 		deadline:            cfg.StreamDeadline,
 		disableSyncMetadata: cfg.DisableSyncMetadata,
-		metricsRecorder:     cfg.MetricsRecorder,
+		metricsRecorder:     flagdService.NewMetrics(cfg.Telemetry.Meter(flagdService.MetricsScope)),
 	}, flagsHandler)
 
 	// Loaded here rather than in ServeTLS so a bad path fails at construction.
@@ -128,10 +126,10 @@ func NewSyncService(cfg SvcConfigurations) (*Service, error) {
 	}
 
 	return &Service{
-		listener: lis,
-		logger:   l,
-		server:   server,
-		modTime:  stamp,
+		listener:    lis,
+		logger:      l,
+		server:      server,
+		modTime:     stamp,
 		initialized: cfg.Initialized,
 		startupTracker: syncTracker{
 			sources:  slices.Clone(cfg.Sources),

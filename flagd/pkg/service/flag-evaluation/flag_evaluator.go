@@ -13,7 +13,9 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
-	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
+	otelprovider "github.com/open-feature-forking/openfeature-relay/telemetry/otel"
+	flagdService "github.com/open-feature/flagd/flagd/pkg/service"
 	"github.com/rs/xid"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -23,6 +25,11 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
+// evaluationRecorder records an evaluation in the evaluation metrics.
+type evaluationRecorder interface {
+	RecordEvaluation(ctx context.Context, err error, reason, variant, key string, metadata model.Metadata)
+}
+
 type resolverSignature[T constraints] func(context context.Context, reqID, flagKey string, ctx map[string]any) (
 	T, string, string, map[string]interface{}, error)
 
@@ -31,7 +38,7 @@ type resolverSignature[T constraints] func(context context.Context, reqID, flagK
 type OldFlagEvaluationService struct {
 	logger                *logger.Logger
 	eval                  evaluator.IResolver
-	metrics               telemetry.IMetricsRecorder
+	metrics               *flagdService.Metrics
 	eventingConfiguration IEvents
 	flagEvalTracer        trace.Tracer
 	contextValues         map[string]any
@@ -42,20 +49,16 @@ func NewOldFlagEvaluationService(
 	log *logger.Logger,
 	eval evaluator.IResolver,
 	eventingCfg IEvents,
-	metricsRecorder telemetry.IMetricsRecorder,
+	tp telemetry.Provider,
 	contextValues map[string]any,
 ) *OldFlagEvaluationService {
 	svc := &OldFlagEvaluationService{
 		logger:                log,
 		eval:                  eval,
-		metrics:               &telemetry.NoopMetricsRecorder{},
+		metrics:               flagdService.NewMetrics(telemetry.OrNoop(tp).Meter(flagdService.MetricsScope)),
 		eventingConfiguration: eventingCfg,
 		flagEvalTracer:        otel.Tracer("flagEvaluationService"),
 		contextValues:         contextValues,
-	}
-
-	if metricsRecorder != nil {
-		svc.metrics = metricsRecorder
 	}
 
 	return svc
@@ -377,7 +380,7 @@ func mergeContexts(reqCtx, configFlagsCtx map[string]any, headers http.Header, h
 
 // resolve is a generic flag resolver
 func resolve[T constraints](ctx context.Context, logger *logger.Logger, resolver resolverSignature[T], header http.Header, flagKey string,
-	evaluationContext *structpb.Struct, resp response[T], metrics telemetry.IMetricsRecorder,
+	evaluationContext *structpb.Struct, resp response[T], metrics evaluationRecorder,
 	configContextValues map[string]any, configHeaderToContextKeyMappings map[string]string,
 ) error {
 	reqID := xid.New().String()
@@ -404,7 +407,7 @@ func resolve[T constraints](ctx context.Context, logger *logger.Logger, resolver
 	}
 
 	spanFromContext := trace.SpanFromContext(ctx)
-	spanFromContext.SetAttributes(telemetry.SemConvFeatureFlagAttributes(flagKey, variant)...)
+	spanFromContext.SetAttributes(otelprovider.SemConvFeatureFlagAttributes(flagKey, variant)...)
 
 	if err := resp.SetResult(result, variant, reason, metadata); err != nil && evalErr == nil {
 		logger.ErrorWithID(reqID, err.Error())

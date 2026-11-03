@@ -10,7 +10,6 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
-	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"go.uber.org/zap"
 )
 
@@ -23,7 +22,6 @@ const ConfigKey = "config"
 // EndpointConfig is what the runtime derives from the operator's settings for the endpoint.
 type EndpointConfig struct {
 	Configuration service.Configuration
-	Metrics       telemetry.IMetricsRecorder
 	// Options are applied to each of the connect handlers.
 	Options []connect.HandlerOption
 }
@@ -46,7 +44,7 @@ func (Factory) Create(s service.Settings) (service.Endpoint, error) {
 		return nil, fmt.Errorf("the %s endpoint needs a resolver", Type)
 	}
 	cfg, _ := s.Config[ConfigKey].(EndpointConfig)
-	svc := NewConnectService(s.Logger.WithFields(zap.String("component", "service")), s.Resolver, s.Store, cfg.Metrics, cfg.Options...)
+	svc := NewConnectService(s.Logger.WithFields(zap.String("component", "service")), s.Resolver, s.Store, s.Telemetry, cfg.Options...)
 	svc.httpMiddleware = s.HTTPMiddleware
 	return &endpoint{svc: svc, cfg: cfg.Configuration}, nil
 }

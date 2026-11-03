@@ -10,7 +10,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
-	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	"github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation/ofrep/sse"
 	compressmw "github.com/open-feature/flagd/flagd/pkg/service/middleware/compress"
 	corsmw "github.com/open-feature/flagd/flagd/pkg/service/middleware/cors"
@@ -29,7 +29,7 @@ type SvcConfiguration struct {
 	Logger                *logger.Logger
 	Port                  uint16
 	ServiceName           string
-	MetricsRecorder       telemetry.IMetricsRecorder
+	Telemetry             telemetry.Provider
 	MaxRequestBodyBytes   int64
 	MaxRequestHeaderBytes int64
 
@@ -86,7 +86,7 @@ func NewOfrepService(
 		evaluator,
 		contextValues,
 		headerToContextKeyMappings,
-		cfg.MetricsRecorder,
+		cfg.Telemetry,
 		cfg.ServiceName,
 		sseCfg,
 		compression,

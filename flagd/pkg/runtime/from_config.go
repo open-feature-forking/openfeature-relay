@@ -125,11 +125,13 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 	}
 
 	// build metrics recorder with startup configurations
-	recorder, err := telemetry.BuildMetricsRecorder(context.Background(), svcName, version, telCfg)
+	_, err = telemetry.BuildMetricsRecorder(context.Background(), svcName, version, telCfg)
 	if err != nil {
 		// log the error but continue
 		logger.Error(fmt.Sprintf("error building metrics recorder: %v", err))
 	}
+	// the providers built above are global state; the components record through the telemetry provider over it
+	tp := telemetry.FromGlobals(svcName)
 
 	syncProviders := sourcesWithKnownFormat(logger, config.SyncProviders, config.ConfigurationFormats)
 	sources := []string{}
@@ -205,7 +207,7 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		rt.Evaluator = inputs.router.IEvaluator()
 	}
 	endpointConfigs := endpointConfigs{
-		config: config, serviceConfig: rt.ServiceConfig, sources: sources, recorder: recorder, options: options,
+		config: config, serviceConfig: rt.ServiceConfig, sources: sources, options: options,
 	}
 	for _, factory := range components.Endpoints {
 		if err := service.ValidateDeclarations(factory); err != nil {
@@ -213,6 +215,7 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		}
 		settings := inputs.settings(factory)
 		settings.Initialized = rt.Initialized()
+		settings.Telemetry = tp
 		settings.Config = endpointConfigs.forEndpoint(factory.Type())
 		endpoint, err := factory.Create(settings)
 		if err != nil {
@@ -240,7 +243,6 @@ type endpointConfigs struct {
 	config        Config
 	serviceConfig service.Configuration
 	sources       []string
-	recorder      telemetry.IMetricsRecorder
 	options       []connect.HandlerOption
 }
 
@@ -250,14 +252,13 @@ func (c endpointConfigs) forEndpoint(endpointType string) map[string]any {
 	switch endpointType {
 	case flageval.Type:
 		return map[string]any{flageval.ConfigKey: flageval.EndpointConfig{
-			Configuration: c.serviceConfig, Metrics: c.recorder, Options: c.options,
+			Configuration: c.serviceConfig, Options: c.options,
 		}}
 	case ofrep.Type:
 		return map[string]any{ofrep.ConfigKey: ofrep.EndpointConfig{
 			Service: ofrep.SvcConfiguration{
 				Port:                  c.config.OfrepServicePort,
 				ServiceName:           svcName,
-				MetricsRecorder:       c.recorder,
 				MaxRequestBodyBytes:   c.config.MaxRequestBodyBytes,
 				MaxRequestHeaderBytes: c.config.MaxRequestHeaderBytes,
 				SSEEnabled:            c.config.OfrepSSEEnabled,
@@ -282,7 +283,6 @@ func (c endpointConfigs) forEndpoint(endpointType string) map[string]any {
 			Options:               c.options,
 			StreamDeadline:        c.config.StreamDeadline,
 			DisableSyncMetadata:   c.config.DisableSyncMetadata,
-			MetricsRecorder:       c.recorder,
 			MaxRequestHeaderBytes: c.config.MaxRequestHeaderBytes,
 			MaxRequestBodyBytes:   c.config.MaxRequestBodyBytes,
 		}}

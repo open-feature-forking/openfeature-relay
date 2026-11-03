@@ -12,12 +12,12 @@ import (
 	"time"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
-	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
-	"go.opentelemetry.io/otel/attribute"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
+	flagdService "github.com/open-feature/flagd/flagd/pkg/service"
 )
 
 type Config struct {
-	MetricRecorder     telemetry.IMetricsRecorder
+	MetricRecorder     *flagdService.Metrics
 	Logger             *logger.Logger
 	Service            string
 	GroupedStatus      bool
@@ -44,7 +44,7 @@ func (cfg *Config) defaults() {
 		log.Fatal("missing logger")
 	}
 	if cfg.MetricRecorder == nil {
-		cfg.MetricRecorder = &telemetry.NoopMetricsRecorder{}
+		cfg.MetricRecorder = flagdService.NoopMetrics()
 	}
 }
 
@@ -59,14 +59,14 @@ func (m Middleware) Measure(ctx context.Context, handlerID string, reporter Repo
 	// If we need to group the status code, it uses the
 	// first number of the status code because is the least
 	// required identification way.
-	httpAttrs := func() []attribute.KeyValue {
+	httpAttrs := func() []telemetry.Attribute {
 		var code string
 		if m.cfg.GroupedStatus {
 			code = fmt.Sprintf("%dxx", reporter.StatusCode()/100)
 		} else {
 			code = strconv.Itoa(reporter.StatusCode())
 		}
-		return m.cfg.MetricRecorder.HTTPAttributes(
+		return flagdService.HTTPAttributes(
 			m.cfg.Service,
 			hid,
 			reporter.Method(),

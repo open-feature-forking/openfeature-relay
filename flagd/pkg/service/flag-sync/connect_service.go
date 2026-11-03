@@ -6,6 +6,7 @@ import (
 
 	"buf.build/gen/go/open-feature/flagd/connectrpc/go/flagd/sync/v1/syncv1connect"
 	"connectrpc.com/connect"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	flagdService "github.com/open-feature/flagd/flagd/pkg/service"
 	corsmw "github.com/open-feature/flagd/flagd/pkg/service/middleware/cors"
 	h2cmw "github.com/open-feature/flagd/flagd/pkg/service/middleware/h2c"
@@ -87,7 +88,7 @@ func methodNotAllowed(w http.ResponseWriter, _ *http.Request) {
 func httpMetrics(cfg SvcConfigurations, handlerID string) metricsmw.Middleware {
 	return metricsmw.NewHTTPMetric(metricsmw.Config{
 		Service:        cfg.ServiceName,
-		MetricRecorder: cfg.MetricsRecorder,
+		MetricRecorder: flagdService.NewMetrics(telemetry.OrNoop(cfg.Telemetry).Meter(flagdService.MetricsScope)),
 		Logger:         cfg.Logger,
 		HandlerID:      handlerID,
 	})

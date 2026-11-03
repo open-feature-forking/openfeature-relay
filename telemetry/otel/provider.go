@@ -30,8 +30,10 @@ type Provider struct {
 	sdkTracerProvider *trace.TracerProvider
 	tracerProvider    oteltrace.TracerProvider
 	propagator        propagation.TextMapPropagator
-	meterProvider     *msdk.MeterProvider
-	recorder          *MetricsRecorder
+	meterProvider     metric.MeterProvider
+	// sdkMeterProvider is nil for a provider over the global state; see FromGlobals.
+	sdkMeterProvider *msdk.MeterProvider
+	recorder         *MetricsRecorder
 }
 
 var _ coretel.Provider = (*Provider)(nil)
@@ -40,7 +42,7 @@ var _ coretel.Provider = (*Provider)(nil)
 // before the telemetry provider existed: the meter provider always, the tracer provider and the propagator only
 // with a span exporter.
 func (p *Provider) installGlobals() {
-	otel.SetMeterProvider(p.meterProvider)
+	otel.SetMeterProvider(p.sdkMeterProvider)
 	if p.sdkTracerProvider != nil {
 		otel.SetTracerProvider(p.sdkTracerProvider)
 		otel.SetTextMapPropagator(p.propagator)
@@ -76,8 +78,18 @@ func (p *Provider) Shutdown(ctx context.Context) error {
 	if p.sdkTracerProvider != nil {
 		errs = append(errs, p.sdkTracerProvider.Shutdown(ctx))
 	}
-	errs = append(errs, p.meterProvider.Shutdown(ctx))
+	if p.sdkMeterProvider != nil {
+		errs = append(errs, p.sdkMeterProvider.Shutdown(ctx))
+	}
 	return errors.Join(errs...)
+}
+
+// ForceFlush exports the spans the provider still holds.
+func (p *Provider) ForceFlush(ctx context.Context) error {
+	if p.sdkTracerProvider == nil {
+		return nil
+	}
+	return p.sdkTracerProvider.ForceFlush(ctx)
 }
 
 // ConnectHandlerOptions instrument a ConnectRPC handler with otelconnect, as flagd's flag evaluation and flag sync

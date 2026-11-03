@@ -9,10 +9,10 @@ import (
 	"testing"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
-	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
+	"github.com/open-feature/flagd/flagd/internal/telemetrytest"
+	flagdService "github.com/open-feature/flagd/flagd/pkg/service"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
-	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.34.0"
 	"go.uber.org/zap/zapcore"
 )
@@ -20,10 +20,9 @@ import (
 func TestMiddlewareExposesMetrics(t *testing.T) {
 	const svcName = "mySvc"
 	exp := metric.NewManualReader()
-	rs := resource.NewWithAttributes("testSchema")
 	l, _ := logger.NewZapLogger(zapcore.DebugLevel, "")
 	m := NewHTTPMetric(Config{
-		MetricRecorder: telemetry.NewOTelRecorder(exp, rs, svcName),
+		MetricRecorder: flagdService.NewMetrics(telemetrytest.ProviderFor(exp).Meter(svcName)),
 		Service:        svcName,
 		Logger:         logger.NewLogger(l, true),
 		HandlerID:      "id",
@@ -93,7 +92,7 @@ func TestMiddlewareRecordsStatusCode(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			exp := metric.NewManualReader()
 			m := NewHTTPMetric(Config{
-				MetricRecorder: telemetry.NewOTelRecorder(exp, resource.NewWithAttributes("testSchema"), "mySvc"),
+				MetricRecorder: flagdService.NewMetrics(telemetrytest.ProviderFor(exp).Meter(flagdService.MetricsScope)),
 				Service:        "mySvc",
 				Logger:         logger.NewLogger(nil, false),
 				HandlerID:      "id",
@@ -139,7 +138,6 @@ func histogramStatusCodes(t *testing.T, reader metric.Reader) map[string]string 
 
 func TestMeasure(t *testing.T) {
 	exp := metric.NewManualReader()
-	rs := resource.NewWithAttributes("testSchema")
 	l, _ := logger.NewZapLogger(zapcore.DebugLevel, "")
 
 	next := func() {}
@@ -218,7 +216,7 @@ func TestMeasure(t *testing.T) {
 			// test the middleware correctly
 			rep := tt.rep
 			m := NewHTTPMetric(Config{
-				MetricRecorder:     telemetry.NewOTelRecorder(exp, rs, tt.name),
+				MetricRecorder:     flagdService.NewMetrics(telemetrytest.ProviderFor(exp).Meter(flagdService.MetricsScope)),
 				Service:            tt.name,
 				Logger:             logger.NewLogger(l, true),
 				GroupedStatus:      tt.groupStatus,
@@ -285,13 +283,12 @@ func TestNewHttpMetric(t *testing.T) {
 	l, _ := logger.NewZapLogger(zapcore.DebugLevel, "")
 	log := logger.NewLogger(l, true)
 	exp := metric.NewManualReader()
-	rs := resource.NewWithAttributes("testSchema")
 	const svcName = "mySvc"
 	const groupedStatus = false
 	const disableMeasureSize = false
 
 	mdw := NewHTTPMetric(Config{
-		MetricRecorder:     telemetry.NewOTelRecorder(exp, rs, svcName),
+		MetricRecorder:     flagdService.NewMetrics(telemetrytest.ProviderFor(exp).Meter(flagdService.MetricsScope)),
 		Logger:             log,
 		Service:            svcName,
 		GroupedStatus:      groupedStatus,

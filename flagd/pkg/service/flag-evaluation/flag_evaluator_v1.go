@@ -12,7 +12,8 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
-	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
+	flagdService "github.com/open-feature/flagd/flagd/pkg/service"
 	"github.com/rs/xid"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -24,7 +25,7 @@ import (
 type FlagEvaluationService struct {
 	logger                     *logger.Logger
 	eval                       evaluator.IResolver
-	metrics                    telemetry.IMetricsRecorder
+	metrics                    *flagdService.Metrics
 	eventingConfiguration      IEvents
 	flagEvalTracer             trace.Tracer
 	contextValues              map[string]any
@@ -36,7 +37,7 @@ type FlagEvaluationService struct {
 func NewFlagEvaluationService(log *logger.Logger,
 	eval evaluator.IResolver,
 	eventingCfg IEvents,
-	metricsRecorder telemetry.IMetricsRecorder,
+	tp telemetry.Provider,
 	contextValues map[string]any,
 	headerToContextKeyMappings map[string]string,
 	streamDeadline time.Duration,
@@ -44,16 +45,12 @@ func NewFlagEvaluationService(log *logger.Logger,
 	svc := &FlagEvaluationService{
 		logger:                     log,
 		eval:                       eval,
-		metrics:                    &telemetry.NoopMetricsRecorder{},
+		metrics:                    flagdService.NewMetrics(telemetry.OrNoop(tp).Meter(flagdService.MetricsScope)),
 		eventingConfiguration:      eventingCfg,
 		flagEvalTracer:             otel.Tracer("flagd.evaluation.v1"),
 		contextValues:              contextValues,
 		headerToContextKeyMappings: headerToContextKeyMappings,
 		deadline:                   streamDeadline,
-	}
-
-	if metricsRecorder != nil {
-		svc.metrics = metricsRecorder
 	}
 
 	return svc

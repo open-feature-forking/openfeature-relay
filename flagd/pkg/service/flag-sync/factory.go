@@ -35,6 +35,7 @@ func (Factory) Create(s service.Settings) (service.Endpoint, error) {
 	cfg.Store = s.Store
 	cfg.Initialized = s.Initialized
 	cfg.HTTPMiddleware = s.HTTPMiddleware
+	cfg.Telemetry = s.Telemetry
 	svc, err := NewSyncService(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("error creating sync service: %w", err)
