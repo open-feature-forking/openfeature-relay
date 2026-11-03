@@ -6,14 +6,23 @@ import (
 	"net/http"
 
 	"connectrpc.com/connect"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	flagdService "github.com/open-feature/flagd/flagd/pkg/service"
+	"go.uber.org/zap"
 )
 
-func selectorFromHeader(ctx context.Context, header http.Header) (store.Selector, error) {
+// errInternal is what a client learns of a request the server could not handle because of its own configuration.
+var errInternal = errors.New("internal error")
+
+func selectorFromHeader(ctx context.Context, log *logger.Logger, header http.Header) (store.Selector, error) {
 	s, err := flagdService.RequestSelector(ctx, header.Get(flagdService.FLAGD_SELECTOR_HEADER))
+	if errors.Is(err, flagdService.ErrInvalidBoundSelector) {
+		log.Error("invalid bound selector", zap.Error(err))
+		return store.Selector{}, connect.NewError(connect.CodeInternal, errInternal)
+	}
 	if err != nil {
 		return store.Selector{}, connect.NewError(connect.CodeInvalidArgument, err)
 	}

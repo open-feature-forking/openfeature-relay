@@ -87,7 +87,7 @@ func (s *FlagEvaluationServiceV2) EventStream(
 
 	s.logger.Debug("starting event stream for request")
 	requestNotificationChan := make(chan service.Notification, 1)
-	selector, err := selectorFromHeader(ctx, req.Header())
+	selector, err := selectorFromHeader(ctx, s.logger, req.Header())
 	if err != nil {
 		return err
 	}
@@ -309,7 +309,7 @@ func (s *FlagEvaluationServiceV2) startResolveV2(
 ) (context.Context, telemetry.Span, error) {
 	ctx, span := s.flagEvalTracer.Start(ctx, spanName, telemetry.WithSpanKind(telemetry.SpanKindServer))
 
-	selector, err := selectorFromHeader(ctx, header)
+	selector, err := selectorFromHeader(ctx, s.logger, header)
 	if err != nil {
 		span.RecordError(err)
 		span.SetError(err.Error())

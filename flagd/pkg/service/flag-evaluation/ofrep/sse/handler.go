@@ -2,11 +2,13 @@ package sse
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/middleware"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	"github.com/open-feature/flagd/flagd/pkg/service"
+	"go.uber.org/zap"
 )
 
 // channelPathVar is the path wildcard carrying the selector expression the client wants change
@@ -24,6 +26,13 @@ func (svc *Service) Handler() http.Handler {
 		// already percent-decoded by the mux, so a source containing "/" arrives intact
 		channel := r.PathValue(channelPathVar)
 		selector, err := service.RequestSelector(r.Context(), channel)
+		if errors.Is(err, service.ErrInvalidBoundSelector) {
+			if svc.logger != nil {
+				svc.logger.Error("invalid bound selector", zap.Error(err))
+			}
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
 		if err != nil {
 			// not echoing the expression back: it is unescaped client input
 			http.Error(w, "invalid selector in the channel path segment", http.StatusBadRequest)

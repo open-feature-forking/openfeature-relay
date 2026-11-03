@@ -8,6 +8,16 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 )
 
+// ErrInvalidBoundSelector marks an invalid selector a middleware bound to a request: a misconfiguration of the
+// server, not an error of the client. Endpoints answer it as an internal error and do not show the expression.
+var ErrInvalidBoundSelector = errors.New("invalid bound selector")
+
+type invalidBoundSelector struct{ cause error }
+
+func (e invalidBoundSelector) Error() string { return e.cause.Error() }
+
+func (e invalidBoundSelector) Unwrap() []error { return []error{ErrInvalidBoundSelector, e.cause} }
+
 // noFlagsSet is a flag set no flag belongs to.
 const noFlagsSet = "\x00relay.no-flags"
 
@@ -21,7 +31,7 @@ func RequestSelector(ctx context.Context, clientExpression string) (store.Select
 		return store.Selector{}, err
 	}
 	if _, bound, err := middleware.BoundSelector(ctx); err != nil {
-		return store.Selector{}, err
+		return store.Selector{}, invalidBoundSelector{cause: err}
 	} else if !bound {
 		return client, nil
 	}

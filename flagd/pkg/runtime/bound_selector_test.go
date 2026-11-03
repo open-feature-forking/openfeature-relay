@@ -23,9 +23,21 @@ import (
 	"github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation/ofrep"
 	flagsync "github.com/open-feature/flagd/flagd/pkg/service/flag-sync"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 const boundHeader = "X-Bound"
+
+// requireLogged requires at least n "invalid bound selector" errors in logs, each naming the expression for the
+// operator.
+func requireLogged(t *testing.T, logs *observer.ObservedLogs, n int) {
+	t.Helper()
+	logged := logs.FilterMessage("invalid bound selector").All()
+	require.GreaterOrEqual(t, len(logged), n, "the server logs each invalid bound selector")
+	for _, e := range logged {
+		require.Contains(t, fmt.Sprint(e.ContextMap()["error"]), "colour")
+	}
+}
 
 // bindFromHeader is a middleware that binds the selector named by the X-Bound request header, if there is one.
 func bindFromHeader(next http.Handler) http.Handler {
@@ -60,7 +72,8 @@ func exchangeBound(t *testing.T, method, url, selector, bound, body string) (int
 // TestBoundSelectorNarrowing pins, on every official endpoint, that a request bound to a selector by a middleware
 // is resolved for the effective selector: the bound selector narrowed by the client's. A client's selector that
 // names another value of the same key than the bound one gets no flags, and FLAG_NOT_FOUND for a single flag
-// without evaluating it. An invalid bound selector is an error, never an unrestricted request.
+// without evaluating it. An invalid bound selector is a misconfiguration of the server, never an unrestricted
+// request: the endpoint answers 500 or Internal without showing the expression, and logs it.
 func TestBoundSelectorNarrowing(t *testing.T) {
 	rows := []struct {
 		name, bound, client string
@@ -80,6 +93,8 @@ func TestBoundSelectorNarrowing(t *testing.T) {
 	t.Run("flag evaluation", func(t *testing.T) {
 		settings := selectorSettings(t, flageval.Factory{})
 		settings.HTTPMiddleware = bindFromHeader
+		log, logs := observedLogger()
+		settings.Logger = log
 		port := freePort(t)
 		settings.Config = map[string]any{flageval.ConfigKey: flageval.EndpointConfig{
 			Configuration: service.Configuration{Port: port, ServiceName: "flagd"},
@@ -109,15 +124,19 @@ func TestBoundSelectorNarrowing(t *testing.T) {
 		t.Run("invalid bound selector", func(t *testing.T) {
 			for _, rpc := range []struct{ name, body string }{{"ResolveAll", `{}`}, {"ResolveBoolean", `{"flagKey":"a"}`}} {
 				status, _, body := exchangeBound(t, http.MethodPost, base+rpc.name, "", invalidBound, rpc.body)
-				require.Equal(t, http.StatusBadRequest, status, string(body))
-				require.Contains(t, string(body), "invalid bound selector")
+				require.Equal(t, http.StatusInternalServerError, status, string(body))
+				require.Contains(t, string(body), `"code":"internal"`)
+				require.NotContains(t, string(body), "colour", "the client does not see the bound expression")
 			}
+			requireLogged(t, logs, 2)
 		})
 	})
 
 	t.Run("OFREP", func(t *testing.T) {
 		settings := selectorSettings(t, ofrep.Factory{})
 		settings.HTTPMiddleware = bindFromHeader
+		log, logs := observedLogger()
+		settings.Logger = log
 		port := freePort(t)
 		settings.Config = map[string]any{ofrep.ConfigKey: ofrep.EndpointConfig{
 			Service: ofrep.SvcConfiguration{Port: port, ServiceName: "flagd", SSEEnabled: true, SSEInactivityDelaySec: 60},
@@ -148,11 +167,13 @@ func TestBoundSelectorNarrowing(t *testing.T) {
 		t.Run("invalid bound selector", func(t *testing.T) {
 			for _, path := range []string{"evaluate/flags", "evaluate/flags/a"} {
 				status, _, body := exchangeBound(t, http.MethodPost, base+path, "", invalidBound, `{}`)
-				require.Equal(t, http.StatusBadRequest, status, string(body))
-				require.Contains(t, string(body), "invalid bound selector")
+				require.Equal(t, http.StatusInternalServerError, status, string(body))
+				require.NotContains(t, string(body), "colour", "the client does not see the bound expression")
 			}
-			status, _, _ := exchangeBound(t, http.MethodGet, base+"sse", "", invalidBound, "")
-			require.Equal(t, http.StatusBadRequest, status, "the event stream refuses it too")
+			requireLogged(t, logs, 2)
+			status, _, body := exchangeBound(t, http.MethodGet, base+"sse", "", invalidBound, "")
+			require.Equal(t, http.StatusInternalServerError, status, "the event stream refuses it too")
+			require.NotContains(t, string(body), "colour")
 		})
 
 		t.Run("event stream channel", func(t *testing.T) {
@@ -188,6 +209,8 @@ func TestBoundSelectorNarrowing(t *testing.T) {
 	t.Run("flag sync", func(t *testing.T) {
 		settings := selectorSettings(t, flagsync.Factory{})
 		settings.HTTPMiddleware = bindFromHeader
+		log, logs := observedLogger()
+		settings.Logger = log
 		port := freePort(t)
 		settings.Config = map[string]any{flagsync.ConfigKey: flagsync.SvcConfigurations{
 			Port: port, ServiceName: "flagd", HTTPEnabled: true,
@@ -241,11 +264,15 @@ func TestBoundSelectorNarrowing(t *testing.T) {
 
 		t.Run("invalid bound selector", func(t *testing.T) {
 			_, err := fetch("", invalidBound)
-			require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+			require.Equal(t, connect.CodeInternal, connect.CodeOf(err))
+			require.NotContains(t, err.Error(), "colour", "the client does not see the bound expression")
 			_, err = syncFirst("", invalidBound)
-			require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
-			status, _, _ := exchangeBound(t, http.MethodGet, baseURL+"/v1/flags", "", invalidBound, "")
-			require.Equal(t, http.StatusBadRequest, status)
+			require.Equal(t, connect.CodeInternal, connect.CodeOf(err))
+			require.NotContains(t, err.Error(), "colour")
+			status, _, body := exchangeBound(t, http.MethodGet, baseURL+"/v1/flags", "", invalidBound, "")
+			require.Equal(t, http.StatusInternalServerError, status)
+			require.NotContains(t, string(body), "colour")
+			requireLogged(t, logs, 3)
 		})
 	})
 }

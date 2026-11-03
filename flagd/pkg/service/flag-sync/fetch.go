@@ -24,6 +24,7 @@ type fetchErrorKind int
 
 const (
 	fetchSelectorMalformed fetchErrorKind = iota
+	fetchBoundSelectorInvalid
 	fetchStoreRead
 	fetchMarshal
 )
@@ -45,6 +46,9 @@ func newSelector(ctx context.Context, expression string) (store.Selector, error)
 	}
 
 	selector, err := flagdService.RequestSelector(ctx, expression)
+	if errors.Is(err, flagdService.ErrInvalidBoundSelector) {
+		return store.Selector{}, fetchError{kind: fetchBoundSelectorInvalid, cause: err}
+	}
 	if err != nil {
 		return store.Selector{}, fetchError{kind: fetchSelectorMalformed, cause: err}
 	}

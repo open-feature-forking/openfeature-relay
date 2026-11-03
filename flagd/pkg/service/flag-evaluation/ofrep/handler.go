@@ -20,7 +20,12 @@ import (
 	"github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation/ofrep/sse"
 	"github.com/open-feature/flagd/flagd/pkg/service/middleware"
 	"github.com/rs/xid"
+	"go.uber.org/zap"
 )
+
+// internalErrorDetails is what a client learns of a request the server could not handle because of its own
+// configuration.
+const internalErrorDetails = "internal error"
 
 const (
 	key              = "key"
@@ -132,6 +137,15 @@ func (h *handler) HandleFlagEvaluation(w http.ResponseWriter, r *http.Request) {
 	evaluationContext := flagdContext(h.Logger, requestID, request, h.contextValues, r.Header, h.headerToContextKeyMappings)
 	selectorExpression := r.Header.Get(service.FLAGD_SELECTOR_HEADER)
 	selector, err := service.RequestSelector(r.Context(), selectorExpression)
+	if errors.Is(err, service.ErrInvalidBoundSelector) {
+		h.Logger.Error("invalid bound selector", zap.Error(err))
+		h.writeJSONToResponse(http.StatusInternalServerError, ofrep.EvaluationError{
+			Key:          flagKey,
+			ErrorCode:    model.GeneralErrorCode,
+			ErrorDetails: internalErrorDetails,
+		}, w)
+		return
+	}
 	if err != nil {
 		h.writeJSONToResponse(http.StatusBadRequest, ofrep.EvaluationError{
 			Key:          flagKey,
@@ -179,6 +193,12 @@ func (h *handler) HandleBulkEvaluation(w http.ResponseWriter, r *http.Request) {
 	evaluationContext := flagdContext(h.Logger, requestID, request, h.contextValues, r.Header, h.headerToContextKeyMappings)
 	selectorExpression := r.Header.Get(service.FLAGD_SELECTOR_HEADER)
 	selector, err := service.RequestSelector(r.Context(), selectorExpression)
+	if errors.Is(err, service.ErrInvalidBoundSelector) {
+		h.Logger.Error("invalid bound selector", zap.Error(err))
+		res := ofrep.BulkEvaluationContextErrorFrom(model.GeneralErrorCode, internalErrorDetails)
+		h.writeJSONToResponse(http.StatusInternalServerError, res, w)
+		return
+	}
 	if err != nil {
 		res := ofrep.BulkEvaluationContextErrorFrom(model.GeneralErrorCode, fmt.Sprintf("invalid selector: %v", err))
 		h.writeJSONToResponse(http.StatusBadRequest, res, w)
