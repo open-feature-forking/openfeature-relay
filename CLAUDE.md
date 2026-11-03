@@ -19,11 +19,12 @@ Each phase runs plan → oppose → implement → review, one role per agent in 
 - A plan with an open `blocker` from the opposer goes back to the planner.
 - The implementer works on its own worktree, cut from `main` (or from the slice it builds on); it never pushes.
 - The orchestrating session pushes the slice as `phase-<n>/pr-<x>-<topic>` and opens a pull request in this repository against `main` (or against the slice below it, stacked). Plans, reviews and spec changes go straight to `main`.
-- The reviewer reviews the pull request: it re-runs the gates and posts its verdict as a PR review comment. `ready` needs every named gate green in its own run and CI green.
+- The reviewer reviews the pull request and posts its verdict as a PR review comment. `ready` needs CI green plus every gate CI does not run green in its own run (see "Local runs and CI" under Gates).
+- Stack ahead instead of waiting for merges. When a slice builds on another, the implementer cuts it from the parent's branch as soon as that branch exists, and the orchestrating session opens it as a PR against the parent. Review runs on every PR of a stack at once, each against its parent's diff. Fixes land as new commits on the branch they belong to and are merged upward through the stack; the implementer of the top branch merges new parent heads in with a merge commit.
 - On `ready` with green CI, the orchestrating session merges with a merge commit (keeping the signed-off commits) and deletes the branch. In a stack, retarget the next PR to `main` before merging the one below it: deleting a PR's base branch closes the PR instead of retargeting it. Confirm the new base with `gh pr view` before merging (the edit can fail silently), and close and reopen the retargeted PR so its build CI runs against `main`. `ready after fixes` goes back to the implementer as new commits on the same branch, never an amend.
 - The project lead approves each plan before implementation, and can stop or veto any PR; they are not a required approver for merges inside this repository.
 - The release-please and benchmark-pages workflows are disabled in this repository; do not enable them.
-- During the proof of concept, CI runs `test`, `lint` (with the boundary and coverage checks), `integration-test`, `docs-check` and markdown linting. FIPS 140-3 and `docker-local` are gated, and so is the Pages deploy: set the repository variable `FULL_CI=true` (or run `build` manually) for a full run, and `PAGES=true` once GitHub Pages is enabled. The reviewer still builds the images locally.
+- During the proof of concept, CI runs `test`, `lint` (with the boundary and coverage checks), `integration-test`, `docs-check` and markdown linting. FIPS 140-3 and `docker-local` are gated, and so is the Pages deploy: set the repository variable `FULL_CI=true` (or run `build` manually) for a full run, and `PAGES=true` once GitHub Pages is enabled. Images are built only when a PR changes a Dockerfile or the build, and then in CI with `FULL_CI=true`.
 
 ## Phases
 
@@ -88,12 +89,21 @@ In a worktree under `.claude/worktrees/`, export `GOWORK=$PWD/go.work` before `m
 
 A red gate is reported with its output. If a gate fails on untouched code too, say so; it is the environment, not the change.
 
+### Local runs and CI
+
+The machine is shared by several sessions, so gate runs collide on ports and on the golangci-lint lock. CI runs on every pushed PR and is the gate for what it covers: `make test` (every module with `-race`, the examples and the evaluator testkit), `make lint` with `depguard`, package coverage, module boundaries (the evaluator boundary included), the `golang.org/x/exp` greps, the integration suite, the docs check and, on pull requests, a comparison of the allocs/op of the library and the flagd endpoint benchmarks against the PR's base (it fails if the head's lowest value is above the base's highest over three runs; ns/op is not compared). Do not repeat those locally.
+
+- **Implementer:** run the tests of the packages you touched (`go test -race`), plus spec lint for spec changes, the one gate CI does not run (the build workflow ignores `docs/**`). Commit and report. The orchestrating session pushes, and CI is the full run.
+- **Reviewer:** read the PR's CI result instead of re-running those gates. Run locally only what judgement needs: targeted tests, mutations, spec lint, and benchmarks for ns/op, which CI does not compare. A verdict may be `ready, pending CI`; the merge waits for green CI either way.
+- **A full local run** is only for diagnosing a CI failure that does not reproduce in a targeted run.
+
 ## Containment
 
 All work stays in this repository until the project lead says otherwise. No pushes, branches, pull requests, issues or comments anywhere except `open-feature-forking/openfeature-relay`: not to `open-feature/flagd`, not to `open-feature-forking/flagd`, not to go-sdk-contrib or any other repository. Other checkouts (go-sdk-contrib, flagd) are read-only references. "Upstream PR" in a plan means a branch here, shaped so it could go upstream later. The `upstream` remote has pushing disabled.
 
 ## Conventions
 
+- flagd built from this repository is a drop-in replacement for today's flagd. Internals change freely; what operators and clients observe does not: CLI, configuration, ports, endpoints, payloads, headers, readiness, startup and exit behaviour, metrics, spans, shutdown. A plan that changes any of it raises a question for the project lead with "keep today's behaviour" as the recommended default, and new behaviour goes behind opt-in configuration. The changes accepted before this rule are tracked in #78 for the migration guide.
 - Conventional commits, `git commit -s` signed off with the committer's own identity (DCO); no AI co-author trailers.
 - Stage files by name; parallel sessions share checkouts.
 - Code comments keep only facts a reader cannot derive; measurements and history go in the PR description.

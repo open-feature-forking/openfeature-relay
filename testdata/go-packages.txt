@@ -9,6 +9,8 @@ github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator/mock
 github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator/router
 github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator/typed
 github.com/open-feature-forking/openfeature-relay/core/pkg/events
+github.com/open-feature-forking/openfeature-relay/core/pkg/eventsink
+github.com/open-feature-forking/openfeature-relay/core/pkg/eventsink/eventsinktest
 github.com/open-feature-forking/openfeature-relay/core/pkg/fips
 github.com/open-feature-forking/openfeature-relay/core/pkg/logger
 github.com/open-feature-forking/openfeature-relay/core/pkg/middleware

@@ -236,6 +236,11 @@ func FromConfig(logger *logger.Logger, version string, config Config) (*Runtime,
 		return nil, err
 	}
 
+	staleLimits, err := staleLimitsOf(syncProviders, iSyncs)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Runtime{
 		Logger:            logger.WithFields(zap.String("component", "runtime")),
 		Evaluator:         jsonEvaluator,
@@ -259,7 +264,27 @@ func FromConfig(logger *logger.Logger, version string, config Config) (*Runtime,
 		Syncs:           iSyncs,
 		Formats:         formats,
 		sourceReadiness: sourceReadiness,
+		staleLimits:     staleLimits,
 	}, nil
+}
+
+// staleLimitsOf pairs the sources that set staleAfter with their sync providers, which must report their last contact.
+func staleLimitsOf(sources []sync.SourceConfig, syncs []sync.ISync) ([]staleLimit, error) {
+	var limits []staleLimit
+	for i, source := range sources {
+		if source.StaleAfter == 0 {
+			continue
+		}
+		reporter, ok := syncs[i].(sync.ContactReporter)
+		if !ok {
+			return nil, fmt.Errorf("source %q sets staleAfter, which the %s sync provider cannot honour: it does not report its last contact",
+				source.URI, source.Provider)
+		}
+		limits = append(limits, staleLimit{
+			source: source.URI, provider: reporter, after: time.Duration(source.StaleAfter) * time.Second,
+		})
+	}
+	return limits, nil
 }
 
 // syncProvidersFromConfig is a helper to build ISync implementations from SourceConfig.
