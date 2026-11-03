@@ -182,7 +182,7 @@ func CheckStreaming(t testing.TB, f sync.StreamingFactory, in StreamingInputs) R
 
 	in.Break(t)
 	in.Restore(t)
-	reconnected, next, got := received.awaitMatch(next, func(d sync.DataSync) bool { return sameJSON(d.FlagData, latest) }, limit*reconnectTimeoutFactors)
+	reconnected, _, got := received.awaitMatch(next, func(d sync.DataSync) bool { return sameJSON(d.FlagData, latest) }, limit*reconnectTimeoutFactors)
 	cases = append(cases, check(CaseReconnectsToSource, got && sameJSON(reconnected.FlagData, latest),
 		fmt.Sprintf("after the source was lost and came back, a delivery of the complete flag configuration, %s", latest),
 		fmt.Sprintf("a delivery arrived: %v, delivered %s", got, reconnected.FlagData)))
