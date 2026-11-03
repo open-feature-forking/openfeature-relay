@@ -1,0 +1,739 @@
+## mixed legacy selector="" body={}
+status=200
+{
+  "flags": {
+    "bool": {
+      "boolValue": true,
+      "reason": "STATIC",
+      "variant": "on"
+    },
+    "disabled": {
+      "boolValue": false,
+      "reason": "DISABLED",
+      "variant": ""
+    },
+    "number": {
+      "doubleValue": 10,
+      "reason": "STATIC",
+      "variant": "ten"
+    },
+    "object": {
+      "objectValue": {
+        "k": 1
+      },
+      "reason": "STATIC",
+      "variant": "o"
+    },
+    "string": {
+      "reason": "STATIC",
+      "stringValue": "alpha",
+      "variant": "a"
+    },
+    "type-mismatch": {
+      "reason": "TARGETING_MATCH",
+      "stringValue": "hello",
+      "variant": "text"
+    }
+  }
+}
+## mixed legacy selector="" body={"context": {"email": "a@b.c"}}
+status=200
+{
+  "flags": {
+    "bool": {
+      "boolValue": true,
+      "reason": "STATIC",
+      "variant": "on"
+    },
+    "disabled": {
+      "boolValue": false,
+      "reason": "DISABLED",
+      "variant": ""
+    },
+    "no-default-targeting-variant": {
+      "boolValue": true,
+      "reason": "TARGETING_MATCH",
+      "variant": "on"
+    },
+    "number": {
+      "doubleValue": 10,
+      "reason": "STATIC",
+      "variant": "ten"
+    },
+    "object": {
+      "objectValue": {
+        "k": 1
+      },
+      "reason": "STATIC",
+      "variant": "o"
+    },
+    "string": {
+      "reason": "STATIC",
+      "stringValue": "alpha",
+      "variant": "a"
+    },
+    "type-mismatch": {
+      "reason": "ERROR",
+      "stringValue": "",
+      "variant": "number"
+    }
+  }
+}
+## mixed v1 selector="" body={}
+status=200
+{
+  "flags": {
+    "bool": {
+      "boolValue": true,
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "STATIC",
+      "variant": "on"
+    },
+    "disabled": {
+      "boolValue": false,
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "DISABLED",
+      "variant": ""
+    },
+    "number": {
+      "doubleValue": 10,
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "STATIC",
+      "variant": "ten"
+    },
+    "object": {
+      "metadata": {
+        "scope": "mixed"
+      },
+      "objectValue": {
+        "k": 1
+      },
+      "reason": "STATIC",
+      "variant": "o"
+    },
+    "string": {
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "STATIC",
+      "stringValue": "alpha",
+      "variant": "a"
+    },
+    "type-mismatch": {
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "TARGETING_MATCH",
+      "stringValue": "hello",
+      "variant": "text"
+    }
+  },
+  "metadata": {}
+}
+## mixed v1 selector="" body={"context": {"email": "a@b.c"}}
+status=200
+{
+  "flags": {
+    "bool": {
+      "boolValue": true,
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "STATIC",
+      "variant": "on"
+    },
+    "disabled": {
+      "boolValue": false,
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "DISABLED",
+      "variant": ""
+    },
+    "number": {
+      "doubleValue": 10,
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "STATIC",
+      "variant": "ten"
+    },
+    "object": {
+      "metadata": {
+        "scope": "mixed"
+      },
+      "objectValue": {
+        "k": 1
+      },
+      "reason": "STATIC",
+      "variant": "o"
+    },
+    "string": {
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "STATIC",
+      "stringValue": "alpha",
+      "variant": "a"
+    },
+    "type-mismatch": {
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "ERROR",
+      "stringValue": "",
+      "variant": "number"
+    }
+  },
+  "metadata": {}
+}
+## one-key-in-two-flag-sets-of-one-source legacy selector="" body={}
+status=200
+{
+  "flags": {
+    "only-set-a": {
+      "boolValue": true,
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "only-set-b": {
+      "boolValue": true,
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "shared": {
+      "reason": "STATIC",
+      "stringValue": "from-b",
+      "variant": "v"
+    }
+  }
+}
+## one-key-in-two-flag-sets-of-one-source legacy selector="" body={"context": {"email": "a@b.c"}}
+status=200
+{
+  "flags": {
+    "only-set-a": {
+      "boolValue": true,
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "only-set-b": {
+      "boolValue": true,
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "shared": {
+      "reason": "STATIC",
+      "stringValue": "from-b",
+      "variant": "v"
+    }
+  }
+}
+## one-key-in-two-flag-sets-of-one-source legacy selector="flagSetId=set-a" body={}
+status=200
+{
+  "flags": {
+    "only-set-a": {
+      "boolValue": true,
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "shared": {
+      "reason": "STATIC",
+      "stringValue": "from-a",
+      "variant": "v"
+    }
+  }
+}
+## one-key-in-two-flag-sets-of-one-source legacy selector="flagSetId=set-a" body={"context": {"email": "a@b.c"}}
+status=200
+{
+  "flags": {
+    "only-set-a": {
+      "boolValue": true,
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "shared": {
+      "reason": "STATIC",
+      "stringValue": "from-a",
+      "variant": "v"
+    }
+  }
+}
+## one-key-in-two-flag-sets-of-one-source legacy selector="flagSetId=set-b" body={}
+status=200
+{
+  "flags": {
+    "only-set-b": {
+      "boolValue": true,
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "shared": {
+      "reason": "STATIC",
+      "stringValue": "from-b",
+      "variant": "v"
+    }
+  }
+}
+## one-key-in-two-flag-sets-of-one-source legacy selector="flagSetId=set-b" body={"context": {"email": "a@b.c"}}
+status=200
+{
+  "flags": {
+    "only-set-b": {
+      "boolValue": true,
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "shared": {
+      "reason": "STATIC",
+      "stringValue": "from-b",
+      "variant": "v"
+    }
+  }
+}
+## one-key-in-two-flag-sets-of-one-source v1 selector="" body={}
+status=200
+{
+  "flags": {
+    "only-set-a": {
+      "boolValue": true,
+      "metadata": {
+        "flagSetId": "set-a"
+      },
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "only-set-b": {
+      "boolValue": true,
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "shared": {
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "stringValue": "from-b",
+      "variant": "v"
+    }
+  },
+  "metadata": {}
+}
+## one-key-in-two-flag-sets-of-one-source v1 selector="" body={"context": {"email": "a@b.c"}}
+status=200
+{
+  "flags": {
+    "only-set-a": {
+      "boolValue": true,
+      "metadata": {
+        "flagSetId": "set-a"
+      },
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "only-set-b": {
+      "boolValue": true,
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "shared": {
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "stringValue": "from-b",
+      "variant": "v"
+    }
+  },
+  "metadata": {}
+}
+## one-key-in-two-flag-sets-of-one-source v1 selector="flagSetId=set-a" body={}
+status=200
+{
+  "flags": {
+    "only-set-a": {
+      "boolValue": true,
+      "metadata": {
+        "flagSetId": "set-a"
+      },
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "shared": {
+      "metadata": {
+        "flagSetId": "set-a"
+      },
+      "reason": "STATIC",
+      "stringValue": "from-a",
+      "variant": "v"
+    }
+  },
+  "metadata": {
+    "flagSetId": "set-a"
+  }
+}
+## one-key-in-two-flag-sets-of-one-source v1 selector="flagSetId=set-a" body={"context": {"email": "a@b.c"}}
+status=200
+{
+  "flags": {
+    "only-set-a": {
+      "boolValue": true,
+      "metadata": {
+        "flagSetId": "set-a"
+      },
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "shared": {
+      "metadata": {
+        "flagSetId": "set-a"
+      },
+      "reason": "STATIC",
+      "stringValue": "from-a",
+      "variant": "v"
+    }
+  },
+  "metadata": {
+    "flagSetId": "set-a"
+  }
+}
+## one-key-in-two-flag-sets-of-one-source v1 selector="flagSetId=set-b" body={}
+status=200
+{
+  "flags": {
+    "only-set-b": {
+      "boolValue": true,
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "shared": {
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "stringValue": "from-b",
+      "variant": "v"
+    }
+  },
+  "metadata": {
+    "flagSetId": "set-b"
+  }
+}
+## one-key-in-two-flag-sets-of-one-source v1 selector="flagSetId=set-b" body={"context": {"email": "a@b.c"}}
+status=200
+{
+  "flags": {
+    "only-set-b": {
+      "boolValue": true,
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "shared": {
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "stringValue": "from-b",
+      "variant": "v"
+    }
+  },
+  "metadata": {
+    "flagSetId": "set-b"
+  }
+}
+## one-key-in-two-sources legacy selector="" body={}
+status=200
+{
+  "flags": {
+    "only-set-a": {
+      "boolValue": true,
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "only-set-b": {
+      "boolValue": true,
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "shared": {
+      "reason": "STATIC",
+      "stringValue": "from-two",
+      "variant": "v"
+    }
+  }
+}
+## one-key-in-two-sources legacy selector="" body={"context": {"email": "a@b.c"}}
+status=200
+{
+  "flags": {
+    "only-set-a": {
+      "boolValue": true,
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "only-set-b": {
+      "boolValue": true,
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "shared": {
+      "reason": "STATIC",
+      "stringValue": "from-two",
+      "variant": "v"
+    }
+  }
+}
+## one-key-in-two-sources legacy selector="source=one" body={}
+status=200
+{
+  "flags": {
+    "only-set-a": {
+      "boolValue": true,
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "shared": {
+      "reason": "STATIC",
+      "stringValue": "from-one",
+      "variant": "v"
+    }
+  }
+}
+## one-key-in-two-sources legacy selector="source=one" body={"context": {"email": "a@b.c"}}
+status=200
+{
+  "flags": {
+    "only-set-a": {
+      "boolValue": true,
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "shared": {
+      "reason": "STATIC",
+      "stringValue": "from-one",
+      "variant": "v"
+    }
+  }
+}
+## one-key-in-two-sources legacy selector="source=two" body={}
+status=200
+{
+  "flags": {
+    "only-set-b": {
+      "boolValue": true,
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "shared": {
+      "reason": "STATIC",
+      "stringValue": "from-two",
+      "variant": "v"
+    }
+  }
+}
+## one-key-in-two-sources legacy selector="source=two" body={"context": {"email": "a@b.c"}}
+status=200
+{
+  "flags": {
+    "only-set-b": {
+      "boolValue": true,
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "shared": {
+      "reason": "STATIC",
+      "stringValue": "from-two",
+      "variant": "v"
+    }
+  }
+}
+## one-key-in-two-sources v1 selector="" body={}
+status=200
+{
+  "flags": {
+    "only-set-a": {
+      "boolValue": true,
+      "metadata": {
+        "flagSetId": "set-a"
+      },
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "only-set-b": {
+      "boolValue": true,
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "shared": {
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "stringValue": "from-two",
+      "variant": "v"
+    }
+  },
+  "metadata": {}
+}
+## one-key-in-two-sources v1 selector="" body={"context": {"email": "a@b.c"}}
+status=200
+{
+  "flags": {
+    "only-set-a": {
+      "boolValue": true,
+      "metadata": {
+        "flagSetId": "set-a"
+      },
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "only-set-b": {
+      "boolValue": true,
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "shared": {
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "stringValue": "from-two",
+      "variant": "v"
+    }
+  },
+  "metadata": {}
+}
+## one-key-in-two-sources v1 selector="source=one" body={}
+status=200
+{
+  "flags": {
+    "only-set-a": {
+      "boolValue": true,
+      "metadata": {
+        "flagSetId": "set-a",
+        "source": "one"
+      },
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "shared": {
+      "metadata": {
+        "flagSetId": "set-a",
+        "source": "one"
+      },
+      "reason": "STATIC",
+      "stringValue": "from-one",
+      "variant": "v"
+    }
+  },
+  "metadata": {
+    "source": "one"
+  }
+}
+## one-key-in-two-sources v1 selector="source=one" body={"context": {"email": "a@b.c"}}
+status=200
+{
+  "flags": {
+    "only-set-a": {
+      "boolValue": true,
+      "metadata": {
+        "flagSetId": "set-a",
+        "source": "one"
+      },
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "shared": {
+      "metadata": {
+        "flagSetId": "set-a",
+        "source": "one"
+      },
+      "reason": "STATIC",
+      "stringValue": "from-one",
+      "variant": "v"
+    }
+  },
+  "metadata": {
+    "source": "one"
+  }
+}
+## one-key-in-two-sources v1 selector="source=two" body={}
+status=200
+{
+  "flags": {
+    "only-set-b": {
+      "boolValue": true,
+      "metadata": {
+        "flagSetId": "set-b",
+        "source": "two"
+      },
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "shared": {
+      "metadata": {
+        "flagSetId": "set-b",
+        "source": "two"
+      },
+      "reason": "STATIC",
+      "stringValue": "from-two",
+      "variant": "v"
+    }
+  },
+  "metadata": {
+    "source": "two"
+  }
+}
+## one-key-in-two-sources v1 selector="source=two" body={"context": {"email": "a@b.c"}}
+status=200
+{
+  "flags": {
+    "only-set-b": {
+      "boolValue": true,
+      "metadata": {
+        "flagSetId": "set-b",
+        "source": "two"
+      },
+      "reason": "STATIC",
+      "variant": "v"
+    },
+    "shared": {
+      "metadata": {
+        "flagSetId": "set-b",
+        "source": "two"
+      },
+      "reason": "STATIC",
+      "stringValue": "from-two",
+      "variant": "v"
+    }
+  },
+  "metadata": {
+    "source": "two"
+  }
+}
