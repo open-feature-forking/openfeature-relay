@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	"github.com/open-feature/flagd/flagd/internal/telemetrytest"
 	"github.com/open-feature/flagd/flagd/pkg/service"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
@@ -18,10 +18,7 @@ func TestMetricsInstruments(t *testing.T) {
 	tel := telemetrytest.New()
 	m := service.NewMetrics(tel.Meter(service.MetricsScope))
 	ctx := context.Background()
-	attrs := service.HTTPAttributes("flagd", "/route", "propfind", "200", "http")
-	m.HTTPRequestDuration(ctx, time.Second, attrs)
-	m.HTTPResponseSize(ctx, 1234, attrs)
-	m.InFlightRequestStart(ctx, attrs)
+	attrs := []telemetry.Attribute{telemetry.String("selector", "s")}
 	m.RecordEvaluation(ctx, nil, "STATIC", "on", "flag", model.Metadata{"flagSetId": "set"})
 	m.SyncServerStreamStart(ctx, attrs)
 	m.SyncServerStreamDuration(ctx, time.Minute, attrs)
@@ -37,9 +34,6 @@ func TestMetricsInstruments(t *testing.T) {
 	}
 
 	units := map[string]string{
-		"http.server.request.duration":                   "s",
-		"http.server.response.body.size":                 "By",
-		"http.server.active_requests":                    "{request}",
 		"feature_flag.flagd.impression":                  "{impression}",
 		"feature_flag.flagd.result.reason":               "{reason}",
 		"feature_flag.flagd.sync.server.active_streams":  "{stream}",
@@ -51,8 +45,6 @@ func TestMetricsInstruments(t *testing.T) {
 	}
 
 	buckets := map[string][]float64{
-		"http.server.request.duration":                   prometheus.DefBuckets,
-		"http.server.response.body.size":                 prometheus.ExponentialBuckets(100, 10, 8),
 		"feature_flag.flagd.sync.server.stream.duration": {30, 60, 120, 300, 480, 600, 1200, 1800, 3600, 10800},
 	}
 	for name, want := range buckets {
@@ -61,6 +53,4 @@ func TestMetricsInstruments(t *testing.T) {
 		require.Equal(t, want, points[0].Bounds, name)
 	}
 
-	method, _ := got["http.server.request.duration"].Data.(metricdata.Histogram[float64]).DataPoints[0].Attributes.Value("http.request.method")
-	require.Equal(t, "_OTHER", method.AsString(), "an unknown method is a bounded label value")
 }

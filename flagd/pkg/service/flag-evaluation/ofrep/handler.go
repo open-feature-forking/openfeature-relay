@@ -19,7 +19,6 @@ import (
 	evalservice "github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation"
 	"github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation/ofrep/sse"
 	"github.com/open-feature/flagd/flagd/pkg/service/middleware"
-	metricsmw "github.com/open-feature/flagd/flagd/pkg/service/middleware/metrics"
 	"github.com/rs/xid"
 )
 
@@ -68,12 +67,13 @@ func NewOfrepHandler(
 	sseCfg SSEConfig,
 	compression middleware.IMiddleware,
 ) http.Handler {
+	tp = telemetry.OrNoop(tp)
 	h := handler{
 		Logger:                     logger,
-		evaluator:                  evalservice.TraceEvaluations(evaluator, telemetry.OrNoop(tp).Tracer(evalservice.EvaluatorTracerName)),
+		evaluator:                  evalservice.TraceEvaluations(evaluator, tp.Tracer(evalservice.EvaluatorTracerName)),
 		contextValues:              contextValues,
 		headerToContextKeyMappings: headerToContextKeyMappings,
-		metricsRecorder:            service.NewMetrics(telemetry.OrNoop(tp).Meter(service.MetricsScope)),
+		metricsRecorder:            service.NewMetrics(tp.Meter(service.MetricsScope)),
 		versioner:                  sseCfg.Versioner,
 		sseEnabled:                 sseCfg.Enabled,
 		sseInactivityDelaySec:      sseCfg.InactivityDelaySec,
@@ -86,12 +86,7 @@ func NewOfrepHandler(
 	compress := compression.Handler
 
 	withMetrics := func(handlerID string, next http.Handler) http.Handler {
-		return metricsmw.NewHTTPMetric(metricsmw.Config{
-			Service:        serviceName,
-			MetricRecorder: h.metricsRecorder,
-			Logger:         logger,
-			HandlerID:      handlerID,
-		}).Handler(next)
+		return tp.HTTPServerMetrics(next, telemetry.HTTPMetricsOptions{Service: serviceName, Route: handlerID})
 	}
 
 	router := mux.NewRouter()
@@ -111,7 +106,7 @@ func NewOfrepHandler(
 	}))
 
 	// tracing only; metrics are recorded by metricsmw above
-	return telemetry.OrNoop(tp).HTTPServerSpans(router, "flagd.ofrep")
+	return tp.HTTPServerSpans(router, "flagd.ofrep")
 }
 
 func (h *handler) HandleFlagEvaluation(w http.ResponseWriter, r *http.Request) {

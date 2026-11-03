@@ -3,12 +3,12 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"slices"
 	"sort"
 	"strings"
 	"time"
 
-	"connectrpc.com/connect"
 	flagdformat "github.com/open-feature-forking/openfeature-relay/configformat/flagd"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
@@ -17,10 +17,11 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	flagdeval "github.com/open-feature-forking/openfeature-relay/evaluator/flagd"
 	syncbuilder "github.com/open-feature-forking/openfeature-relay/sync/builder"
 	flagdgrpc "github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc"
-	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
+	otelprovider "github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	flageval "github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation"
 	"github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation/ofrep"
 	flagsync "github.com/open-feature/flagd/flagd/pkg/service/flag-sync"
@@ -103,9 +104,9 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 	config = withComponents(config, components)
 	warnOnNoOpConfig(logger, config)
 
-	telCfg := telemetry.Config{
+	telCfg := otelprovider.Config{
 		MetricsExporter: config.MetricExporter,
-		CollectorConfig: telemetry.CollectorConfig{
+		CollectorConfig: otelprovider.CollectorConfig{
 			Target:         config.OtelCollectorURI,
 			CertPath:       config.OtelCertPath,
 			KeyPath:        config.OtelKeyPath,
@@ -115,23 +116,23 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 	}
 
 	// register error handling for OpenTelemetry
-	telemetry.RegisterErrorHandling(logger)
+	otelprovider.RegisterErrorHandling(logger)
 
 	// register trace provider for the runtime
-	err := telemetry.BuildTraceProvider(context.Background(), logger, svcName, version, telCfg)
+	err := otelprovider.BuildTraceProvider(context.Background(), logger, svcName, version, telCfg)
 	if err != nil {
 		// log the error but continue
 		logger.Error(fmt.Sprintf("error building trace provider: %v", err))
 	}
 
 	// build metrics recorder with startup configurations
-	_, err = telemetry.BuildMetricsRecorder(context.Background(), svcName, version, telCfg)
+	_, err = otelprovider.BuildMetricsRecorder(context.Background(), svcName, version, telCfg)
 	if err != nil {
 		// log the error but continue
 		logger.Error(fmt.Sprintf("error building metrics recorder: %v", err))
 	}
 	// the providers built above are global state; the components record through the telemetry provider over it
-	tp := telemetry.FromGlobals(svcName)
+	tp := otelprovider.FromGlobals(svcName)
 
 	syncProviders := sourcesWithKnownFormat(logger, config.SyncProviders, config.ConfigurationFormats)
 	sources := []string{}
@@ -169,18 +170,12 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		formatTypes = append(formatTypes, f.Type())
 	}
 
-	options, err := telemetry.BuildConnectOptions(telCfg)
-	if err != nil {
-		// log the error but continue
-		logger.Error("failed to build connect options", zap.Error(err))
-	}
-
 	bus := events.NewBus()
 	rt := &Runtime{
 		Logger:         logger.WithFields(zap.String("component", "runtime")),
 		Bus:            bus,
 		Telemetry:      tp,
-		MetricsHandler: components.MetricsHandler,
+		MetricsHandler: metricsHandler(tp, components),
 		ServiceConfig: service.Configuration{
 			Port:                       config.ServicePort,
 			ManagementPort:             config.ManagementPort,
@@ -208,7 +203,7 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		rt.Evaluator = inputs.router.IEvaluator()
 	}
 	endpointConfigs := endpointConfigs{
-		config: config, serviceConfig: rt.ServiceConfig, sources: sources, options: options,
+		config: config, serviceConfig: rt.ServiceConfig, sources: sources,
 	}
 	for _, factory := range components.Endpoints {
 		if err := service.ValidateDeclarations(factory); err != nil {
@@ -227,11 +222,11 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 
 	// build sync providers with a shared source-agnostic sync-metrics recorder so every
 	// provider (grpc, http, file, kubernetes, blob) emits the universal client-side sync
-	// metrics into the same reader as the rest of flagd's telemetry.
+	// metrics into the same reader as the rest of flagd's otelprovider.
 	syncLogger := logger.WithFields(zap.String("component", "sync"))
-	syncMetricsRecorder := telemetry.NewSyncRecorder(nil)
+	syncMetricsRecorder := otelprovider.NewSyncRecorder(nil)
 	iSyncs, err := syncProvidersFromConfig(
-		syncLogger, syncProviders, syncMetricsRecorder, telemetry.NewStreamRecorder(nil), config.SyncFactories)
+		syncLogger, syncProviders, syncMetricsRecorder, otelprovider.NewStreamRecorder(nil), config.SyncFactories)
 	if err != nil {
 		return nil, err
 	}
@@ -244,7 +239,6 @@ type endpointConfigs struct {
 	config        Config
 	serviceConfig service.Configuration
 	sources       []string
-	options       []connect.HandlerOption
 }
 
 // forEndpoint returns Settings.Config for the endpoint type; an extension's endpoint has no settings of the
@@ -253,7 +247,7 @@ func (c endpointConfigs) forEndpoint(endpointType string) map[string]any {
 	switch endpointType {
 	case flageval.Type:
 		return map[string]any{flageval.ConfigKey: flageval.EndpointConfig{
-			Configuration: c.serviceConfig, Options: c.options,
+			Configuration: c.serviceConfig,
 		}}
 	case ofrep.Type:
 		return map[string]any{ofrep.ConfigKey: ofrep.EndpointConfig{
@@ -281,7 +275,6 @@ func (c endpointConfigs) forEndpoint(endpointType string) map[string]any {
 			HTTPEnabled:           c.config.SyncServiceHTTPEnabled,
 			ServiceName:           svcName,
 			CORS:                  c.config.CORS,
-			Options:               c.options,
 			StreamDeadline:        c.config.StreamDeadline,
 			DisableSyncMetadata:   c.config.DisableSyncMetadata,
 			MaxRequestHeaderBytes: c.config.MaxRequestHeaderBytes,
@@ -303,7 +296,7 @@ func syncProvidersFromConfig(
 ) ([]sync.ISync, error) {
 	factories := syncbuilder.OfficialWith(syncbuilder.OfficialOptions{
 		StreamMetrics:   streamMetricsRecorder,
-		GRPCDialOptions: []googlegrpc.DialOption{telemetry.GRPCClientDialOption()},
+		GRPCDialOptions: []googlegrpc.DialOption{otelprovider.GRPCClientDialOption()},
 	})
 	builder := syncbuilder.NewSyncBuilder(append(factories, extra...)...)
 	builder.SyncMetricsRecorder = syncMetricsRecorder
@@ -374,4 +367,16 @@ func withComponents(config Config, components Components) Config {
 	config.Evaluators = append(slices.Clone(config.Evaluators), components.Evaluators...)                               //nolint:staticcheck // deprecated, still applied
 	config.SyncFactories = append(slices.Clone(config.SyncFactories), components.Sync...)                               //nolint:staticcheck // deprecated, still applied
 	return config
+}
+
+// metricsHandler returns what serves /metrics on the management port: the handler of the components, or else the one
+// of the telemetry provider if it has one.
+func metricsHandler(tp telemetry.Provider, components Components) http.Handler {
+	if components.MetricsHandler != nil {
+		return components.MetricsHandler
+	}
+	if p, ok := tp.(interface{ MetricsHandler() http.Handler }); ok {
+		return p.MetricsHandler()
+	}
+	return nil
 }

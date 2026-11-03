@@ -29,7 +29,6 @@ import (
 	"github.com/open-feature/flagd/flagd/pkg/service/middleware"
 	corsmw "github.com/open-feature/flagd/flagd/pkg/service/middleware/cors"
 	h2cmw "github.com/open-feature/flagd/flagd/pkg/service/middleware/h2c"
-	metricsmw "github.com/open-feature/flagd/flagd/pkg/service/middleware/metrics"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -96,7 +95,6 @@ func evaluationMetricRoute(request *http.Request) string {
 type ConnectService struct {
 	logger                *logger.Logger
 	eval                  evaluator.IResolver
-	metrics               *flagdService.Metrics
 	telemetry             telemetry.Provider
 	eventingConfiguration IEvents
 	handlerOptions        []connect.HandlerOption
@@ -125,7 +123,6 @@ func NewConnectService(
 	cs := &ConnectService{
 		logger:         logger,
 		eval:           TraceEvaluations(evaluator, tp.Tracer(EvaluatorTracerName)),
-		metrics:        flagdService.NewMetrics(tp.Meter(flagdService.MetricsScope)),
 		telemetry:      tp,
 		handlerOptions: handlerOptions,
 		eventingConfiguration: &eventingConfiguration{
@@ -249,14 +246,10 @@ func (s *ConnectService) setupHandler(svcConf service.Configuration) {
 	}
 
 	// Add middlewares
-	metricsMiddleware := metricsmw.NewHTTPMetric(metricsmw.Config{
-		Service:              svcConf.ServiceName,
-		MetricRecorder:       s.metrics,
-		Logger:               s.logger,
-		HandlerIDFromRequest: evaluationMetricRoute,
+	s.server.Handler = s.telemetry.HTTPServerMetrics(s.server.Handler, telemetry.HTTPMetricsOptions{
+		Service:          svcConf.ServiceName,
+		RouteFromRequest: evaluationMetricRoute,
 	})
-
-	s.AddMiddleware(metricsMiddleware)
 	if s.httpMiddleware != nil {
 		s.server.Handler = s.httpMiddleware(s.server.Handler)
 	}

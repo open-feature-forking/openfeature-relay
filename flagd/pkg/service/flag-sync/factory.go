@@ -3,7 +3,9 @@ package sync
 import (
 	"context"
 	"fmt"
+	"slices"
 
+	"connectrpc.com/connect"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"go.uber.org/zap"
@@ -14,6 +16,11 @@ const Type = "flag-sync"
 
 // ConfigKey is the key of Settings.Config under which the runtime hands the endpoint its SvcConfigurations.
 const ConfigKey = "config"
+
+// connectInstrumentation is implemented by a telemetry provider that instruments ConnectRPC handlers.
+type connectInstrumentation interface {
+	ConnectHandlerOptions() []connect.HandlerOption
+}
 
 // Factory creates the flag sync service endpoint. It resolves no flags: it serves the flag configurations of
 // the store, and announces a change to its clients when a configuration change event arrives.
@@ -36,6 +43,9 @@ func (Factory) Create(s service.Settings) (service.Endpoint, error) {
 	cfg.Initialized = s.Initialized
 	cfg.HTTPMiddleware = s.HTTPMiddleware
 	cfg.Telemetry = s.Telemetry
+	if p, ok := s.Telemetry.(connectInstrumentation); ok {
+		cfg.Options = append(slices.Clone(cfg.Options), p.ConnectHandlerOptions()...)
+	}
 	svc, err := NewSyncService(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("error creating sync service: %w", err)
