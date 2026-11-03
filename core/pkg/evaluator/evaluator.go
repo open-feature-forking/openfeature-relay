@@ -42,6 +42,8 @@ type Request struct {
 // Result is the resolution of one flag.
 type Result struct {
 	FlagKey string
+	// Format is the configuration format whose evaluator resolved the flag. The router stamps it.
+	Format string
 	// Value is meaningful when HasValue is set. In bulk results an evaluator may set it without HasValue to
 	// keep the typed zero value of a flag it could not resolve.
 	Value    any
