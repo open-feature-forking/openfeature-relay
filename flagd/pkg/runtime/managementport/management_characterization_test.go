@@ -67,12 +67,13 @@ func TestManagementPort(t *testing.T) {
 		}
 	}()
 
-	managementPort, servicePort := freePort(t), freePort(t)
+	managementPort, servicePort, ofrepPort, syncPort := freePort(t), freePort(t), freePort(t), freePort(t)
 	rt, err := runtime.FromConfig(logger.NewLogger(nil, false), "test", runtime.Config{
 		ManagementPort:               managementPort,
 		ServicePort:                  servicePort,
-		OfrepServicePort:             freePort(t),
-		SyncServicePort:              freePort(t),
+		OfrepServicePort:             ofrepPort,
+		SyncServicePort:              syncPort,
+		SyncServiceHTTPEnabled:       true,
 		StreamDeadline:               5 * time.Second,
 		KeepAliveMinTime:             runtime.KeepAliveMinTimeDefault,
 		KeepAlivePermitWithoutStream: runtime.KeepAlivePermitWithoutStreamDefault,
@@ -137,4 +138,10 @@ func TestManagementPort(t *testing.T) {
 		resp, _ := get(t, fmt.Sprintf("http://127.0.0.1:%d%s", servicePort, path))
 		require.Equal(t, http.StatusNotFound, resp.StatusCode, "%s is served on the management port only", path)
 	}
+
+	t.Run("inventory", func(t *testing.T) {
+		callEveryEndpoint(t, servicePort, ofrepPort, syncPort)
+		_, body := get(t, management+"/metrics")
+		checkGolden(t, "inventory.golden", inventory(body, file, remote.URL))
+	})
 }
