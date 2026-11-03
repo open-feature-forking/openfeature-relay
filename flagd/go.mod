@@ -12,6 +12,7 @@ require (
 	github.com/klauspost/compress v1.19.1
 	github.com/launchdarkly/eventsource v1.11.0
 	github.com/mattn/go-colorable v0.1.14
+	github.com/open-feature-forking/openfeature-relay/configformat/flagd v0.1.0
 	github.com/open-feature-forking/openfeature-relay/core v0.20.0
 	github.com/open-feature-forking/openfeature-relay/evaluator/flagd v0.1.0
 	github.com/open-feature-forking/openfeature-relay/sync/builder v0.1.0
@@ -35,6 +36,7 @@ require (
 	go.uber.org/zap v1.27.0
 	golang.org/x/net v0.61.0
 	golang.org/x/sync v0.24.0
+	golang.org/x/sys v0.49.0
 	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
 )
@@ -126,7 +128,6 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/open-feature-forking/openfeature-relay/configformat/flagd v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/azblob v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/file v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/gcs v0.1.0 // indirect
@@ -176,7 +177,6 @@ require (
 	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/oauth2 v0.37.0 // indirect
-	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/term v0.47.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	golang.org/x/time v0.15.0 // indirect

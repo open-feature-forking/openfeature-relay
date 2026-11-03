@@ -205,7 +205,7 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		rt.Evaluator = inputs.router.IEvaluator()
 	}
 	endpointConfigs := endpointConfigs{
-		config: config, serviceConfig: rt.ServiceConfig, sources: sources, recorder: recorder, options: options,
+		formats: append([]string{flagdformat.Type}, formatTypes...), config: config, serviceConfig: rt.ServiceConfig, sources: sources, recorder: recorder, options: options,
 	}
 	for _, factory := range components.Endpoints {
 		if err := service.ValidateDeclarations(factory); err != nil {
@@ -243,6 +243,7 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 
 // endpointConfigs derives the settings of the official endpoints from the operator's configuration.
 type endpointConfigs struct {
+	formats       []string // the configuration formats of the distribution, flagd's first
 	config        Config
 	serviceConfig service.Configuration
 	sources       []string
@@ -260,6 +261,7 @@ func (c endpointConfigs) forEndpoint(endpointType string) map[string]any {
 		}}
 	case ofrep.Type:
 		return map[string]any{ofrep.ConfigKey: ofrep.EndpointConfig{
+			Formats: c.formats,
 			Service: ofrep.SvcConfiguration{
 				Port:                  c.config.OfrepServicePort,
 				ServiceName:           svcName,
