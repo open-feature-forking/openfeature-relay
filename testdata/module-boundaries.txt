@@ -7,7 +7,7 @@ core:./pkg/configformat/...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|jsonlog
 # The service interfaces and the OFREP models stay light.
 core:./pkg/service/...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|jsonlogic|jsonschema
 # The core module imports no telemetry, transport, platform client, JsonLogic engine, schema library or other library module.
-core:./...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|cloud.google.com|github.com/Azure|github.com/aws|jsonlogic|jsonschema|openfeature-relay/(sync|telemetry|evaluator|configformat)/
+core:./...:robfig|opentelemetry|grpc|connectrpc|k8s.io|gocloud|cloud.google.com|github.com/Azure|github.com/aws|jsonlogic|jsonschema|openfeature-relay/(sync|telemetry|evaluator|configformat)/
 # NFR-005, NFR-011: the embeddable modules import no telemetry, transport or platform clients, and flagd's
 # configuration format knows no evaluator, engine or sync provider.
 evaluator/flagd:./...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|openfeature-relay/(sync|telemetry)/

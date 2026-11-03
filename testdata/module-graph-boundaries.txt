@@ -1,6 +1,6 @@
 # <module dir>:<forbidden module path regexp>
 # The module graph of core carries no telemetry, transport, platform client, JsonLogic engine, schema library or other library module.
-core:opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|cloud.google.com|github.com/Azure|github.com/aws|jsonlogic|jsonschema|openfeature-relay/(sync|telemetry|evaluator|configformat)/
+core:robfig|opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|cloud.google.com|github.com/Azure|github.com/aws|jsonlogic|jsonschema|openfeature-relay/(sync|telemetry|evaluator|configformat)/
 # NFR-005: the embeddable modules are free of telemetry, transport and platform clients down to their module graphs.
 evaluator/flagd:opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|cloud.google.com|github.com/Azure|github.com/aws|openfeature-relay/(sync|telemetry)/
 configformat/flagd:opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|cloud.google.com|github.com/Azure|github.com/aws|jsonlogic|openfeature-relay/(sync|telemetry|evaluator)/
