@@ -302,3 +302,53 @@ func TestBuildExampleDistribution(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode, string(body))
 	require.Contains(t, string(body), "hello", "the example endpoint resolves the flag through the router")
 }
+
+// TestFlagdFullServesMetrics pins the telemetry of the flagd-full the Builder makes: flagd serves /metrics on the
+// management port through its OpenTelemetry provider. A build that lost the provider answers 404 there, with every
+// other check green.
+func TestFlagdFullServesMetrics(t *testing.T) {
+	path := filepath.Join(root(t), "distributions", "flagd-full", "manifest.yaml")
+	b := build(t, path)
+	require.NoError(t, b.err, b.out)
+
+	flags := filepath.Join(t.TempDir(), "flags.json")
+	require.NoError(t, os.WriteFile(flags, []byte(`{"flags":{"f":{"state":"ENABLED","variants":{"on":true},"defaultVariant":"on"}}}`), 0o600))
+	ports := map[string]string{}
+	for _, name := range []string{"port", "management-port", "sync-port", "ofrep-port"} {
+		ports[name] = fmt.Sprint(freePort(t))
+	}
+	cmd := exec.Command(binary(t, path), "start", "--uri", "file:"+flags,
+		"--port", ports["port"], "--management-port", ports["management-port"],
+		"--sync-port", ports["sync-port"], "--ofrep-port", ports["ofrep-port"])
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	require.NoError(t, cmd.Start())
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	t.Cleanup(func() {
+		_ = cmd.Process.Signal(syscall.SIGTERM)
+		select {
+		case <-done:
+		case <-time.After(20 * time.Second):
+			_ = cmd.Process.Kill()
+		}
+	})
+
+	base := "http://127.0.0.1:" + ports["management-port"]
+	require.Eventually(t, func() bool {
+		resp, err := http.Get(base + "/readyz") //nolint:noctx // a local probe
+		if err != nil {
+			return false
+		}
+		defer resp.Body.Close()
+		return resp.StatusCode == http.StatusOK
+	}, 60*time.Second, 200*time.Millisecond, "flagd-full becomes ready: %s", &stderr)
+
+	resp, err := http.Get(base + "/metrics") //nolint:noctx // a local request
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "/metrics is served by the telemetry provider")
+	require.Contains(t, string(body), "# HELP", "in the Prometheus exposition format")
+}
