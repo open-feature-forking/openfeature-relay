@@ -52,6 +52,8 @@ func TestFlagdFormatContract(t *testing.T) {
 			{Data: `{"metadata":{"flagSetId":"s1"},"flags":{"a":{` + flagBody + `}}}`, Sets: []formattest.Set{{FlagSet: "s1", Keys: []string{"a"}}}},
 			{Data: `{"metadata":{"flagSetId":"s2"},"flags":{"a":{` + flagBody + `}}}`, Sets: []formattest.Set{{FlagSet: "s2", Keys: []string{"a"}}}},
 		},
+		// the format has no entries it skips and accepts the rest of a delivery without
+		Without: []formattest.Feature{formattest.FeatureDropped},
 	})
 }
 
