@@ -13,6 +13,7 @@ github.com/open-feature-forking/openfeature-relay/core/pkg/service
 github.com/open-feature-forking/openfeature-relay/core/pkg/service/ofrep
 github.com/open-feature-forking/openfeature-relay/core/pkg/store
 github.com/open-feature-forking/openfeature-relay/core/pkg/sync
+github.com/open-feature-forking/openfeature-relay/core/pkg/sync/bloburi
 github.com/open-feature-forking/openfeature-relay/core/pkg/sync/fetching
 github.com/open-feature-forking/openfeature-relay/core/pkg/sync/polling
 github.com/open-feature-forking/openfeature-relay/core/pkg/sync/synctest
@@ -20,7 +21,6 @@ github.com/open-feature-forking/openfeature-relay/core/pkg/utils
 github.com/open-feature-forking/openfeature-relay/evaluator/flagd
 github.com/open-feature-forking/openfeature-relay/sync/azblob
 github.com/open-feature-forking/openfeature-relay/sync/blob
-github.com/open-feature-forking/openfeature-relay/sync/blob/bloburi
 github.com/open-feature-forking/openfeature-relay/sync/builder
 github.com/open-feature-forking/openfeature-relay/sync/builder/mock
 github.com/open-feature-forking/openfeature-relay/sync/file

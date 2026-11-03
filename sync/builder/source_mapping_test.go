@@ -13,7 +13,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature-forking/openfeature-relay/sync/blob"
-	"github.com/open-feature-forking/openfeature-relay/sync/blob/bloburi"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/bloburi"
 	buildermock "github.com/open-feature-forking/openfeature-relay/sync/builder/mock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
