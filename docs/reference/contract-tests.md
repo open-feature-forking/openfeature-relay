@@ -10,11 +10,11 @@ the test inputs of its type, from an ordinary Go test:
 
 ```go
 func TestContract(t *testing.T) {
-	synctest.RunFetcher(t, myFactory{}, synctest.FetcherInputs{
-		Source: sync.SourceConfig{URI: "example://flags"},
-		Change: func(testing.TB) { source.Set(changedFlags) },
-		Break:  func(testing.TB) { source.Fail(true) },
-	})
+    synctest.RunFetcher(t, myFactory{}, synctest.FetcherInputs{
+        Source: sync.SourceConfig{URI: "example://flags"},
+        Change: func(testing.TB) { source.Set(changedFlags) },
+        Break:  func(testing.TB) { source.Fail(true) },
+    })
 }
 ```
 

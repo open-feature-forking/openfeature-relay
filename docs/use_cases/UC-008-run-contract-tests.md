@@ -103,6 +103,8 @@ Each set covers what the runtime relies on for that component type; the extensio
 | Evaluator          | resolves one, several or all flags of a selector in one request and returns an untyped result per flag, with no value where the caller's default applies; the core's typed adapter turns these results into correct typed resolutions; every reason is an OpenFeature reason or a vendor reason without parameters, and every error code is one of OpenFeature's; it resolves concurrently while the store changes without seeing a half-updated store, and, when paired with flagd's configuration format, resolves as the flagd test-harness evaluation suite expects (UC-007) |
 | Event Sink         | receives the events it subscribed to, delivers them to its external system in batches, drops and counts events when its buffer is full instead of blocking the publisher, flushes buffered events on shutdown and returns from shutdown (UC-020) |
 
+A fetch trigger is checked as far as its signal goes: a trigger that reads the source without signalling cannot be seen by a contract run, which is a limit of the check and no later use case's work.
+
 ### BR-003: Only Injected Dependencies
 
 The contract tests create the component only through its factory and give it only the dependencies a distribution injects. A component that needs anything else to pass is not compatible with flagd.
@@ -126,5 +128,4 @@ This use case is `Implemented`: every component type has a contract runner in th
 - The evaluator contract for flagd's configuration format, the testbed's evaluator suite, from a module outside this repository: the suite is a pinned submodule of the testbed, which carries no licence to redistribute it, so `test/evaluator-testkit` runs only inside this repository. UC-012, together with releasing the modules, or an upstream change of the testbed that the project lead decides.
 - Release tags of the core module, behind BR-001's "a release of the core module that contains the contract tests": UC-012. Until then the external run fetches the core module at a commit.
 - Building the example components into a distribution and starting it (NFR-010): UC-001.
-- That a fetch trigger fetches nothing of its source on its own beyond signalling is checked as far as the signal goes; a trigger that reads the source without signalling cannot be seen by a contract run.
 - The names this use case changed go into the migration guide of UC-015: the `Case` and `Report` types of the runner packages, `servicetest.Result`, `ValidateDeclaration` of the telemetry, event sink and middleware factories, `Run` of the format and evaluator runners taking `*testing.T`, and the samples a format or evaluator leaves out becoming `Without` entries.
