@@ -42,9 +42,13 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=bind,source=./sync/builder/go.sum,target=./sync/builder/go.sum \
     --mount=type=bind,source=./telemetry/otel/go.mod,target=./telemetry/otel/go.mod \
     --mount=type=bind,source=./telemetry/otel/go.sum,target=./telemetry/otel/go.sum \
+    --mount=type=bind,source=./evaluator/flagd/go.mod,target=./evaluator/flagd/go.mod \
+    --mount=type=bind,source=./evaluator/flagd/go.sum,target=./evaluator/flagd/go.sum \
+    --mount=type=bind,source=./configformat/flagd/go.mod,target=./configformat/flagd/go.mod \
+    --mount=type=bind,source=./configformat/flagd/go.sum,target=./configformat/flagd/go.sum \
     --mount=type=bind,source=./flagd/go.mod,target=./flagd/go.mod \
     --mount=type=bind,source=./flagd/go.sum,target=./flagd/go.sum \
-    go work init ./core ./sync/file ./sync/flagd-grpc ./sync/http ./sync/openfeature-operator ./sync/blob ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel ./flagd && go mod download
+    go work init ./core ./sync/file ./sync/flagd-grpc ./sync/http ./sync/openfeature-operator ./sync/blob ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel ./evaluator/flagd ./configformat/flagd ./flagd && go mod download
 
 # Build the application.
 # Leverage a cache mount to /go/pkg/mod/ to speed up subsequent builds.
@@ -55,6 +59,8 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=bind,source=./core,target=./core \
     --mount=type=bind,source=./sync,target=./sync \
     --mount=type=bind,source=./telemetry,target=./telemetry \
+    --mount=type=bind,source=./evaluator,target=./evaluator \
+    --mount=type=bind,source=./configformat,target=./configformat \
     --mount=type=bind,source=./flagd,target=./flagd \
     if [ "${FIPS}" = on ]; then export GOFIPS140=v1.0.0 TAGS=fips140; else TAGS=; fi; \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -a -tags "${TAGS}" -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" -o /bin/flagd-build ./flagd/main.go ./flagd/profiler.go

@@ -9,11 +9,11 @@ import (
 	"time"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator/jsonlogic"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	flagdeval "github.com/open-feature-forking/openfeature-relay/evaluator/flagd"
 	syncbuilder "github.com/open-feature-forking/openfeature-relay/sync/builder"
 	flagdgrpc "github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc"
 	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
@@ -145,10 +145,10 @@ func FromConfig(logger *logger.Logger, version string, config Config) (*Runtime,
 	}
 
 	// derive evaluator
-	var evalOpts []jsonlogic.JSONEvaluatorOption
+	var evalOpts []flagdeval.JSONEvaluatorOption
 	// TODO(#2101): remove
 	if config.StrictNumericRange {
-		evalOpts = append(evalOpts, jsonlogic.WithStrictNumericRange())
+		evalOpts = append(evalOpts, flagdeval.WithStrictNumericRange())
 	}
 	jsonEvaluator := evaluation.NewEvaluator(logger, store, evalOpts...)
 

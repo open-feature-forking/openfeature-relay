@@ -66,6 +66,8 @@ jobs:
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
         with:
           go-version-file: 'flagd/go.mod'
+      - name: Fetch the testbed's evaluator suite
+        run: git submodule update --init test-harness
       - run: make workspace-init
       - run: make test
       - name: Upload coverage to Codecov

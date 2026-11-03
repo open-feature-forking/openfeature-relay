@@ -3,6 +3,7 @@ module github.com/open-feature/flagd/test/configformat-example
 go 1.27
 
 require (
+	github.com/open-feature-forking/openfeature-relay/configformat/flagd v0.1.0
 	github.com/open-feature-forking/openfeature-relay/core v0.20.0
 	github.com/open-feature/flagd/flagd v0.0.0
 	github.com/stretchr/testify v1.12.1
@@ -104,6 +105,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/open-feature-forking/openfeature-relay/evaluator/flagd v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/azblob v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/blob v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/builder v0.1.0 // indirect
@@ -198,7 +200,9 @@ require (
 replace github.com/open-feature/flagd/flagd => ../../flagd
 
 replace (
+	github.com/open-feature-forking/openfeature-relay/configformat/flagd => ../../configformat/flagd
 	github.com/open-feature-forking/openfeature-relay/core => ../../core
+	github.com/open-feature-forking/openfeature-relay/evaluator/flagd => ../../evaluator/flagd
 	github.com/open-feature-forking/openfeature-relay/sync/azblob => ../../sync/azblob
 	github.com/open-feature-forking/openfeature-relay/sync/blob => ../../sync/blob
 	github.com/open-feature-forking/openfeature-relay/sync/builder => ../../sync/builder

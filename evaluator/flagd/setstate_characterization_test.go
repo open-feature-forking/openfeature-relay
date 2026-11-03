@@ -1,9 +1,9 @@
-package jsonlogic
+package flagd
 
 import (
 	"testing"
 
-	flagconfigtest "github.com/open-feature-forking/openfeature-relay/core/pkg/configformat/flagd/flagdtest"
+	flagconfigtest "github.com/open-feature-forking/openfeature-relay/configformat/flagd/flagdtest"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"

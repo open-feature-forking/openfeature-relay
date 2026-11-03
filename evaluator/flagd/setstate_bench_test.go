@@ -1,4 +1,4 @@
-package jsonlogic
+package flagd
 
 import (
 	"fmt"

@@ -1,5 +1,5 @@
 //nolint:wrapcheck
-package jsonlogic_test
+package flagd_test
 
 import (
 	"context"
@@ -10,11 +10,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	flagdEvaluator "github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator/jsonlogic"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	flagdEvaluator "github.com/open-feature-forking/openfeature-relay/evaluator/flagd"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"

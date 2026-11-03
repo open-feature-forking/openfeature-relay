@@ -1,4 +1,4 @@
-package jsonlogic
+package flagd
 
 import (
 	"bytes"
@@ -12,8 +12,8 @@ import (
 	"time"
 
 	jl "github.com/diegoholiveira/jsonlogic/v3"
+	flagdformat "github.com/open-feature-forking/openfeature-relay/configformat/flagd"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat/flagd"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
@@ -64,8 +64,8 @@ func WithStrictNumericRange() JSONEvaluatorOption {
 type JSON struct {
 	store     store.IStore
 	Logger    *logger.Logger
-	validator *flagd.Validator
-	format    *flagd.Format // set when the store is a *store.Store
+	validator *flagdformat.Validator
+	format    *flagdformat.Format // set when the store is a *store.Store
 	Resolver
 }
 
@@ -78,7 +78,7 @@ func NewJSON(logger *logger.Logger, s store.IStore, opts ...JSONEvaluatorOption)
 	ev := JSON{
 		store:     s,
 		Logger:    logger,
-		validator: flagd.NewValidator(logger),
+		validator: flagdformat.NewValidator(logger),
 		Resolver:  NewResolver(s, logger),
 	}
 	if st, ok := s.(*store.Store); ok {
@@ -105,7 +105,7 @@ func (je *JSON) SetState(payload sync.DataSync) error {
 		_, err = je.format.Accept(context.Background(), in)
 	} else {
 		// an IStore implemented elsewhere may not store documents
-		var definition flagd.Definition
+		var definition flagdformat.Definition
 		if definition, err = je.validator.Validate(in); err == nil {
 			je.store.Update(payload.Source, definition.Flags, definition.Metadata, payload.IncrementalUpdates)
 		}
