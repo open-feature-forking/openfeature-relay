@@ -6,8 +6,8 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/builder/internal/manifest"
 )
 
-// Kind is how the generated source wires the item: "sync", "format", "evaluator", "engine", "endpoint", or "" for a
-// group whose factories distribution.Components has no field for yet; such a component is compiled in by its import.
+// Kind is how the generated source wires the item: "sync", "format", "evaluator", "engine", "endpoint", "telemetry",
+// "middleware" or "eventsink".
 func (i Item) Kind() string {
 	switch i.Group {
 	case manifest.SyncProviders:
@@ -20,6 +20,12 @@ func (i Item) Kind() string {
 		return "engine"
 	case manifest.ServiceEndpoints:
 		return "endpoint"
+	case manifest.Telemetry:
+		return "telemetry"
+	case manifest.Middleware:
+		return "middleware"
+	case manifest.EventSinks:
+		return "eventsink"
 	}
 	return ""
 }
@@ -105,6 +111,12 @@ func Components() distribution.Components {
 	c.Evaluators = append(c.Evaluators, {{.Alias}}.NewEvaluatorFactory())
 {{- else if eq .Kind "endpoint"}}
 	c.Endpoints = append(c.Endpoints, {{.Alias}}.NewFactory())
+{{- else if eq .Kind "telemetry"}}
+	c.Telemetry = {{.Alias}}.NewFactory()
+{{- else if eq .Kind "middleware"}}
+	c.Middleware = append(c.Middleware, {{.Alias}}.NewFactory())
+{{- else if eq .Kind "eventsink"}}
+	c.EventSinks = append(c.EventSinks, {{.Alias}}.NewFactory())
 {{- end}}
 {{- end}}
 	return c
@@ -130,6 +142,12 @@ func Inventory() distribution.Inventory {
 	add(distribution.GroupEvaluator, {{.Alias}}.NewEvaluatorFactory().Type(), {{printf "%q" .Module}})
 {{- else if eq .Kind "endpoint"}}
 	add(distribution.GroupServiceEndpoint, {{.Alias}}.NewFactory().Type(), {{printf "%q" .Module}})
+{{- else if eq .Kind "telemetry"}}
+	add(distribution.GroupTelemetry, {{.Alias}}.NewFactory().Type(), {{printf "%q" .Module}})
+{{- else if eq .Kind "middleware"}}
+	add(distribution.GroupMiddleware, {{.Alias}}.NewFactory().Type(), {{printf "%q" .Module}})
+{{- else if eq .Kind "eventsink"}}
+	add(distribution.GroupEventSink, {{.Alias}}.NewFactory().Type(), {{printf "%q" .Module}})
 {{- end}}
 {{- end}}
 	return inv

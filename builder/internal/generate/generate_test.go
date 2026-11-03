@@ -31,6 +31,10 @@ engines:
 service_endpoints:
   - {module: github.com/open-feature-forking/openfeature-relay/service/ofrep, version: v0.0.0}
 telemetry: {module: github.com/open-feature-forking/openfeature-relay/telemetry/otel, version: v0.0.0}
+middleware:
+  - {module: example.com/cors, version: v1.0.0}
+event_sinks:
+  - {module: example.com/sink, version: v1.0.0}
 replaces:
   - {module: github.com/open-feature-forking/openfeature-relay/sync/file, path: ../sync/file}
   - {module: github.com/open-feature-forking/openfeature-relay/core, path: ../core}
