@@ -1,0 +1,571 @@
+## mixed selector="" body=
+status=200
+{
+  "flags": [
+    {
+      "key": "array-default",
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "STATIC",
+      "value": [
+        1,
+        2
+      ],
+      "variant": "list"
+    },
+    {
+      "key": "bool",
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "STATIC",
+      "value": true,
+      "variant": "on"
+    },
+    {
+      "key": "disabled",
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "DISABLED"
+    },
+    {
+      "key": "no-default",
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "DEFAULT"
+    },
+    {
+      "key": "no-default-targeting-variant",
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "DEFAULT"
+    },
+    {
+      "key": "number",
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "STATIC",
+      "value": 10,
+      "variant": "ten"
+    },
+    {
+      "key": "object",
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "STATIC",
+      "value": {
+        "k": 1
+      },
+      "variant": "o"
+    },
+    {
+      "key": "string",
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "STATIC",
+      "value": "alpha",
+      "variant": "a"
+    },
+    {
+      "key": "type-mismatch",
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "TARGETING_MATCH",
+      "value": "hello",
+      "variant": "text"
+    }
+  ],
+  "metadata": {}
+}
+## mixed selector="" body={"context": {"email": "a@b.c"}}
+status=200
+{
+  "flags": [
+    {
+      "key": "array-default",
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "STATIC",
+      "value": [
+        1,
+        2
+      ],
+      "variant": "list"
+    },
+    {
+      "key": "bool",
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "STATIC",
+      "value": true,
+      "variant": "on"
+    },
+    {
+      "key": "disabled",
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "DISABLED"
+    },
+    {
+      "key": "no-default",
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "DEFAULT"
+    },
+    {
+      "key": "no-default-targeting-variant",
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "TARGETING_MATCH",
+      "value": true,
+      "variant": "on"
+    },
+    {
+      "key": "number",
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "STATIC",
+      "value": 10,
+      "variant": "ten"
+    },
+    {
+      "key": "object",
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "STATIC",
+      "value": {
+        "k": 1
+      },
+      "variant": "o"
+    },
+    {
+      "key": "string",
+      "metadata": {
+        "scope": "mixed"
+      },
+      "reason": "STATIC",
+      "value": "alpha",
+      "variant": "a"
+    },
+    {
+      "errorCode": "GENERAL",
+      "errorDetails": "error processing the flag for evaluation",
+      "key": "type-mismatch",
+      "metadata": {
+        "scope": "mixed"
+      }
+    }
+  ],
+  "metadata": {}
+}
+## one-key-in-two-flag-sets-of-one-source selector="" body=
+status=200
+{
+  "flags": [
+    {
+      "key": "only-set-a",
+      "metadata": {
+        "flagSetId": "set-a"
+      },
+      "reason": "STATIC",
+      "value": true,
+      "variant": "v"
+    },
+    {
+      "key": "shared",
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "value": "from-b",
+      "variant": "v"
+    },
+    {
+      "key": "only-set-b",
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "value": true,
+      "variant": "v"
+    },
+    {
+      "key": "shared",
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "value": "from-b",
+      "variant": "v"
+    }
+  ],
+  "metadata": {}
+}
+## one-key-in-two-flag-sets-of-one-source selector="" body={"context": {"email": "a@b.c"}}
+status=200
+{
+  "flags": [
+    {
+      "key": "only-set-a",
+      "metadata": {
+        "flagSetId": "set-a"
+      },
+      "reason": "STATIC",
+      "value": true,
+      "variant": "v"
+    },
+    {
+      "key": "shared",
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "value": "from-b",
+      "variant": "v"
+    },
+    {
+      "key": "only-set-b",
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "value": true,
+      "variant": "v"
+    },
+    {
+      "key": "shared",
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "value": "from-b",
+      "variant": "v"
+    }
+  ],
+  "metadata": {}
+}
+## one-key-in-two-flag-sets-of-one-source selector="flagSetId=set-a" body=
+status=200
+{
+  "flags": [
+    {
+      "key": "only-set-a",
+      "metadata": {
+        "flagSetId": "set-a"
+      },
+      "reason": "STATIC",
+      "value": true,
+      "variant": "v"
+    },
+    {
+      "key": "shared",
+      "metadata": {
+        "flagSetId": "set-a"
+      },
+      "reason": "STATIC",
+      "value": "from-a",
+      "variant": "v"
+    }
+  ],
+  "metadata": {
+    "flagSetId": "set-a"
+  }
+}
+## one-key-in-two-flag-sets-of-one-source selector="flagSetId=set-a" body={"context": {"email": "a@b.c"}}
+status=200
+{
+  "flags": [
+    {
+      "key": "only-set-a",
+      "metadata": {
+        "flagSetId": "set-a"
+      },
+      "reason": "STATIC",
+      "value": true,
+      "variant": "v"
+    },
+    {
+      "key": "shared",
+      "metadata": {
+        "flagSetId": "set-a"
+      },
+      "reason": "STATIC",
+      "value": "from-a",
+      "variant": "v"
+    }
+  ],
+  "metadata": {
+    "flagSetId": "set-a"
+  }
+}
+## one-key-in-two-flag-sets-of-one-source selector="flagSetId=set-b" body=
+status=200
+{
+  "flags": [
+    {
+      "key": "only-set-b",
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "value": true,
+      "variant": "v"
+    },
+    {
+      "key": "shared",
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "value": "from-b",
+      "variant": "v"
+    }
+  ],
+  "metadata": {
+    "flagSetId": "set-b"
+  }
+}
+## one-key-in-two-flag-sets-of-one-source selector="flagSetId=set-b" body={"context": {"email": "a@b.c"}}
+status=200
+{
+  "flags": [
+    {
+      "key": "only-set-b",
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "value": true,
+      "variant": "v"
+    },
+    {
+      "key": "shared",
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "value": "from-b",
+      "variant": "v"
+    }
+  ],
+  "metadata": {
+    "flagSetId": "set-b"
+  }
+}
+## one-key-in-two-sources selector="" body=
+status=200
+{
+  "flags": [
+    {
+      "key": "only-set-a",
+      "metadata": {
+        "flagSetId": "set-a"
+      },
+      "reason": "STATIC",
+      "value": true,
+      "variant": "v"
+    },
+    {
+      "key": "shared",
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "value": "from-two",
+      "variant": "v"
+    },
+    {
+      "key": "only-set-b",
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "value": true,
+      "variant": "v"
+    },
+    {
+      "key": "shared",
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "value": "from-two",
+      "variant": "v"
+    }
+  ],
+  "metadata": {}
+}
+## one-key-in-two-sources selector="" body={"context": {"email": "a@b.c"}}
+status=200
+{
+  "flags": [
+    {
+      "key": "only-set-a",
+      "metadata": {
+        "flagSetId": "set-a"
+      },
+      "reason": "STATIC",
+      "value": true,
+      "variant": "v"
+    },
+    {
+      "key": "shared",
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "value": "from-two",
+      "variant": "v"
+    },
+    {
+      "key": "only-set-b",
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "value": true,
+      "variant": "v"
+    },
+    {
+      "key": "shared",
+      "metadata": {
+        "flagSetId": "set-b"
+      },
+      "reason": "STATIC",
+      "value": "from-two",
+      "variant": "v"
+    }
+  ],
+  "metadata": {}
+}
+## one-key-in-two-sources selector="source=one" body=
+status=200
+{
+  "flags": [
+    {
+      "key": "only-set-a",
+      "metadata": {
+        "flagSetId": "set-a",
+        "source": "one"
+      },
+      "reason": "STATIC",
+      "value": true,
+      "variant": "v"
+    },
+    {
+      "key": "shared",
+      "metadata": {
+        "flagSetId": "set-a",
+        "source": "one"
+      },
+      "reason": "STATIC",
+      "value": "from-one",
+      "variant": "v"
+    }
+  ],
+  "metadata": {
+    "source": "one"
+  }
+}
+## one-key-in-two-sources selector="source=one" body={"context": {"email": "a@b.c"}}
+status=200
+{
+  "flags": [
+    {
+      "key": "only-set-a",
+      "metadata": {
+        "flagSetId": "set-a",
+        "source": "one"
+      },
+      "reason": "STATIC",
+      "value": true,
+      "variant": "v"
+    },
+    {
+      "key": "shared",
+      "metadata": {
+        "flagSetId": "set-a",
+        "source": "one"
+      },
+      "reason": "STATIC",
+      "value": "from-one",
+      "variant": "v"
+    }
+  ],
+  "metadata": {
+    "source": "one"
+  }
+}
+## one-key-in-two-sources selector="source=two" body=
+status=200
+{
+  "flags": [
+    {
+      "key": "only-set-b",
+      "metadata": {
+        "flagSetId": "set-b",
+        "source": "two"
+      },
+      "reason": "STATIC",
+      "value": true,
+      "variant": "v"
+    },
+    {
+      "key": "shared",
+      "metadata": {
+        "flagSetId": "set-b",
+        "source": "two"
+      },
+      "reason": "STATIC",
+      "value": "from-two",
+      "variant": "v"
+    }
+  ],
+  "metadata": {
+    "source": "two"
+  }
+}
+## one-key-in-two-sources selector="source=two" body={"context": {"email": "a@b.c"}}
+status=200
+{
+  "flags": [
+    {
+      "key": "only-set-b",
+      "metadata": {
+        "flagSetId": "set-b",
+        "source": "two"
+      },
+      "reason": "STATIC",
+      "value": true,
+      "variant": "v"
+    },
+    {
+      "key": "shared",
+      "metadata": {
+        "flagSetId": "set-b",
+        "source": "two"
+      },
+      "reason": "STATIC",
+      "value": "from-two",
+      "variant": "v"
+    }
+  ],
+  "metadata": {
+    "source": "two"
+  }
+}
