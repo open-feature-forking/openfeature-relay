@@ -165,3 +165,12 @@ func TestFetcherSendsHeaders(t *testing.T) {
 	require.Equal(t, "value", h.Get("X-Custom"))
 	require.Equal(t, []string{"application/json", "application/yaml"}, h.Values("Accept"))
 }
+
+func TestFetcherExtensionIgnoresTheQuery(t *testing.T) {
+	source := newFlagSource(t, "", "flags: {}\n")
+	f := NewFetcher(sync.SourceConfig{URI: source.URL + "/flags.yaml?token=abc.json"}, logger.NewLogger(nil, false))
+
+	res, err := f.Fetch(context.Background(), "")
+	require.NoError(t, err)
+	require.Equal(t, ".yaml", res.Extension)
+}

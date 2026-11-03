@@ -1,51 +1,16 @@
 package http
 
 import (
-	"bytes"
 	"context"
-	"errors"
-	"fmt"
-	"io"
 	"net/http"
 	parseUrl "net/url"
 	"os"
 	"path/filepath"
-	"sync/atomic"
 	"time"
 
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/polling"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/utils"
-	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 )
-
-type Sync struct {
-	uri         string
-	client      Client
-	poller      polling.Poller
-	lastBodySHA string
-	logger      *logger.Logger
-	authHeader  string
-	headers     map[string]string
-	interval    uint32
-	ready       atomic.Bool
-	eTag        string
-	timeoutS    time.Duration
-
-	oauthCredential *oauthCredentialHandler
-
-	// syncMetricsRecorder is the source-agnostic client-side sync-metrics recorder shared
-	// by every sync provider. Nil is safe — record methods no-op on nil.
-	syncMetricsRecorder sync.MetricsRecorder
-}
-
-// SetSyncMetricsRecorder wires the shared sync.MetricsRecorder onto this provider. Called
-// by SyncBuilder after construction so NewHTTP retains its existing signature for
-// backward compatibility with test call sites.
-func (hs *Sync) SetSyncMetricsRecorder(r sync.MetricsRecorder) { hs.syncMetricsRecorder = r }
 
 type oauthCredentialHandler struct {
 	clientId           string
@@ -98,146 +63,6 @@ type Client interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-func (hs *Sync) ReSync(ctx context.Context, dataSync chan<- sync.DataSync) error {
-	msg, _, err := hs.fetchBody(ctx, true)
-	if err != nil {
-		return err
-	}
-	dataSync <- sync.DataSync{FlagData: msg, Source: hs.uri}
-	sync.RecordFlagConfigReceived(ctx, hs.syncMetricsRecorder, sync.SourceHTTP, hs.uri, "")
-	return nil
-}
-
-func (hs *Sync) Init(_ context.Context) error {
-	return nil
-}
-
-func (hs *Sync) IsReady() bool {
-	return hs.ready.Load()
-}
-
-func (hs *Sync) Sync(ctx context.Context, dataSync chan<- sync.DataSync) error {
-	hs.logger.Info(fmt.Sprintf("starting sync from %s (interval: %ds)", hs.uri, hs.interval))
-
-	// Initial fetch
-	hs.logger.Debug(fmt.Sprintf("initial fetch from %s", hs.uri))
-	fetch, _, err := hs.fetchBody(ctx, true)
-	if err != nil {
-		return err
-	}
-
-	// Set ready state
-	hs.ready.Store(true)
-
-	hs.logger.Debug(fmt.Sprintf("polling %s every %ds (offset: %ds)", hs.uri, hs.interval, hs.poller.Offset()))
-
-	dataSync <- sync.DataSync{FlagData: fetch, Source: hs.uri}
-	sync.RecordFlagConfigReceived(ctx, hs.syncMetricsRecorder, sync.SourceHTTP, hs.uri, "")
-
-	hs.poller.Start(ctx, func() {
-		hs.logger.Debug(fmt.Sprintf("fetching configuration from %s", hs.uri))
-		previousBodySHA := hs.lastBodySHA
-		body, noChange, err := hs.fetchBody(ctx, false)
-		if err != nil {
-			hs.logger.Error(fmt.Sprintf("error fetching: %s", err.Error()))
-			return
-		}
-
-		if body == "" && !noChange {
-			hs.logger.Debug("configuration deleted")
-			return
-		}
-
-		if previousBodySHA == "" {
-			hs.logger.Debug("configuration created")
-			dataSync <- sync.DataSync{FlagData: body, Source: hs.uri}
-			sync.RecordFlagConfigReceived(ctx, hs.syncMetricsRecorder, sync.SourceHTTP, hs.uri, "")
-		} else if previousBodySHA != hs.lastBodySHA {
-			hs.logger.Debug("configuration updated")
-			dataSync <- sync.DataSync{FlagData: body, Source: hs.uri}
-			sync.RecordFlagConfigReceived(ctx, hs.syncMetricsRecorder, sync.SourceHTTP, hs.uri, "")
-		}
-	})
-
-	return nil
-}
-
-func (hs *Sync) applyHeaders(req *http.Request) {
-	for key, value := range hs.headers {
-		if http.CanonicalHeaderKey(key) == "Host" {
-			req.Host = value
-		} else {
-			req.Header.Set(key, value)
-		}
-	}
-}
-
-func (hs *Sync) fetchBody(ctx context.Context, fetchAll bool) (string, bool, error) {
-	if hs.uri == "" {
-		return "", false, errors.New("no HTTP URL string set")
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "GET", hs.uri, bytes.NewBuffer(nil))
-	if err != nil {
-		return "", false, fmt.Errorf("error creating request for url %s: %w", hs.uri, err)
-	}
-
-	req.Header.Add("Accept", "application/json")
-	req.Header.Add("Accept", "application/yaml")
-
-	if hs.authHeader != "" {
-		req.Header.Set("Authorization", hs.authHeader)
-	}
-
-	if hs.eTag != "" && !fetchAll {
-		req.Header.Set("If-None-Match", hs.eTag)
-	}
-
-	hs.applyHeaders(req)
-
-	client := hs.getClient()
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", false, fmt.Errorf("error calling endpoint %s: %w", hs.uri, err)
-	}
-	defer func() {
-		err = resp.Body.Close()
-		if err != nil {
-			hs.logger.Error(fmt.Sprintf("error closing the response body: %s", err.Error()))
-		}
-	}()
-
-	if resp.StatusCode == 304 {
-		hs.logger.Debug("no changes detected")
-		return "", true, nil
-	}
-
-	statusOK := resp.StatusCode >= 200 && resp.StatusCode < 300
-	if !statusOK {
-		return "", false, fmt.Errorf("error fetching from url %s: %s", hs.uri, resp.Status)
-	}
-
-	if resp.Header.Get("ETag") != "" {
-		hs.eTag = resp.Header.Get("ETag")
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", false, fmt.Errorf("unable to read body to bytes: %w", err)
-	}
-
-	json, err := utils.ConvertToJSON(body, getFileExtensions(hs.uri), resp.Header.Get("Content-Type"))
-	if err != nil {
-		return "", false, fmt.Errorf("error converting response body to json: %w", err)
-	}
-
-	if json != "" {
-		hs.lastBodySHA = utils.GenerateSha([]byte(json))
-	}
-
-	return json, false, nil
-}
-
 // getFileExtensions returns the file extension from the URL path
 func getFileExtensions(url string) string {
 	u, err := parseUrl.Parse(url)
@@ -246,68 +71,4 @@ func getFileExtensions(url string) string {
 	}
 
 	return filepath.Ext(u.Path)
-}
-
-func (hs *Sync) Fetch(ctx context.Context) (string, error) {
-	body, _, err := hs.fetchBody(ctx, false)
-	return body, err
-}
-
-func (hs *Sync) getClient() Client {
-	if hs.oauthCredential != nil {
-		delta := time.Since(hs.oauthCredential.lastUpdate).Seconds()
-		if delta <= float64(hs.oauthCredential.reloadDelaySeconds) && hs.client != nil {
-			return hs.client
-		}
-	} else if hs.client != nil {
-		return hs.client
-	}
-	// if we cannot reuse the cached one, let's create a new one
-	client := &http.Client{
-		Timeout: time.Second * hs.timeoutS,
-	}
-	if hs.oauthCredential != nil {
-		if c, err := hs.oauthCredential.getOAuthClient(); err == nil {
-			client = c
-			client.Timeout = time.Second * hs.timeoutS
-			hs.oauthCredential.lastUpdate = time.Now()
-		} else {
-			hs.logger.Error(fmt.Sprintf("Cannot init OAuth. Default to normal HTTP client: %v", err))
-		}
-	}
-	hs.client = client
-	return client
-}
-
-func NewHTTP(config sync.SourceConfig, logger *logger.Logger, poller polling.Poller, interval uint32) *Sync {
-	var oauthCredential *oauthCredentialHandler
-	if config.OAuth != nil {
-		oauthCredential = &oauthCredentialHandler{
-			clientId:           config.OAuth.ClientID,
-			clientSecret:       config.OAuth.ClientSecret,
-			tokenUrl:           config.OAuth.TokenURL,
-			folderSource:       config.OAuth.Folder,
-			reloadDelaySeconds: config.OAuth.ReloadDelayS,
-			lastUpdate:         time.Now(),
-		}
-	}
-
-	canonicalHeaders := make(map[string]string, len(config.Headers))
-	for k, v := range config.Headers {
-		canonicalHeaders[http.CanonicalHeaderKey(k)] = v
-	}
-
-	return &Sync{
-		uri: config.URI,
-		logger: logger.WithFields(
-			zap.String("component", "sync"),
-			zap.String("sync", "http"),
-		),
-		authHeader:      config.AuthHeader,
-		headers:         canonicalHeaders,
-		interval:        interval,
-		poller:          poller,
-		oauthCredential: oauthCredential,
-		timeoutS:        time.Duration(config.TimeoutS),
-	}
 }
