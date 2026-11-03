@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
@@ -61,6 +62,9 @@ type Config struct {
 	SyncProviders []sync.SourceConfig
 	// ConfigurationFormats are the formats, besides flagd's own, that sources may name.
 	ConfigurationFormats []configformat.Factory
+	// Evaluators are the evaluators, besides flagd's own, that resolve the flags of a configuration format.
+	// Each one's format must be flagd's own or one of ConfigurationFormats.
+	Evaluators []evaluator.Factory
 	// SyncFactories are the sync components, besides the official ones, that sources may select.
 	SyncFactories []sync.Factory
 	CORS          []string
@@ -152,7 +156,14 @@ func FromConfig(logger *logger.Logger, version string, config Config) (*Runtime,
 	if config.StrictNumericRange {
 		evalOpts = append(evalOpts, flagdeval.WithStrictNumericRange())
 	}
-	jsonEvaluator := evaluation.NewEvaluator(logger, store, evalOpts...)
+	formatTypes := make([]string, 0, len(config.ConfigurationFormats))
+	for _, f := range config.ConfigurationFormats {
+		formatTypes = append(formatTypes, f.Type())
+	}
+	jsonEvaluator, err := evaluation.NewRoutedEvaluator(logger, store, formatTypes, config.Evaluators, evalOpts...)
+	if err != nil {
+		return nil, err
+	}
 
 	options, err := telemetry.BuildConnectOptions(telCfg)
 	if err != nil {

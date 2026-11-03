@@ -169,6 +169,10 @@ Each T1 row that builds through `FromConfig` lives in a test package of its own 
 | T2b | implementer | `core/pkg/telemetry/telemetrytest` | `Run(t, Factory, Inputs{Config; InvalidConfig; FaultyValue; StallBackend; Observed})`, one subtest per UC-008 case: usable without setup; never blocks a request (round trip through both HTTP wrappers within 100 ms while the backend stalls); 64 goroutines under `-race`; `Shutdown` returns within its context with a stalled backend; held data delivered on shutdown; invalid configuration named; declaration. A missing input names the cases that need it; no skips | Noop passes the backend-free cases; broken stubs fail exactly theirs |
 | T2c | mechanic | `testdata/go-packages.txt`, both boundary files | Rows `core:./pkg/telemetry/...` with the `core:./...` regexp plus `prometheus\|otelconnect\|go.opentelemetry.io` (finding 9b) | `make check-package-coverage check-module-boundary` |
 
+**Deviation in T2a (decided by the orchestrator, option A):** Q2's variadic API stays. Through an interface, a variadic argument slice escapes, so a call that passes attributes or options costs one allocation even with the noop telemetry provider. This was measured under go1.27.3, and today's OpenTelemetry API costs the same. `TestNoopAllocatesNothing` therefore pins three things: 0 allocations for building attributes, 0 for every noop call made without attributes or options, and exactly 1 per call that passes them. Attribute values never box (finding 15 holds).
+
+**Implementation notes for T2b:** `Inputs` has two additions, `NoBackend` and `NoConfig`. With them, the noop provider declares that it has no backend and takes no configuration, so it runs every case instead of skipping some: the backend cases check that it never blocks and that `Shutdown` returns nil, and the configuration case checks that any configuration is accepted. A declaration that is invalid, or a factory that fails on the valid configuration, aborts the run with the reason, as `synctest` does (UC-008 A2, A3).
+
 #### T3 `uc-006/pr-3-otel-provider` (base T2)
 
 | Step | Model | Files | Change | Check |

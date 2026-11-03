@@ -5,7 +5,7 @@ ALL_GO_MOD_DIRS := $(shell find . \( -path ./test/integration -o -path ./.claude
 
 # The library modules: what embedders import. Tests, the FIPS tests and the benchmarks run on exactly
 # these (plus the binaries), and testdata/go-packages.txt pins the packages they contain.
-GO_LIB_MODULE_DIRS := ./core ./sync/file ./sync/flagd-grpc ./sync/http ./sync/openfeature-operator ./sync/blob ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel ./evaluator/flagd ./configformat/flagd
+GO_LIB_MODULE_DIRS := ./core ./sync/file ./sync/flagd-grpc ./sync/http ./sync/openfeature-operator ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel ./evaluator/flagd ./configformat/flagd
 
 # The FIPS variant builds against the CMVP-certified Go Cryptographic Module
 # v1.0.0 (certificate #5247). The literal version is required; the
@@ -75,7 +75,7 @@ test-evaluator-testkit:
 	go test -race -short -count=1 ./test/evaluator-testkit/...
 # The in-process examples assert on their own module graphs, which they read with the go command outside the workspace.
 test-inprocess-example:
-	go test -race -short -count=1 ./test/inprocess-example/file/... ./test/inprocess-example/filegrpc/...
+	go test -race -short -count=1 ./test/inprocess-example/file/... ./test/inprocess-example/filegrpc/... ./test/inprocess-example/engine/...
 test-flagd-proxy:
 	go test -race -covermode=atomic -cover -short ./flagd-proxy/pkg/... -coverprofile=flagd-proxy-coverage.out
 # fips140=only makes non-approved algorithms error or panic, so this fails if a

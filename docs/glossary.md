@@ -53,7 +53,7 @@
 | Source Version | An opaque value a fetcher returns for its source's flag configuration as read (an ETag, a content hash, a generation) and gets back on the next fetch; not a document version. | |
 | Streaming Sync Provider | A sync provider that detects changes and delivers flag configurations in one, such as flagd's gRPC sync protocol and the OpenFeature Operator's FeatureFlag watch. | |
 | Fetching Sync Provider | A sync provider built as a fetcher plus the fetch triggers attached to its source. | retriever |
-| Encoding | The serialization of a flag configuration (JSON, YAML, TOML), decoded by the core before its configuration format validates it; independent of the configuration format. |  |
+| Encoding | The serialization of a flag configuration (JSON or YAML), decoded by the core before its configuration format validates it; independent of the configuration format. |  |
 | Document Version | An opaque value a configuration format reports for each document, such as a hash or the vendor's update time; service endpoints derive ETags and event stream events from it. |  |
 | Event Stream | The OFREP server-sent event stream that announces configuration changes for a selector, advertised in OFREP bulk responses. | SSE endpoint |
 | Context Enrichment | Values flagd adds to an evaluation context before resolution: static values, header mappings, and per-selector values. |  |

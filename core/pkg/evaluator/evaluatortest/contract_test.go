@@ -41,6 +41,7 @@ type flaws struct {
 	ignoreAttrs     bool
 	tornPair        bool
 	ignoresDst      bool
+	noFlagSet       bool
 }
 
 // reference is a small evaluator over fixed flags, with a pair of flags updated together.
@@ -120,6 +121,13 @@ func (e *reference) Evaluate(_ context.Context, req evaluator.Request, dst []eva
 		for _, key := range []string{"audience", "absent", "bool", "disabled", "int", "pair-a", "pair-b"} {
 			dst = append(dst, e.result(key, req, e.roundFor(round)))
 		}
+		for _, set := range []string{"a", "b"} {
+			res := evaluator.Result{FlagKey: "shared", FlagSet: set, HasValue: true, Value: set, Variant: "v", Reason: model.StaticReason}
+			if e.flaws.noFlagSet {
+				res.FlagSet = ""
+			}
+			dst = append(dst, res)
+		}
 	case req.FlagKeys != nil:
 		for _, key := range req.FlagKeys {
 			dst = append(dst, e.result(key, req, e.roundFor(round)))
@@ -136,6 +144,7 @@ func samplesFor(e *reference) Samples {
 			{Key: "bool", Hint: evaluator.TypeBool, Value: true},
 			{Key: "int", Hint: evaluator.TypeInt, Value: 10.0},
 		},
+		Shared:        &SharedSample{Key: "shared", FlagSets: []string{"a", "b"}},
 		Disabled:      "disabled",
 		AbsentDefault: "absent",
 		Attribute:     &AttributeSample{Key: "audience", Attributes: map[string]any{"audience": "client"}, With: "client-visible"},
@@ -174,6 +183,7 @@ func TestContractReportsExpectedAndObserved(t *testing.T) {
 		"bulk differs from single":         {flaws{bulkDiffers: true}, "bulk equals single"},
 		"attributes ignored":               {flaws{ignoreAttrs: true}, "attributes"},
 		"torn read of a pair":              {flaws{tornPair: true}, "consistent resolution"},
+		"bulk entries without a flag set":  {flaws{noFlagSet: true}, "bulk flag sets"},
 		"results replace dst":              {flaws{ignoresDst: true}, "append to dst"},
 	}
 	for name, tt := range tests {

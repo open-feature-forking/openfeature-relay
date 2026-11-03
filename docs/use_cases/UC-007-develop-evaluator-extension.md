@@ -7,7 +7,7 @@
 **Primary Actor:** Extension Author  
 **Goal:** Publish an evaluator in the Extension Author's own component module, verified against the evaluator contract, so that a distribution evaluates flags with another vendor's evaluation logic, such as Flagsmith's or GO Feature Flag's, from the documents of its paired configuration format.  
 **Trigger:** Extension Author needs flags evaluated in a way the JsonLogic evaluator does not support  
-**Status:** Draft  
+**Status:** Implemented  
 
 **Requirements:** [FR-014, FR-015, FR-018, FR-027, FR-033, FR-035, FR-040, FR-047, FR-048, FR-003, FR-008, NFR-005](../requirements.md)
 
@@ -143,3 +143,19 @@ An evaluator resolves flags concurrently while the store changes; a resolution s
 ### BR-012: Same Selection as Official Components
 
 An extension is referenced in a manifest by Go module path and version in the same way as an official evaluator; no registration with the Maintainers is needed.
+
+## Accepted Test Gaps
+
+- A6: has no system behaviour to test.
+- A3: the evaluator half is tested (the request attributes shape the results); the middleware half that attaches the attributes is tested with UC-005.
+
+## Delivered by Later Use Cases
+
+This use case is `Implemented` for the evaluator side: the untyped evaluator interface and factory, the shared typed adapter, the evaluator contract, the evaluation router in flagd's evaluator constructor, the JsonLogic evaluator on the new interface and an example engine module in the configuration format example. These parts are delivered by the use cases named here, and are accepted gaps of this one:
+
+- Main scenario steps 7–8, BR-012, FR-003, FR-008, FR-018's builder check and A5's manifest and `replace` part (tag and publish the module, select it in a manifest by module path and version, build a distribution that names the evaluator and replaces its module locally): UC-001 and UC-012. A5 is tested without a builder: `FromConfig` given the engine's factories, a file source in the paired format, and the flag evaluation and OFREP endpoints on local ports.
+- FR-047 and A3's middleware half (middleware attaches the request attributes the evaluator reads): UC-005.
+- FR-027 (a distribution that serves another vendor's flags behind OFREP, with the vendor's sync provider, configuration format and evaluator): UC-019.
+- Flag sync of vendor documents (the flag sync endpoint sends documents of another format): UC-017.
+- Contract packaging across component types (one run that exercises every component type's contract): UC-008. The evaluator contract itself, `evaluatortest.Run`, and the exported flagd suite, `testkit.Run`, are delivered here.
+- Whether `NewJSON` over a foreign `IStore` retires, which keeps its per-call reads without the consistency guarantee of BR-011, and the note for embedders that the error text of an unmarshalable context changed from `ERROR` to `GENERAL` (BR-010): UC-015.

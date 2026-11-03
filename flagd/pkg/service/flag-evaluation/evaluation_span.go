@@ -12,14 +12,14 @@ import (
 const evaluatorTracerName = "jsonEvaluator"
 
 type tracedEvaluator struct {
-	evaluator.IEvaluator
+	evaluator.IResolver
 	tracer trace.Tracer
 }
 
 // TraceEvaluations wraps an evaluator so that every evaluation request is recorded as an internal span
-// of the "jsonEvaluator" instrumentation scope. SetState is delegated without a span.
-func TraceEvaluations(e evaluator.IEvaluator) evaluator.IEvaluator {
-	return &tracedEvaluator{IEvaluator: e, tracer: otel.Tracer(evaluatorTracerName)}
+// of the "jsonEvaluator" instrumentation scope.
+func TraceEvaluations(e evaluator.IResolver) evaluator.IResolver {
+	return &tracedEvaluator{IResolver: e, tracer: otel.Tracer(evaluatorTracerName)}
 }
 
 func (t *tracedEvaluator) ResolveBooleanValue(
@@ -27,7 +27,7 @@ func (t *tracedEvaluator) ResolveBooleanValue(
 ) (bool, string, string, model.Metadata, error) {
 	_, span := t.tracer.Start(ctx, "resolveBoolean")
 	defer span.End()
-	return t.IEvaluator.ResolveBooleanValue(ctx, reqID, flagKey, context)
+	return t.IResolver.ResolveBooleanValue(ctx, reqID, flagKey, context)
 }
 
 func (t *tracedEvaluator) ResolveStringValue(
@@ -35,7 +35,7 @@ func (t *tracedEvaluator) ResolveStringValue(
 ) (string, string, string, model.Metadata, error) {
 	_, span := t.tracer.Start(ctx, "resolveString")
 	defer span.End()
-	return t.IEvaluator.ResolveStringValue(ctx, reqID, flagKey, context)
+	return t.IResolver.ResolveStringValue(ctx, reqID, flagKey, context)
 }
 
 func (t *tracedEvaluator) ResolveIntValue(
@@ -43,7 +43,7 @@ func (t *tracedEvaluator) ResolveIntValue(
 ) (int64, string, string, model.Metadata, error) {
 	_, span := t.tracer.Start(ctx, "resolveInt")
 	defer span.End()
-	return t.IEvaluator.ResolveIntValue(ctx, reqID, flagKey, context)
+	return t.IResolver.ResolveIntValue(ctx, reqID, flagKey, context)
 }
 
 func (t *tracedEvaluator) ResolveFloatValue(
@@ -51,7 +51,7 @@ func (t *tracedEvaluator) ResolveFloatValue(
 ) (float64, string, string, model.Metadata, error) {
 	_, span := t.tracer.Start(ctx, "resolveFloat")
 	defer span.End()
-	return t.IEvaluator.ResolveFloatValue(ctx, reqID, flagKey, context)
+	return t.IResolver.ResolveFloatValue(ctx, reqID, flagKey, context)
 }
 
 func (t *tracedEvaluator) ResolveObjectValue(
@@ -59,7 +59,7 @@ func (t *tracedEvaluator) ResolveObjectValue(
 ) (map[string]any, string, string, model.Metadata, error) {
 	_, span := t.tracer.Start(ctx, "resolveObject")
 	defer span.End()
-	return t.IEvaluator.ResolveObjectValue(ctx, reqID, flagKey, context)
+	return t.IResolver.ResolveObjectValue(ctx, reqID, flagKey, context)
 }
 
 func (t *tracedEvaluator) ResolveAsAnyValue(
@@ -67,7 +67,7 @@ func (t *tracedEvaluator) ResolveAsAnyValue(
 ) evaluator.AnyValue {
 	_, span := t.tracer.Start(ctx, "resolveAnyValue")
 	defer span.End()
-	return t.IEvaluator.ResolveAsAnyValue(ctx, reqID, flagKey, context)
+	return t.IResolver.ResolveAsAnyValue(ctx, reqID, flagKey, context)
 }
 
 func (t *tracedEvaluator) ResolveAllValues(
@@ -75,5 +75,5 @@ func (t *tracedEvaluator) ResolveAllValues(
 ) ([]evaluator.AnyValue, model.Metadata, error) {
 	_, span := t.tracer.Start(ctx, "resolveAll")
 	defer span.End()
-	return t.IEvaluator.ResolveAllValues(ctx, reqID, context)
+	return t.IResolver.ResolveAllValues(ctx, reqID, context)
 }

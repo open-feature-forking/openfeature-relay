@@ -1,13 +1,29 @@
-// Package gcs is the sync provider for flag configurations in Google Cloud Storage buckets. Importing
-// it registers the gs:// scheme of gocloud's GCS driver, and no other cloud's driver.
+// Package gcs is the sync provider for flag configurations in Google Cloud Storage buckets: a fetcher on the Cloud
+// Storage client library.
+//
+// A source is "gs://bucket/path/to/object", with these options in its query:
+//
+//   - anonymous=true reads without credentials;
+//   - access_id=- does the same, and any other access_id is accepted and unused (it only matters for signing URLs);
+//   - private_key_path=<file> must name a readable file, and is unused for the same reason.
+//
+// Without options the client uses Application Default Credentials. STORAGE_EMULATOR_HOST points it at an emulator.
 package gcs
 
 import (
+	"context"
+	"fmt"
+	"io"
+	"net/url"
+	"os"
 	"regexp"
+	"strconv"
+	gosync "sync"
+	"time"
 
-	"github.com/open-feature-forking/openfeature-relay/sync/blob"
-	gocloud "gocloud.dev/blob"
-	_ "gocloud.dev/blob/gcsblob" // needed to initialize GCS driver
+	"cloud.google.com/go/storage"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/blobfetch"
+	"google.golang.org/api/option"
 )
 
 // Provider is the name by which a source selects this sync provider.
@@ -22,6 +38,147 @@ func Matches(uri string) bool {
 }
 
 // NewFactory creates the factory of gs:// sources.
-func NewFactory() blob.Factory {
-	return blob.Factory{Kind: Provider, Prefix: "gs://", Scheme: scheme, Mux: gocloud.DefaultURLMux()}
+func NewFactory() blobfetch.Factory {
+	return factory(nil, nil)
+}
+
+// factory creates the factory with extra options for the storage client, which the tests use to reach a stub.
+func factory(clientOptions []option.ClientOption, created func()) blobfetch.Factory {
+	return blobfetch.Factory{
+		Kind: Provider, Prefix: "gs://", Scheme: scheme,
+		Open: func(bucketURL, object string) (blobfetch.Store, error) {
+			return open(bucketURL, object, clientOptions, created)
+		},
+	}
+}
+
+// store is an object of a bucket. The generation it reads is the one its last Identity call saw, so that what is read
+// is what was compared.
+type store struct {
+	bucket        string
+	object        string
+	anonymous     bool
+	clientOptions []option.ClientOption
+	// created is called each time a client is created, which the tests count
+	created func()
+
+	clientMu gosync.Mutex
+	c        *storage.Client
+
+	mu         gosync.Mutex
+	generation int64
+}
+
+// open reads the options of a bucket URL, as "gs://bucket?anonymous=true".
+func open(bucketURL, object string, clientOptions []option.ClientOption, created func()) (*store, error) {
+	fail := func(err error) (*store, error) { return nil, fmt.Errorf("open bucket %v: %w", bucketURL, err) }
+	u, err := url.Parse(bucketURL)
+	if err != nil {
+		return fail(err)
+	}
+	q := u.Query()
+	for k := range q {
+		if k != "access_id" && k != "private_key_path" && k != "anonymous" {
+			return fail(fmt.Errorf("invalid query parameter %q", k))
+		}
+	}
+	s := &store{bucket: u.Host, object: object, clientOptions: clientOptions, created: created}
+	if anon := q.Get("anonymous"); anon != "" {
+		isAnon, err := strconv.ParseBool(anon)
+		if err != nil {
+			return fail(fmt.Errorf("invalid value %q for query parameter \"anonymous\": %w", anon, err))
+		}
+		s.anonymous = isAnon
+	}
+	if q.Get("access_id") == "-" {
+		s.anonymous = true
+	}
+	if keyPath := q.Get("private_key_path"); keyPath != "" {
+		if _, err := os.ReadFile(keyPath); err != nil {
+			return fail(err)
+		}
+	}
+	return s, nil
+}
+
+// client returns the store's client, creating it on first use: credentials are looked up then, so a missing credential is
+// a failed fetch, and one that is found is kept, with its token source, until Close. A failed creation is tried again by
+// the next call.
+func (s *store) client() (*storage.Client, error) {
+	s.clientMu.Lock()
+	defer s.clientMu.Unlock()
+	if s.c != nil {
+		return s.c, nil
+	}
+	var opts []option.ClientOption
+	if s.anonymous {
+		opts = append(opts, option.WithoutAuthentication())
+	}
+	// the client outlives the fetch that creates it, and so does its token source
+	c, err := storage.NewClient(context.Background(), append(opts, s.clientOptions...)...)
+	if err != nil {
+		return nil, err
+	}
+	// a failed fetch is tried again on the next poll, so the client gives up early
+	c.SetRetry(storage.WithMaxAttempts(maxAttempts))
+	if s.created != nil {
+		s.created()
+	}
+	s.c = c
+	return c, nil
+}
+
+// Close closes the client, if one was created.
+func (s *store) Close() error {
+	s.clientMu.Lock()
+	defer s.clientMu.Unlock()
+	if s.c == nil {
+		return nil
+	}
+	err := s.c.Close()
+	s.c = nil
+	return err
+}
+
+const maxAttempts = 3
+
+// Identity is the generation of the object, which changes with its content.
+func (s *store) Identity(ctx context.Context) (string, time.Time, error) {
+	c, err := s.client()
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	attrs, err := c.Bucket(s.bucket).Object(s.object).Attrs(ctx)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	s.mu.Lock()
+	s.generation = attrs.Generation
+	s.mu.Unlock()
+	return strconv.FormatInt(attrs.Generation, 10), attrs.Updated, nil
+}
+
+// Read reads the generation of the last Identity call, and fails when the object has moved on since.
+func (s *store) Read(ctx context.Context) ([]byte, string, error) {
+	c, err := s.client()
+	if err != nil {
+		return nil, "", err
+	}
+	s.mu.Lock()
+	generation := s.generation
+	s.mu.Unlock()
+	obj := c.Bucket(s.bucket).Object(s.object)
+	if generation != 0 {
+		obj = obj.Generation(generation)
+	}
+	r, err := obj.NewReader(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+	defer r.Close()
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return nil, "", err
+	}
+	return data, r.Attrs.ContentType, nil
 }

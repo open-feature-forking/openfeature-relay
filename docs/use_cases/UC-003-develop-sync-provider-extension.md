@@ -136,7 +136,7 @@ When the distribution shuts down, a fetcher abandons a running fetch, a fetch tr
 
 ### BR-010: Encoding- and Format-Neutral Delivery
 
-A sync provider does not decode, parse, validate or transform the flag configuration it obtains. It may take the flag configuration out of its source's protocol envelope (the `flagConfiguration` field of a flagd sync message, the `spec.flagSpec` of a FeatureFlag resource) but never changes it. The core decodes its encoding (JSON, YAML or TOML), and the configuration format the source names validates it, flagd's being the default (FR-029). A sync provider therefore works with every encoding and configuration format and in a configuration proxy, which has no evaluator, and an invalid flag configuration is rejected the same way whichever sync provider delivered it.
+A sync provider does not decode, parse, validate or transform the flag configuration it obtains. It may take the flag configuration out of its source's protocol envelope (the `flagConfiguration` field of a flagd sync message, the `spec.flagSpec` of a FeatureFlag resource) but never changes it. The core decodes its encoding (JSON or YAML), and the configuration format the source names validates it, flagd's being the default (FR-029). A sync provider therefore works with every encoding and configuration format and in a configuration proxy, which has no evaluator, and an invalid flag configuration is rejected the same way whichever sync provider delivered it.
 
 ### BR-011: Same Selection as Official Components
 
@@ -156,5 +156,4 @@ This use case is `Implemented` for the sync provider side: the factory interface
 - Fetch triggers that need an inbound endpoint or a vendor: a webhook (UC-004), server-sent events and vendor change events (UC-019). Notifying a system of a change is an event sink (UC-020).
 - The official `http` fetcher answers conditionally with the ETag and the body digest only; sources that answer `If-Modified-Since`, such as the Flagsmith environment document, need their own fetcher (UC-019).
 - flagd-proxy keeps `SyncFromURI`; it moves to the flag sync endpoint in UC-017.
-- TOML decoding, the TOML part of BR-010 and FR-049: the core decodes JSON and YAML only, as before. UC-018 lists the same gap, and no use case delivers it yet; the project lead assigns it to one, or drops TOML from FR-049, BR-010 and UC-018 BR-009.
-- The exported names this use case removed (`NewHTTP`, `NewFileSync`, the fields of `file.Sync`, `polling.Poller`, `CronPoller`, `NewCronPoller`, `NewSourcePoller`, `MockPoller`, `gcs.New`, `azblob.New`, `s3.New`, the fields of `blob.Sync`, and the type `blob.NewSync` returns, now `sync.StreamingSyncProvider`) go into the migration guide of UC-015.
+- The exported names this use case removed (`NewHTTP`, `NewFileSync`, the fields of `file.Sync`, `polling.Poller`, `CronPoller`, `NewCronPoller`, `NewSourcePoller`, `MockPoller`, `gcs.New`, `azblob.New`, `s3.New`, and the module `sync/blob` with `blob.NewSync`, `blob.Factory`, `blob.Fetcher` and the fields of `blob.Sync`; each cloud module now exports `NewFactory`) go into the migration guide of UC-015.
