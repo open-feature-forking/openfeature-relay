@@ -105,3 +105,6 @@ func (s *ConnectService) serveEndpoint(ctx context.Context, svcConf service.Conf
 		return nil
 	}
 }
+
+// NewFactory returns the factory of the flag evaluation endpoint, as a generated main of a distribution calls it.
+func NewFactory() service.Factory { return Factory{} }

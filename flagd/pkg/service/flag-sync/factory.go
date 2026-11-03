@@ -66,3 +66,6 @@ func (e *endpoint) Serve(ctx context.Context) error {
 	}
 	return e.svc.Start(ctx)
 }
+
+// NewFactory returns the factory of the flag sync endpoint, as a generated main of a distribution calls it.
+func NewFactory() service.Factory { return Factory{} }

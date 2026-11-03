@@ -20,11 +20,14 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 
-	keyvalue "github.com/open-feature/flagd/test/configformat-example"
 )
 
 // FactoryType names the evaluator.
 const FactoryType = "keyvalue"
+
+// configurationFormat is the format whose documents the evaluator resolves. It is the type of the keyvalue format of
+// the module root; the evaluator does not import it, so that the root can offer both factories of the engine.
+const configurationFormat = "keyvalue"
 
 // Factory creates the evaluator; a distribution registers it next to the configuration format's factory.
 type Factory struct{}
@@ -35,7 +38,7 @@ var _ evaluator.Factory = Factory{}
 func (Factory) Type() string { return FactoryType }
 
 // ConfigurationFormat implements evaluator.Factory.
-func (Factory) ConfigurationFormat() string { return keyvalue.Type }
+func (Factory) ConfigurationFormat() string { return configurationFormat }
 
 // Create implements evaluator.Factory from the store a distribution injects.
 func (Factory) Create(s evaluator.Settings) (evaluator.Evaluator, error) {
@@ -134,7 +137,7 @@ func (e *Evaluator) collect(view store.View, req evaluator.Request) []hit {
 		if onlySource != "" && source != onlySource {
 			continue
 		}
-		for _, doc := range view.Documents(keyvalue.Type, source) {
+		for _, doc := range view.Documents(configurationFormat, source) {
 			if named && doc.FlagSet != flagSet {
 				continue
 			}

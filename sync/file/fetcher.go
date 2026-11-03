@@ -144,3 +144,9 @@ func NewSyncProvider(
 func fileWatch(name string) sync.TriggerConfig {
 	return sync.TriggerConfig{Type: name, Config: map[string]any{SettingSignalOnChmod: true}}
 }
+
+// NewFactories returns the factories of the file sync component: the provider and the two fetch triggers it
+// attaches, as a generated main of a distribution calls it.
+func NewFactories() []sync.Factory {
+	return []sync.Factory{Factory{}, FSNotifyTriggerFactory(), FileInfoTriggerFactory()}
+}

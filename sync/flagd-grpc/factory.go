@@ -70,3 +70,7 @@ func (f Factory) CreateStreaming(settings sync.Settings) (sync.StreamingSyncProv
 		DialOptions:           f.DialOptions,
 	}, nil
 }
+
+// NewFactories returns the factories of the flagd gRPC sync component, as a generated main of a distribution calls
+// it.
+func NewFactories() []sync.Factory { return []sync.Factory{Factory{}} }

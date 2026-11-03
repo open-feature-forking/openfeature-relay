@@ -54,3 +54,6 @@ type endpoint struct{ svc *Service }
 // Serve implements service.Endpoint. When ctx ends the server closes its connections at once, the event streams
 // included.
 func (e endpoint) Serve(ctx context.Context) error { return e.svc.Start(ctx) }
+
+// NewFactory returns the factory of the OFREP endpoint, as a generated main of a distribution calls it.
+func NewFactory() service.Factory { return Factory{} }

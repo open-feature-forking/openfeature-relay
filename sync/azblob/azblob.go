@@ -33,6 +33,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/blobfetch"
 )
 
@@ -271,3 +272,6 @@ func (s *store) Read(ctx context.Context) ([]byte, string, error) {
 	}
 	return data, contentType, nil
 }
+
+// NewFactories returns the factories of the azblob sync component, as a generated main of a distribution calls it.
+func NewFactories() []sync.Factory { return []sync.Factory{NewFactory()} }
