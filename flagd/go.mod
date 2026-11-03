@@ -17,7 +17,6 @@ require (
 	github.com/open-feature-forking/openfeature-relay/sync/builder v0.1.0
 	github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc v0.1.0
 	github.com/open-feature-forking/openfeature-relay/telemetry/otel v0.1.0
-	github.com/open-feature/flagd/test/service-example v0.0.0
 	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/client_model v0.6.3
 	github.com/rs/cors v1.11.1
@@ -201,8 +200,6 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.6.0 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
-
-replace github.com/open-feature/flagd/test/service-example => ../test/service-example
 
 replace (
 	github.com/open-feature-forking/openfeature-relay/configformat/flagd => ../configformat/flagd
