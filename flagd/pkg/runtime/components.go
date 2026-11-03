@@ -1,7 +1,6 @@
 package runtime
 
 import (
-
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/distribution"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	flageval "github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation"

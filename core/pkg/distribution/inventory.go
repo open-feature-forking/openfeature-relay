@@ -6,13 +6,13 @@ import "runtime/debug"
 type Group string
 
 const (
-	GroupSync                 Group = "sync_providers"
-	GroupConfigurationFormat  Group = "configuration_formats"
-	GroupEvaluator            Group = "evaluators"
-	GroupServiceEndpoint      Group = "service_endpoints"
-	GroupTelemetry            Group = "telemetry"
-	GroupMiddleware           Group = "middleware"
-	GroupEventSink            Group = "event_sinks"
+	GroupSync                Group = "sync_providers"
+	GroupConfigurationFormat Group = "configuration_formats"
+	GroupEvaluator           Group = "evaluators"
+	GroupServiceEndpoint     Group = "service_endpoints"
+	GroupTelemetry           Group = "telemetry"
+	GroupMiddleware          Group = "middleware"
+	GroupEventSink           Group = "event_sinks"
 )
 
 // ComponentInfo describes one component a distribution contains.
