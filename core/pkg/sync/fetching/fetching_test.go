@@ -691,3 +691,36 @@ func TestRestartedTriggerQueuesAFetch(t *testing.T) {
 	require.Equal(t, flagsV1, r.next(t).FlagData)
 	require.Equal(t, flagsV2, r.next(t).FlagData, "the change made while the trigger was not running is fetched")
 }
+
+func TestLastContactOnUnchangedFetch(t *testing.T) {
+	var fail atomic.Bool
+	fetcher := fetcherFunc(func(_ context.Context, previous string) (sync.FetchResult, error) {
+		if fail.Load() {
+			return sync.FetchResult{}, errors.New("down")
+		}
+		if previous == "v1" {
+			return sync.FetchResult{Unchanged: true}, nil
+		}
+		return result("v1", flagsV1), nil
+	})
+	trigger := newManualTrigger()
+	r := start(t, Options{Fetcher: fetcher, Triggers: []sync.Trigger{trigger}})
+	require.True(t, r.provider.LastContact().IsZero(), "no contact before the first fetch")
+	r.next(t)
+	first := r.provider.LastContact()
+	require.False(t, first.IsZero())
+
+	signal := trigger.signal(t)
+	time.Sleep(5 * time.Millisecond)
+	signal()
+	require.Eventually(t, func() bool { return r.provider.LastContact().After(first) }, timeout, time.Millisecond,
+		"an unchanged fetch is a contact, though it delivers nothing")
+	r.none(t)
+
+	second := r.provider.LastContact()
+	fail.Store(true)
+	time.Sleep(5 * time.Millisecond)
+	signal()
+	time.Sleep(quiet)
+	require.Equal(t, second, r.provider.LastContact(), "a failed fetch is no contact")
+}
