@@ -33,84 +33,59 @@ func TestTriggerContract(t *testing.T) {
 	}
 }
 
-// TestClosedWatcherStopsTheProvider pins that a file watch that closes its channels stops a fetching sync provider
-// that is set to exit on a trigger error, as a closed watcher stopped the file sync provider.
-func TestClosedWatcherStopsTheProvider(t *testing.T) {
+// TestClosedWatcherDoesNotStopTheProvider pins that a file watch that closes its channels does not stop the fetching
+// sync provider, and is run again with a new watcher.
+func TestClosedWatcherDoesNotStopTheProvider(t *testing.T) {
 	tests := []struct {
-		name    string
-		close   func(w *closableWatcher)
-		wantErr string
+		name  string
+		close func(w *closableWatcher)
 	}{
-		{"a closed event channel", func(w *closableWatcher) { close(w.events) }, "filepath notifier closed"},
-		{"a closed error channel", func(w *closableWatcher) { close(w.errors) }, "watcher error"},
+		{"a closed event channel", func(w *closableWatcher) { close(w.events) }},
+		{"a closed error channel", func(w *closableWatcher) { close(w.errors) }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "flags.json")
 			replaceFile(t, path, flagsA, 0o600)
 			log := logger.NewLogger(nil, false)
-			w := newClosableWatcher()
+			watchers := make(chan *closableWatcher, 4)
 			trigger := &watchTrigger{
 				path: path, logger: log,
-				newWatcher: func(context.Context) (Watcher, error) { return w, nil },
+				newWatcher: func(context.Context) (Watcher, error) {
+					w := newClosableWatcher()
+					watchers <- w
+					return w, nil
+				},
 			}
 			provider := fetching.New(fetching.Options{
 				Fetcher: NewFetcher(path), Triggers: []sync.Trigger{trigger}, Logger: log, Source: path, SourceType: sync.SourceFile,
-				Legacy: fetching.Legacy{ExitOnTriggerError: true},
+				Interval: 5 * time.Millisecond,
 			})
-
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			deliveries := make(chan sync.DataSync, 4)
 			done := make(chan error, 1)
-			go func() { done <- provider.Sync(context.Background(), deliveries) }()
+			go func() { done <- provider.Sync(ctx, deliveries) }()
 
 			select {
 			case <-deliveries:
 			case <-time.After(5 * time.Second):
 				t.Fatal("no delivery")
 			}
-			tt.close(w)
+			tt.close(<-watchers)
 			select {
+			case <-watchers: // the trigger runs again with a new watcher
 			case err := <-done:
-				require.EqualError(t, err, tt.wantErr)
+				t.Fatalf("the provider stopped with %v", err)
 			case <-time.After(5 * time.Second):
-				t.Fatal("the provider did not stop")
+				t.Fatal("the trigger was not run again")
 			}
+			cancel()
+			require.NoError(t, <-done)
 		})
 	}
 }
 
-func TestClosedWatcherIsRunAgain(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "flags.json")
-	replaceFile(t, path, flagsA, 0o600)
-	log := logger.NewLogger(nil, false)
-	runs := make(chan *closableWatcher, 4)
-	trigger := &watchTrigger{
-		path: path, logger: log,
-		newWatcher: func(context.Context) (Watcher, error) {
-			w := newClosableWatcher()
-			runs <- w
-			return w, nil
-		},
-	}
-	provider := fetching.New(fetching.Options{
-		Fetcher: NewFetcher(path), Triggers: []sync.Trigger{trigger}, Logger: log, Source: path, SourceType: sync.SourceFile,
-		Interval: 5 * time.Millisecond,
-	})
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	done := make(chan error, 1)
-	go func() { done <- provider.Sync(ctx, make(chan sync.DataSync, 8)) }()
-
-	first := <-runs
-	close(first.events)
-	select {
-	case <-runs: // the trigger runs again with a new watcher
-	case <-time.After(5 * time.Second):
-		t.Fatal("the trigger was not run again")
-	}
-	cancel()
-	require.NoError(t, <-done)
-}
 
 // closableWatcher is a Watcher whose channels the test closes.
 type closableWatcher struct {

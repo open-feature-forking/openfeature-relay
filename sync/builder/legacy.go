@@ -23,7 +23,7 @@ func legacyFor(f sync.Factory) fetching.Legacy {
 	case file.Provider:
 		return fetching.Legacy{
 			NoDeadline: true, IgnoreIncremental: true,
-			CountOnlyRead: true, ExitOnTriggerError: true,
+			CountOnlyRead: true,
 		}
 	}
 	return fetching.Legacy{}
