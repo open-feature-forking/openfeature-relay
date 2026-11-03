@@ -66,6 +66,7 @@ TEST_TARGETS += test-evaluator-testkit
 TEST_TARGETS += test-inprocess-example
 TEST_TARGETS += test-sync-example
 TEST_TARGETS += test-telemetry-example
+TEST_TARGETS += test-eventsink-example
 test: $(TEST_TARGETS)
 test-core: test-modules
 test-modules:
@@ -78,6 +79,8 @@ test-sync-example:
 	go test -race -short -count=1 ./test/sync-example/...
 test-telemetry-example:
 	go test -race -short -count=1 ./test/telemetry-example/...
+test-eventsink-example:
+	go test -race -short -count=1 ./test/eventsink-example/...
 test-configformat-example:
 	go test -race -short -count=1 ./test/configformat-example/...
 test-service-example:

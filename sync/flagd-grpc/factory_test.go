@@ -152,3 +152,40 @@ func TestFactoryInjectsWhatTheDistributionProvides(t *testing.T) {
 type receivedRecorder struct{}
 
 func (*receivedRecorder) RecordFlagConfigReceived(context.Context, string, string, string) {}
+
+func TestLastContactWhileStreamOpen(t *testing.T) {
+	server := newPushServer()
+	server.start()
+	t.Cleanup(server.stop)
+
+	provider, err := Factory{DialOptions: []grpc.DialOption{
+		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
+			return server.listener.Load().DialContext(ctx)
+		}),
+	}}.CreateStreaming(sync.Settings{
+		Source: sync.SourceConfig{URI: "passthrough:///flagd", Provider: Provider}, Logger: logger.NewLogger(nil, false),
+	})
+	require.NoError(t, err)
+	reporter, ok := provider.(sync.ContactReporter)
+	require.True(t, ok)
+	require.True(t, reporter.LastContact().IsZero(), "no contact before the first stream")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	require.NoError(t, provider.Init(ctx))
+	deliveries := make(chan sync.DataSync, 4)
+	go func() { _ = provider.Sync(ctx, deliveries) }()
+	<-deliveries
+
+	first := reporter.LastContact()
+	time.Sleep(20 * time.Millisecond)
+	require.True(t, reporter.LastContact().After(first), "an open stream is in contact now")
+
+	server.stop()
+	require.Eventually(t, func() bool {
+		a := reporter.LastContact()
+		time.Sleep(10 * time.Millisecond)
+		return a.Equal(reporter.LastContact())
+	}, 5*time.Second, 10*time.Millisecond, "once the stream is lost the time stands still")
+	require.False(t, reporter.LastContact().IsZero())
+}
