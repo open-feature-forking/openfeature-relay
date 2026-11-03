@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/fetching"
@@ -110,3 +111,20 @@ func TestClosedWatcherIsRunAgain(t *testing.T) {
 	cancel()
 	require.NoError(t, <-done)
 }
+
+// closableWatcher is a Watcher whose channels the test closes.
+type closableWatcher struct {
+	events chan fsnotify.Event
+	errors chan error
+}
+
+func newClosableWatcher() *closableWatcher {
+	return &closableWatcher{events: make(chan fsnotify.Event), errors: make(chan error)}
+}
+
+func (w *closableWatcher) Close() error                { return nil }
+func (w *closableWatcher) Add(string) error            { return nil }
+func (w *closableWatcher) Remove(string) error         { return nil }
+func (w *closableWatcher) WatchList() []string         { return nil }
+func (w *closableWatcher) Events() chan fsnotify.Event { return w.events }
+func (w *closableWatcher) Errors() chan error          { return w.errors }
