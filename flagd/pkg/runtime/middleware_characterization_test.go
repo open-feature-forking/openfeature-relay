@@ -163,11 +163,15 @@ func TestMiddlewareChainCharacterization(t *testing.T) {
 				} else {
 					require.Error(t, err, "a prior-knowledge HTTP/2 call is refused")
 				}
+				// the metrics are recorded once the handler returns, which may be after the client has its response
 				callStatuses := recordedStatuses(t, tel.Metrics)
-				before := total(callStatuses)
 				if tt.h2c {
-					require.Equal(t, uint64(1), before, "the HTTP server metrics record the served call")
+					require.Eventually(t, func() bool {
+						callStatuses = recordedStatuses(t, tel.Metrics)
+						return total(callStatuses) == 1
+					}, 5*time.Second, 10*time.Millisecond, "the HTTP server metrics record the served call")
 				}
+				before := total(callStatuses)
 
 				// CORS answers a preflight before the HTTP server metrics see it
 				preflight, err := http.NewRequest(http.MethodOptions, url, nil)
@@ -186,13 +190,13 @@ func TestMiddlewareChainCharacterization(t *testing.T) {
 				post.Header.Set("Content-Type", "application/json")
 				resp, err = do(client, post)
 				require.NoError(t, err)
-				statuses := recordedStatuses(t, tel.Metrics)
 				require.Equal(t, tt.oversizedStatus, resp.StatusCode, "the response to a body above the limit")
 				if tt.oversizedRecorded == "" {
-					require.Equal(t, before, total(statuses), "the HTTP server metrics do not record it")
+					require.Equal(t, before, total(recordedStatuses(t, tel.Metrics)), "the HTTP server metrics do not record it")
 				} else {
-					require.Equal(t, uint64(1), statuses[tt.oversizedRecorded]-callStatuses[tt.oversizedRecorded],
-						"the HTTP server metrics record it under its status")
+					require.Eventually(t, func() bool {
+						return recordedStatuses(t, tel.Metrics)[tt.oversizedRecorded]-callStatuses[tt.oversizedRecorded] == 1
+					}, 5*time.Second, 10*time.Millisecond, "the HTTP server metrics record it under its status")
 				}
 			})
 		}
