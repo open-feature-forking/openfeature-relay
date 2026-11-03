@@ -26,7 +26,7 @@ def bench(rows):
 
 class CompareAllocs(unittest.TestCase):
     def test_noise_of_the_same_code_passes(self):
-        # #97: the code is identical, and test_a allocates two more in every run of the head than in the base
+        # #97: the code is identical, and test_a allocates one more in every run of the head than in the base (203 against 204 at 1000 iterations)
         code, text = compare(DATA / "bench-base.txt", DATA / "bench-head-noise.txt")
         self.assertEqual(code, 0, text)
         self.assertIn("Within noise: flagd: BenchmarkFractionalEvaluation/test_a@faas.com", text)
@@ -55,11 +55,11 @@ class CompareAllocs(unittest.TestCase):
         cases = {
             # (base, head): exit code
             (99, 100): 1,  # under 100 allocs/op any rise fails
-            (100, 102): 0,  # 100 or more: max(2, 1%) = 2
-            (100, 103): 1,
-            (400, 404): 0,  # 1% of 400
-            (400, 405): 1,
-            (368000, 368500): 0,
+            (100, 101): 0,  # 100 or more: max(1, 0.1%) = 1
+            (100, 102): 1,
+            (2000, 2002): 0,  # 0.1% of 2000
+            (2000, 2003): 1,
+            (368000, 368300): 0,
         }
         with tempfile.TemporaryDirectory() as tmp:
             for (base, head), want in cases.items():

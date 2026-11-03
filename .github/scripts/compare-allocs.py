@@ -5,14 +5,16 @@
 
 Only allocs/op is compared. ns/op depends on the runner and is ignored. A benchmark that ran several times has a
 range of allocs/op. It fails when the lowest allocs/op of the head is above the highest of the base and, for a
-benchmark that allocates 100 or more times per operation, above the lowest of the base by more than max(2, 1%).
+benchmark that allocates 100 or more times per operation, above the lowest of the base by more than
+max(1, 0.1%).
 
-Why a tolerance on the large benchmarks only: a benchmark runs a fixed number of iterations, so the allocations that
-happen once per run (a pool that fills, a map that grows, a timer) are spread over those iterations and add up to a
-fraction of an allocation per operation that rounds either way. That is a handful of allocations in absolute terms:
-about 1 on a benchmark of 380 allocs/op on one machine, 2 across the machines of two jobs of the same pull request.
-A hot path of under 100 allocs/op shows one extra allocation as a change of its own, so it gets no tolerance. A rise
-that stays inside the tolerance or the base's range is listed as noise. A benchmark that exists in only one of the outputs
+Why a tolerance on the large benchmarks only: the allocations that happen once per run (a pool that fills, a map
+that grows, a timer) are spread over the iterations of the run. run-benchmarks.sh runs 1000 iterations, which brings
+that share below one allocation per operation, and what is left is a rounding of one: 203 against 204 on
+BenchmarkFractionalEvaluation, 180 against 181 on the flag evaluation endpoint, with identical code. At 100 iterations
+the same benchmarks moved by 2 to 6 (381 against 383), which is why the iteration count is raised and the tolerance is
+not. A hot path of under 100 allocs/op shows one extra allocation as a change of its own, so it gets no tolerance. A
+rise that stays inside the tolerance or the base's range is listed as noise. A benchmark that exists in only one of the outputs
 is listed and never fails the comparison. A table of the benchmarks whose allocs/op changed, the packages that were
 benchmarked and the benchmarks within noise go to stdout and, when GITHUB_STEP_SUMMARY is set, to the job summary.
 """
@@ -42,7 +44,7 @@ def parse(path):
 
 def tolerance(base_lowest):
     """The rise in allocs/op that is noise for a benchmark whose base allocates base_lowest at best."""
-    return 0 if base_lowest < 100 else max(2, base_lowest // 100)
+    return 0 if base_lowest < 100 else max(1, base_lowest // 1000)
 
 
 def show(values):

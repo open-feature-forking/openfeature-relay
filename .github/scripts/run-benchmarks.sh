@@ -5,14 +5,16 @@
 #
 # The benchmarks run on the library modules the Makefile of <dir> names (GO_LIB_MODULE_DIRS) and on the packages of
 # the flagd and flagd-proxy modules, whose service endpoints have benchmarks of their own (NFR-001, NFR-013). Each runs
-# a fixed number of iterations, several times, so that the run stays short and the spread of a benchmark shows;
+# a fixed number of iterations, several times, so that the spread of a benchmark shows. 1000 iterations amortize the
+# one-time allocations of a run to under one per operation (at 100 the large benchmarks moved by up to 6 allocs/op); a run
+# of the whole set takes about 5 minutes;
 # compare-allocs.py reads allocs/op, which does not depend on the machine, and ignores ns/op. The tests themselves
 # are skipped.
 set -euo pipefail
 
 dir=${1:?usage: run-benchmarks.sh <dir> <out>}
 out=$(realpath -m "${2:?usage: run-benchmarks.sh <dir> <out>}")
-benchtime=${BENCHTIME:-100x}
+benchtime=${BENCHTIME:-1000x}
 count=${BENCHCOUNT:-3}
 
 cd "$dir"

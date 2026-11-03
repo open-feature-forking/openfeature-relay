@@ -2,16 +2,16 @@ goos: linux
 goarch: amd64
 pkg: github.com/open-feature-forking/openfeature-relay/evaluator/flagd
 cpu: AMD EPYC 7763 64-Core Processor
-BenchmarkFractionalEvaluation/test_a@faas.com-4   	     100	     11000 ns/op	    7649 B/op	     381 allocs/op
-BenchmarkFractionalEvaluation/test_a@faas.com-4   	     100	     11000 ns/op	    7649 B/op	     382 allocs/op
-BenchmarkFractionalEvaluation/test_a@faas.com-4   	     100	     11000 ns/op	    7649 B/op	     381 allocs/op
-BenchmarkFractionalEvaluation/test_b@faas.com-4   	     100	     11000 ns/op	    7649 B/op	     381 allocs/op
-BenchmarkFractionalEvaluation/test_b@faas.com-4   	     100	     11000 ns/op	    7649 B/op	     381 allocs/op
-BenchmarkFractionalEvaluation/test_b@faas.com-4   	     100	     11000 ns/op	    7649 B/op	     382 allocs/op
-BenchmarkResolveAllValues-4   	     100	     11000 ns/op	    7649 B/op	     375 allocs/op
-BenchmarkResolveAllValues-4   	     100	     11000 ns/op	    7649 B/op	     375 allocs/op
-BenchmarkResolveAllValues-4   	     100	     11000 ns/op	    7649 B/op	     376 allocs/op
-BenchmarkResolveBooleanValue/test_staticBoolFlag-4   	     100	     11000 ns/op	    7649 B/op	     22 allocs/op
-BenchmarkResolveBooleanValue/test_staticBoolFlag-4   	     100	     11000 ns/op	    7649 B/op	     22 allocs/op
-BenchmarkResolveBooleanValue/test_staticBoolFlag-4   	     100	     11000 ns/op	    7649 B/op	     22 allocs/op
+BenchmarkFractionalEvaluation/test_a@faas.com-16   	    1000	     11000 ns/op	    7649 B/op	     203 allocs/op
+BenchmarkFractionalEvaluation/test_a@faas.com-16   	    1000	     11000 ns/op	    7649 B/op	     203 allocs/op
+BenchmarkFractionalEvaluation/test_a@faas.com-16   	    1000	     11000 ns/op	    7649 B/op	     203 allocs/op
+BenchmarkFractionalEvaluation/test_b@faas.com-16   	    1000	     11000 ns/op	    7649 B/op	     203 allocs/op
+BenchmarkFractionalEvaluation/test_b@faas.com-16   	    1000	     11000 ns/op	    7649 B/op	     203 allocs/op
+BenchmarkFractionalEvaluation/test_b@faas.com-16   	    1000	     11000 ns/op	    7649 B/op	     204 allocs/op
+BenchmarkResolveAllValues-16   	    1000	     11000 ns/op	    7649 B/op	     375 allocs/op
+BenchmarkResolveAllValues-16   	    1000	     11000 ns/op	    7649 B/op	     375 allocs/op
+BenchmarkResolveAllValues-16   	    1000	     11000 ns/op	    7649 B/op	     376 allocs/op
+BenchmarkResolveBooleanValue/test_staticBoolFlag-16   	    1000	     11000 ns/op	    7649 B/op	     22 allocs/op
+BenchmarkResolveBooleanValue/test_staticBoolFlag-16   	    1000	     11000 ns/op	    7649 B/op	     22 allocs/op
+BenchmarkResolveBooleanValue/test_staticBoolFlag-16   	    1000	     11000 ns/op	    7649 B/op	     22 allocs/op
 PASS
