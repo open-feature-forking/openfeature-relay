@@ -43,6 +43,7 @@ type Components struct {
 	ConfigurationFormats []configformat.Factory
 	Evaluators           []evaluator.Factory
 	Endpoints            []service.Factory
+	Telemetry            interface{ Type() string }
 }
 
 type Info struct{ Name, Version, Commit, Date string }
@@ -54,6 +55,7 @@ const (
 	GroupConfigurationFormat Group = "configuration_formats"
 	GroupEvaluator           Group = "evaluators"
 	GroupServiceEndpoint     Group = "service_endpoints"
+	GroupTelemetry           Group = "telemetry"
 )
 
 type ComponentInfo struct {
