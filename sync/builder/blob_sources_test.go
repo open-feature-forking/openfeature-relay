@@ -5,7 +5,6 @@ import (
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	"github.com/open-feature-forking/openfeature-relay/sync/blob"
 	"github.com/stretchr/testify/require"
 )
 
@@ -104,13 +103,13 @@ func TestBlobSourcesCharacterization(t *testing.T) {
 			require.Len(t, syncs, 1)
 			res, err := NewSyncBuilder().Resolve(tt.config, logger.NewLogger(nil, false))
 			require.NoError(t, err)
-			fetcher, ok := res.Fetcher.(*blob.Fetcher)
+			fetcher, ok := res.Fetcher.(bucketObject)
 			require.True(t, ok, "want a blob fetcher, got %T", res.Fetcher)
 			require.Equal(t, tt.wantBucket, fetcher.Bucket())
 			require.Equal(t, tt.wantObject, fetcher.Object())
 			require.Equal(t, tt.wantInterval, res.Interval)
 			require.Equal(t, []sync.TriggerConfig{{Type: "poller"}}, res.Triggers)
-			require.True(t, fetcher.Mux().ValidBucketScheme(tt.wantScheme), "driver for %q is registered", tt.wantScheme)
+			require.Contains(t, res.Factory.(sync.SchemeFactory).Schemes(), tt.wantScheme+"://")
 		})
 	}
 }

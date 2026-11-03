@@ -88,13 +88,14 @@ flagd start --uri gs://my-bucket/my-flags.json
 
 In this example, `gs://my-bucket/my-flags.json` is expected to be a valid GCS URI accessible by the flagd
 (either by being public or together with application default credentials).
+The URI takes these options in its query: `anonymous=true` reads without credentials, `access_id=-` does the same, and `private_key_path` must name a readable file. `STORAGE_EMULATOR_HOST` points the client at an emulator.
 The polling interval can be configured.
 See [sync source](../reference/sync-configuration.md#source-configuration) configuration for details.
 
 ### Azure Blob sync
 
 The Azure Blob sync provider fetches flags from an Azure Blob Storage blob and periodically polls the blob for the flag definition updates.
-It uses [environment variables](https://pkg.go.dev/gocloud.dev/blob/azureblob#hdr-URLs) to set the Storage Account name and to
+It uses environment variables (`AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_KEY`, `AZURE_STORAGE_SAS_TOKEN`, `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_STORAGEBLOB_CONNECTIONSTRING`, `AZURE_STORAGE_DOMAIN`, `AZURE_STORAGE_PROTOCOL`, `AZURE_STORAGE_IS_CDN` and `AZURE_STORAGE_IS_LOCAL_EMULATOR`) to set the Storage Account name and to
 authorize the calls to Azure Blob Storage.
 
 ```shell
@@ -120,6 +121,11 @@ In this example, `s3://my-bucket/my-flags.json` is expected to be a valid URI ac
 (either by being public or together with the appropriate credentials read from a file or via the environment as described in the AWS docs linked above).
 The polling interval is configurable.
 See [sync source](../reference/sync-configuration.md#source-configuration) for details.
+
+The URI takes these options in its query: `region`, `endpoint`, `profile`, `use_path_style` (or `s3ForcePathStyle`), `disable_https`, `dualstack`, `fips`, `accelerate`, `anonymous`, `hostname_immutable`, `rate_limiter_capacity` and `awssdk=v2`.
+The provider uses the AWS SDK for Go v2 only, so `awssdk=v1` stops flagd at start-up.
+
+The options of a blob source and its Azure account and credential variables are checked when flagd starts, so a source that cannot be configured stops flagd at start-up.
 
 ## Merging
 
