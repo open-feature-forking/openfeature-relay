@@ -130,15 +130,30 @@ type tracer struct{ t oteltrace.Tracer }
 
 func (t tracer) Start(ctx context.Context, name string, opts ...coretel.SpanOption) (context.Context, coretel.Span) {
 	cfg := coretel.NewSpanConfig(opts...)
-	if len(cfg.Attributes) == 0 {
-		ctx, s := t.t.Start(ctx, name, oteltrace.WithSpanKind(spanKind(cfg.Kind)))
-		return ctx, span{s}
+	st := startPool.Get().(*start)
+	st.opts = append(st.opts[:0], oteltrace.WithSpanKind(spanKind(cfg.Kind)))
+	if len(cfg.Attributes) > 0 {
+		st.kvs = convertInto(st.kvs[:0], cfg.Attributes)
+		st.opts = append(st.opts, oteltrace.WithAttributes(st.kvs...))
 	}
-	kvs := converted(cfg.Attributes)
-	ctx, s := t.t.Start(ctx, name, oteltrace.WithSpanKind(spanKind(cfg.Kind)), oteltrace.WithAttributes(*kvs...))
-	release(kvs)
+	ctx, s := t.t.Start(ctx, name, st.opts...)
+	clear(st.kvs)
+	clear(st.opts)
+	st.kvs, st.opts = st.kvs[:0], st.opts[:0]
+	startPool.Put(st)
 	return ctx, span{s}
 }
+
+// start is a pooled buffer for the options of one span start. The SDK reads the options and copies the attributes
+// while the span starts, so the buffer is reused once Start has returned.
+type start struct {
+	opts []oteltrace.SpanStartOption
+	kvs  []attribute.KeyValue
+}
+
+var startPool = sync.Pool{New: func() any {
+	return &start{opts: make([]oteltrace.SpanStartOption, 0, 2), kvs: make([]attribute.KeyValue, 0, 8)}
+}}
 
 func spanKind(k coretel.SpanKind) oteltrace.SpanKind {
 	switch k {
@@ -217,37 +232,78 @@ func (m meter) Int64Gauge(name string, opts ...coretel.InstrumentOption) coretel
 type int64Counter struct{ c metric.Int64Counter }
 
 func (c int64Counter) Add(ctx context.Context, incr int64, attrs ...coretel.Attribute) {
-	kvs := converted(attrs)
-	c.c.Add(ctx, incr, metric.WithAttributes(*kvs...))
-	release(kvs)
+	m := newMeasurement(attrs)
+	c.c.Add(ctx, incr, m.addOptions()...)
+	m.release()
 }
 
 type int64Gauge struct{ g metric.Int64Gauge }
 
 func (g int64Gauge) Record(ctx context.Context, value int64, attrs ...coretel.Attribute) {
-	kvs := converted(attrs)
-	g.g.Record(ctx, value, metric.WithAttributes(*kvs...))
-	release(kvs)
+	m := newMeasurement(attrs)
+	g.g.Record(ctx, value, m.recordOptions()...)
+	m.release()
 }
 
 type int64UpDownCounter struct{ c metric.Int64UpDownCounter }
 
 func (c int64UpDownCounter) Add(ctx context.Context, incr int64, attrs ...coretel.Attribute) {
-	kvs := converted(attrs)
-	c.c.Add(ctx, incr, metric.WithAttributes(*kvs...))
-	release(kvs)
+	m := newMeasurement(attrs)
+	c.c.Add(ctx, incr, m.addOptions()...)
+	m.release()
 }
 
 type float64Histogram struct{ h metric.Float64Histogram }
 
 func (h float64Histogram) Record(ctx context.Context, value float64, attrs ...coretel.Attribute) {
-	kvs := converted(attrs)
-	h.h.Record(ctx, value, metric.WithAttributes(*kvs...))
-	release(kvs)
+	m := newMeasurement(attrs)
+	h.h.Record(ctx, value, m.recordOptions()...)
+	m.release()
 }
 
-// kvPool holds the buffers of converted attributes. The SDK copies the attributes of a measurement and of a span,
-// so a buffer is reused once the call that received it returns.
+// measurement is a pooled buffer for one measurement: its converted attributes and the one-element option slice
+// the SDK's variadic parameter takes. The SDK copies the attributes and keeps neither, so the buffer is reused
+// once the call that received it returns.
+type measurement struct {
+	kvs    []attribute.KeyValue
+	add    []metric.AddOption
+	record []metric.RecordOption
+}
+
+var measurementPool = sync.Pool{New: func() any {
+	return &measurement{
+		kvs:    make([]attribute.KeyValue, 0, 8),
+		add:    make([]metric.AddOption, 1),
+		record: make([]metric.RecordOption, 1),
+	}
+}}
+
+// newMeasurement returns a pooled buffer holding attrs as OpenTelemetry attributes; release returns it.
+func newMeasurement(attrs []coretel.Attribute) *measurement {
+	m := measurementPool.Get().(*measurement)
+	m.kvs = convertInto(m.kvs[:0], attrs)
+	return m
+}
+
+func (m *measurement) addOptions() []metric.AddOption {
+	m.add[0] = metric.WithAttributes(m.kvs...)
+	return m.add
+}
+
+func (m *measurement) recordOptions() []metric.RecordOption {
+	m.record[0] = metric.WithAttributes(m.kvs...)
+	return m.record
+}
+
+func (m *measurement) release() {
+	clear(m.kvs)
+	m.kvs = m.kvs[:0]
+	m.add[0], m.record[0] = nil, nil
+	measurementPool.Put(m)
+}
+
+// kvPool holds the buffers of the converted attributes of a span. The SDK copies them, so a buffer is reused once
+// the call that received it returns.
 var kvPool = sync.Pool{New: func() any {
 	kvs := make([]attribute.KeyValue, 0, 8)
 	return &kvs
