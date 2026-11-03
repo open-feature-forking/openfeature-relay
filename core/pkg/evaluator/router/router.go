@@ -1,0 +1,230 @@
+// Package router implements evaluator.Evaluator over several evaluators, one per configuration format. It
+// finds the evaluator that owns a flag from the documents the formats stored and hands it the request.
+package router
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"slices"
+	"sort"
+
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
+)
+
+// Route sends the flags of one configuration format to an evaluator.
+type Route struct {
+	Format    string
+	Evaluator evaluator.Evaluator
+}
+
+// Router is an evaluator.Evaluator over the routes it was built with.
+type Router struct {
+	store  *store.Store
+	routes []Route
+}
+
+var _ evaluator.Evaluator = (*Router)(nil)
+
+// New returns a router over routes. A router with one route hands every request to it and needs no store;
+// otherwise the store holds the documents that decide where a flag goes. Each format has one route.
+func New(st *store.Store, routes ...Route) (*Router, error) {
+	if len(routes) == 0 {
+		return nil, errors.New("a router needs at least one evaluator")
+	}
+	seen := make(map[string]struct{}, len(routes))
+	for _, route := range routes {
+		if route.Evaluator == nil || route.Format == "" {
+			return nil, errors.New("a route needs a configuration format and an evaluator")
+		}
+		if _, dup := seen[route.Format]; dup {
+			return nil, fmt.Errorf("two evaluators for the configuration format %q", route.Format)
+		}
+		seen[route.Format] = struct{}{}
+	}
+	if len(routes) > 1 && st == nil {
+		return nil, errors.New("a router over several evaluators needs a store")
+	}
+	return &Router{store: st, routes: routes}, nil
+}
+
+// entry is a flag a document holds.
+type entry struct {
+	flagSet  string
+	key      string
+	priority int
+	route    int
+}
+
+// Evaluate implements evaluator.Evaluator.
+//
+// With one evaluator the request goes to it unchanged. Otherwise the router reads the documents the selector
+// names through one view and, for each (flag set, key), picks the evaluator of the document from the
+// highest-priority source. A bulk request gets one result for each pick; a single key goes to the evaluator of
+// the highest-priority source, which decides between the flag sets of that source as it does without a router.
+// A key no document holds is FLAG_NOT_FOUND.
+func (r *Router) Evaluate(ctx context.Context, req evaluator.Request, dst []evaluator.Result) ([]evaluator.Result, model.Metadata, error) {
+	if len(r.routes) == 1 {
+		return r.routes[0].Evaluator.Evaluate(ctx, req, dst)
+	}
+
+	view := r.store.View()
+	wanted := wantedKeys(req)
+	entries := r.collect(view, req.Selector, wanted)
+	meta := req.Selector.ToMetadata()
+
+	if !req.Bulk && req.FlagKeys == nil {
+		return r.single(ctx, req, entries, dst, meta)
+	}
+
+	type pair struct{ flagSet, key string }
+	winners := map[pair]entry{}
+	for _, e := range entries {
+		p := pair{e.flagSet, e.key}
+		if best, ok := winners[p]; !ok || e.priority > best.priority {
+			winners[p] = e
+		}
+	}
+
+	keysOf := make([][]string, len(r.routes))
+	for p, e := range winners {
+		if !contains(keysOf[e.route], p.key) {
+			keysOf[e.route] = append(keysOf[e.route], p.key)
+		}
+	}
+
+	var results []evaluator.Result
+	for i, route := range r.routes {
+		if len(keysOf[i]) == 0 {
+			continue
+		}
+		sort.Strings(keysOf[i])
+		sub := req
+		sub.FlagKeys, sub.FlagKey = keysOf[i], ""
+		out, _, err := route.Evaluator.Evaluate(ctx, sub, nil)
+		if err != nil {
+			for _, key := range keysOf[i] {
+				results = append(results, evaluator.Result{
+					FlagKey: key, Reason: model.ErrorReason, ErrorCode: model.GeneralErrorCode,
+					ErrorMessage: model.GetErrorMessage(model.GeneralErrorCode), Metadata: meta,
+				})
+			}
+			continue
+		}
+		for _, res := range out {
+			// an evaluator answers for every flag set holding a key, including those another format won
+			flagSet, _ := res.Metadata["flagSetId"].(string)
+			if w, ok := winners[pair{flagSet, res.FlagKey}]; ok && w.route != i {
+				continue
+			}
+			results = append(results, res)
+		}
+	}
+
+	if req.FlagKeys != nil && !req.Bulk {
+		// an explicit list answers for every key it names
+		for _, key := range req.FlagKeys {
+			if !hasResult(results, key) {
+				results = append(results, notFound(key, meta))
+			}
+		}
+	}
+
+	sort.SliceStable(results, func(a, b int) bool {
+		if !req.Bulk {
+			return slices.Index(req.FlagKeys, results[a].FlagKey) < slices.Index(req.FlagKeys, results[b].FlagKey)
+		}
+		fa, _ := results[a].Metadata["flagSetId"].(string)
+		fb, _ := results[b].Metadata["flagSetId"].(string)
+		if fa != fb {
+			return fa < fb
+		}
+		return results[a].FlagKey < results[b].FlagKey
+	})
+	return append(dst, results...), meta, nil
+}
+
+func (r *Router) single(
+	ctx context.Context, req evaluator.Request, entries []entry, dst []evaluator.Result, meta model.Metadata,
+) ([]evaluator.Result, model.Metadata, error) {
+	best := -1
+	for i, e := range entries {
+		if best == -1 || e.priority > entries[best].priority {
+			best = i
+		}
+	}
+	if best == -1 {
+		return append(dst, notFound(req.FlagKey, meta)), meta, nil
+	}
+	return r.routes[entries[best].route].Evaluator.Evaluate(ctx, req, dst)
+}
+
+// collect lists the flags the documents of all routes hold, restricted by the selector and the wanted keys.
+func (r *Router) collect(view store.View, selector store.Selector, wanted map[string]struct{}) []entry {
+	flagSet, flagSetNamed := selector.DocumentFlagSet()
+	onlySource := selector.Source()
+
+	var entries []entry
+	for priority, source := range r.store.Sources() {
+		if onlySource != "" && source != onlySource {
+			continue
+		}
+		for i, route := range r.routes {
+			for _, doc := range view.Documents(route.Format, source) {
+				if flagSetNamed && doc.FlagSet != flagSet {
+					continue
+				}
+				for _, key := range doc.FlagKeys {
+					if wanted != nil {
+						if _, ok := wanted[key]; !ok {
+							continue
+						}
+					}
+					entries = append(entries, entry{flagSet: doc.FlagSet, key: key, priority: priority, route: i})
+				}
+			}
+		}
+	}
+	return entries
+}
+
+func wantedKeys(req evaluator.Request) map[string]struct{} {
+	if req.Bulk && req.FlagKeys == nil {
+		return nil
+	}
+	if req.FlagKeys == nil {
+		return map[string]struct{}{req.FlagKey: {}}
+	}
+	wanted := make(map[string]struct{}, len(req.FlagKeys))
+	for _, key := range req.FlagKeys {
+		wanted[key] = struct{}{}
+	}
+	return wanted
+}
+
+func notFound(key string, meta model.Metadata) evaluator.Result {
+	return evaluator.Result{
+		FlagKey: key, Reason: model.ErrorReason, ErrorCode: model.FlagNotFoundErrorCode,
+		ErrorMessage: model.GetErrorMessage(model.FlagNotFoundErrorCode), Metadata: meta,
+	}
+}
+
+func contains(keys []string, key string) bool {
+	for _, k := range keys {
+		if k == key {
+			return true
+		}
+	}
+	return false
+}
+
+func hasResult(results []evaluator.Result, key string) bool {
+	for _, res := range results {
+		if res.FlagKey == key {
+			return true
+		}
+	}
+	return false
+}

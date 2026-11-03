@@ -6,6 +6,7 @@ github.com/open-feature-forking/openfeature-relay/core/pkg/configformat/formatte
 github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator
 github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator/evaluatortest
 github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator/mock
+github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator/router
 github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator/typed
 github.com/open-feature-forking/openfeature-relay/core/pkg/fips
 github.com/open-feature-forking/openfeature-relay/core/pkg/logger
