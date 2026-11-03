@@ -62,18 +62,33 @@ func TestEffectiveSelector(t *testing.T) {
 }
 
 func TestBoundSelector(t *testing.T) {
-	_, ok := BoundSelector(context.Background())
-	require.False(t, ok)
+	_, bound, err := BoundSelector(context.Background())
+	require.NoError(t, err)
+	require.False(t, bound)
 
-	selector, ok := BoundSelector(BindSelector(context.Background(), "source=s"))
-	require.True(t, ok)
+	selector, bound, err := BoundSelector(BindSelector(context.Background(), "source=s"))
+	require.NoError(t, err)
+	require.True(t, bound)
 	require.Equal(t, "s", selector.Source())
 
-	_, ok = BoundSelector(BindSelector(context.Background(), "colour=red"))
-	require.False(t, ok, "an invalid expression binds nothing")
-
-	rebound, _ := BoundSelector(BindSelector(BindSelector(context.Background(), "source=a"), "source=b"))
+	rebound, _, _ := BoundSelector(BindSelector(BindSelector(context.Background(), "source=a"), "source=b"))
 	require.Equal(t, "b", rebound.Source(), "the inner middleware's binding wins")
+}
+
+// TestInvalidBindingFailsClosed pins that a binding that cannot be parsed is an error, not the absence of a
+// binding, which would serve every flag.
+func TestInvalidBindingFailsClosed(t *testing.T) {
+	ctx := BindSelector(context.Background(), "colour=red")
+
+	selector, bound, err := BoundSelector(ctx)
+	require.True(t, bound, "a binding exists")
+	require.ErrorContains(t, err, "invalid bound selector")
+	require.True(t, selector.IsEmpty())
+
+	_, err = EffectiveSelector(ctx, "")
+	require.ErrorContains(t, err, "invalid bound selector")
+	_, err = EffectiveSelector(ctx, "source=s")
+	require.ErrorContains(t, err, "invalid bound selector")
 }
 
 func TestWithAttributesIsTheEvaluatorsKey(t *testing.T) {
