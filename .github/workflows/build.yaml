@@ -115,6 +115,20 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044 # v4
 
+  builder-e2e:
+    name: Builder end to end
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - name: Setup go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
+        with:
+          go-version-file: 'flagd/go.mod'
+      - run: make workspace-init
+      - name: Build flagd-full from its manifest, check its components and run the CLI pins against it
+        run: make builder-e2e
+
   fips:
     name: FIPS 140-3
     # Gated during the proof of concept: set the repository variable FULL_CI=true, or run the workflow manually.
