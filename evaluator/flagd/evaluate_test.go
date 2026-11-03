@@ -171,6 +171,11 @@ func flagdSamples() evaluatortest.Samples {
 	deliver := func(st *store.Store, data string) error {
 		return writerFor(st).SetState(flagsync.DataSync{Source: evaluatortest.Source, FlagData: data})
 	}
+	deliverSet := func(st *store.Store, set string) error {
+		data := fmt.Sprintf(`{"metadata": {"flagSetId": %q}, "flags": {
+		  "shared": {"state": "ENABLED", "defaultVariant": "v", "variants": {"v": %q}}}}`, set, set)
+		return writerFor(st).SetState(flagsync.DataSync{Source: evaluatortest.Source, FlagData: data, IncrementalUpdates: true})
+	}
 	flags := func(round int) string {
 		return fmt.Sprintf(`{"flags": {
 		  "static-bool": {"state": "ENABLED", "defaultVariant": "on", "variants": {"on": true, "off": false}},
@@ -182,7 +187,18 @@ func flagdSamples() evaluatortest.Samples {
 		  "pair-b": {"state": "ENABLED", "defaultVariant": "v", "variants": {"v": %d}}}}`, round, round)
 	}
 	return evaluatortest.Samples{
-		Setup: func(st *store.Store) error { return deliver(st, flags(0)) },
+		Setup: func(st *store.Store) error {
+			if err := deliver(st, flags(0)); err != nil {
+				return err
+			}
+			for _, set := range []string{"A", "B"} {
+				if err := deliverSet(st, set); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+		Shared: &evaluatortest.SharedSample{Key: "shared", FlagSets: []string{"A", "B"}},
 		Static: []evaluatortest.StaticSample{
 			{Key: "static-bool", Hint: evaluator.TypeBool, Value: true},
 			{Key: "static-int", Hint: evaluator.TypeInt, Value: 10.0},
