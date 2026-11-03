@@ -41,3 +41,5 @@ test/telemetry-example:./...:opentelemetry|google.golang.org/grpc|connectrpc|k8s
 # BR-009 and FR-048: an engine module's format and evaluator import core only, no telemetry, transport, platform client,
 # JsonLogic engine or other library module (the module's tests run a distribution and carry flagd's runtime).
 test/configformat-example:. ./evaluator:opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud|jsonlogic|jsonschema|openfeature-relay/(sync|telemetry|evaluator|configformat)/
+# The example event sink requires the core only: no vendor client, transport or flagd module.
+test/eventsink-example:./...:opentelemetry|google.golang.org/grpc|connectrpc|k8s.io|gocloud|open-feature/flagd/flagd|openfeature-relay/(sync|telemetry|evaluator|configformat)/
