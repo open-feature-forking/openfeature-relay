@@ -28,4 +28,4 @@ test/middleware-example:robfig|opentelemetry|google.golang.org/grpc|connectrpc.c
 # The example event sink requires the core only: no vendor client, transport or flagd module.
 test/eventsink-example:robfig|opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|cloud.google.com|github.com/Azure|github.com/aws|prometheus|open-feature/flagd/flagd|openfeature-relay/(sync|telemetry|evaluator|configformat)/
 # The Builder (UC-001 Q1) depends on no relay module: it only reads manifests and runs the go binary.
-builder:openfeature-relay/(core|runtime|sync|evaluator|configformat|telemetry|service|distribution)
+builder:open-feature/flagd/|openfeature-relay/(core|runtime|sync|evaluator|configformat|telemetry|service|distribution)
