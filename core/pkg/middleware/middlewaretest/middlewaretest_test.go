@@ -3,6 +3,7 @@ package middlewaretest_test
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -29,6 +30,10 @@ const (
 	bugAcceptsInvalid
 	bugVagueError
 	bugNilMiddleware
+	bugDrainsBody
+	bugDropsTrailer
+	bugBindsUnaskedSelector
+	bugBindsWrongType
 )
 
 const keyHeader, goodKey = "X-Api-Key", "good"
@@ -36,6 +41,8 @@ const keyHeader, goodKey = "X-Api-Key", "good"
 type stubFactory struct {
 	typ string
 	bug bug
+	// attributesOnly makes the stub bind the attributes and no selector
+	attributesOnly bool
 }
 
 func (f stubFactory) Type() string { return f.typ }
@@ -51,27 +58,32 @@ func (f stubFactory) Create(s middleware.Settings) (middleware.Middleware, error
 		}
 		return nil, fmt.Errorf("setting \"key\": %v is not a string", s.Config["key"])
 	}
-	return &stub{bug: f.bug, key: key, tracer: s.Telemetry.Tracer("stub")}, nil
+	return &stub{bug: f.bug, key: key, attributesOnly: f.attributesOnly, tracer: s.Telemetry.Tracer("stub")}, nil
 }
 
 // stub binds the selector flagSetId=a and the attribute credential=api-key to a request with the right key, and
 // answers 401 to any other.
 type stub struct {
-	bug    bug
-	key    string
-	tracer telemetry.Tracer
-	busy   atomic.Bool
+	bug            bug
+	key            string
+	attributesOnly bool
+	tracer         telemetry.Tracer
+	busy           atomic.Bool
 }
 
 // writer passes everything on and, with bugChangesStatus, replaces the status.
 type writer struct {
 	http.ResponseWriter
-	force int
+	force        int
+	dropTrailers bool
 }
 
 func (w writer) WriteHeader(code int) {
 	if w.force != 0 {
 		code = w.force
+	}
+	if w.dropTrailers {
+		w.Header().Del("Trailer")
 	}
 	w.ResponseWriter.WriteHeader(code)
 }
@@ -103,15 +115,26 @@ func (s *stub) Handler(next http.Handler) http.Handler {
 			}
 		}
 		ctx := r.Context()
+		if s.bug == bugDrainsBody {
+			_, _ = io.Copy(io.Discard, r.Body)
+		}
 		if s.bug != bugNoBinding {
-			ctx = middleware.BindSelector(ctx, "flagSetId=a")
-			ctx = middleware.WithAttributes(ctx, map[string]any{"credential": "api-key"})
+			if !s.attributesOnly || s.bug == bugBindsUnaskedSelector {
+				ctx = middleware.BindSelector(ctx, "flagSetId=a")
+			}
+			tier := any("1")
+			if s.bug == bugBindsWrongType {
+				tier = 1
+			}
+			ctx = middleware.WithAttributes(ctx, map[string]any{"credential": "api-key", "tier": tier})
 		}
 		switch s.bug {
 		case bugHidesFlusher:
 			next.ServeHTTP(opaque{w}, r.WithContext(ctx))
 		case bugChangesStatus:
 			next.ServeHTTP(writer{ResponseWriter: w, force: http.StatusOK}, r.WithContext(ctx))
+		case bugDropsTrailer:
+			next.ServeHTTP(writer{ResponseWriter: w, dropTrailers: true}, r.WithContext(ctx))
 		default:
 			next.ServeHTTP(w, r.WithContext(ctx))
 		}
@@ -133,7 +156,7 @@ func inputs() middlewaretest.Inputs {
 		Config:        map[string]any{"key": goodKey},
 		Passed:        request(goodKey),
 		Answered:      request(""),
-		Binds:         &middlewaretest.Binding{Selector: "flagSetId=a", Attributes: map[string]any{"credential": "api-key"}},
+		Binds:         &middlewaretest.Binding{Selector: "flagSetId=a", Attributes: map[string]any{"credential": "api-key", "tier": "1"}},
 		InvalidConfig: map[string]any{"key": 42},
 		FaultyValue:   "42",
 		Timeout:       2 * time.Second,
@@ -174,6 +197,9 @@ func TestBrokenStubsFailExactlyTheirCases(t *testing.T) {
 		{bugNotConcurrencySafe, []string{middlewaretest.CaseConcurrent}},
 		{bugAcceptsInvalid, []string{middlewaretest.CaseInvalidConfig}},
 		{bugVagueError, []string{middlewaretest.CaseInvalidConfig}},
+		{bugDrainsBody, []string{middlewaretest.CasePassesUnchanged}},
+		{bugDropsTrailer, []string{middlewaretest.CasePassesUnchanged, middlewaretest.CaseNeverBoth, middlewaretest.CaseConcurrent}},
+		{bugBindsWrongType, []string{middlewaretest.CaseBindings}},
 	}
 	for _, tt := range tests {
 		report := middlewaretest.Check(stubFactory{typ: "stub", bug: tt.bug}, inputs())
@@ -213,5 +239,27 @@ func TestAbortedRuns(t *testing.T) {
 	in.Config = map[string]any{"key": 7}
 	if r := middlewaretest.Check(stubFactory{typ: "stub"}, in); !strings.Contains(r.Aborted, "7 is not a string") {
 		t.Errorf("factory failure: aborted %q", r.Aborted)
+	}
+}
+
+// attributesInputs are the inputs of a middleware that binds attributes and no selector.
+func attributesInputs() middlewaretest.Inputs {
+	in := inputs()
+	in.Binds = &middlewaretest.Binding{Attributes: map[string]any{"credential": "api-key", "tier": "1"}}
+	return in
+}
+
+func TestContractOnMiddlewareThatBindsNoSelector(t *testing.T) {
+	middlewaretest.Run(t, stubFactory{typ: "stub", attributesOnly: true}, attributesInputs())
+}
+
+func TestBindingASelectorThatWasNotExpectedFailsOnlyTheBindings(t *testing.T) {
+	report := middlewaretest.Check(stubFactory{typ: "stub", attributesOnly: true, bug: bugBindsUnaskedSelector}, attributesInputs())
+
+	if report.Aborted != "" {
+		t.Fatalf("aborted: %s", report.Aborted)
+	}
+	if got, want := report.FailedCases(), []string{middlewaretest.CaseBindings}; !slices.Equal(got, want) {
+		t.Errorf("failed cases %q, want %q", got, want)
 	}
 }
