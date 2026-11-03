@@ -29,7 +29,6 @@ import (
 	"github.com/open-feature/flagd/flagd/pkg/service/middleware"
 	corsmw "github.com/open-feature/flagd/flagd/pkg/service/middleware/cors"
 	h2cmw "github.com/open-feature/flagd/flagd/pkg/service/middleware/h2c"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -318,9 +317,14 @@ func (s *ConnectService) startServer(ctx context.Context, svcConf service.Config
 func (s *ConnectService) startMetricsServer(ctx context.Context, svcConf service.Configuration) error {
 	s.logger.Info(fmt.Sprintf("metrics and probes listening at %d", svcConf.ManagementPort))
 
+	// without a metrics handler of the telemetry provider, /metrics answers 404
+	var metrics http.Handler
+	if p, ok := s.telemetry.(interface{ MetricsHandler() http.Handler }); ok {
+		metrics = p.MetricsHandler()
+	}
 	s.metricsServer = flagdService.NewManagementServer(svcConf.ManagementPort, func() bool {
 		return s.readinessEnabled && svcConf.ReadinessProbe()
-	}, promhttp.Handler())
+	}, metrics)
 
 	return serveWithShutdown(ctx, s.metricsServer, s.metricsServer.ListenAndServe)
 }
