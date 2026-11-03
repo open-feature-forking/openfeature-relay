@@ -45,7 +45,25 @@ func samples() evaluatortest.Samples {
 		return err
 	}
 	return evaluatortest.Samples{
-		Setup: func(st *store.Store) error { return deliverRound(st, 0) },
+		Setup: func(st *store.Store) error {
+			if err := deliverRound(st, 0); err != nil {
+				return err
+			}
+			format, err := keyvalue.Factory{}.Create(configformat.Settings{Store: st})
+			if err != nil {
+				return err
+			}
+			for _, env := range []string{"A", "B"} {
+				data := fmt.Sprintf(`{"environment":%q,"flags":{"shared":%q}}`, env, env)
+				if _, err := format.Accept(context.Background(), configformat.Input{
+					Source: evaluatortest.Source, Data: data, IncrementalUpdate: true,
+				}); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+		Shared: &evaluatortest.SharedSample{Key: "shared", FlagSets: []string{"A", "B"}},
 		Static: []evaluatortest.StaticSample{
 			{Key: "static-bool", Hint: evaluator.TypeBool, Value: true},
 			{Key: "static-int", Hint: evaluator.TypeInt, Value: 10.0},

@@ -164,7 +164,7 @@ func visible(key string, attributes map[string]any) bool {
 }
 
 func resolve(h hit) evaluator.Result {
-	result := evaluator.Result{FlagKey: h.key, Variant: "value", Reason: model.StaticReason}
+	result := evaluator.Result{FlagKey: h.key, FlagSet: h.flagSet, Variant: "value", Reason: model.StaticReason}
 	if h.flagSet != "" {
 		result.Metadata = model.Metadata{"flagSetId": h.flagSet}
 	}
