@@ -3,9 +3,7 @@ package evaluatortest
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -14,21 +12,6 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	"github.com/stretchr/testify/require"
 )
-
-// fakeTB records what the contract reports instead of failing the test.
-type fakeTB struct {
-	mu     sync.Mutex
-	errors []string
-}
-
-func (f *fakeTB) Helper() {}
-func (f *fakeTB) Errorf(format string, args ...any) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.errors = append(f.errors, fmt.Sprintf(format, args...))
-}
-func (f *fakeTB) Fatalf(format string, args ...any) { f.Errorf(format, args...); panic("fatal") }
-func (f *fakeTB) Logf(string, ...any)               {}
 
 // flaws are the ways the reference evaluator can be broken.
 type flaws struct {
@@ -265,7 +248,7 @@ func TestContractAbortsOnFactoryProblems(t *testing.T) {
 	require.Contains(t, report.Aborted, "no backend")
 }
 
-type failing struct{ nameless }
+type failing struct{}
 
 func (failing) Type() string                { return "failing" }
 func (failing) ConfigurationFormat() string { return "flagd" }
