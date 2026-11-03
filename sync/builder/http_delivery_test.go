@@ -77,11 +77,6 @@ func (fs *flagServer) nextRequest(t *testing.T) http.Header {
 // TestHTTPDeliveryCharacterization pins what an HTTP source delivers, and when.
 func TestHTTPDeliveryCharacterization(t *testing.T) {
 	t.Run("deliveries across polls", func(t *testing.T) {
-		if raceEnabled {
-			// every poll is a cron job in its own goroutine, and consecutive jobs read and write the provider's ETag and
-			// body hash without synchronization: the race detector reports it although the jobs are a second apart
-			t.Skip("the http provider races between poll jobs; run without -race")
-		}
 		fs := newFlagServer(t, `"e1"`, flagsA)
 		uri := fs.URL + "/flags"
 		// incrementalUpdates is set to show that deliveries do not carry it

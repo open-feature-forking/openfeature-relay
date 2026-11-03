@@ -194,3 +194,6 @@ func (f Factory) CreateFetcher(settings sync.Settings) (sync.Fetcher, error) {
 	}
 	return NewFetcher(f.Kind, f.Scheme, settings.Source.URI, settings.Logger, f.Mux), nil
 }
+
+// Mux is the URL mux the fetcher opens its bucket with.
+func (f *Fetcher) Mux() *blob.URLMux { return f.mux }
