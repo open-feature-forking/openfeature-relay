@@ -49,6 +49,8 @@ func TestContract(t *testing.T) {
 			{Data: `{"environment":"prod","flags":{"a":1}}`, Sets: []formattest.Set{{FlagSet: "prod", Keys: []string{"a"}}}},
 			{Data: `{"environment":"dev","flags":{"a":1}}`, Sets: []formattest.Set{{FlagSet: "dev", Keys: []string{"a"}}}},
 		},
+		// the format has no entries it skips and accepts the rest of a delivery without
+		Without: []formattest.Feature{formattest.FeatureDropped},
 	})
 }
 

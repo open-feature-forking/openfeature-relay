@@ -24,6 +24,7 @@ func TestInventoryHelper(t *testing.T) {
 	samples := kvSamples
 	if mode == "without optional samples" {
 		samples.Incremental, samples.Dropped = nil, nil
+		samples.Without = []Feature{FeatureIncremental, FeatureDropped}
 	}
 	Run(t, kvFactory{}, samples)
 }

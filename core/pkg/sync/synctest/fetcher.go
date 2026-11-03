@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/contracttest"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 )
 
@@ -34,34 +35,34 @@ const (
 // RunFetcher runs the contract tests of a fetcher: one subtest per contract case.
 func RunFetcher(t *testing.T, f sync.FetcherFactory, in FetcherInputs) {
 	t.Helper()
-	CheckFetcher(t, f, in).report(t)
+	CheckFetcher(t, f, in).Run(t)
 }
 
 // CheckFetcher runs the contract tests of a fetcher and returns their outcome. t is only handed to the test inputs.
-func CheckFetcher(t testing.TB, f sync.FetcherFactory, in FetcherInputs) Report {
+func CheckFetcher(t testing.TB, f sync.FetcherFactory, in FetcherInputs) contracttest.Report {
 	if in.Source.URI == "" || in.Change == nil || in.Break == nil {
-		if msg := missing(
-			missingInput{"FetcherInputs.Source", in.Source.URI != "", fetcherCases},
-			missingInput{"FetcherInputs.Change", in.Change != nil, []string{CaseNewVersion}},
-			missingInput{"FetcherInputs.Break", in.Break != nil, []string{CaseReportsFailedFetch}},
+		if msg := contracttest.Missing(
+			contracttest.Need("FetcherInputs.Source", in.Source.URI != "", fetcherCases...),
+			contracttest.Need("FetcherInputs.Change", in.Change != nil, CaseNewVersion),
+			contracttest.Need("FetcherInputs.Break", in.Break != nil, CaseReportsFailedFetch),
 		); msg != "" {
-			return Report{Aborted: msg}
+			return contracttest.Report{Aborted: msg}
 		}
 	}
 	if msg := checkSchemes(f); msg != "" {
-		return Report{Aborted: msg}
+		return contracttest.Report{Aborted: msg}
 	}
 
 	fetcher, err := f.CreateFetcher(newSettings(in.Source, f.Type(), nil))
 	if err != nil || fetcher == nil {
-		return Report{Aborted: fmt.Sprintf("the factory cannot create the fetcher (fetcher %v, error %v)", fetcher, err)}
+		return contracttest.Report{Aborted: fmt.Sprintf("the factory cannot create the fetcher (fetcher %v, error %v)", fetcher, err)}
 	}
 	if closer, ok := fetcher.(io.Closer); ok {
 		defer closer.Close()
 	}
 	if init, ok := fetcher.(sync.InitializingFetcher); ok {
 		if err := init.Init(context.Background()); err != nil {
-			return Report{Aborted: fmt.Sprintf("the fetcher cannot be initialized: %v", err)}
+			return contracttest.Report{Aborted: fmt.Sprintf("the fetcher cannot be initialized: %v", err)}
 		}
 	}
 
@@ -71,7 +72,7 @@ func CheckFetcher(t testing.TB, f sync.FetcherFactory, in FetcherInputs) Report 
 		return res, err, returned
 	}
 
-	var cases []Case
+	var cases []contracttest.Case
 
 	// the first fetch, and the version it returns
 	res, err, returned := fetch(context.Background(), "")
@@ -110,7 +111,7 @@ func CheckFetcher(t testing.TB, f sync.FetcherFactory, in FetcherInputs) Report 
 		"a fetch of a broken source returns an error and no flag configuration",
 		describe(res5, err5, returned5)))
 
-	return Report{Cases: cases}
+	return contracttest.Report{Cases: cases}
 }
 
 var fetcherCases = []string{CaseFetchesOnce, CaseReportsUnchanged, CaseNewVersion, CaseAbandonsOnDone, CaseReportsFailedFetch}

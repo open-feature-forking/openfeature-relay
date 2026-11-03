@@ -52,7 +52,7 @@ type Pipeline struct {
 // core-owned keys of settings.Config size the pipeline (see ParseOptions); an invalid one, or a sink the factory
 // rejects, is an error that names the sink.
 func NewPipeline(bus *events.Bus, f Factory, settings Settings, opts ...Option) (*Pipeline, error) {
-	if err := ValidateDeclaration(f); err != nil {
+	if err := ValidateDeclarations(f); err != nil {
 		return nil, fmt.Errorf("event sink: invalid declaration: %w", err)
 	}
 	o, err := ParseOptions(settings.Config)
