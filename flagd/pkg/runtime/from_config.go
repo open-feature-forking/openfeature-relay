@@ -186,6 +186,7 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		store,
 		recorder,
 		options...)
+	connectService.DisableManagement()
 
 	// ofrep service
 	ofrepService, err := ofrep.NewOfrepService(jsonEvaluator, store, config.CORS, ofrep.SvcConfiguration{
@@ -266,6 +267,7 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		Formats:         formats,
 		DefaultFormat:   flagdformat.NewFormat(store, logger.WithFields(zap.String("component", "configformat"))),
 		Bus:             events.NewBus(),
+		MetricsHandler:  components.MetricsHandler,
 		sourceReadiness: sourceReadiness,
 	}, nil
 }

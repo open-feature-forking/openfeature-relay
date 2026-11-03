@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	msync "sync"
@@ -42,6 +43,10 @@ type Runtime struct {
 	DefaultFormat configformat.ConfigurationFormat
 	// Bus carries the configuration change events the runtime publishes once a format accepts a delivery.
 	Bus *events.Bus
+	// MetricsHandler serves /metrics on the management port; nil answers 404.
+	MetricsHandler http.Handler
+	// shuttingDown makes the readiness probe fail once the runtime stops.
+	shuttingDown atomic.Bool
 
 	// versions holds the version last accepted for each document, to tell a new version from a redelivery.
 	versions map[string]string
@@ -110,6 +115,13 @@ func (r *Runtime) start(ctx context.Context) error {
 		r.EvaluationService.Shutdown()
 		r.Logger.Info("Server successfully shutdown.")
 	}()
+
+	g.Go(func() error {
+		if err := r.serveManagement(gCtx); err != nil {
+			return fmt.Errorf("error from the management port: %w", err)
+		}
+		return nil
+	})
 
 	g.Go(func() error {
 		// Readiness probe rely on the runtime

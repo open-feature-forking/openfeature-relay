@@ -13,7 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestPortInUse pins which step fails, and with which error, when a port an endpoint listens on is taken.
+// TestPortInUse pins which step fails, and with which error, when a port an endpoint listens on is taken. The
+// management port is the runtime's own: its error no longer comes through the flag evaluation service.
 func TestPortInUse(t *testing.T) {
 	tests := []struct {
 		name string
@@ -25,7 +26,7 @@ func TestPortInUse(t *testing.T) {
 		{
 			name:  "management port",
 			port:  func(c *Config) *uint16 { return &c.ManagementPort },
-			start: "error returned from serving flag evaluation service: errgroup closed with error: listen tcp :%d: bind: address already in use",
+			start: "error from the management port: listen tcp :%d: bind: address already in use",
 		},
 		{
 			name:  "flag evaluation port",

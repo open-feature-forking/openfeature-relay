@@ -32,12 +32,7 @@ import (
 	metricsmw "github.com/open-feature/flagd/flagd/pkg/service/middleware/metrics"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c" //nolint:staticcheck // deprecated package, still functionally correct
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/health"
-	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -109,7 +104,13 @@ type ConnectService struct {
 	metricsServer *http.Server
 
 	readinessEnabled bool
+	// withoutManagement leaves the management port to the runtime.
+	withoutManagement bool
 }
+
+// DisableManagement leaves the management port, health, readiness and metrics, to the runtime: Serve then serves
+// the evaluation endpoint only.
+func (s *ConnectService) DisableManagement() { s.withoutManagement = true }
 
 // NewConnectService creates a ConnectService with provided parameters
 // NewConnectService creates the connect service; handlerOptions are applied to each of its handlers.
@@ -143,9 +144,11 @@ func (s *ConnectService) Serve(ctx context.Context, svcConf service.Configuratio
 	g.Go(func() error {
 		return s.startServer(gCtx, svcConf)
 	})
-	g.Go(func() error {
-		return s.startMetricsServer(gCtx, svcConf)
-	})
+	if !s.withoutManagement {
+		g.Go(func() error {
+			return s.startMetricsServer(gCtx, svcConf)
+		})
+	}
 	if err := g.Wait(); err != nil {
 		return fmt.Errorf("errgroup closed with error: %w", err)
 	}
@@ -317,44 +320,9 @@ func (s *ConnectService) startServer(ctx context.Context, svcConf service.Config
 func (s *ConnectService) startMetricsServer(ctx context.Context, svcConf service.Configuration) error {
 	s.logger.Info(fmt.Sprintf("metrics and probes listening at %d", svcConf.ManagementPort))
 
-	srv := grpc.NewServer()
-	grpc_health_v1.RegisterHealthServer(srv, health.NewServer())
-
-	mux := http.NewServeMux()
-	mux.Handle("/healthz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	mux.Handle("/readyz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.readinessEnabled && svcConf.ReadinessProbe() {
-			w.WriteHeader(http.StatusOK)
-		} else {
-			w.WriteHeader(http.StatusPreconditionFailed)
-		}
-	}))
-	mux.Handle("/metrics", promhttp.Handler())
-
-	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		// if this is 'application/grpc' and HTTP2, handle with gRPC, otherwise HTTP.
-		if request.ProtoMajor == 2 && strings.HasPrefix(request.Header.Get("Content-Type"), "application/grpc") {
-			srv.ServeHTTP(writer, request)
-		} else {
-			mux.ServeHTTP(writer, request)
-			return
-		}
-	})
-
-	s.metricsServer = &http.Server{
-		Addr:              fmt.Sprintf(":%d", svcConf.ManagementPort),
-		ReadHeaderTimeout: 3 * time.Second,
-		// slowloris/slow-client DoS protection; safe for server streams
-		ReadTimeout: 5 * time.Second,
-		// we need to use h2c to support plaintext HTTP2. h2c.NewHandler is
-		// deprecated in favor of setting http.Server.Protocols, but that
-		// requires refactoring server construction; the handler still works
-		// correctly, so we keep using it for now.
-		//nolint:staticcheck
-		Handler: h2c.NewHandler(handler, &http2.Server{}),
-	}
+	s.metricsServer = flagdService.NewManagementServer(svcConf.ManagementPort, func() bool {
+		return s.readinessEnabled && svcConf.ReadinessProbe()
+	}, promhttp.Handler())
 
 	return serveWithShutdown(ctx, s.metricsServer, s.metricsServer.ListenAndServe)
 }
