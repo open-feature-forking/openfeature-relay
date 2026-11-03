@@ -1,7 +1,8 @@
 //go:build unix
 
 // Package telemetrystartup_test pins how FromConfig treats a telemetry configuration it cannot build. It calls
-// FromConfig once, in a test binary of its own, because FromConfig installs process-wide telemetry.
+// FromConfig once, in a test binary of its own, because FromConfig installs process-wide telemetry: run it with
+// -count=1.
 package telemetrystartup_test
 
 import (

@@ -17,7 +17,8 @@ import (
 )
 
 // otelhttp reads the global tracer provider, so it is installed before any test builds a handler. A global
-// provider cannot be restored; TestFlagsRouteSpans resets the recorder instead.
+// provider cannot be restored; TestFlagsRouteSpans resets the recorder instead. Every test of the package runs with
+// this recording tracer, so a test that runs in parallel would add its spans to TestFlagsRouteSpans'.
 var spanRecorder = tracetest.NewSpanRecorder()
 
 func TestMain(m *testing.M) {
