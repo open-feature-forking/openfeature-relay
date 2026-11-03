@@ -29,10 +29,16 @@ func (sb *SyncBuilder) Resolve(source sync.SourceConfig, log *logger.Logger) (Re
 		fetcherFactory, isFetcher := f.(sync.FetcherFactory)
 		if isFetcher {
 			if triggers, ok := sb.fetcherTriggers(fetcherFactory, source); ok {
+				if len(source.Triggers) > 0 {
+					triggers = source.Triggers
+				}
 				return sb.resolveFetcher(fetcherFactory, source, triggers, log)
 			}
 		}
 		if streamingFactory, ok := f.(sync.StreamingFactory); ok && f.Type() == source.Provider {
+			if len(source.Triggers) > 0 {
+				return Resolution{}, fmt.Errorf("the %s sync provider streams its source and takes no fetch triggers", source.Provider)
+			}
 			provider, err := streamingFactory.CreateStreaming(sync.Settings{
 				Source: source, Logger: log, Metrics: sb.SyncMetricsRecorder,
 			})
@@ -70,6 +76,11 @@ func (sb *SyncBuilder) fetcherTriggers(f sync.FetcherFactory, source sync.Source
 func (sb *SyncBuilder) resolveFetcher(
 	f sync.FetcherFactory, source sync.SourceConfig, triggers []sync.TriggerConfig, log *logger.Logger,
 ) (Resolution, error) {
+	for _, trigger := range triggers {
+		if err := sb.checkTriggerType(trigger.Type); err != nil {
+			return Resolution{}, err
+		}
+	}
 	// the factory's rewriting of the URI, such as stripping "file:", is how the source is read and named
 	if parsed, claimed := f.ParseURI(source.URI); claimed {
 		source.URI = parsed.URI

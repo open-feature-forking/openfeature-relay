@@ -61,6 +61,7 @@ Alternatively, these configurations can be passed to flagd via config file, spec
 | maxMsgSize         | optional `int`     | Used for gRPC sync to set max receive message size (in bytes) e.g. 5242880 for 5MB. If not provided, the default is [4MB](https://pkg.go.dev/google.golang.org#grpc#MaxCallRecvMsgSize)                                                                                                                                                                                                                                                                                                   |
 | incrementalUpdates | optional `boolean` | **Experimental.** Used for gRPC sync. When true, each update only replaces flags matching the flagSetIds in the payload, allowing flags from other flagSetIds to accumulate. When false (default), each update replaces all flags for the source. See [caveats](#incremental-updates-experimental) below.                                                                                                                                                                                 |
 | headers            | optional `map[string]string` | Custom key-value pairs sent as HTTP headers or gRPC metadata with outbound sync requests.                                                                                                                                                                                                                                                                                                                                                                                       |
+| triggers           | optional `array`   | Used for fetching sync providers (`file`, `http`, `gcs`, `azblob`, `s3` and fetchers of extensions). The fetch triggers that make flagd fetch the source again: a list of `{"type": "<trigger type>", ...settings}` objects, for example `{"type": "poller"}`. Without it, a source gets the default triggers of its provider: the `poller` for `http`, `gcs`, `azblob`, `s3` and extension fetchers, and the file watch for `file`. See [fetch triggers](#fetch-triggers). |
 
 The `uri` field values **do not** follow the [URI patterns](#uri-patterns). The provider type is instead derived
 from the `provider` field. Only exception is the remote provider where `http(s)://` is expected by default. Incorrect
@@ -145,6 +146,29 @@ sources:
   - uri: s3://my-bucket/my-flags.json
     provider: s3
 ```
+
+### Fetch triggers
+
+A fetching sync provider fetches its source once at start-up and then each time one of its fetch triggers signals.
+Signals that arrive while a fetch runs lead to one more fetch after it. The distribution provides the available trigger
+types; flagd provides:
+
+| Type       | Signals                                                                                        |
+| ---------- | ---------------------------------------------------------------------------------------------- |
+| `poller`   | on the `interval` (and `intervalSeed`) of the source; the wait grows while fetches fail         |
+| `fsnotify` | when the file changes (the `file` provider inside Kubernetes)                                   |
+| `fileinfo` | when the status of the file changes (the `file` provider outside Kubernetes)                    |
+
+```yaml
+sources:
+  - uri: https://my-flags.com/flags
+    provider: http
+    triggers:
+      - type: poller
+```
+
+An unknown trigger type stops flagd at start-up and lists the available types. The `grpc` and `kubernetes` providers
+stream their source and take no triggers.
 
 ### HTTP Configuration
 

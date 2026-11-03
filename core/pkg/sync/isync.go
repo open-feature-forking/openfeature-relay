@@ -74,6 +74,10 @@ type SourceConfig struct {
 	Headers            map[string]string `json:"headers,omitempty"`
 
 	OAuth *OAuthCredentialHandler `json:"oauth,omitempty"`
+
+	// Triggers are the fetch triggers of a fetcher source. Without them the source gets the default triggers of its
+	// factory, or the core's poller when the factory declares none.
+	Triggers []TriggerConfig `json:"triggers,omitempty"`
 }
 
 // OAuthCredentialHandler is a helper to manager OAuth 2.0 tokens, including re-loading of tokens.
