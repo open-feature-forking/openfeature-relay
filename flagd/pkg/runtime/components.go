@@ -7,6 +7,9 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	flageval "github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation"
+	"github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation/ofrep"
+	flagsync "github.com/open-feature/flagd/flagd/pkg/service/flag-sync"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -36,5 +39,7 @@ func Official() Components {
 	}
 }
 
-// officialEndpoints is set where the factories of the official endpoints are known.
-func officialEndpoints() []service.Factory { return nil }
+// officialEndpoints are the three service endpoints of flagd-full.
+func officialEndpoints() []service.Factory {
+	return []service.Factory{flageval.Factory{}, ofrep.Factory{}, flagsync.Factory{}}
+}

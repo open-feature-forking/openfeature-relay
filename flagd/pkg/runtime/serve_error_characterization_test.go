@@ -31,17 +31,17 @@ func TestPortInUse(t *testing.T) {
 		{
 			name:  "flag evaluation port",
 			port:  func(c *Config) *uint16 { return &c.ServicePort },
-			start: "error returned from serving flag evaluation service: errgroup closed with error: error creating listener for flag evaluation service: listen tcp :%d: bind: address already in use",
+			start: "error from service endpoint \"flag-evaluation\": error creating listener for flag evaluation service: listen tcp :%d: bind: address already in use",
 		},
 		{
 			name:  "OFREP port",
 			port:  func(c *Config) *uint16 { return &c.OfrepServicePort },
-			start: "error from ofrep server: error from ofrep service: error from ofrep service: listen tcp :%d: bind: address already in use",
+			start: "error from service endpoint \"ofrep\": error from ofrep service: error from ofrep service: listen tcp :%d: bind: address already in use",
 		},
 		{
 			name:       "flag sync port",
 			port:       func(c *Config) *uint16 { return &c.SyncServicePort },
-			fromConfig: "error creating sync service: error creating listener: listen tcp :%d: bind: address already in use",
+			fromConfig: "error creating the service endpoint \"flag-sync\": error creating sync service: error creating listener: listen tcp :%d: bind: address already in use",
 		},
 	}
 	for _, tt := range tests {

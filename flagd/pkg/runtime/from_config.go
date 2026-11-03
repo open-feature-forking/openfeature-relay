@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"connectrpc.com/connect"
 	flagdformat "github.com/open-feature-forking/openfeature-relay/configformat/flagd"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
@@ -20,7 +21,6 @@ import (
 	syncbuilder "github.com/open-feature-forking/openfeature-relay/sync/builder"
 	flagdgrpc "github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc"
 	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
-	"github.com/open-feature/flagd/flagd/pkg/evaluation"
 	flageval "github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation"
 	"github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation/ofrep"
 	flagsync "github.com/open-feature/flagd/flagd/pkg/service/flag-sync"
@@ -156,7 +156,7 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		return nil, err
 	}
 
-	// derive evaluator
+	// derive the evaluator options and the service endpoints
 	var evalOpts []flagdeval.JSONEvaluatorOption
 	// TODO(#2101): remove
 	if config.StrictNumericRange {
@@ -166,10 +166,6 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 	for _, f := range config.ConfigurationFormats {
 		formatTypes = append(formatTypes, f.Type())
 	}
-	jsonEvaluator, err := evaluation.NewRoutedEvaluator(logger, store, formatTypes, config.Evaluators, evalOpts...)
-	if err != nil {
-		return nil, err
-	}
 
 	options, err := telemetry.BuildConnectOptions(telCfg)
 	if err != nil {
@@ -177,78 +173,11 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		logger.Error("failed to build connect options", zap.Error(err))
 	}
 
-	// derive services
-
-	// connect service
-	connectService := flageval.NewConnectService(
-		logger.WithFields(zap.String("component", "service")),
-		jsonEvaluator,
-		store,
-		recorder,
-		options...)
-	connectService.DisableManagement()
-
-	// ofrep service
-	ofrepService, err := ofrep.NewOfrepService(jsonEvaluator, store, config.CORS, ofrep.SvcConfiguration{
-		Logger:                logger.WithFields(zap.String("component", "OFREPService")),
-		Port:                  config.OfrepServicePort,
-		ServiceName:           svcName,
-		MetricsRecorder:       recorder,
-		MaxRequestBodyBytes:   config.MaxRequestBodyBytes,
-		MaxRequestHeaderBytes: config.MaxRequestHeaderBytes,
-		SSEEnabled:            config.OfrepSSEEnabled,
-		SSEInactivityDelaySec: config.OfrepSSEInactivityDel,
-		SSEPublicURL:          config.OfrepSSEPublicURL,
-	},
-		config.ContextValues,
-		config.HeaderToContextKeyMappings,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("error creating OFREP service: %w", err)
-	}
-
-	// flag sync service
-	flagSyncService, err := flagsync.NewSyncService(flagsync.SvcConfigurations{
-		Logger:              logger.WithFields(zap.String("component", "FlagSyncService")),
-		Port:                config.SyncServicePort,
-		Sources:             sources,
-		Store:               store,
-		ContextValues:       config.ContextValues,
-		KeyPath:             config.ServiceKeyPath,
-		CertPath:            config.ServiceCertPath,
-		SocketPath:          config.SyncServiceSocketPath,
-		HTTPEnabled:         config.SyncServiceHTTPEnabled,
-		ServiceName:         svcName,
-		CORS:                config.CORS,
-		Options:             options,
-		StreamDeadline:      config.StreamDeadline,
-		DisableSyncMetadata: config.DisableSyncMetadata,
-		MetricsRecorder:     recorder,
-
-		MaxRequestHeaderBytes: config.MaxRequestHeaderBytes,
-		MaxRequestBodyBytes:   config.MaxRequestBodyBytes,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("error creating sync service: %w", err)
-	}
-
-	// build sync providers with a shared source-agnostic sync-metrics recorder so every
-	// provider (grpc, http, file, kubernetes, blob) emits the universal client-side sync
-	// metrics into the same reader as the rest of flagd's telemetry.
-	syncLogger := logger.WithFields(zap.String("component", "sync"))
-	syncMetricsRecorder := telemetry.NewSyncRecorder(nil)
-	iSyncs, err := syncProvidersFromConfig(
-		syncLogger, syncProviders, syncMetricsRecorder, telemetry.NewStreamRecorder(nil), config.SyncFactories)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Runtime{
-		Logger:            logger.WithFields(zap.String("component", "runtime")),
-		Evaluator:         jsonEvaluator,
-		SyncService:       flagSyncService,
-		OfrepService:      ofrepService,
-		EvaluationService: connectService,
+	bus := events.NewBus()
+	rt := &Runtime{
+		Logger:         logger.WithFields(zap.String("component", "runtime")),
+		Bus:            bus,
+		MetricsHandler: components.MetricsHandler,
 		ServiceConfig: service.Configuration{
 			Port:                       config.ServicePort,
 			ManagementPort:             config.ManagementPort,
@@ -263,13 +192,102 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 			MaxRequestBodyBytes:        config.MaxRequestBodyBytes,
 			MaxRequestHeaderBytes:      config.MaxRequestHeaderBytes,
 		},
-		Syncs:           iSyncs,
 		Formats:         formats,
 		DefaultFormat:   flagdformat.NewFormat(store, logger.WithFields(zap.String("component", "configformat"))),
-		Bus:             events.NewBus(),
-		MetricsHandler:  components.MetricsHandler,
 		sourceReadiness: sourceReadiness,
-	}, nil
+	}
+
+	inputs, err := newEndpointInputs(logger, store, bus, components.Endpoints, formatTypes, config.Evaluators, evalOpts)
+	if err != nil {
+		return nil, err
+	}
+	if inputs.router != nil {
+		rt.Evaluator = inputs.router.IEvaluator()
+	}
+	endpointConfigs := endpointConfigs{
+		config: config, serviceConfig: rt.ServiceConfig, sources: sources, recorder: recorder, options: options,
+	}
+	for _, factory := range components.Endpoints {
+		if err := service.ValidateDeclarations(factory); err != nil {
+			return nil, fmt.Errorf("the service endpoint %q declares: %w", factory.Type(), err)
+		}
+		settings := inputs.settings(factory)
+		settings.Initialized = rt.Initialized()
+		settings.Config = endpointConfigs.forEndpoint(factory.Type())
+		endpoint, err := factory.Create(settings)
+		if err != nil {
+			return nil, fmt.Errorf("error creating the service endpoint %q: %w", factory.Type(), err)
+		}
+		rt.Endpoints = append(rt.Endpoints, NamedEndpoint{Type: factory.Type(), Endpoint: endpoint})
+	}
+
+	// build sync providers with a shared source-agnostic sync-metrics recorder so every
+	// provider (grpc, http, file, kubernetes, blob) emits the universal client-side sync
+	// metrics into the same reader as the rest of flagd's telemetry.
+	syncLogger := logger.WithFields(zap.String("component", "sync"))
+	syncMetricsRecorder := telemetry.NewSyncRecorder(nil)
+	iSyncs, err := syncProvidersFromConfig(
+		syncLogger, syncProviders, syncMetricsRecorder, telemetry.NewStreamRecorder(nil), config.SyncFactories)
+	if err != nil {
+		return nil, err
+	}
+	rt.Syncs = iSyncs
+	return rt, nil
+}
+
+// endpointConfigs derives the settings of the official endpoints from the operator's configuration.
+type endpointConfigs struct {
+	config        Config
+	serviceConfig service.Configuration
+	sources       []string
+	recorder      telemetry.IMetricsRecorder
+	options       []connect.HandlerOption
+}
+
+// forEndpoint returns Settings.Config for the endpoint type; an extension's endpoint has no settings of the
+// operator's yet.
+func (c endpointConfigs) forEndpoint(endpointType string) map[string]any {
+	switch endpointType {
+	case flageval.Type:
+		return map[string]any{flageval.ConfigKey: flageval.EndpointConfig{
+			Configuration: c.serviceConfig, Metrics: c.recorder, Options: c.options,
+		}}
+	case ofrep.Type:
+		return map[string]any{ofrep.ConfigKey: ofrep.EndpointConfig{
+			Service: ofrep.SvcConfiguration{
+				Port:                  c.config.OfrepServicePort,
+				ServiceName:           svcName,
+				MetricsRecorder:       c.recorder,
+				MaxRequestBodyBytes:   c.config.MaxRequestBodyBytes,
+				MaxRequestHeaderBytes: c.config.MaxRequestHeaderBytes,
+				SSEEnabled:            c.config.OfrepSSEEnabled,
+				SSEInactivityDelaySec: c.config.OfrepSSEInactivityDel,
+				SSEPublicURL:          c.config.OfrepSSEPublicURL,
+			},
+			CORS:                       c.config.CORS,
+			ContextValues:              c.config.ContextValues,
+			HeaderToContextKeyMappings: c.config.HeaderToContextKeyMappings,
+		}}
+	case flagsync.Type:
+		return map[string]any{flagsync.ConfigKey: flagsync.SvcConfigurations{
+			Port:                  c.config.SyncServicePort,
+			Sources:               c.sources,
+			ContextValues:         c.config.ContextValues,
+			KeyPath:               c.config.ServiceKeyPath,
+			CertPath:              c.config.ServiceCertPath,
+			SocketPath:            c.config.SyncServiceSocketPath,
+			HTTPEnabled:           c.config.SyncServiceHTTPEnabled,
+			ServiceName:           svcName,
+			CORS:                  c.config.CORS,
+			Options:               c.options,
+			StreamDeadline:        c.config.StreamDeadline,
+			DisableSyncMetadata:   c.config.DisableSyncMetadata,
+			MetricsRecorder:       c.recorder,
+			MaxRequestHeaderBytes: c.config.MaxRequestHeaderBytes,
+			MaxRequestBodyBytes:   c.config.MaxRequestBodyBytes,
+		}}
+	}
+	return map[string]any{}
 }
 
 // syncProvidersFromConfig is a helper to build ISync implementations from SourceConfig.

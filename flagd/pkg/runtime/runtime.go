@@ -43,6 +43,9 @@ type Runtime struct {
 	DefaultFormat configformat.ConfigurationFormat
 	// Bus carries the configuration change events the runtime publishes once a format accepts a delivery.
 	Bus *events.Bus
+	// Endpoints are the service endpoints the runtime serves, created by FromConfig from the distribution's factories.
+	Endpoints []NamedEndpoint
+	hooks     []shutdownHook
 	// MetricsHandler serves /metrics on the management port; nil answers 404.
 	MetricsHandler http.Handler
 	// shuttingDown makes the readiness probe fail once the runtime stops.
@@ -71,7 +74,7 @@ func (r *Runtime) Start() error {
 
 //nolint:funlen
 func (r *Runtime) start(ctx context.Context) error {
-	if r.EvaluationService == nil {
+	if len(r.Endpoints) == 0 && r.EvaluationService == nil {
 		return errors.New("no service set")
 	}
 	if len(r.Syncs) == 0 {
@@ -112,7 +115,9 @@ func (r *Runtime) start(ctx context.Context) error {
 
 	defer func() {
 		r.Logger.Info("Shutting down server...")
-		r.EvaluationService.Shutdown()
+		if r.EvaluationService != nil {
+			r.EvaluationService.Shutdown()
+		}
 		r.Logger.Info("Server successfully shutdown.")
 	}()
 
@@ -123,37 +128,57 @@ func (r *Runtime) start(ctx context.Context) error {
 		return nil
 	})
 
-	g.Go(func() error {
-		// Readiness probe rely on the runtime
-		r.ServiceConfig.ReadinessProbe = r.isReady
-		if err := r.EvaluationService.Serve(gCtx, r.ServiceConfig); err != nil {
-			return fmt.Errorf("error returned from serving flag evaluation service: %w", err)
-		}
-		return nil
-	})
+	for _, named := range r.Endpoints {
+		g.Go(func() error {
+			if err := named.Endpoint.Serve(gCtx); err != nil {
+				return fmt.Errorf("error from service endpoint %q: %w", named.Type, err)
+			}
+			return nil
+		})
+	}
 
-	g.Go(func() error {
-		err := r.OfrepService.Start(gCtx)
-		if err != nil {
-			return fmt.Errorf("error from ofrep server: %w", err)
-		}
+	r.startLegacyServices(gCtx, g)
 
-		return nil
-	})
-
-	g.Go(func() error {
-		err := r.SyncService.Start(gCtx)
-		if err != nil {
-			return fmt.Errorf("error from sync server: %w", err)
-		}
-
-		return nil
-	})
-
-	if err := g.Wait(); err != nil {
+	err := g.Wait()
+	// the endpoints are done: later events are dropped, and the shutdown hooks run in the order they were registered
+	if r.Bus != nil {
+		r.Bus.Close()
+	}
+	r.runShutdownHooks()
+	if err != nil {
 		return fmt.Errorf("errgroup closed with error: %w", err)
 	}
 	return nil
+}
+
+// startLegacyServices starts the typed services of a Runtime that is not built by FromConfig.
+func (r *Runtime) startLegacyServices(ctx context.Context, g *errgroup.Group) {
+	if r.EvaluationService != nil {
+		g.Go(func() error {
+			// Readiness probe rely on the runtime
+			r.ServiceConfig.ReadinessProbe = r.isReady
+			if err := r.EvaluationService.Serve(ctx, r.ServiceConfig); err != nil {
+				return fmt.Errorf("error returned from serving flag evaluation service: %w", err)
+			}
+			return nil
+		})
+	}
+	if r.OfrepService != nil {
+		g.Go(func() error {
+			if err := r.OfrepService.Start(ctx); err != nil {
+				return fmt.Errorf("error from ofrep server: %w", err)
+			}
+			return nil
+		})
+	}
+	if r.SyncService != nil {
+		g.Go(func() error {
+			if err := r.SyncService.Start(ctx); err != nil {
+				return fmt.Errorf("error from sync server: %w", err)
+			}
+			return nil
+		})
+	}
 }
 
 func (r *Runtime) isReady() bool {
@@ -215,7 +240,9 @@ func (r *Runtime) updateAndEmit(payload sync.DataSync) {
 			r.initializedOnce.Do(func() { close(r.initChan()) })
 		}
 	}
-	r.SyncService.Emit(payload.Source)
+	if r.SyncService != nil {
+		r.SyncService.Emit(payload.Source)
+	}
 }
 
 // accept hands a payload to the configuration format of its source. A rejection names source and entry.

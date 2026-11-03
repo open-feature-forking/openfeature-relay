@@ -5,11 +5,12 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
-	"sync"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -67,7 +68,13 @@ func characterizedConfig(t *testing.T, p ports) Config {
 // startRuntime runs the runtime on a context the test cancels, and returns once it reports ready.
 func startRuntime(t *testing.T, cfg Config) (cancel func(), done <-chan error) {
 	t.Helper()
-	rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, Official())
+	return startRuntimeWith(t, cfg, Official())
+}
+
+// startRuntimeWith is startRuntime for a distribution with these components.
+func startRuntimeWith(t *testing.T, cfg Config, components Components) (cancel func(), done <-chan error) {
+	t.Helper()
+	rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, components)
 	require.NoError(t, err)
 	ctx, stop := context.WithCancel(context.Background())
 	result := make(chan error, 1)
@@ -162,20 +169,21 @@ func TestShutdownEvaluationEventStream(t *testing.T) {
 		require.NoError(t, err)
 		return func() (string, error) {
 			if !stream.Receive() {
-				return "", stream.Err()
+				if err := stream.Err(); err != nil {
+					return "", err
+				}
+				return "", io.EOF
 			}
 			return stream.Msg().Type, nil
 		}
 	})
-	// The graceful shutdown of the server waits for the open stream until its 5s limit expires, so start
-	// fails with that error. Only then does the runtime's deferred Shutdown send provider_shutdown, which the
-	// stream still receives; the stream itself stays open. The endpoint that sends provider_shutdown when its
-	// context ends is PR 3 (3e).
-	require.ErrorContains(t, startErr, "error shutting down server: context deadline exceeded")
-	require.GreaterOrEqual(t, took, 4*time.Second)
-	require.Less(t, took, 8*time.Second)
+	// When its context ends the endpoint sends provider_shutdown to the open stream and ends it, so the server shuts
+	// down at once and start returns nil.
+	require.NoError(t, startErr)
+	require.Less(t, took, 2*time.Second)
 	require.Equal(t, []string{"provider_ready", "provider_shutdown"}, out.events)
-	require.True(t, out.open, "the stream stays open")
+	require.False(t, out.open, "the stream is ended")
+	require.ErrorIs(t, out.err, io.EOF)
 }
 
 func TestShutdownFlagSyncStream(t *testing.T) {

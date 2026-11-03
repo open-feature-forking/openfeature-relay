@@ -58,6 +58,10 @@ func (r *Router) Resolver(opts ...typed.Option) evaluator.IResolver {
 	return typed.New(r.Router, append(typedOptions(r.json), opts...)...)
 }
 
+// IEvaluator returns the typed calls over the router with the state updates of flagd's evaluator, for a caller
+// that holds the distribution's one evaluator.
+func (r *Router) IEvaluator() evaluator.IEvaluator { return routed{IResolver: r.Resolver(), json: r.json} }
+
 // NewRouter builds the router of a distribution: the formats and extra evaluators are as for NewRoutedEvaluator.
 func NewRouter(
 	log *logger.Logger, st *store.Store, formats []string, extra []evaluator.Factory, opts ...flagdeval.JSONEvaluatorOption,
