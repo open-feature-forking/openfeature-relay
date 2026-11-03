@@ -73,7 +73,7 @@ func (s syncHandler) syncFlags(
 	}()
 
 	watcher := make(chan store.FlagQueryResult, 1)
-	selector, err := newSelector(selectorExpression)
+	selector, err := newSelector(ctx, selectorExpression)
 	if err != nil {
 		exitReason = "error"
 		return s.connectError(err)

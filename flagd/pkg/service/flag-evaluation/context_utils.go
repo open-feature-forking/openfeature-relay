@@ -1,17 +1,19 @@
 package service
 
 import (
+	"context"
+	"errors"
 	"net/http"
 
 	"connectrpc.com/connect"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	flagdService "github.com/open-feature/flagd/flagd/pkg/service"
 )
 
-func selectorFromHeader(header http.Header) (store.Selector, error) {
-	expr := header.Get(flagdService.FLAGD_SELECTOR_HEADER)
-	s, err := store.NewSelector(expr)
+func selectorFromHeader(ctx context.Context, header http.Header) (store.Selector, error) {
+	s, err := flagdService.RequestSelector(ctx, header.Get(flagdService.FLAGD_SELECTOR_HEADER))
 	if err != nil {
 		return store.Selector{}, connect.NewError(connect.CodeInvalidArgument, err)
 	}
@@ -54,4 +56,10 @@ func MergeContextsAndHeaders(
 	}
 
 	return merged
+}
+
+// flagNotFound is the resolver for a request whose bound and client's selectors conflict: no flag matches both.
+func flagNotFound[T constraints](context.Context, string, string, map[string]any) (T, string, string, map[string]any, error) {
+	var zero T
+	return zero, "", model.ErrorReason, map[string]any{}, errors.New(model.FlagNotFoundErrorCode)
 }
