@@ -35,6 +35,7 @@ const (
 	fetcherDataOnFailure  fetcherBug = "returns a flag configuration when the fetch fails"
 	fetcherHangs          fetcherBug = "does not return when its context is done"
 	fetcherEmptyUnchanged fetcherBug = "reports unchanged for an empty previous version after the first fetch"
+	fetcherNoVersion      fetcherBug = "returns no source version"
 )
 
 type memSource struct {
@@ -71,6 +72,9 @@ func (f *stubFetcher) Fetch(ctx context.Context, previous string) (sync.FetchRes
 	defer f.src.mu.Unlock()
 
 	version := fmt.Sprint("v", f.src.version)
+	if f.bug == fetcherNoVersion {
+		version = ""
+	}
 	if f.bug == fetcherSameVersion {
 		version = "v0"
 	}
@@ -227,21 +231,27 @@ func (m mismatched) ParseURI(uri string) (sync.SourceConfig, bool) {
 type triggerBug string
 
 const (
-	triggerOK            triggerBug = ""
-	triggerNoReconnect   triggerBug = "stops for good when it loses the change signal"
-	triggerIgnoresDone   triggerBug = "does not return when its context is done"
-	triggerErrorOnDone   triggerBug = "returns an error when its context is done"
-	triggerSignalsAlways triggerBug = "keeps signalling after shutdown"
+	triggerOK             triggerBug = ""
+	triggerNoReconnect    triggerBug = "stops for good when it loses the change signal"
+	triggerIgnoresDone    triggerBug = "does not return when its context is done"
+	triggerErrorOnDone    triggerBug = "returns an error when its context is done"
+	triggerSignalsAlways  triggerBug = "keeps signalling after shutdown"
+	triggerSignalsUnasked triggerBug = "signals without a change signal"
+	triggerDropsSignals   triggerBug = "drops every second change signal"
 )
 
 type stubTrigger struct {
 	bug     triggerBug
+	seen    int
 	events  chan string // "signal" or "lose"
 	release chan struct{}
 	late    chan func()
 }
 
 func (s *stubTrigger) Run(ctx context.Context, signal func()) error {
+	if s.bug == triggerSignalsUnasked {
+		signal()
+	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -257,6 +267,12 @@ func (s *stubTrigger) Run(ctx context.Context, signal func()) error {
 		case ev := <-s.events:
 			switch ev {
 			case "signal":
+				if s.bug == triggerDropsSignals {
+					s.seen++
+					if s.seen > 1 {
+						continue
+					}
+				}
 				signal()
 			case "lose":
 				if s.bug == triggerNoReconnect {
@@ -300,7 +316,7 @@ func TestTriggerContract(t *testing.T) {
 
 		require.Empty(t, report.Aborted)
 		require.Empty(t, report.FailedCases())
-		require.Len(t, report.Cases, 4)
+		require.Len(t, report.Cases, 5)
 	})
 
 	tests := []struct {
@@ -310,6 +326,7 @@ func TestTriggerContract(t *testing.T) {
 		{triggerNoReconnect, []string{synctest.CaseReconnects, synctest.CaseReturnsNilOnDone}},
 		{triggerIgnoresDone, []string{synctest.CaseReturnsNilOnDone, synctest.CaseStopsListening}},
 		{triggerErrorOnDone, []string{synctest.CaseReturnsNilOnDone}},
+		{triggerSignalsUnasked, []string{synctest.CaseNeverFetchesItself}},
 	}
 	for _, tt := range tests {
 		t.Run("a trigger that "+string(tt.bug)+" fails its cases", func(t *testing.T) {
@@ -360,6 +377,8 @@ const (
 	streamDeliversOnDel streamBug = "delivers when its source is removed although it declares Keep"
 	streamNoReSync      streamBug = "does not deliver on ReSync"
 	streamExitsWhenDown streamBug = "returns an error when the source is unavailable at startup"
+	streamIgnoresChange streamBug = "does not deliver a change the source pushes"
+	streamAltersData    streamBug = "delivers a flag configuration other than its source's"
 )
 
 type stubStream struct {
@@ -430,7 +449,11 @@ func (s *stubStream) Sync(ctx context.Context, ch chan<- sync.DataSync) error {
 		}
 	}
 	s.set(flagsOne)
-	ch <- sync.DataSync{FlagData: s.snapshot(), Source: s.source()}
+	first := s.snapshot()
+	if s.bug == streamAltersData {
+		first = flagsTwo
+	}
+	ch <- sync.DataSync{FlagData: first, Source: s.source()}
 	close(s.ready)
 	for {
 		select {
@@ -443,6 +466,9 @@ func (s *stubStream) Sync(ctx context.Context, ch chan<- sync.DataSync) error {
 			switch ev {
 			case "change":
 				s.set(flagsTwo)
+				if s.bug == streamIgnoresChange {
+					continue
+				}
 				ch <- sync.DataSync{FlagData: s.snapshot(), Source: s.source()}
 			case "restore":
 				if s.bug != streamNoReconnect {
@@ -592,4 +618,37 @@ func TestRunReportsCasesAsSubtests(t *testing.T) {
 
 	sf, sin := streamSetup(t, streamOK)
 	synctest.RunStreaming(t, sf, sin)
+}
+
+// TestEveryCaseHasABrokenStub: for the cases the other tests leave to chance, a stub that breaks that rule fails the
+// case, and fails it as the author would see it, with the expected and the observed behaviour.
+func TestEveryCaseHasABrokenStub(t *testing.T) {
+	t.Run("fetcher: fetches once per request with its source version", func(t *testing.T) {
+		f, in := fetcherSetup(t, fetcherNoVersion)
+		report := synctest.CheckFetcher(t, f, in)
+
+		require.Empty(t, report.Aborted)
+		require.Contains(t, report.FailedCases(), synctest.CaseFetchesOnce)
+	})
+	t.Run("trigger: signals each time the change signal arrives", func(t *testing.T) {
+		f, in := triggerSetup(t, triggerDropsSignals)
+		report := synctest.CheckTrigger(t, f, in)
+
+		require.Empty(t, report.Aborted)
+		require.Contains(t, report.FailedCases(), synctest.CaseSignalsEachTime)
+	})
+	t.Run("streaming: delivers each change the source pushes", func(t *testing.T) {
+		f, in := streamSetup(t, streamIgnoresChange)
+		report := synctest.CheckStreaming(t, f, in)
+
+		require.Empty(t, report.Aborted)
+		require.Contains(t, report.FailedCases(), synctest.CaseDeliversChange)
+	})
+	t.Run("streaming: delivers the flag configuration unchanged", func(t *testing.T) {
+		f, in := streamSetup(t, streamAltersData)
+		report := synctest.CheckStreaming(t, f, in)
+
+		require.Empty(t, report.Aborted)
+		require.Contains(t, report.FailedCases(), synctest.CaseDeliversUnchanged)
+	})
 }

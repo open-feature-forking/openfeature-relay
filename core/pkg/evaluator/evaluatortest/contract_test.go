@@ -2,6 +2,7 @@ package evaluatortest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -168,6 +169,45 @@ func TestContractAcceptsAConformingEvaluator(t *testing.T) {
 	Run(t, e, samplesFor(e))
 }
 
+func TestAFeatureNeitherSuppliedNorNamedFails(t *testing.T) {
+	e := &reference{}
+	samples := samplesFor(e)
+	samples.Disabled = ""
+	samples.Attribute = nil
+	samples.Without = []Feature{FeatureAttribute}
+
+	report := Check(t, e, samples)
+
+	require.Equal(t, []string{"disabled"}, report.FailedCases())
+	for _, c := range report.Cases {
+		switch c.Name {
+		case "disabled":
+			require.Contains(t, c.Expected, "Samples.Disabled")
+		case "attributes":
+			require.NotEmpty(t, c.NotApplicable)
+		}
+	}
+}
+
+func TestAFeatureBothSuppliedAndNamedAbortsTheRun(t *testing.T) {
+	e := &reference{}
+	samples := samplesFor(e)
+	samples.Without = []Feature{FeatureShared}
+
+	require.Contains(t, Check(t, e, samples).Aborted, `"Shared" is both set and named`)
+
+	samples.Without = []Feature{"Colour"}
+	require.Contains(t, Check(t, e, samples).Aborted, `observed: "Colour"`)
+}
+
+func TestMissingStaticSamplesAbortTheRun(t *testing.T) {
+	e := &reference{}
+	samples := samplesFor(e)
+	samples.Static = nil
+
+	require.Contains(t, Check(t, e, samples).Aborted, "Samples.Static")
+}
+
 func TestContractReportsExpectedAndObserved(t *testing.T) {
 	tests := map[string]struct {
 		flaws flaws
@@ -189,17 +229,22 @@ func TestContractReportsExpectedAndObserved(t *testing.T) {
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			e := &reference{flaws: tt.flaws}
-			tb := &fakeTB{}
-			Run(tb, e, samplesFor(e))
+			report := Check(t, e, samplesFor(e))
 
-			require.NotEmpty(t, tb.errors, "the contract accepted a broken evaluator")
-			var matching []string
-			for _, msg := range tb.errors {
-				if strings.HasPrefix(msg, tt.reported+":") {
-					matching = append(matching, msg)
+			require.True(t, report.Failed(), "the contract accepted a broken evaluator")
+			var errors, matching []string
+			for _, c := range report.Cases {
+				if c.Passed || c.NotApplicable != "" {
+					continue
+				}
+				for _, msg := range strings.Split(c.Observed, "\n---\n") {
+					errors = append(errors, msg)
+					if strings.HasPrefix(msg, tt.reported+":") {
+						matching = append(matching, msg)
+					}
 				}
 			}
-			require.NotEmpty(t, matching, "no failure under %q in %v", tt.reported, tb.errors)
+			require.NotEmpty(t, matching, "no failure under %q in %v", tt.reported, errors)
 			for _, msg := range matching {
 				require.Contains(t, msg, "expected")
 				require.Contains(t, msg, "observed")
@@ -208,14 +253,24 @@ func TestContractReportsExpectedAndObserved(t *testing.T) {
 	}
 }
 
-func TestContractReportsFactoryProblems(t *testing.T) {
-	tb := &fakeTB{}
-	Run(tb, nameless{}, Samples{})
-	require.Len(t, tb.errors, 2)
-	for _, msg := range tb.errors {
-		require.Contains(t, msg, "expected")
-		require.Contains(t, msg, "observed")
-	}
+func TestContractAbortsOnFactoryProblems(t *testing.T) {
+	report := Check(t, nameless{}, samplesFor(&reference{}))
+
+	require.True(t, report.Failed())
+	require.Empty(t, report.Cases)
+	require.Contains(t, report.Aborted, "the type name is empty")
+
+	report = Check(t, failing{}, samplesFor(&reference{}))
+	require.Empty(t, report.Cases)
+	require.Contains(t, report.Aborted, "no backend")
+}
+
+type failing struct{ nameless }
+
+func (failing) Type() string                { return "failing" }
+func (failing) ConfigurationFormat() string { return "flagd" }
+func (failing) Create(evaluator.Settings) (evaluator.Evaluator, error) {
+	return nil, errors.New("no backend")
 }
 
 type nameless struct{}

@@ -248,5 +248,5 @@ func TestDefaultKinds(t *testing.T) {
 		[]events.Kind{events.KindConfigurationChange, events.KindEvaluation, events.KindTracking},
 		eventsinkexample.Factory{}.Kinds())
 	require.Equal(t, "webhook", eventsinkexample.Factory{}.Type())
-	require.NoError(t, eventsink.ValidateDeclaration(eventsinkexample.Factory{}))
+	require.NoError(t, eventsink.ValidateDeclarations(eventsinkexample.Factory{}))
 }

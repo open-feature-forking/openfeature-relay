@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/contracttest"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 )
 
@@ -52,7 +53,7 @@ const (
 // RunStreaming runs the contract tests of a streaming sync provider: one subtest per contract case.
 func RunStreaming(t *testing.T, f sync.StreamingFactory, in StreamingInputs) {
 	t.Helper()
-	CheckStreaming(t, f, in).report(t)
+	CheckStreaming(t, f, in).Run(t)
 }
 
 // collector receives what a provider delivers and keeps all of it.
@@ -104,39 +105,39 @@ func (c *collector) await(index int, d time.Duration) (sync.DataSync, bool) {
 
 // CheckStreaming runs the contract tests of a streaming sync provider and returns their outcome. t is only handed to
 // the test inputs.
-func CheckStreaming(t testing.TB, f sync.StreamingFactory, in StreamingInputs) Report {
-	if msg := missing(
-		missingInput{"StreamingInputs.Expect", in.Expect != "", []string{CaseDeliversUnchanged, CaseDeliversChange}},
-		missingInput{"StreamingInputs.Change", in.Change != nil, []string{CaseDeliversChange}},
-		missingInput{"StreamingInputs.Break", in.Break != nil, []string{CaseReconnectsToSource}},
-		missingInput{"StreamingInputs.Restore", in.Restore != nil, []string{CaseReconnectsToSource}},
-		missingInput{"StreamingInputs.Remove", in.Remove != nil, []string{CaseSourceRemoved}},
-		missingInput{"StreamingInputs.Unavailable", in.Unavailable != nil, []string{CaseSurvivesFirstFailure}},
-		missingInput{"StreamingInputs.Available", in.Available != nil, []string{CaseSurvivesFirstFailure}},
-		missingInput{"StreamingInputs.OnRemove", in.OnRemove == Keep || in.OnRemove == Empty, []string{CaseSourceRemoved}},
+func CheckStreaming(t testing.TB, f sync.StreamingFactory, in StreamingInputs) contracttest.Report {
+	if msg := contracttest.Missing(
+		contracttest.Need("StreamingInputs.Expect", in.Expect != "", CaseDeliversUnchanged, CaseDeliversChange),
+		contracttest.Need("StreamingInputs.Change", in.Change != nil, CaseDeliversChange),
+		contracttest.Need("StreamingInputs.Break", in.Break != nil, CaseReconnectsToSource),
+		contracttest.Need("StreamingInputs.Restore", in.Restore != nil, CaseReconnectsToSource),
+		contracttest.Need("StreamingInputs.Remove", in.Remove != nil, CaseSourceRemoved),
+		contracttest.Need("StreamingInputs.Unavailable", in.Unavailable != nil, CaseSurvivesFirstFailure),
+		contracttest.Need("StreamingInputs.Available", in.Available != nil, CaseSurvivesFirstFailure),
+		contracttest.Need("StreamingInputs.OnRemove", in.OnRemove == Keep || in.OnRemove == Empty, CaseSourceRemoved),
 	); msg != "" {
-		return Report{Aborted: msg}
+		return contracttest.Report{Aborted: msg}
 	}
 	if msg := checkSchemes(f); msg != "" {
-		return Report{Aborted: msg}
+		return contracttest.Report{Aborted: msg}
 	}
 	probe, err := f.CreateStreaming(newSettings(in.Source, f.Type(), nil))
 	if err != nil || probe == nil {
-		return Report{Aborted: fmt.Sprintf("the factory cannot create the streaming sync provider (provider %v, error %v)", probe, err)}
+		return contracttest.Report{Aborted: fmt.Sprintf("the factory cannot create the streaming sync provider (provider %v, error %v)", probe, err)}
 	}
 
 	limit := timeoutOr(in.Timeout)
-	var cases []Case
+	var cases []contracttest.Case
 	cases = append(cases, firstConnectCase(t, f, in, limit))
 
 	provider, err := f.CreateStreaming(newSettings(in.Source, f.Type(), nil))
 	if err != nil || provider == nil {
-		return Report{Aborted: fmt.Sprintf("the factory cannot create the streaming sync provider (provider %v, error %v)", provider, err)}
+		return contracttest.Report{Aborted: fmt.Sprintf("the factory cannot create the streaming sync provider (provider %v, error %v)", provider, err)}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	if err := provider.Init(ctx); err != nil {
-		return Report{Aborted: fmt.Sprintf("the streaming sync provider cannot be initialized: %v", err)}
+		return contracttest.Report{Aborted: fmt.Sprintf("the streaming sync provider cannot be initialized: %v", err)}
 	}
 	deliveries := make(chan sync.DataSync, 64)
 	stopCollecting := make(chan struct{})
@@ -214,11 +215,11 @@ func CheckStreaming(t testing.TB, f sync.StreamingFactory, in StreamingInputs) R
 		fmt.Sprintf("returned: %v, error: %v", stopped, syncErr)))
 
 	cases = append(cases, namedSource(received, in.Source.URI))
-	return Report{Cases: cases}
+	return contracttest.Report{Cases: cases}
 }
 
 // namedSource checks that every delivery carried the configured URI as its source.
-func namedSource(c *collector, uri string) Case {
+func namedSource(c *collector, uri string) contracttest.Case {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for i, d := range c.deliveries {
@@ -278,7 +279,7 @@ func (c *collector) count() int {
 
 // firstConnectCase starts a provider while the source is unavailable. It has to stay up and, once the source is
 // available, deliver and report ready. The source is available again afterwards.
-func firstConnectCase(t testing.TB, f sync.StreamingFactory, in StreamingInputs, limit time.Duration) Case {
+func firstConnectCase(t testing.TB, f sync.StreamingFactory, in StreamingInputs, limit time.Duration) contracttest.Case {
 	in.Unavailable(t)
 	provider, err := f.CreateStreaming(newSettings(in.Source, f.Type(), nil))
 	if err != nil || provider == nil {
