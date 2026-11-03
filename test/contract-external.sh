@@ -28,7 +28,9 @@ qualifying=()
 while read -r gomod; do
 	dir=$(dirname "$gomod")
 	self=$(sed -n 's/^module[[:space:]]\{1,\}//p' "$gomod" | tr -d '\r')
-	graph=$(cd "$dir" && GOWORK=off GOPROXY=off go list -m all) || { echo "cannot list the module graph of $dir" >&2; exit 1; }
+	# The graph is listed outside the workspace, so its modules may not be in the module cache yet (a fresh CI runner filled
+	# it in workspace mode): lookup stays allowed, and -mod=readonly keeps the checkout's go.mod and go.sum untouched.
+	graph=$(cd "$dir" && GOWORK=off GOFLAGS=-mod=readonly go list -m all) || { echo "cannot list the module graph of $dir" >&2; exit 1; }
 	paths=$(echo "$graph" | awk '{print $1}')
 	# a module of this repository is one under the relay path or under the path its flagd modules still carry
 	others=$(echo "$paths" | grep -E "^($relay|$legacy)/" | grep -vxE "$relay/core|$self" || true)
@@ -82,6 +84,8 @@ for dir in $derived; do
 			go mod edit -replace "$relay/core=$core_replace"
 			go mod tidy
 		else
+			# the requirement names a core version no tag publishes; only the replace made it resolvable
+			go mod edit -droprequire "$relay/core"
 			GOPROXY=direct GONOSUMDB="github.com/open-feature-forking/*" go get "$relay/core@$sha"
 		fi
 		go test -race -count=2 ./...
