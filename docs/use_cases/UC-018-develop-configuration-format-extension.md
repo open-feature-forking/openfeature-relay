@@ -155,7 +155,6 @@ This use case is `Implemented` for the configuration format side: the interface,
 
 - Main scenario steps 8–9 and BR-007 (tag and publish the module, select it in a manifest by module path and version): UC-001 Build Custom Distribution and UC-012.
 - BR-002, flag sync half (the flag sync endpoint sends documents only to a request that names the format, FR-044): UC-017.
-- BR-008, consumers of the reported facts: the OFREP endpoint derives ETags and event stream events from document versions and the runtime publishes configuration change events (UC-004).
 
 - BR-003 for the Kubernetes sync provider, which shapes the flag configuration from the FeatureFlag CRD instead of delivering it unchanged: UC-003.
 - The module split: the `configformat` packages stay in the core module for now: UC-014 and phase 4.
