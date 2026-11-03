@@ -69,7 +69,12 @@ type Sync struct {
 
 	client FlagSyncServiceClient
 	ready  atomic.Bool
+
+	streamOpen  atomic.Bool
+	lastContact atomic.Int64 // unix nanoseconds at which the last stream ended; zero before the first
 }
+
+var _ sync.ContactReporter = (*Sync)(nil)
 
 func (g *Sync) Init(_ context.Context) error {
 	var rpcCon *grpc.ClientConn // Reusable client connection
@@ -146,6 +151,18 @@ func (g *Sync) ReSync(ctx context.Context, dataSync chan<- sync.DataSync) error 
 
 func (g *Sync) IsReady() bool {
 	return g.ready.Load()
+}
+
+// LastContact is the current time while a stream is open, else when the last stream ended; the zero time before the
+// first stream.
+func (g *Sync) LastContact() time.Time {
+	if g.streamOpen.Load() {
+		return time.Now()
+	}
+	if n := g.lastContact.Load(); n != 0 {
+		return time.Unix(0, n)
+	}
+	return time.Time{}
 }
 
 func (g *Sync) Sync(ctx context.Context, dataSync chan<- sync.DataSync) error {
@@ -239,6 +256,11 @@ func (g *Sync) handleFlagSync(
 	isReconnect bool,
 ) error {
 	g.ready.Store(true)
+	g.streamOpen.Store(true)
+	defer func() {
+		g.lastContact.Store(time.Now().UnixNano())
+		g.streamOpen.Store(false)
+	}()
 
 	firstRecv := true
 	for {
