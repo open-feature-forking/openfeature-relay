@@ -3,6 +3,7 @@
 # fails when it differs from this file.
 test/configformat-example
 test/eventsink-example
+test/middleware-example
 test/service-example
 test/sync-example
 test/telemetry-example
