@@ -25,7 +25,7 @@ flowchart LR
 The **runtime** is the part of a distribution that starts the sync providers, hands their flag configurations to configuration formats, publishes events on the event bus and starts the service endpoints.
 
 1. A **sync provider** reads a source. A fetching sync provider only fetches on request; the core's poller schedules it, sends conditional requests and refetches on a trigger.
-2. The core decodes the **encoding** (JSON, YAML, TOML) and hands the result to the source's **configuration format**, which validates it and writes documents to the **store**. A rejected configuration leaves the store unchanged.
+2. The core decodes the **encoding** (JSON or YAML) and hands the result to the source's **configuration format**, which validates it and writes documents to the **store**. A rejected configuration leaves the store unchanged.
 3. On a change, the runtime publishes a **configuration change event** on the **event bus**.
 4. A client request reaches a **service endpoint**, through its middleware. For evaluation, the **evaluation router** picks, for the selector and flag key, the configuration format holding the flag and its evaluator; the **evaluator** returns untyped results, and type checks stay in the core.
 5. The flag sync endpoint and the OFREP event stream watch the store; **event sinks** subscribe to the event bus.
