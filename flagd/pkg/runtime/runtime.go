@@ -10,6 +10,7 @@ import (
 	msync "sync"
 	"sync/atomic"
 	"syscall"
+	"time"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
@@ -22,6 +23,13 @@ import (
 	flagsync "github.com/open-feature/flagd/flagd/pkg/service/flag-sync"
 	"golang.org/x/sync/errgroup"
 )
+
+// staleLimit is the age of the last contact with a source beyond which flagd is not ready.
+type staleLimit struct {
+	source   string
+	provider sync.ContactReporter
+	after    time.Duration
+}
 
 type Runtime struct {
 	Evaluator         evaluator.IEvaluator
@@ -62,6 +70,10 @@ type Runtime struct {
 	sourceReadiness map[string]bool
 	// initialized is set once every configured source has successfully updated the evaluator.
 	initialized atomic.Bool
+	// staleLimits are the sources that go stale, and how soon.
+	staleLimits []staleLimit
+	// now is the clock of the staleness check; nil means time.Now.
+	now func() time.Time
 
 	mu msync.Mutex
 }
@@ -189,7 +201,7 @@ func (r *Runtime) isReady() bool {
 				return false
 			}
 		}
-		return true
+		return !r.anyStale()
 	}
 	return false
 }
@@ -264,4 +276,20 @@ func (r *Runtime) accept(format configformat.ConfigurationFormat, payload sync.D
 		r.Logger.Warn(fmt.Sprintf("dropped: %v", dropped))
 	}
 	return nil
+}
+
+// anyStale reports whether a source with a staleAfter setting has not been in contact within it. A source that has
+// never been in contact is stale.
+func (r *Runtime) anyStale() bool {
+	now := time.Now
+	if r.now != nil {
+		now = r.now
+	}
+	for _, limit := range r.staleLimits {
+		last := limit.provider.LastContact()
+		if last.IsZero() || now().Sub(last) > limit.after {
+			return true
+		}
+	}
+	return false
 }

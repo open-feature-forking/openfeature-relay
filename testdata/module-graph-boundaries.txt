@@ -17,7 +17,11 @@ sync/azblob:cloud.google.com/go/storage|github.com/aws|gocloud.dev|google.golang
 sync/s3:cloud.google.com|github.com/Azure|gocloud.dev|openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|openfeature-operator|gcs|azblob|builder))
 # The telemetry module carries no sync provider and no Kubernetes or gocloud client (OpenTelemetry brings a few Google auth modules).
 telemetry/otel:openfeature-relay/sync/|k8s.io|gocloud.dev|github.com/Azure|github.com/aws
+# BR-001 of UC-004: the example service endpoint's module graph carries the core module only.
+test/service-example:opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|open-feature/flagd/flagd|openfeature-relay/(sync|telemetry|evaluator|configformat)/
 # BR-001 of UC-003: the module graph of the example sync extension is that of core.
 test/sync-example:robfig|opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|cloud.google.com|github.com/Azure|github.com/aws|open-feature/flagd/flagd|openfeature-relay/(sync|telemetry|evaluator|configformat)/
 # The example telemetry provider requires the core only: no telemetry SDK, transport or flagd module.
 test/telemetry-example:robfig|opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|cloud.google.com|github.com/Azure|github.com/aws|prometheus|open-feature/flagd/flagd|openfeature-relay/(sync|telemetry|evaluator|configformat)/
+# The example event sink requires the core only: no vendor client, transport or flagd module.
+test/eventsink-example:robfig|opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|cloud.google.com|github.com/Azure|github.com/aws|prometheus|open-feature/flagd/flagd|openfeature-relay/(sync|telemetry|evaluator|configformat)/

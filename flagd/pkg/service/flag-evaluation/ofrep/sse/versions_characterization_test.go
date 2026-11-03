@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/launchdarkly/eventsource"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	"github.com/stretchr/testify/require"
 )
@@ -16,10 +16,10 @@ import (
 // quiet is how long a stream is watched to count its events.
 const quiet = 500 * time.Millisecond
 
-// subscribed starts a service over the store and returns a subscription on channel.
-func subscribed(t *testing.T, s *store.Store, channel string) *eventsource.Stream {
+// subscribed starts a service over the store, following the bus, and returns a subscription on channel.
+func subscribed(t *testing.T, s *store.Store, bus *events.Bus, channel string) *eventsource.Stream {
 	t.Helper()
-	svc := New(s, Config{Logger: logger.NewLogger(nil, false), HeartbeatInterval: time.Hour})
+	svc := New(s, Config{Logger: logger.NewLogger(nil, false), HeartbeatInterval: time.Hour, Bus: bus, Formats: testFormats})
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	go func() { _ = svc.Start(ctx) }()
@@ -33,58 +33,84 @@ func subscribed(t *testing.T, s *store.Store, channel string) *eventsource.Strea
 
 // drain returns the events that arrive within quiet.
 func drain(stream *eventsource.Stream) []eventsource.Event {
-	var events []eventsource.Event
+	var got []eventsource.Event
 	deadline := time.After(quiet)
 	for {
 		select {
 		case ev := <-stream.Events:
-			events = append(events, ev)
+			got = append(got, ev)
 		case <-deadline:
-			return events
+			return got
 		}
 	}
 }
 
-// TestRefetchEventsToday pins the refetch event stream of the OFREP endpoint: the payload, one event per
-// change, none for an identical update or a change to another selector, and none for a change of a
-// vendor-format document. The vendor case is flipped when change announcements come from document versions.
-func TestRefetchEventsToday(t *testing.T) {
-	log := logger.NewLogger(nil, false)
-	s, err := store.NewStore(log, []string{"src1", "src2", "vendor"})
+// TestRefetchEvents pins the refetch event stream of the OFREP endpoint: the payload, one event per change of a
+// document behind the selector, none for an identical delivery or a change to another selector, and one for a
+// change of a vendor-format document.
+func TestRefetchEvents(t *testing.T) {
+	s, err := store.NewStore(logger.NewLogger(nil, false), []string{"src1", "src2", "vendor"})
 	require.NoError(t, err)
-	s.Update("src1", []model.Flag{testFlag("fs1", "a", "on")}, model.Metadata{"flagSetId": "fs1"}, false)
-	s.Update("src2", []model.Flag{testFlag("fs2", "b", "on")}, model.Metadata{"flagSetId": "fs2"}, false)
+	bus := events.NewBus()
+	deliver(t, s, bus, "flagd", "src1", "fs1", "v1", "a")
+	deliver(t, s, bus, "flagd", "src2", "fs2", "v1", "b")
 
-	stream := subscribed(t, s, "flagSetId=fs1")
+	stream := subscribed(t, s, bus, "flagSetId=fs1")
 
 	// a change to the selected flag set: one event
-	s.Update("src1", []model.Flag{testFlag("fs1", "a", "off")}, model.Metadata{"flagSetId": "fs1"}, false)
-	events := drain(stream)
-	require.Len(t, events, 1)
-	require.Equal(t, "message", events[0].Event())
+	deliver(t, s, bus, "flagd", "src1", "fs1", "v2", "a")
+	got := drain(stream)
+	require.Len(t, got, 1)
+	require.Equal(t, "message", got[0].Event())
 	var payload map[string]any
-	require.NoError(t, json.Unmarshal([]byte(events[0].Data()), &payload))
+	require.NoError(t, json.Unmarshal([]byte(got[0].Data()), &payload))
 	require.Equal(t, "refetchEvaluation", payload["type"])
 	require.NotEmpty(t, payload["etag"], "the config version token")
 	require.NotZero(t, payload["lastModified"], "the time of the change, in Unix seconds")
 	require.Len(t, payload, 3, "type, etag and lastModified")
 
-	// the same flags again: none
-	s.Update("src1", []model.Flag{testFlag("fs1", "a", "off")}, model.Metadata{"flagSetId": "fs1"}, false)
+	// the same version again: none
+	deliver(t, s, bus, "flagd", "src1", "fs1", "v2", "a")
 	require.Empty(t, drain(stream))
 
 	// a change to another flag set: none
-	s.Update("src2", []model.Flag{testFlag("fs2", "b", "off")}, model.Metadata{"flagSetId": "fs2"}, false)
+	deliver(t, s, bus, "flagd", "src2", "fs2", "v2", "b")
 	require.Empty(t, drain(stream))
 
-	// a vendor-format document, as a format other than flagd's writes it: none
-	require.NoError(t, s.Apply(store.ApplyRequest{
-		Format: "vendor", Source: "vendor",
-		Documents: []store.Document{{Format: "vendor", Source: "vendor", FlagSet: "fs1", Version: "v1", FlagKeys: []string{"k"}}},
-	}))
-	require.Empty(t, drain(stream))
-
-	// and the next flagd-format change is announced again
-	s.Update("src1", []model.Flag{testFlag("fs1", "a", "on")}, model.Metadata{"flagSetId": "fs1"}, false)
+	// a vendor-format document of the flag set: one
+	deliver(t, s, bus, "vendor", "vendor", "fs1", "v1", "k")
 	require.Len(t, drain(stream), 1)
+
+	// and the next flagd-format change is announced as before
+	deliver(t, s, bus, "flagd", "src1", "fs1", "v3", "a")
+	require.Len(t, drain(stream), 1)
+}
+
+// TestEventStreamVendorFormat pins that a vendor format's delivery reaches the stream, though no flagd flag
+// changes, and that the version token the event carries is the one a conditional request is compared with.
+func TestEventStreamVendorFormat(t *testing.T) {
+	s, err := store.NewStore(logger.NewLogger(nil, false), []string{"src1", "vendor"})
+	require.NoError(t, err)
+	bus := events.NewBus()
+	svc := New(s, Config{Logger: logger.NewLogger(nil, false), HeartbeatInterval: time.Hour, Bus: bus, Formats: testFormats})
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go func() { _ = svc.Start(ctx) }()
+
+	stream, err := eventsource.SubscribeWithURL(streamURL(newStreamServer(t, svc), ""))
+	require.NoError(t, err)
+	t.Cleanup(stream.Close)
+	time.Sleep(100 * time.Millisecond)
+	before, _, ok := svc.Tracker().Version("")
+	require.True(t, ok)
+
+	deliver(t, s, bus, "vendor", "vendor", "", "v1", "segment")
+
+	got := drain(stream)
+	require.Len(t, got, 1)
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal([]byte(got[0].Data()), &payload))
+	after, _, _ := svc.Tracker().Version("")
+	require.NotEqual(t, before, after)
+	require.Equal(t, after, payload["etag"])
 }

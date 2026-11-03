@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
@@ -38,6 +39,11 @@ type SvcConfiguration struct {
 	SSEInactivityDelaySec int
 	SSEPublicURL          string
 
+	// Bus carries the configuration change events the event stream announces; Formats are the configuration formats
+	// whose document versions its validators come from.
+	Bus     *events.Bus
+	Formats []string
+
 	// HTTPMiddleware wraps the routes after CORS and before the router. Nil means none.
 	HTTPMiddleware func(http.Handler) http.Handler
 }
@@ -57,8 +63,9 @@ func NewOfrepService(
 	// SSE requires a flag store to watch; without one we cannot serve or advertise it, so treat
 	// a missing store as SSE disabled rather than crashing later in the tracker goroutine.
 	sseEnabled := cfg.SSEEnabled
-	if sseEnabled && flagStore == nil {
-		cfg.Logger.Warn("OFREP SSE requested but no flag store was provided; disabling SSE")
+	documentStore, isStore := flagStore.(*store.Store)
+	if sseEnabled && (flagStore == nil || !isStore || documentStore == nil) {
+		cfg.Logger.Warn("OFREP SSE requested but no document store was provided; disabling SSE")
 		sseEnabled = false
 	}
 
@@ -69,7 +76,7 @@ func NewOfrepService(
 		PublicURL:          cfg.SSEPublicURL,
 	}
 	if sseEnabled {
-		sseService = sse.New(flagStore, sse.Config{Logger: cfg.Logger})
+		sseService = sse.New(documentStore, sse.Config{Logger: cfg.Logger, Bus: cfg.Bus, Formats: cfg.Formats})
 		sseCfg.Versioner = sseService.Tracker()
 	}
 

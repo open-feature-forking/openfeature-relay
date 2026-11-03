@@ -38,6 +38,9 @@ func (Factory) Needs() service.Needs { return service.Needs{} }
 // delivers, so that none is lost.
 func (Factory) Create(s service.Settings) (service.Endpoint, error) {
 	cfg, _ := s.Config[ConfigKey].(SvcConfigurations)
+	if port, ok := s.Config["port"].(int); ok {
+		cfg.Port = uint16(port)
+	}
 	cfg.Logger = s.Logger.WithFields(zap.String("component", "FlagSyncService"))
 	cfg.Store = s.Store
 	cfg.Initialized = s.Initialized

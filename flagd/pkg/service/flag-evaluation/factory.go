@@ -47,6 +47,9 @@ func (Factory) Create(s service.Settings) (service.Endpoint, error) {
 		return nil, fmt.Errorf("the %s endpoint needs a resolver", Type)
 	}
 	cfg, _ := s.Config[ConfigKey].(EndpointConfig)
+	if port, ok := s.Config["port"].(int); ok {
+		cfg.Configuration.Port = uint16(port)
+	}
 	var options []connect.HandlerOption
 	if p, ok := s.Telemetry.(connectInstrumentation); ok {
 		options = p.ConnectHandlerOptions()

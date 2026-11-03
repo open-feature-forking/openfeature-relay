@@ -57,10 +57,11 @@ type SvcConfigurations struct {
 }
 
 type Service struct {
-	listener net.Listener
-	logger   *logger.Logger
-	server   *http.Server
-	modTime  *modTime
+	listener   net.Listener
+	endStreams context.CancelFunc
+	logger     *logger.Logger
+	server     *http.Server
+	modTime    *modTime
 
 	startupTracker syncTracker
 	initialized    <-chan struct{}
@@ -95,6 +96,9 @@ func NewSyncService(cfg SvcConfigurations) (*Service, error) {
 		flagsHandler = httpHandler{store: cfg.Store, log: l, modTime: stamp}
 	}
 
+	// the requests end with this context, which is cancelled when the service shuts down: an open SyncFlags stream
+	// would otherwise hold the graceful shutdown for its whole limit
+	streams, endStreams := context.WithCancel(context.Background())
 	server := newConnectServer(cfg, syncHandler{
 		store:               cfg.Store,
 		log:                 l,
@@ -104,10 +108,13 @@ func NewSyncService(cfg SvcConfigurations) (*Service, error) {
 		metricsRecorder:     flagdService.NewMetrics(cfg.Telemetry.Meter(flagdService.MetricsScope)),
 	}, flagsHandler)
 
+	server.BaseContext = func(net.Listener) context.Context { return streams }
+
 	// Loaded here rather than in ServeTLS so a bad path fails at construction.
 	if cfg.CertPath != "" && cfg.KeyPath != "" {
 		tlsConfig, tlsErr := loadTLSConfig(cfg.CertPath, cfg.KeyPath)
 		if tlsErr != nil {
+			endStreams()
 			return nil, fmt.Errorf("failed to load TLS cert and key: %w", tlsErr)
 		}
 		server.TLSConfig = tlsConfig
@@ -122,11 +129,13 @@ func NewSyncService(cfg SvcConfigurations) (*Service, error) {
 		lis, err = net.Listen("tcp", fmt.Sprintf(":%d", cfg.Port))
 	}
 	if err != nil {
+		endStreams()
 		return nil, fmt.Errorf("error creating listener: %w", err)
 	}
 
 	return &Service{
 		listener:    lis,
+		endStreams:  endStreams,
 		logger:      l,
 		server:      server,
 		modTime:     stamp,
@@ -207,6 +216,7 @@ func (s *Service) waitForInitialSync() {
 
 func (s *Service) shutdown() {
 	s.logger.Info("shutting down flag sync service")
+	s.endStreams()
 
 	// Bounded: a long-lived SyncFlags stream would otherwise hold the graceful shutdown open
 	// indefinitely, while unary requests get the window to finish.

@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net/http"
 	"slices"
 	"sort"
@@ -67,6 +68,9 @@ type Config struct {
 	// SyncFactories are the sync components, besides the official ones, that sources may select.
 	SyncFactories []sync.Factory
 	CORS          []string
+	// EndpointSettings are the settings of the service endpoints of a distribution, besides the official ones, keyed by
+	// the endpoint's type. An endpoint gets its own as Settings.Config.
+	EndpointSettings map[string]map[string]any
 
 	ContextValues              map[string]any
 	HeaderToContextKeyMappings map[string]string
@@ -179,7 +183,7 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		rt.Evaluator = inputs.router.IEvaluator()
 	}
 	endpointConfigs := endpointConfigs{
-		config: config, serviceConfig: rt.ServiceConfig, sources: sources,
+		formats: append([]string{flagdformat.Type}, formatTypes...), config: config, serviceConfig: rt.ServiceConfig, sources: sources,
 	}
 	for _, factory := range components.Endpoints {
 		if err := service.ValidateDeclarations(factory); err != nil {
@@ -205,6 +209,11 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		return nil, err
 	}
 	rt.Syncs = iSyncs
+	staleLimits, err := staleLimitsOf(syncProviders, iSyncs)
+	if err != nil {
+		return nil, err
+	}
+	rt.staleLimits = staleLimits
 	if shutdownTelemetry != nil {
 		rt.onShutdown("telemetry", shutdownTelemetry)
 	}
@@ -236,6 +245,7 @@ func telemetryProvider(
 
 // endpointConfigs derives the settings of the official endpoints from the operator's configuration.
 type endpointConfigs struct {
+	formats       []string // the configuration formats of the distribution, flagd's first
 	config        Config
 	serviceConfig service.Configuration
 	sources       []string
@@ -251,6 +261,7 @@ func (c endpointConfigs) forEndpoint(endpointType string) map[string]any {
 		}}
 	case ofrep.Type:
 		return map[string]any{ofrep.ConfigKey: ofrep.EndpointConfig{
+			Formats: c.formats,
 			Service: ofrep.SvcConfiguration{
 				Port:                  c.config.OfrepServicePort,
 				ServiceName:           svcName,
@@ -281,7 +292,30 @@ func (c endpointConfigs) forEndpoint(endpointType string) map[string]any {
 			MaxRequestBodyBytes:   c.config.MaxRequestBodyBytes,
 		}}
 	}
-	return map[string]any{}
+	settings := maps.Clone(c.config.EndpointSettings[endpointType])
+	if settings == nil {
+		settings = map[string]any{}
+	}
+	return settings
+}
+
+// staleLimitsOf pairs the sources that set staleAfter with their sync providers, which must report their last contact.
+func staleLimitsOf(sources []sync.SourceConfig, syncs []sync.ISync) ([]staleLimit, error) {
+	var limits []staleLimit
+	for i, source := range sources {
+		if source.StaleAfter == 0 {
+			continue
+		}
+		reporter, ok := syncs[i].(sync.ContactReporter)
+		if !ok {
+			return nil, fmt.Errorf("source %q sets staleAfter, which the %s sync provider cannot honour: it does not report its last contact",
+				source.URI, source.Provider)
+		}
+		limits = append(limits, staleLimit{
+			source: source.URI, provider: reporter, after: time.Duration(source.StaleAfter) * time.Second,
+		})
+	}
+	return limits, nil
 }
 
 // grpcClientInstrumentation is implemented by a telemetry provider that instruments outbound gRPC connections.
