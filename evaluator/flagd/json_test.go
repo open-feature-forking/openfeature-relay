@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -1804,4 +1805,42 @@ func TestTargetingVariantBehavior(t *testing.T) {
 			t.Fatal("did not map to stringified boolean")
 		}
 	})
+}
+
+// BenchmarkResolveAllValues is the bulk counterpart of the single-flag benchmarks: 20 flags of mixed types,
+// one of them with targeting.
+func BenchmarkResolveAllValues(b *testing.B) {
+	flags := make([]string, 0, 20)
+	for i := 0; i < 20; i++ {
+		switch i % 5 {
+		case 0:
+			flags = append(flags, fmt.Sprintf(`"flag-%02d": {"state": "ENABLED", "defaultVariant": "on", "variants": {"on": true, "off": false}}`, i))
+		case 1:
+			flags = append(flags, fmt.Sprintf(`"flag-%02d": {"state": "ENABLED", "defaultVariant": "a", "variants": {"a": "alpha", "b": "beta"}}`, i))
+		case 2:
+			flags = append(flags, fmt.Sprintf(`"flag-%02d": {"state": "ENABLED", "defaultVariant": "ten", "variants": {"one": 1, "ten": 10}}`, i))
+		case 3:
+			flags = append(flags, fmt.Sprintf(`"flag-%02d": {"state": "ENABLED", "defaultVariant": "half", "variants": {"half": 0.5, "quarter": 0.25}}`, i))
+		default:
+			flags = append(flags, fmt.Sprintf(`"flag-%02d": {"state": "ENABLED", "defaultVariant": "o", "variants": {"o": {"k": 1, "n": {"x": true}}, "p": {}}}`, i))
+		}
+	}
+	flags[7] = `"flag-07": {"state": "ENABLED", "defaultVariant": "off", "variants": {"on": true, "off": false},
+		"targeting": {"if": [{"==": [{"var": "email"}, "a@b.c"]}, "on", "off"]}}`
+	config := `{"flags": {` + strings.Join(flags, ",") + `}}`
+
+	evaluator := flagdEvaluator.NewJSON(logger.NewLogger(nil, false), store.NewFlags())
+	if err := evaluator.SetState(sync.DataSync{FlagData: config, Source: "testSource"}); err != nil {
+		b.Fatalf("expected no error: %v", err)
+	}
+	evalContext := map[string]interface{}{"email": "a@b.c"}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		values, _, err := evaluator.ResolveAllValues(context.TODO(), "bench", evalContext)
+		if err != nil || len(values) != 20 {
+			b.Fatalf("want 20 values, got %d, %v", len(values), err)
+		}
+	}
 }
