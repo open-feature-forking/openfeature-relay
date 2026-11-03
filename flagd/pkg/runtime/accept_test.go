@@ -36,7 +36,8 @@ func acceptRuntime(t *testing.T) (rt *Runtime, changes *events.Subscription, fla
 	}
 	var err error
 	rt, err = FromConfig(logger.NewLogger(nil, false), "test", cfg, Components{
-		ConfigurationFormats: []configformat.Factory{versionedFactory{}},
+		ConfigurationFormats: append(Official().ConfigurationFormats, versionedFactory{}),
+		Evaluators:           Official().Evaluators,
 	})
 	require.NoError(t, err)
 	changes = rt.Bus.Subscribe(events.SubscribeOptions{Kinds: []events.Kind{events.KindConfigurationChange}, Buffer: 16})

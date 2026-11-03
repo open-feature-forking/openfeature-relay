@@ -3,13 +3,13 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 	"strings"
 	"time"
 
 	"connectrpc.com/connect"
-	flagdformat "github.com/open-feature-forking/openfeature-relay/configformat/flagd"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
@@ -17,7 +17,6 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	flagdeval "github.com/open-feature-forking/openfeature-relay/evaluator/flagd"
 	syncbuilder "github.com/open-feature-forking/openfeature-relay/sync/builder"
 	flagdgrpc "github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc"
 	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
@@ -73,6 +72,9 @@ type Config struct {
 	// SyncFactories are the sync components, besides the official ones, that sources may select.
 	SyncFactories []sync.Factory
 	CORS          []string
+	// EvaluatorSettings are the settings of the evaluators of a distribution, keyed by the type of the evaluator's
+	// factory; an evaluator gets its own as Settings.Config.
+	EvaluatorSettings map[string]map[string]any
 
 	ContextValues              map[string]any
 	HeaderToContextKeyMappings map[string]string
@@ -156,11 +158,10 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		return nil, err
 	}
 
-	// derive the evaluator options and the service endpoints
-	var evalOpts []flagdeval.JSONEvaluatorOption
-	// TODO(#2101): remove
-	if config.StrictNumericRange {
-		evalOpts = append(evalOpts, flagdeval.WithStrictNumericRange())
+	// derive the default format and the service endpoints
+	defaultFormat, err := defaultFormatOf(logger, store, syncProviders, config.ConfigurationFormats)
+	if err != nil {
+		return nil, err
 	}
 	formatTypes := make([]string, 0, len(config.ConfigurationFormats))
 	for _, f := range config.ConfigurationFormats {
@@ -193,17 +194,17 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 			MaxRequestHeaderBytes:      config.MaxRequestHeaderBytes,
 		},
 		Formats:         formats,
-		DefaultFormat:   flagdformat.NewFormat(store, logger.WithFields(zap.String("component", "configformat"))),
+		DefaultFormat:   defaultFormat,
 		sourceReadiness: sourceReadiness,
 	}
 
-	inputs, err := newEndpointInputs(logger, store, bus, components.Endpoints, formatTypes, config.Evaluators, evalOpts)
+	inputs, err := newEndpointInputs(logger, store, bus, components.Endpoints, formatTypes, config.Evaluators,
+		func(evaluatorType string) map[string]any { return maps.Clone(config.EvaluatorSettings[evaluatorType]) },
+		config.StrictNumericRange)
 	if err != nil {
 		return nil, err
 	}
-	if inputs.router != nil {
-		rt.Evaluator = inputs.router.IEvaluator()
-	}
+	rt.Evaluator = inputs.evaluator()
 	endpointConfigs := endpointConfigs{
 		config: config, serviceConfig: rt.ServiceConfig, sources: sources, recorder: recorder, options: options,
 	}
@@ -339,6 +340,38 @@ func syncProvidersFromConfig(
 	return syncs, nil
 }
 
+// defaultFormatOf creates the format of the sources that name none, through the factory of the type
+// configformat.DefaultType. A distribution without that factory fails when a source needs it, naming the formats it has.
+func defaultFormatOf(
+	logger *logger.Logger, st *store.Store, providers []sync.SourceConfig, factories []configformat.Factory,
+) (configformat.ConfigurationFormat, error) {
+	for _, f := range factories {
+		if f.Type() == configformat.DefaultType {
+			format, err := f.Create(configformat.Settings{Store: st, Logger: logger.WithFields(zap.String("component", "configformat"))})
+			if err != nil {
+				return nil, fmt.Errorf("error creating configuration format %q: %w", f.Type(), err)
+			}
+			return format, nil
+		}
+	}
+	for _, provider := range providers {
+		if usesDefaultFormat(provider) {
+			return nil, fmt.Errorf("source %q names no configuration format, and this distribution has no %q format; available formats: %s",
+				provider.URI, configformat.DefaultType, strings.Join(formatTypesOf(factories), ", "))
+		}
+	}
+	return nil, nil
+}
+
+func formatTypesOf(factories []configformat.Factory) []string {
+	types := make([]string, 0, len(factories))
+	for _, f := range factories {
+		types = append(types, f.Type())
+	}
+	sort.Strings(types)
+	return types
+}
+
 func usesDefaultFormat(provider sync.SourceConfig) bool {
 	return provider.Format == "" || provider.Format == configformat.DefaultType
 }
@@ -348,11 +381,11 @@ func usesDefaultFormat(provider sync.SourceConfig) bool {
 func sourcesWithKnownFormat(
 	logger *logger.Logger, providers []sync.SourceConfig, factories []configformat.Factory,
 ) []sync.SourceConfig {
-	available := []string{configformat.DefaultType}
-	for _, f := range factories {
-		available = append(available, f.Type())
-	}
+	// flagd's format is named available, as it always was; a distribution that lacks it fails at startup instead,
+	// for a source that needs it (defaultFormatOf)
+	available := append([]string{configformat.DefaultType}, formatTypesOf(factories)...)
 	sort.Strings(available)
+	available = slices.Compact(available)
 
 	kept := make([]sync.SourceConfig, 0, len(providers))
 	for _, provider := range providers {
