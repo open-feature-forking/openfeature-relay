@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 )
 
 // Settings is what a distribution injects into the factory of a sync component for one source.
@@ -17,6 +18,9 @@ type Settings struct {
 	Logger *logger.Logger
 	// Metrics records what the component receives; nil records nothing.
 	Metrics MetricsRecorder
+	// Telemetry is the telemetry provider of the distribution, for what a component records beyond Metrics, such as
+	// the lifecycle of a stream, or instruments, such as the dial options of a client connection. Nil records nothing.
+	Telemetry telemetry.Provider
 	// Config holds the settings of a fetch trigger, from the source's `triggers` entry.
 	Config map[string]any
 }

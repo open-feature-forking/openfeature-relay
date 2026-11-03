@@ -75,7 +75,7 @@ func TestLastModifiedMovesOnUnchangedRedelivery(t *testing.T) {
 	require.NotEmpty(t, before)
 
 	time.Sleep(1100 * time.Millisecond) // Last-Modified has a resolution of one second
-	svc.Emit(testSource1)                // the store holds the same flags as before
+	svc.Emit(testSource1)               // the store holds the same flags as before
 
 	second, err := client.Get(url)
 	require.NoError(t, err)

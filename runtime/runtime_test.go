@@ -40,12 +40,15 @@ func (s readySync) IsReady() bool {
 type deliveryFormat struct {
 	errs []error
 	n    int
+	// accepted are the sources of the deliveries, in order, rejected ones included.
+	accepted []string
 }
 
 func (*deliveryFormat) Type() string { return "delivery" }
 
 func (f *deliveryFormat) Accept(_ context.Context, in configformat.Input) (configformat.Result, error) {
 	f.n++
+	f.accepted = append(f.accepted, in.Source)
 	if len(f.errs) > 0 {
 		err := f.errs[0]
 		f.errs = f.errs[1:]
@@ -149,8 +152,9 @@ func TestRuntimeReadinessRequiresSuccessfulStateForEverySource(t *testing.T) {
 
 	bus := events.NewBus()
 	delivered := deliveredSources(t, bus)
+	format := &deliveryFormat{errs: []error{evaluatorError}}
 	runtime := Runtime{
-		DefaultFormat: &deliveryFormat{errs: []error{evaluatorError}},
+		DefaultFormat: format,
 		Logger:        logger.NewLogger(nil, false),
 		Bus:           bus,
 		Syncs: []coresync.ISync{
@@ -174,6 +178,7 @@ func TestRuntimeReadinessRequiresSuccessfulStateForEverySource(t *testing.T) {
 	runtime.updateAndEmit(secondPayload)
 	require.True(t, runtime.isReady())
 	require.Equal(t, []string{firstSource, secondSource}, delivered())
+	require.Equal(t, []string{firstSource, firstSource, secondSource}, format.accepted, "the rejected delivery and its retry both reach the format")
 }
 
 func TestRuntimeStartWaitsForEverySource(t *testing.T) {
@@ -199,8 +204,9 @@ func TestRuntimeStartWaitsForEverySource(t *testing.T) {
 		}
 	}()
 
+	format := &deliveryFormat{}
 	runtime := Runtime{
-		DefaultFormat: &deliveryFormat{},
+		DefaultFormat: format,
 		Logger:        logger.NewLogger(nil, false),
 		Bus:           bus,
 		Endpoints:     []NamedEndpoint{{Type: "blocking", Endpoint: blockingEndpoint{stop: stop}}},
@@ -236,6 +242,7 @@ func TestRuntimeStartWaitsForEverySource(t *testing.T) {
 	runtime.mu.Unlock() //nolint:staticcheck // SA2001 waits for the delivery to finish
 	require.True(t, runtime.isReady())
 
+	require.Equal(t, []string{firstSource, secondSource}, format.accepted)
 	close(stop)
 	require.Error(t, <-startErr)
 }

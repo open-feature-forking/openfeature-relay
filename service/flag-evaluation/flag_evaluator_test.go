@@ -13,11 +13,11 @@ import (
 	mock "github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator/mock"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
-	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
+	"github.com/open-feature-forking/openfeature-relay/telemetry/otel/oteltest"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
-	"go.opentelemetry.io/otel/sdk/resource"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -948,10 +948,9 @@ func BenchmarkFlag_Evaluation_ResolveObject(b *testing.B) {
 	}
 }
 
-func getMetricReader() (*telemetry.MetricsRecorder, metric.Reader) {
+func getMetricReader() (telemetry.Provider, metric.Reader) {
 	exp := metric.NewManualReader()
-	rs := resource.NewWithAttributes("testSchema")
-	return telemetry.NewOTelRecorder(exp, rs, "testSvc"), exp
+	return telemetrytest.ProviderFor(exp), exp
 }
 
 // TestFlag_Evaluation_ErrorCodes test validate error mapping from known errors to connect.Code and avoid accidental

@@ -4,6 +4,7 @@ package runtime
 
 import (
 	"context"
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"os"
 	"path/filepath"
 	"testing"
@@ -36,8 +37,9 @@ func acceptRuntime(t *testing.T) (rt *Runtime, changes *events.Subscription, fla
 	}
 	var err error
 	rt, err = FromConfig(logger.NewLogger(nil, false), "test", cfg, Components{
-		ConfigurationFormats: append(Official().ConfigurationFormats, versionedFactory{}),
-		Evaluators:           Official().Evaluators,
+		Sync:                 flagdcomponents.Official().Sync,
+		ConfigurationFormats: append(flagdcomponents.Official().ConfigurationFormats, versionedFactory{}),
+		Evaluators:           flagdcomponents.Official().Evaluators,
 	})
 	require.NoError(t, err)
 	changes = rt.Bus.Subscribe(events.SubscribeOptions{Kinds: []events.Kind{events.KindConfigurationChange}, Buffer: 16})
@@ -133,6 +135,7 @@ func TestChangeEventForVendorFormat(t *testing.T) {
 // TestFlagSyncSpanOnAcceptPath pins that the flagSync span is there when the delivery goes through a format.
 func TestFlagSyncSpanOnAcceptPath(t *testing.T) {
 	rt, _, source, _ := acceptRuntime(t)
+	rt.Telemetry = spanRecorder
 	spanRecorder.Reset()
 
 	rt.updateAndEmit(coresync.DataSync{Source: source, FlagData: changeFlags})

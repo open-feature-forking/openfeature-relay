@@ -14,8 +14,8 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
-	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
-	"go.opentelemetry.io/otel/attribute"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
+	flagdService "github.com/open-feature-forking/openfeature-relay/service/transport"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -27,7 +27,7 @@ type syncHandler struct {
 	contextValues       map[string]any
 	deadline            time.Duration
 	disableSyncMetadata bool
-	metricsRecorder     telemetry.IMetricsRecorder
+	metricsRecorder     *flagdService.Metrics
 }
 
 // syncFlagsSender is the subset of connect.ServerStream used here; it has no exported constructor,
@@ -51,12 +51,12 @@ func (s syncHandler) syncFlags(
 	selectorExpression := s.getSelectorExpression(header, bodySelector)
 
 	// Build metric attributes
-	attrs := []attribute.KeyValue{}
+	attrs := []telemetry.Attribute{}
 	if selectorExpression != "" {
-		attrs = append(attrs, attribute.String("selector", selectorExpression))
+		attrs = append(attrs, telemetry.String("selector", selectorExpression))
 	}
 	if providerID != "" {
-		attrs = append(attrs, attribute.String("provider_id", providerID))
+		attrs = append(attrs, telemetry.String("provider_id", providerID))
 	}
 
 	// Record stream start
@@ -66,8 +66,8 @@ func (s syncHandler) syncFlags(
 	var exitReason string
 	defer func() {
 		duration := time.Since(startTime)
-		reasonAttrs := append([]attribute.KeyValue{}, attrs...)
-		reasonAttrs = append(reasonAttrs, attribute.String("reason", exitReason))
+		reasonAttrs := append([]telemetry.Attribute{}, attrs...)
+		reasonAttrs = append(reasonAttrs, telemetry.String("reason", exitReason))
 		s.metricsRecorder.SyncServerStreamEnd(ctx, attrs)
 		s.metricsRecorder.SyncServerStreamDuration(ctx, duration, reasonAttrs)
 	}()

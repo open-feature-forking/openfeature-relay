@@ -55,6 +55,57 @@ linters:
               desc: a configuration format knows no evaluator engine
             - pkg: github.com/open-feature-forking/openfeature-relay/sync/
               desc: a configuration format knows no sync provider
+        # flagd's service endpoints and runtime record through the telemetry provider they are injected with.
+        # Depguard checks direct imports only: the module boundaries cover the service endpoints transitively. The
+        # runtime reaches OpenTelemetry through the sync providers of the GCS module, which no check can forbid yet.
+        telemetry-through-provider:
+          files:
+            - "!$test"
+            - "**/service/transport/**"
+            - "**/service/flag-evaluation/**"
+            - "**/service/ofrep/**"
+            - "**/service/flag-sync/**"
+            - "**/runtime/**"
+          deny:
+            - pkg: go.opentelemetry.io
+              desc: record spans and metrics through the injected telemetry provider
+            - pkg: github.com/prometheus/client_golang
+              desc: the telemetry provider serves the metrics
+            - pkg: connectrpc.com/otelconnect
+              desc: the telemetry provider instruments ConnectRPC
+            - pkg: github.com/open-feature-forking/openfeature-relay/telemetry/
+              desc: only the distribution's command selects a telemetry provider
+        # The runtime serves the components it is given and imports none of them (UC-001, Q6 and Q15): flagd-full's list is
+        # the flagd/components package. The module boundaries cover the packages transitively.
+        runtime-holds-no-component:
+          files:
+            - "!$test"
+            - "**/runtime/**"
+          deny:
+            - pkg: github.com/open-feature-forking/openfeature-relay/sync/file
+              desc: the runtime holds no sync provider; the distribution passes Components.Sync
+            - pkg: github.com/open-feature-forking/openfeature-relay/sync/http
+              desc: the runtime holds no sync provider; the distribution passes Components.Sync
+            - pkg: github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc
+              desc: the runtime holds no sync provider; the distribution passes Components.Sync
+            - pkg: github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator
+              desc: the runtime holds no sync provider; the distribution passes Components.Sync
+            - pkg: github.com/open-feature-forking/openfeature-relay/sync/gcs
+              desc: the runtime holds no sync provider; the distribution passes Components.Sync
+            - pkg: github.com/open-feature-forking/openfeature-relay/sync/azblob
+              desc: the runtime holds no sync provider; the distribution passes Components.Sync
+            - pkg: github.com/open-feature-forking/openfeature-relay/sync/s3
+              desc: the runtime holds no sync provider; the distribution passes Components.Sync
+            - pkg: github.com/open-feature-forking/openfeature-relay/sync/builder/official
+              desc: the runtime holds no sync provider; the distribution passes Components.Sync
+            - pkg: github.com/open-feature-forking/openfeature-relay/evaluator/
+              desc: the runtime holds no evaluator; the distribution passes Components.Evaluators
+            - pkg: github.com/open-feature-forking/openfeature-relay/configformat/
+              desc: the runtime holds no configuration format; the distribution passes Components.ConfigurationFormats
+            - pkg: github.com/open-feature-forking/openfeature-relay/service/flag-evaluation
+              desc: the runtime holds no service endpoint; the distribution passes Components.Endpoints
+            - pkg: github.com/open-feature-forking/openfeature-relay/service/flag-sync
+              desc: the runtime holds no service endpoint; the distribution passes Components.Endpoints
         stable-dependencies:
           deny:
             - pkg: golang.org/x/exp

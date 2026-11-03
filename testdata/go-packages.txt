@@ -35,8 +35,12 @@ github.com/open-feature-forking/openfeature-relay/evaluator/flagd
 github.com/open-feature-forking/openfeature-relay/runtime
 github.com/open-feature-forking/openfeature-relay/runtime/cmd
 github.com/open-feature-forking/openfeature-relay/runtime/fromconfig_test
+github.com/open-feature-forking/openfeature-relay/runtime/grpcclient_test
 github.com/open-feature-forking/openfeature-relay/runtime/managementport
+github.com/open-feature-forking/openfeature-relay/runtime/propagation_test
 github.com/open-feature-forking/openfeature-relay/runtime/syncmetrics_test
+github.com/open-feature-forking/openfeature-relay/runtime/telemetrystartup_test
+github.com/open-feature-forking/openfeature-relay/runtime/tracingoff_test
 github.com/open-feature-forking/openfeature-relay/service/flag-evaluation
 github.com/open-feature-forking/openfeature-relay/service/flag-evaluation/mock
 github.com/open-feature-forking/openfeature-relay/service/flag-sync
@@ -47,12 +51,11 @@ github.com/open-feature-forking/openfeature-relay/service/transport/middleware
 github.com/open-feature-forking/openfeature-relay/service/transport/middleware/compress
 github.com/open-feature-forking/openfeature-relay/service/transport/middleware/cors
 github.com/open-feature-forking/openfeature-relay/service/transport/middleware/h2c
-github.com/open-feature-forking/openfeature-relay/service/transport/middleware/metrics
-github.com/open-feature-forking/openfeature-relay/service/transport/middleware/metrics/metricstest
 github.com/open-feature-forking/openfeature-relay/service/transport/middleware/mock
 github.com/open-feature-forking/openfeature-relay/sync/azblob
 github.com/open-feature-forking/openfeature-relay/sync/builder
 github.com/open-feature-forking/openfeature-relay/sync/builder/mock
+github.com/open-feature-forking/openfeature-relay/sync/builder/official
 github.com/open-feature-forking/openfeature-relay/sync/file
 github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc
 github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc/credentials
@@ -65,5 +68,7 @@ github.com/open-feature-forking/openfeature-relay/sync/http/mock
 github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator
 github.com/open-feature-forking/openfeature-relay/sync/s3
 github.com/open-feature-forking/openfeature-relay/telemetry/otel
+github.com/open-feature-forking/openfeature-relay/telemetry/otel/oteltest
 github.com/open-feature/flagd/flagd
 github.com/open-feature/flagd/flagd/cmd/doc
+github.com/open-feature/flagd/flagd/components

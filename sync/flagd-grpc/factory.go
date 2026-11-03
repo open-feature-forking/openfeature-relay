@@ -2,6 +2,7 @@ package flagdgrpc
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
@@ -13,12 +14,17 @@ import (
 // Provider is the provider name of flagd gRPC sync sources.
 const Provider = "grpc"
 
+// clientInstrumentation is implemented by a telemetry provider that instruments outbound gRPC connections.
+type clientInstrumentation interface {
+	GRPCDialOptions() []grpc.DialOption
+}
+
 // customResolver matches the targets that name a gRPC name resolver.
 var customResolver = regexp.MustCompile("^" + SupportedScheme)
 
 // Factory creates the streaming sync providers of flagd gRPC sync sources. A distribution sets what it injects into
 // every provider: the dial options of the client connection, such as its instrumentation, and the recorder of the
-// stream's lifecycle.
+// stream's lifecycle. What the distribution's telemetry provider records and instruments comes through Settings.Telemetry, besides these.
 type Factory struct {
 	DialOptions   []grpc.DialOption
 	StreamMetrics StreamMetricsRecorder
@@ -50,6 +56,15 @@ func (Factory) ParseURI(uri string) (sync.SourceConfig, bool) {
 // CreateStreaming creates the provider of a source.
 func (f Factory) CreateStreaming(settings sync.Settings) (sync.StreamingSyncProvider, error) {
 	config := settings.Source
+	streamMetrics, dialOptions := f.StreamMetrics, f.DialOptions
+	if settings.Telemetry != nil {
+		if streamMetrics == nil {
+			streamMetrics = NewStreamMetrics(settings.Telemetry.Meter(StreamMetricsScope))
+		}
+		if p, ok := settings.Telemetry.(clientInstrumentation); ok {
+			dialOptions = append(slices.Clone(dialOptions), p.GRPCDialOptions()...)
+		}
+	}
 	return &Sync{
 		URI: config.URI,
 		Logger: settings.Logger.WithFields(
@@ -66,8 +81,8 @@ func (f Factory) CreateStreaming(settings sync.Settings) (sync.StreamingSyncProv
 		Headers:             config.Headers,
 		SyncMetricsRecorder: settings.Metrics,
 
-		StreamMetricsRecorder: f.StreamMetrics,
-		DialOptions:           f.DialOptions,
+		StreamMetricsRecorder: streamMetrics,
+		DialOptions:           dialOptions,
 	}, nil
 }
 

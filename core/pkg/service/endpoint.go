@@ -8,6 +8,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 )
 
 // Endpoint is a service endpoint: it serves clients from when the distribution starts until it shuts down.
@@ -44,9 +45,19 @@ type Settings struct {
 	// distribution selects. Nil means none; see WrapHTTP.
 	HTTPMiddleware func(http.Handler) http.Handler
 	Logger         *logger.Logger
+	// Telemetry is the telemetry provider the endpoint records spans and metrics through. Nil means the noop
+	// telemetry provider; see TelemetryProvider.
+	Telemetry telemetry.Provider
+	// Formats are the types of the configuration formats of the distribution, flagd's first when it has it.
+	Formats []string
+	// Sources are the URIs of the sources the runtime reads.
+	Sources []string
 	// Config holds the endpoint's own settings.
 	Config map[string]any
 }
+
+// TelemetryProvider returns Telemetry, or the noop telemetry provider when none is set.
+func (s Settings) TelemetryProvider() telemetry.Provider { return telemetry.OrNoop(s.Telemetry) }
 
 // WrapHTTP applies HTTPMiddleware to handler; without middleware it returns handler.
 func (s Settings) WrapHTTP(handler http.Handler) http.Handler {

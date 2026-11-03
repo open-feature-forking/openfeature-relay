@@ -3,8 +3,15 @@ module github.com/open-feature/flagd/flagd
 go 1.27
 
 require (
+	github.com/open-feature-forking/openfeature-relay/configformat/flagd v0.1.0
 	github.com/open-feature-forking/openfeature-relay/core v0.20.0
+	github.com/open-feature-forking/openfeature-relay/evaluator/flagd v0.1.0
 	github.com/open-feature-forking/openfeature-relay/runtime v0.1.0
+	github.com/open-feature-forking/openfeature-relay/service/flag-evaluation v0.1.0
+	github.com/open-feature-forking/openfeature-relay/service/flag-sync v0.1.0
+	github.com/open-feature-forking/openfeature-relay/service/ofrep v0.1.0
+	github.com/open-feature-forking/openfeature-relay/sync/builder v0.1.0
+	github.com/open-feature-forking/openfeature-relay/telemetry/otel v0.1.0
 	github.com/stretchr/testify v1.12.1
 )
 
@@ -104,21 +111,14 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/open-feature-forking/openfeature-relay/configformat/flagd v0.1.0 // indirect
-	github.com/open-feature-forking/openfeature-relay/evaluator/flagd v0.1.0 // indirect
-	github.com/open-feature-forking/openfeature-relay/service/flag-evaluation v0.1.0 // indirect
-	github.com/open-feature-forking/openfeature-relay/service/flag-sync v0.1.0 // indirect
-	github.com/open-feature-forking/openfeature-relay/service/ofrep v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/service/transport v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/azblob v0.1.0 // indirect
-	github.com/open-feature-forking/openfeature-relay/sync/builder v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/file v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/gcs v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/http v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/s3 v0.1.0 // indirect
-	github.com/open-feature-forking/openfeature-relay/telemetry/otel v0.1.0 // indirect
 	github.com/open-feature/flagd-schemas v0.2.15 // indirect
 	github.com/open-feature/open-feature-operator/api v0.2.47 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect

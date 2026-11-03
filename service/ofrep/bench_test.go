@@ -1,6 +1,7 @@
 package ofrep
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -10,19 +11,17 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	evaluation "github.com/open-feature-forking/openfeature-relay/evaluator/flagd"
 	compressmw "github.com/open-feature-forking/openfeature-relay/service/transport/middleware/compress"
+	"github.com/open-feature-forking/openfeature-relay/telemetry/otel/oteltest"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace/noop"
+	"go.opentelemetry.io/otel/sdk/metric"
 )
 
-// newBenchmarkServer serves the OFREP endpoint over a real evaluator with today's noop metrics recorder
-// and a noop tracer provider, which replaces the recording one of TestMain; the benchmarks run after the
-// tests.
-func newBenchmarkServer(b *testing.B) *httptest.Server {
+// newBenchmarkServer serves the OFREP endpoint over a real evaluator, recording through tp.
+func newBenchmarkServer(b *testing.B, tp telemetry.Provider) *httptest.Server {
 	b.Helper()
-	otel.SetTracerProvider(noop.NewTracerProvider())
 
 	log := logger.NewLogger(nil, false)
 	flagStore, err := store.NewStore(log, []string{spanTestSource})
@@ -32,13 +31,21 @@ func newBenchmarkServer(b *testing.B) *httptest.Server {
 
 	compression, err := compressmw.New()
 	require.NoError(b, err)
-	server := httptest.NewServer(NewOfrepHandler(log, eval, nil, nil, nil, "flagd", SSEConfig{}, compression))
+	server := httptest.NewServer(NewOfrepHandler(log, eval, nil, nil, tp, "flagd", SSEConfig{}, compression))
 	b.Cleanup(server.Close)
 	return server
 }
 
-func benchmarkPost(b *testing.B, path string) {
-	server := newBenchmarkServer(b)
+// openTelemetry is the OpenTelemetry telemetry provider flagd-full injects, over an in-memory reader.
+func openTelemetry(b *testing.B) telemetry.Provider {
+	b.Helper()
+	tel := telemetrytest.ProviderFor(metric.NewManualReader())
+	b.Cleanup(func() { _ = tel.Shutdown(context.Background()) })
+	return tel
+}
+
+func benchmarkPostWith(b *testing.B, path string, tp telemetry.Provider) {
+	server := newBenchmarkServer(b, tp)
 	b.ReportAllocs()
 	for b.Loop() {
 		resp, err := http.Post(server.URL+path, "application/json", strings.NewReader("{}")) //nolint:noctx // benchmark
@@ -53,6 +60,19 @@ func benchmarkPost(b *testing.B, path string) {
 	}
 }
 
-func BenchmarkOFREPSingle(b *testing.B) { benchmarkPost(b, "/ofrep/v1/evaluate/flags/bool-flag") }
+// The benchmarks without a suffix run with the noop telemetry provider, which a distribution without telemetry
+// injects; those with OpenTelemetry run with the provider flagd-full injects.
 
-func BenchmarkOFREPBulk(b *testing.B) { benchmarkPost(b, "/ofrep/v1/evaluate/flags") }
+func BenchmarkOFREPSingle(b *testing.B) {
+	benchmarkPostWith(b, "/ofrep/v1/evaluate/flags/bool-flag", telemetry.Noop())
+}
+
+func BenchmarkOFREPSingleOpenTelemetry(b *testing.B) {
+	benchmarkPostWith(b, "/ofrep/v1/evaluate/flags/bool-flag", openTelemetry(b))
+}
+
+func BenchmarkOFREPBulk(b *testing.B) { benchmarkPostWith(b, "/ofrep/v1/evaluate/flags", telemetry.Noop()) }
+
+func BenchmarkOFREPBulkOpenTelemetry(b *testing.B) {
+	benchmarkPostWith(b, "/ofrep/v1/evaluate/flags", openTelemetry(b))
+}

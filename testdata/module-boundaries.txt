@@ -43,13 +43,20 @@ test/middleware-example:./...:opentelemetry|google.golang.org/grpc|connectrpc|k8
 # BR-009 and FR-048: an engine module's format and evaluator import core only, no telemetry, transport, platform client,
 # JsonLogic engine or other library module (the module's tests run a distribution and carry flagd's runtime).
 test/configformat-example:. ./evaluator:opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud|jsonlogic|jsonschema|openfeature-relay/((sync|telemetry|evaluator|configformat|service)/|runtime)
+# FR-013, FR-024: flagd's service endpoints import no telemetry SDK, Prometheus client or telemetry provider module,
+# transitively. The runtime is covered by the telemetry-through-provider depguard rule, for its direct imports only: the
+# GCS sync provider brings Google's own OpenTelemetry instrumentation into its graph.
 # The example event sink requires the core only: no vendor client, transport or flagd module.
 test/eventsink-example:./...:opentelemetry|google.golang.org/grpc|connectrpc|k8s.io|gocloud|open-feature/flagd/flagd|openfeature-relay/((sync|telemetry|evaluator|configformat|service)/|runtime)
+# Q6, Q15: the runtime holds no component. Its package graph, which go list -deps reads without the tests, contains no
+# sync provider module, evaluator, configuration format, telemetry provider or SDK, or service endpoint package; the
+# distribution's components package passes them in.
+runtime:./...:go.opentelemetry.io|prometheus|openfeature-relay/(sync/(file|http|flagd-grpc|openfeature-operator|gcs|azblob|s3)|evaluator/|configformat/|telemetry/|service/(flag-evaluation|ofrep|flag-sync))
 # UC-001 Q7: the service endpoints share their helpers through the transport module and know neither the runtime
 # nor one another.
-service/transport:./...:openfeature-relay/(runtime|service/(flag-evaluation|ofrep|flag-sync))
-service/flag-evaluation:./...:openfeature-relay/(runtime|service/(ofrep|flag-sync))
-service/ofrep:./...:openfeature-relay/(runtime|service/(flag-evaluation|flag-sync))
-service/flag-sync:./...:openfeature-relay/(runtime|service/(flag-evaluation|ofrep))
+service/transport:./...:go.opentelemetry.io|prometheus/client_golang|otelconnect|openfeature-relay/telemetry/|openfeature-relay/(runtime|service/(flag-evaluation|ofrep|flag-sync))
+service/flag-evaluation:./...:go.opentelemetry.io|prometheus/client_golang|otelconnect|openfeature-relay/telemetry/|openfeature-relay/(runtime|service/(ofrep|flag-sync))
+service/ofrep:./...:go.opentelemetry.io|prometheus/client_golang|otelconnect|openfeature-relay/telemetry/|openfeature-relay/(runtime|service/(flag-evaluation|flag-sync))
+service/flag-sync:./...:go.opentelemetry.io|prometheus/client_golang|otelconnect|openfeature-relay/telemetry/|openfeature-relay/(runtime|service/(flag-evaluation|ofrep))
 # The Builder (UC-001 Q1) depends on no relay module: it only reads manifests and runs the go binary.
 builder:./...:openfeature-relay/(core|runtime|sync|evaluator|configformat|telemetry|service|distribution)

@@ -1,7 +1,6 @@
 package service
 
 import (
-	flagdService "github.com/open-feature-forking/openfeature-relay/service/transport"
 	"context"
 	"fmt"
 	"net/http"
@@ -14,15 +13,17 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
-	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
+	flagdService "github.com/open-feature-forking/openfeature-relay/service/transport"
 	"github.com/rs/xid"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/structpb"
 )
+
+// evaluationRecorder records an evaluation in the evaluation metrics.
+type evaluationRecorder interface {
+	RecordEvaluation(ctx context.Context, err error, reason, variant, key string, metadata model.Metadata)
+}
 
 type resolverSignature[T constraints] func(context context.Context, reqID, flagKey string, ctx map[string]any) (
 	T, string, string, map[string]interface{}, error)
@@ -32,9 +33,9 @@ type resolverSignature[T constraints] func(context context.Context, reqID, flagK
 type OldFlagEvaluationService struct {
 	logger                *logger.Logger
 	eval                  evaluator.IResolver
-	metrics               telemetry.IMetricsRecorder
+	metrics               *flagdService.Metrics
 	eventingConfiguration IEvents
-	flagEvalTracer        trace.Tracer
+	flagEvalTracer        telemetry.Tracer
 	contextValues         map[string]any
 }
 
@@ -43,20 +44,16 @@ func NewOldFlagEvaluationService(
 	log *logger.Logger,
 	eval evaluator.IResolver,
 	eventingCfg IEvents,
-	metricsRecorder telemetry.IMetricsRecorder,
+	tp telemetry.Provider,
 	contextValues map[string]any,
 ) *OldFlagEvaluationService {
 	svc := &OldFlagEvaluationService{
 		logger:                log,
 		eval:                  eval,
-		metrics:               &telemetry.NoopMetricsRecorder{},
+		metrics:               flagdService.NewMetrics(telemetry.OrNoop(tp).Meter(flagdService.MetricsScope)),
 		eventingConfiguration: eventingCfg,
-		flagEvalTracer:        otel.Tracer("flagEvaluationService"),
+		flagEvalTracer:        telemetry.OrNoop(tp).Tracer("flagEvaluationService"),
 		contextValues:         contextValues,
-	}
-
-	if metricsRecorder != nil {
-		svc.metrics = metricsRecorder
 	}
 
 	return svc
@@ -69,7 +66,7 @@ func (s *OldFlagEvaluationService) ResolveAll(
 ) (*connect.Response[schemaV1.ResolveAllResponse], error) {
 	reqID := xid.New().String()
 	defer s.logger.ClearFields(reqID)
-	ctx, span := s.flagEvalTracer.Start(ctx, "resolveAll", trace.WithSpanKind(trace.SpanKindServer))
+	ctx, span := s.flagEvalTracer.Start(ctx, "resolveAll", telemetry.WithSpanKind(telemetry.SpanKindServer))
 	defer span.End()
 	res := &schemaV1.ResolveAllResponse{
 		Flags: make(map[string]*schemaV1.AnyFlag),
@@ -87,7 +84,7 @@ func (s *OldFlagEvaluationService) ResolveAll(
 		return nil, fmt.Errorf("error resolving flags. Tracking ID: %s", reqID)
 	}
 
-	span.SetAttributes(attribute.Int("feature_flag.count", len(values)))
+	span.SetAttributes(telemetry.Int("feature_flag.count", len(values)))
 	for _, value := range values {
 		// register the impression and reason for each flag evaluated
 		s.metrics.RecordEvaluation(
@@ -203,7 +200,7 @@ func (s *OldFlagEvaluationService) ResolveBoolean(
 	ctx context.Context,
 	req *connect.Request[schemaV1.ResolveBooleanRequest],
 ) (*connect.Response[schemaV1.ResolveBooleanResponse], error) {
-	ctx, span := s.flagEvalTracer.Start(ctx, "resolveBoolean", trace.WithSpanKind(trace.SpanKindServer))
+	ctx, span := s.flagEvalTracer.Start(ctx, "resolveBoolean", telemetry.WithSpanKind(telemetry.SpanKindServer))
 	defer span.End()
 	res := connect.NewResponse(&schemaV1.ResolveBooleanResponse{})
 	selector, err := selectorFromHeader(req.Header())
@@ -214,6 +211,7 @@ func (s *OldFlagEvaluationService) ResolveBoolean(
 
 	err = resolve[bool](
 		ctx,
+		span,
 		s.logger,
 		s.eval.ResolveBooleanValue,
 		req.Header(),
@@ -226,7 +224,7 @@ func (s *OldFlagEvaluationService) ResolveBoolean(
 	)
 	if err != nil {
 		span.RecordError(err)
-		span.SetStatus(codes.Error, fmt.Sprintf("error evaluating flag with key %s", req.Msg.GetFlagKey()))
+		span.SetError(fmt.Sprintf("error evaluating flag with key %s", req.Msg.GetFlagKey()))
 	}
 
 	return res, err
@@ -237,7 +235,7 @@ func (s *OldFlagEvaluationService) ResolveString(
 	ctx context.Context,
 	req *connect.Request[schemaV1.ResolveStringRequest],
 ) (*connect.Response[schemaV1.ResolveStringResponse], error) {
-	ctx, span := s.flagEvalTracer.Start(ctx, "resolveString", trace.WithSpanKind(trace.SpanKindServer))
+	ctx, span := s.flagEvalTracer.Start(ctx, "resolveString", telemetry.WithSpanKind(telemetry.SpanKindServer))
 	defer span.End()
 
 	selector, err := selectorFromHeader(req.Header())
@@ -249,6 +247,7 @@ func (s *OldFlagEvaluationService) ResolveString(
 	res := connect.NewResponse(&schemaV1.ResolveStringResponse{})
 	err = resolve[string](
 		ctx,
+		span,
 		s.logger,
 		s.eval.ResolveStringValue,
 		req.Header(),
@@ -261,7 +260,7 @@ func (s *OldFlagEvaluationService) ResolveString(
 	)
 	if err != nil {
 		span.RecordError(err)
-		span.SetStatus(codes.Error, fmt.Sprintf("error evaluating flag with key %s", req.Msg.GetFlagKey()))
+		span.SetError(fmt.Sprintf("error evaluating flag with key %s", req.Msg.GetFlagKey()))
 	}
 
 	return res, err
@@ -272,7 +271,7 @@ func (s *OldFlagEvaluationService) ResolveInt(
 	ctx context.Context,
 	req *connect.Request[schemaV1.ResolveIntRequest],
 ) (*connect.Response[schemaV1.ResolveIntResponse], error) {
-	ctx, span := s.flagEvalTracer.Start(ctx, "resolveInt", trace.WithSpanKind(trace.SpanKindServer))
+	ctx, span := s.flagEvalTracer.Start(ctx, "resolveInt", telemetry.WithSpanKind(telemetry.SpanKindServer))
 	defer span.End()
 
 	selector, err := selectorFromHeader(req.Header())
@@ -284,6 +283,7 @@ func (s *OldFlagEvaluationService) ResolveInt(
 	res := connect.NewResponse(&schemaV1.ResolveIntResponse{})
 	err = resolve[int64](
 		ctx,
+		span,
 		s.logger,
 		s.eval.ResolveIntValue,
 		req.Header(),
@@ -296,7 +296,7 @@ func (s *OldFlagEvaluationService) ResolveInt(
 	)
 	if err != nil {
 		span.RecordError(err)
-		span.SetStatus(codes.Error, fmt.Sprintf("error evaluating flag with key %s", req.Msg.GetFlagKey()))
+		span.SetError(fmt.Sprintf("error evaluating flag with key %s", req.Msg.GetFlagKey()))
 	}
 
 	return res, err
@@ -307,7 +307,7 @@ func (s *OldFlagEvaluationService) ResolveFloat(
 	ctx context.Context,
 	req *connect.Request[schemaV1.ResolveFloatRequest],
 ) (*connect.Response[schemaV1.ResolveFloatResponse], error) {
-	ctx, span := s.flagEvalTracer.Start(ctx, "resolveFloat", trace.WithSpanKind(trace.SpanKindServer))
+	ctx, span := s.flagEvalTracer.Start(ctx, "resolveFloat", telemetry.WithSpanKind(telemetry.SpanKindServer))
 	defer span.End()
 
 	selector, err := selectorFromHeader(req.Header())
@@ -319,6 +319,7 @@ func (s *OldFlagEvaluationService) ResolveFloat(
 	res := connect.NewResponse(&schemaV1.ResolveFloatResponse{})
 	err = resolve[float64](
 		ctx,
+		span,
 		s.logger,
 		s.eval.ResolveFloatValue,
 		req.Header(),
@@ -331,7 +332,7 @@ func (s *OldFlagEvaluationService) ResolveFloat(
 	)
 	if err != nil {
 		span.RecordError(err)
-		span.SetStatus(codes.Error, fmt.Sprintf("error evaluating flag with key %s", req.Msg.GetFlagKey()))
+		span.SetError(fmt.Sprintf("error evaluating flag with key %s", req.Msg.GetFlagKey()))
 	}
 
 	return res, err
@@ -342,7 +343,7 @@ func (s *OldFlagEvaluationService) ResolveObject(
 	ctx context.Context,
 	req *connect.Request[schemaV1.ResolveObjectRequest],
 ) (*connect.Response[schemaV1.ResolveObjectResponse], error) {
-	ctx, span := s.flagEvalTracer.Start(ctx, "resolveObject", trace.WithSpanKind(trace.SpanKindServer))
+	ctx, span := s.flagEvalTracer.Start(ctx, "resolveObject", telemetry.WithSpanKind(telemetry.SpanKindServer))
 	defer span.End()
 
 	selector, err := selectorFromHeader(req.Header())
@@ -354,6 +355,7 @@ func (s *OldFlagEvaluationService) ResolveObject(
 	res := connect.NewResponse(&schemaV1.ResolveObjectResponse{})
 	err = resolve[map[string]any](
 		ctx,
+		span,
 		s.logger,
 		s.eval.ResolveObjectValue,
 		req.Header(),
@@ -366,7 +368,7 @@ func (s *OldFlagEvaluationService) ResolveObject(
 	)
 	if err != nil {
 		span.RecordError(err)
-		span.SetStatus(codes.Error, fmt.Sprintf("error evaluating flag with key %s", req.Msg.GetFlagKey()))
+		span.SetError(fmt.Sprintf("error evaluating flag with key %s", req.Msg.GetFlagKey()))
 	}
 
 	return res, err
@@ -377,8 +379,8 @@ func mergeContexts(reqCtx, configFlagsCtx map[string]any, headers http.Header, h
 }
 
 // resolve is a generic flag resolver
-func resolve[T constraints](ctx context.Context, logger *logger.Logger, resolver resolverSignature[T], header http.Header, flagKey string,
-	evaluationContext *structpb.Struct, resp response[T], metrics telemetry.IMetricsRecorder,
+func resolve[T constraints](ctx context.Context, span telemetry.Span, logger *logger.Logger, resolver resolverSignature[T], header http.Header, flagKey string,
+	evaluationContext *structpb.Struct, resp response[T], metrics evaluationRecorder,
 	configContextValues map[string]any, configHeaderToContextKeyMappings map[string]string,
 ) error {
 	reqID := xid.New().String()
@@ -404,8 +406,7 @@ func resolve[T constraints](ctx context.Context, logger *logger.Logger, resolver
 		metrics.RecordEvaluation(ctx, evalErr, reason, variant, flagKey, metadata)
 	}
 
-	spanFromContext := trace.SpanFromContext(ctx)
-	spanFromContext.SetAttributes(telemetry.SemConvFeatureFlagAttributes(flagKey, variant)...)
+	span.SetAttributes(flagdService.SemConvFeatureFlagAttributes(flagKey, variant)...)
 
 	if err := resp.SetResult(result, variant, reason, metadata); err != nil && evalErr == nil {
 		logger.ErrorWithID(reqID, err.Error())

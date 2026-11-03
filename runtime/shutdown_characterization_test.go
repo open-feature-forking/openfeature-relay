@@ -5,6 +5,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"io"
 	"net"
 	"net/http"
@@ -68,7 +69,7 @@ func characterizedConfig(t *testing.T, p ports) Config {
 // startRuntime runs the runtime on a context the test cancels, and returns once it reports ready.
 func startRuntime(t *testing.T, cfg Config) (cancel func(), done <-chan error) {
 	t.Helper()
-	return startRuntimeWith(t, cfg, Official())
+	return startRuntimeWith(t, cfg, flagdcomponents.Official())
 }
 
 // startRuntimeWith is startRuntime for a distribution with these components.
@@ -193,17 +194,20 @@ func TestShutdownFlagSyncStream(t *testing.T) {
 		require.NoError(t, err)
 		return func() (string, error) {
 			if !stream.Receive() {
-				return "", stream.Err()
+				if err := stream.Err(); err != nil {
+					return "", err
+				}
+				return "", io.EOF
 			}
 			return "sync", nil
 		}
 	})
-	// The stream outlives the server's 5s graceful limit and is cut: the client sees a truncated envelope.
+	// The endpoint ends its streams when its context ends, so the server shuts down at once.
 	require.NoError(t, startErr)
-	require.GreaterOrEqual(t, took, 4*time.Second)
-	require.Less(t, took, 8*time.Second)
-	require.Equal(t, []string{"sync"}, out.events, "the flag configuration, then nothing")
-	require.ErrorContains(t, out.err, "incomplete envelope")
+	require.Less(t, took, 2*time.Second)
+	require.Equal(t, []string{"sync"}, out.events, "the flag configuration, then the end")
+	require.ErrorIs(t, out.err, io.EOF)
+	require.False(t, out.open)
 }
 
 func TestShutdownOFREPEventStream(t *testing.T) {

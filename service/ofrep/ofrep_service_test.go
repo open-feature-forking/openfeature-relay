@@ -13,7 +13,6 @@ import (
 	mock "github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator/mock"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
-	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/sync/errgroup"
 )
@@ -31,10 +30,9 @@ func TestOfrepServiceStartStop(t *testing.T) {
 		Return([]evaluator.AnyValue{}, model.Metadata{}, nil)
 
 	cfg := SvcConfiguration{
-		Logger:          logger.NewLogger(nil, false),
-		Port:            uint16(port),
-		ServiceName:     testServiceName,
-		MetricsRecorder: &telemetry.NoopMetricsRecorder{},
+		Logger:      logger.NewLogger(nil, false),
+		Port:        uint16(port),
+		ServiceName: testServiceName,
 	}
 
 	service, err := NewOfrepService(eval, nil, []string{"*"}, cfg, nil, nil)
@@ -101,10 +99,9 @@ func tryResponseWithHeaders(method string, uri string, payload []byte, headers m
 
 func TestOfrepServiceCORSPreflightAllowsFlagdSelector(t *testing.T) {
 	svc, port := startOfrepService(t, SvcConfiguration{
-		Logger:          logger.NewLogger(nil, false),
-		Port:            18285,
-		ServiceName:     testServiceName,
-		MetricsRecorder: &telemetry.NoopMetricsRecorder{},
+		Logger:      logger.NewLogger(nil, false),
+		Port:        18285,
+		ServiceName: testServiceName,
 	})
 	_ = svc
 
@@ -142,7 +139,6 @@ func TestOfrepServiceRequestBodySizeLimit(t *testing.T) {
 		Logger:              logger.NewLogger(nil, false),
 		Port:                18283,
 		ServiceName:         testServiceName,
-		MetricsRecorder:     &telemetry.NoopMetricsRecorder{},
 		MaxRequestBodyBytes: 10, // allow only 10 bytes
 	})
 	_ = svc // kept alive by deferred cleanup
@@ -166,7 +162,6 @@ func TestOfrepServiceRequestHeaderSizeLimit(t *testing.T) {
 		Logger:                logger.NewLogger(nil, false),
 		Port:                  18284,
 		ServiceName:           testServiceName,
-		MetricsRecorder:       &telemetry.NoopMetricsRecorder{},
 		MaxRequestHeaderBytes: 100, // 10000-byte test header value easily exceeds 100 + slop
 	})
 	_ = svc // kept alive by deferred cleanup
