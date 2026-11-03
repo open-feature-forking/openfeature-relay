@@ -30,7 +30,6 @@ replace (
 	github.com/open-feature-forking/openfeature-relay/configformat/flagd => ../../configformat/flagd
 	github.com/open-feature-forking/openfeature-relay/core => ../../core
 	github.com/open-feature-forking/openfeature-relay/evaluator/flagd => ../../evaluator/flagd
-	github.com/open-feature-forking/openfeature-relay/sync/blob => ../blob
 	github.com/open-feature-forking/openfeature-relay/sync/builder => ../builder
 	github.com/open-feature-forking/openfeature-relay/sync/file => ../file
 	github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc => ../flagd-grpc
