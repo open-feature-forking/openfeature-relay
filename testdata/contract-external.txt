@@ -1,0 +1,8 @@
+# The example modules that run their contract tests outside the checkout, from the module cache (test/contract-external.sh).
+# A module qualifies when its module graph holds no module of this repository but core. The script derives the list and
+# fails when it differs from this file.
+test/configformat-example
+test/eventsink-example
+test/service-example
+test/sync-example
+test/telemetry-example

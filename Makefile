@@ -67,6 +67,7 @@ TEST_TARGETS += test-inprocess-example
 TEST_TARGETS += test-sync-example
 TEST_TARGETS += test-telemetry-example
 TEST_TARGETS += test-eventsink-example
+TEST_TARGETS += test-contract-external
 test: $(TEST_TARGETS)
 test-core: test-modules
 test-modules:
@@ -79,6 +80,8 @@ test-sync-example:
 	go test -race -short -count=1 ./test/sync-example/...
 test-telemetry-example:
 	go test -race -short -count=1 ./test/telemetry-example/...
+test-contract-external:
+	./test/contract-external.sh
 test-eventsink-example:
 	go test -race -short -count=1 ./test/eventsink-example/...
 test-configformat-example:
