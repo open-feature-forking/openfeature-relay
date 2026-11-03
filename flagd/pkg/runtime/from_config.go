@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -73,6 +74,9 @@ type Config struct {
 	// SyncFactories are the sync components, besides the official ones, that sources may select.
 	SyncFactories []sync.Factory
 	CORS          []string
+	// EndpointSettings are the settings of the service endpoints of a distribution, besides the official ones, keyed by
+	// the endpoint's type. An endpoint gets its own as Settings.Config.
+	EndpointSettings map[string]map[string]any
 
 	ContextValues              map[string]any
 	HeaderToContextKeyMappings map[string]string
@@ -289,7 +293,11 @@ func (c endpointConfigs) forEndpoint(endpointType string) map[string]any {
 			MaxRequestBodyBytes:   c.config.MaxRequestBodyBytes,
 		}}
 	}
-	return map[string]any{}
+	settings := maps.Clone(c.config.EndpointSettings[endpointType])
+	if settings == nil {
+		settings = map[string]any{}
+	}
+	return settings
 }
 
 // syncProvidersFromConfig is a helper to build ISync implementations from SourceConfig.
