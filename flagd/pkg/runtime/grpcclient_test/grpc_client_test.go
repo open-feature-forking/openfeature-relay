@@ -25,6 +25,7 @@ import (
 	v1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/sync/v1"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	otelprovider "github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"github.com/open-feature/flagd/flagd/pkg/runtime"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
@@ -151,7 +152,7 @@ func TestGRPCSyncClientInstrumentationCharacterization(t *testing.T) {
 		KeepAliveMinTime:             runtime.KeepAliveMinTimeDefault,
 		KeepAlivePermitWithoutStream: runtime.KeepAlivePermitWithoutStreamDefault,
 		SyncProviders:                []coresync.SourceConfig{{URI: l.Addr().String(), Provider: "grpc"}},
-	}, runtime.Official())
+	}, withOpenTelemetry(runtime.Official()))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -204,4 +205,11 @@ func TestGRPCSyncClientInstrumentationCharacterization(t *testing.T) {
 	want, err := os.ReadFile(path)
 	require.NoError(t, err, "run go test -update to create %s", path)
 	require.Equal(t, string(want), got)
+}
+
+// withOpenTelemetry is the components of flagd-full with the OpenTelemetry telemetry provider, as flagd's command
+// line selects it.
+func withOpenTelemetry(components runtime.Components) runtime.Components {
+	components.Telemetry = otelprovider.NewFactory()
+	return components
 }

@@ -43,6 +43,10 @@ test/middleware-example:./...:opentelemetry|google.golang.org/grpc|connectrpc|k8
 # BR-009 and FR-048: an engine module's format and evaluator import core only, no telemetry, transport, platform client,
 # JsonLogic engine or other library module (the module's tests run a distribution and carry flagd's runtime).
 test/configformat-example:. ./evaluator:opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud|jsonlogic|jsonschema|openfeature-relay/(sync|telemetry|evaluator|configformat)/
+# FR-013, FR-024: flagd's service endpoints import no telemetry SDK, Prometheus client or telemetry provider module,
+# transitively. The runtime is covered by the telemetry-through-provider depguard rule, for its direct imports only: the
+# GCS sync provider brings Google's own OpenTelemetry instrumentation into its graph.
+flagd:./pkg/service/...:go.opentelemetry.io|prometheus/client_golang|otelconnect|openfeature-relay/telemetry/
 # The example event sink requires the core only: no vendor client, transport or flagd module.
 test/eventsink-example:./...:opentelemetry|google.golang.org/grpc|connectrpc|k8s.io|gocloud|open-feature/flagd/flagd|openfeature-relay/(sync|telemetry|evaluator|configformat)/
 # The Builder (UC-001 Q1) depends on no relay module: it only reads manifests and runs the go binary.

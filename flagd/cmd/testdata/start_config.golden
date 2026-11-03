@@ -1,15 +1,9 @@
 == defaults
-MetricExporter: ""
 ManagementPort: 8014
 OfrepServicePort: 8016
 OfrepSSEEnabled: true
 OfrepSSEInactivityDel: 120
 OfrepSSEPublicURL: ""
-OtelCollectorURI: ""
-OtelCertPath: ""
-OtelKeyPath: ""
-OtelCAPath: ""
-OtelReloadInterval: 0s
 ServiceCertPath: ""
 ServiceKeyPath: ""
 ServicePort: 8013
@@ -32,19 +26,20 @@ ContextValues: map[string]interface {}{}
 HeaderToContextKeyMappings: map[string]string{}
 MaxRequestBodyBytes: 1000000
 MaxRequestHeaderBytes: 1000000
+Telemetry: otel
+TelemetryConfig.caPath: ""
+TelemetryConfig.certPath: ""
+TelemetryConfig.collectorURI: ""
+TelemetryConfig.keyPath: ""
+TelemetryConfig.metricsExporter: ""
+TelemetryConfig.reloadInterval: 0s
 
 == every flag on the command line
-MetricExporter: "otel"
 ManagementPort: 9014
 OfrepServicePort: 9016
 OfrepSSEEnabled: false
 OfrepSSEInactivityDel: 77
 OfrepSSEPublicURL: "https://cli.example"
-OtelCollectorURI: "cli-collector:4317"
-OtelCertPath: "/cli/otel.crt"
-OtelKeyPath: "/cli/otel.key"
-OtelCAPath: "/cli/otel-ca.crt"
-OtelReloadInterval: 0s
 ServiceCertPath: "/cli/server.crt"
 ServiceKeyPath: "/cli/server.key"
 ServicePort: 9013
@@ -67,19 +62,20 @@ ContextValues: map[string]interface {}{"cliKey1":"cliValue1", "cliKey2":"cliValu
 HeaderToContextKeyMappings: map[string]string{"X-Cli-A":"cliA", "X-Cli-B":"cliB"}
 MaxRequestBodyBytes: 4321
 MaxRequestHeaderBytes: 8765
+Telemetry: otel
+TelemetryConfig.caPath: "/cli/otel-ca.crt"
+TelemetryConfig.certPath: "/cli/otel.crt"
+TelemetryConfig.collectorURI: "cli-collector:4317"
+TelemetryConfig.keyPath: "/cli/otel.key"
+TelemetryConfig.metricsExporter: "otel"
+TelemetryConfig.reloadInterval: 0s
 
 == every flag as an environment variable
-MetricExporter: "otel"
 ManagementPort: 10014
 OfrepServicePort: 10016
 OfrepSSEEnabled: false
 OfrepSSEInactivityDel: 88
 OfrepSSEPublicURL: "https://env.example"
-OtelCollectorURI: "env-collector:4317"
-OtelCertPath: "/env/otel.crt"
-OtelKeyPath: "/env/otel.key"
-OtelCAPath: "/env/otel-ca.crt"
-OtelReloadInterval: 3h0m0s
 ServiceCertPath: "/env/server.crt"
 ServiceKeyPath: "/env/server.key"
 ServicePort: 10013
@@ -102,20 +98,21 @@ ContextValues: map[string]interface {}{"envKey1":"envValue1"}
 HeaderToContextKeyMappings: map[string]string{"X-Env-A":"envA"}
 MaxRequestBodyBytes: 5432
 MaxRequestHeaderBytes: 9876
+Telemetry: otel
+TelemetryConfig.caPath: "/env/otel-ca.crt"
+TelemetryConfig.certPath: "/env/otel.crt"
+TelemetryConfig.collectorURI: "env-collector:4317"
+TelemetryConfig.keyPath: "/env/otel.key"
+TelemetryConfig.metricsExporter: "otel"
+TelemetryConfig.reloadInterval: 3h0m0s
 
 == every key in the configuration file given with --config
 stderr: using config file: $HOME/flagd.yaml
-MetricExporter: "otel"
 ManagementPort: 11014
 OfrepServicePort: 11016
 OfrepSSEEnabled: false
 OfrepSSEInactivityDel: 99
 OfrepSSEPublicURL: "https://file.example"
-OtelCollectorURI: "file-collector:4317"
-OtelCertPath: "/file/otel.crt"
-OtelKeyPath: "/file/otel.key"
-OtelCAPath: "/file/otel-ca.crt"
-OtelReloadInterval: 5h0m0s
 ServiceCertPath: "/file/server.crt"
 ServiceKeyPath: "/file/server.key"
 ServicePort: 11013
@@ -138,20 +135,21 @@ ContextValues: map[string]interface {}{"filekey1":"fileValue1"}
 HeaderToContextKeyMappings: map[string]string{"x-file-a":"fileA"}
 MaxRequestBodyBytes: 6543
 MaxRequestHeaderBytes: 10987
+Telemetry: otel
+TelemetryConfig.caPath: "/file/otel-ca.crt"
+TelemetryConfig.certPath: "/file/otel.crt"
+TelemetryConfig.collectorURI: "file-collector:4317"
+TelemetryConfig.keyPath: "/file/otel.key"
+TelemetryConfig.metricsExporter: "otel"
+TelemetryConfig.reloadInterval: 5h0m0s
 
 == the default configuration file in the home directory
 stderr: using config file: $HOME/.agent.yaml
-MetricExporter: ""
 ManagementPort: 8014
 OfrepServicePort: 8016
 OfrepSSEEnabled: true
 OfrepSSEInactivityDel: 120
 OfrepSSEPublicURL: ""
-OtelCollectorURI: ""
-OtelCertPath: ""
-OtelKeyPath: ""
-OtelCAPath: ""
-OtelReloadInterval: 0s
 ServiceCertPath: ""
 ServiceKeyPath: ""
 ServicePort: 12013
@@ -174,20 +172,21 @@ ContextValues: map[string]interface {}{}
 HeaderToContextKeyMappings: map[string]string{}
 MaxRequestBodyBytes: 1000000
 MaxRequestHeaderBytes: 1000000
+Telemetry: otel
+TelemetryConfig.caPath: ""
+TelemetryConfig.certPath: ""
+TelemetryConfig.collectorURI: ""
+TelemetryConfig.keyPath: ""
+TelemetryConfig.metricsExporter: ""
+TelemetryConfig.reloadInterval: 0s
 
 == command line over environment over configuration file
 stderr: using config file: $HOME/flagd.yaml
-MetricExporter: ""
 ManagementPort: 14014
 OfrepServicePort: 8016
 OfrepSSEEnabled: true
 OfrepSSEInactivityDel: 120
 OfrepSSEPublicURL: ""
-OtelCollectorURI: ""
-OtelCertPath: ""
-OtelKeyPath: ""
-OtelCAPath: ""
-OtelReloadInterval: 0s
 ServiceCertPath: ""
 ServiceKeyPath: ""
 ServicePort: 13013
@@ -210,4 +209,11 @@ ContextValues: map[string]interface {}{}
 HeaderToContextKeyMappings: map[string]string{}
 MaxRequestBodyBytes: 1000000
 MaxRequestHeaderBytes: 1000000
+Telemetry: otel
+TelemetryConfig.caPath: ""
+TelemetryConfig.certPath: ""
+TelemetryConfig.collectorURI: ""
+TelemetryConfig.keyPath: ""
+TelemetryConfig.metricsExporter: ""
+TelemetryConfig.reloadInterval: 0s
 

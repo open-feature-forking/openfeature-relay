@@ -4,27 +4,18 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"sort"
 	"strings"
 	"testing"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature/flagd/flagd/internal/telemetrytest"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
-// otelhttp reads the global tracer provider, so it is installed before any test builds a handler. A global
-// provider cannot be restored; TestFlagsRouteSpans resets the recorder instead. Every test of the package runs with
-// this recording tracer, so a test that runs in parallel would add its spans to TestFlagsRouteSpans'.
-var spanRecorder = tracetest.NewSpanRecorder()
-
-func TestMain(m *testing.M) {
-	otel.SetTracerProvider(sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanRecorder)))
-	os.Exit(m.Run())
-}
+// spanRecorder is the telemetry provider the tests inject, with the spans it recorded.
+var spanRecorder = telemetrytest.New()
 
 func renderSpans(spans []sdktrace.ReadOnlySpan) string {
 	var out strings.Builder
@@ -74,7 +65,7 @@ func TestFlagsRouteSpans(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			spanRecorder.Reset()
-			cfg := SvcConfigurations{Logger: logger.NewLogger(nil, false), ServiceName: "flagd"}
+			cfg := SvcConfigurations{Logger: logger.NewLogger(nil, false), ServiceName: "flagd", Telemetry: spanRecorder}
 			h := instrumentFlagsRoute(cfg, flagsPath, tt.handler)
 			req := httptest.NewRequest(tt.method, flagsPath, nil)
 			req.Host = "attacker.example:9999"

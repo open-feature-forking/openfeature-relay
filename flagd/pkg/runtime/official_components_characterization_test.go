@@ -49,7 +49,10 @@ func TestOfficialComponentsCharacterization(t *testing.T) {
 		needs := f.Needs()
 		fmt.Fprintf(&out, "  %s\n    needs: router=%v format=%q\n", f.Type(), needs.Router, needs.Format)
 	}
-	fmt.Fprintf(&out, "metrics handler: %v\n", Official().MetricsHandler != nil)
+	// /metrics is served by the telemetry provider's MetricsHandler; flagd start adds the OpenTelemetry provider
+	// (TestStartSelectsOpenTelemetry), and the management port characterization pins what it serves.
+	fmt.Fprintf(&out, "metrics handler override: %v\n", Official().MetricsHandler != nil)
+	fmt.Fprintf(&out, "telemetry provider: %v\n", Official().Telemetry != nil)
 
 	if *updateOfficialComponents {
 		require.NoError(t, os.MkdirAll("testdata", 0o755))

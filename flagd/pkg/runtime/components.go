@@ -7,10 +7,10 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	flageval "github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation"
 	"github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation/ofrep"
 	flagsync "github.com/open-feature/flagd/flagd/pkg/service/flag-sync"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // Components are the factories a distribution passes to the runtime; Config keeps the operator's settings.
@@ -26,17 +26,20 @@ type Components struct {
 	Evaluators []evaluator.Factory
 	// Endpoints are the service endpoints the runtime serves.
 	Endpoints []service.Factory
-	// MetricsHandler serves /metrics on the management port. Nil answers 404.
+	// Telemetry creates the telemetry provider the runtime, the sync providers and the service endpoints record
+	// through. Nil leaves the runtime to build the OpenTelemetry providers it always has from Config.
+	Telemetry telemetry.Factory
+	// TelemetryConfig is the configuration of Telemetry, as the keys of telemetry.Settings.Config.
+	TelemetryConfig map[string]any
+	// MetricsHandler serves /metrics on the management port. Nil leaves it to the telemetry provider, and answers
+	// 404 if the provider serves none.
 	MetricsHandler http.Handler
 }
 
-// Official returns the components of flagd-full: its service endpoints, and the metrics of the default
-// Prometheus registry. flagd's configuration format, evaluator and the official sync providers are built in.
+// Official returns the components of flagd-full: its service endpoints. flagd's configuration format, evaluator and
+// the official sync providers are built in.
 func Official() Components {
-	return Components{
-		Endpoints:      officialEndpoints(),
-		MetricsHandler: promhttp.Handler(),
-	}
+	return Components{Endpoints: officialEndpoints()}
 }
 
 // officialEndpoints are the three service endpoints of flagd-full.

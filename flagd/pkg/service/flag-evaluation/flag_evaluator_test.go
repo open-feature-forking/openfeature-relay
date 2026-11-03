@@ -13,11 +13,11 @@ import (
 	mock "github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator/mock"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
-	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
+	"github.com/open-feature/flagd/flagd/internal/telemetrytest"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
-	"go.opentelemetry.io/otel/sdk/resource"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -287,7 +287,7 @@ func BenchmarkFlag_Evaluation_ResolveBoolean(b *testing.B) {
 			tt.evalFields.metadata,
 			tt.wantErr,
 		).AnyTimes()
-		metrics, exp := getMetricReader()
+		metrics, exp := getBenchmarkMetricReader()
 		s := NewOldFlagEvaluationService(
 			logger.NewLogger(nil, false),
 			eval,
@@ -442,7 +442,7 @@ func BenchmarkFlag_Evaluation_ResolveString(b *testing.B) {
 			tt.evalFields.metadata,
 			tt.wantErr,
 		).AnyTimes()
-		metrics, exp := getMetricReader()
+		metrics, exp := getBenchmarkMetricReader()
 		s := NewOldFlagEvaluationService(
 			logger.NewLogger(nil, false),
 			eval,
@@ -596,7 +596,7 @@ func BenchmarkFlag_Evaluation_ResolveFloat(b *testing.B) {
 			tt.evalFields.metadata,
 			tt.wantErr,
 		).AnyTimes()
-		metrics, exp := getMetricReader()
+		metrics, exp := getBenchmarkMetricReader()
 		s := NewOldFlagEvaluationService(
 			logger.NewLogger(nil, false),
 			eval,
@@ -750,7 +750,7 @@ func BenchmarkFlag_Evaluation_ResolveInt(b *testing.B) {
 			tt.evalFields.metadata,
 			tt.wantErr,
 		).AnyTimes()
-		metrics, exp := getMetricReader()
+		metrics, exp := getBenchmarkMetricReader()
 		s := NewOldFlagEvaluationService(
 			logger.NewLogger(nil, false),
 			eval,
@@ -915,7 +915,7 @@ func BenchmarkFlag_Evaluation_ResolveObject(b *testing.B) {
 			tt.evalFields.metadata,
 			tt.wantErr,
 		).AnyTimes()
-		metrics, exp := getMetricReader()
+		metrics, exp := getBenchmarkMetricReader()
 		s := NewOldFlagEvaluationService(
 			logger.NewLogger(nil, false),
 			eval,
@@ -948,10 +948,22 @@ func BenchmarkFlag_Evaluation_ResolveObject(b *testing.B) {
 	}
 }
 
-func getMetricReader() (*telemetry.MetricsRecorder, metric.Reader) {
+func getMetricReader() (telemetry.Provider, metric.Reader) {
 	exp := metric.NewManualReader()
-	rs := resource.NewWithAttributes("testSchema")
-	return telemetry.NewOTelRecorder(exp, rs, "testSvc"), exp
+	return telemetrytest.ProviderFor(exp), exp
+}
+
+// meteredOnly records metrics through the OpenTelemetry telemetry provider and starts noop spans.
+type meteredOnly struct{ telemetry.Provider }
+
+func (meteredOnly) Tracer(scope string) telemetry.Tracer { return telemetry.Noop().Tracer(scope) }
+
+// getBenchmarkMetricReader is the provider of the single-flag benchmarks: OpenTelemetry metrics and noop spans.
+// Before the telemetry provider these benchmarks took the global tracer, which BenchmarkConnect* left noop when it
+// ran first, as it does in CI; the provider makes that configuration explicit instead of dependent on test order.
+func getBenchmarkMetricReader() (telemetry.Provider, metric.Reader) {
+	p, exp := getMetricReader()
+	return meteredOnly{p}, exp
 }
 
 // TestFlag_Evaluation_ErrorCodes test validate error mapping from known errors to connect.Code and avoid accidental

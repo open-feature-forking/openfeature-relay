@@ -93,6 +93,17 @@ func TestNoopAllocatesNothing(t *testing.T) {
 	}
 }
 
+func TestIsNoopMeter(t *testing.T) {
+	if !telemetry.IsNoopMeter(telemetry.Noop().Meter("test")) {
+		t.Error("the noop provider's meter is not reported as noop")
+	}
+	if telemetry.IsNoopMeter(countingMeter{}) {
+		t.Error("another meter is reported as noop")
+	}
+}
+
+type countingMeter struct{ telemetry.Meter }
+
 func TestAttributeValues(t *testing.T) {
 	tests := []struct {
 		attr telemetry.Attribute
@@ -192,4 +203,13 @@ func TestNoopLeavesHandlersUnchanged(t *testing.T) {
 	if err := p.Shutdown(context.Background()); err != nil {
 		t.Errorf("shutdown: %v", err)
 	}
+}
+
+// TestNoopMeterHasGauges pins that the noop telemetry provider offers gauges, and records nothing in them.
+func TestNoopMeterHasGauges(t *testing.T) {
+	gauges, ok := telemetry.Noop().Meter("scope").(telemetry.GaugeMeter)
+	if !ok {
+		t.Fatal("the noop meter has no gauges")
+	}
+	gauges.Int64Gauge("last", telemetry.WithUnit("s")).Record(context.Background(), 1, telemetry.String("k", "v"))
 }

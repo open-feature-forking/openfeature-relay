@@ -22,6 +22,7 @@ import (
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	otelprovider "github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"github.com/open-feature/flagd/flagd/pkg/runtime"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
@@ -82,7 +83,7 @@ func TestManagementPort(t *testing.T) {
 			{URI: file, Provider: "file"},
 			{URI: remote.URL, Provider: "http", Interval: 60},
 		},
-	}, runtime.Official())
+	}, withOpenTelemetry(runtime.Official()))
 	require.NoError(t, err)
 	// with OTEL_TRACES_EXPORTER unset, autoexport selects the OTLP span exporter, so FromConfig installs the trace
 	// provider and the W3C propagators; only OTEL_TRACES_EXPORTER=none leaves both noop
@@ -148,4 +149,11 @@ func TestManagementPort(t *testing.T) {
 		_, body := get(t, management+"/metrics")
 		checkGolden(t, "inventory.golden", inventory(body, file, remote.URL))
 	})
+}
+
+// withOpenTelemetry is the components of flagd-full with the OpenTelemetry telemetry provider, as flagd's command
+// line selects it.
+func withOpenTelemetry(components runtime.Components) runtime.Components {
+	components.Telemetry = otelprovider.NewFactory()
+	return components
 }

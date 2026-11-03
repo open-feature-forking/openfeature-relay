@@ -21,6 +21,7 @@ import (
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	otelprovider "github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"github.com/open-feature/flagd/flagd/pkg/runtime"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
@@ -59,7 +60,7 @@ func TestTracingOffCharacterization(t *testing.T) {
 		KeepAliveMinTime:             runtime.KeepAliveMinTimeDefault,
 		KeepAlivePermitWithoutStream: runtime.KeepAlivePermitWithoutStreamDefault,
 		SyncProviders:                []coresync.SourceConfig{{URI: file, Provider: "file"}},
-	}, runtime.Official())
+	}, withOpenTelemetry(runtime.Official()))
 	require.NoError(t, err)
 
 	require.Empty(t, otel.GetTextMapPropagator().Fields(), "no propagator is installed")
@@ -100,4 +101,11 @@ func TestTracingOffCharacterization(t *testing.T) {
 		resp.Body.Close()
 		return resp.StatusCode == http.StatusOK
 	}, 20*time.Second, 100*time.Millisecond, "a ConnectRPC call with a traceparent is served")
+}
+
+// withOpenTelemetry is the components of flagd-full with the OpenTelemetry telemetry provider, as flagd's command
+// selects it.
+func withOpenTelemetry(components runtime.Components) runtime.Components {
+	components.Telemetry = otelprovider.NewFactory()
+	return components
 }

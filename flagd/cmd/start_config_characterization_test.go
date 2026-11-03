@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -41,8 +43,8 @@ func TestStartConfigHelper(_ *testing.T) {
 	if err := json.Unmarshal([]byte(os.Getenv(startConfigArgsEnv)), &args); err != nil {
 		panic(err)
 	}
-	fromConfig = func(_ *logger.Logger, _ string, cfg runtime.Config, _ runtime.Components) (*runtime.Runtime, error) {
-		if err := os.WriteFile(out, []byte(renderRuntimeConfig(cfg)), 0o600); err != nil {
+	fromConfig = func(_ *logger.Logger, _ string, cfg runtime.Config, components runtime.Components) (*runtime.Runtime, error) {
+		if err := os.WriteFile(out, []byte(renderRuntimeConfig(cfg)+renderTelemetry(components)), 0o600); err != nil {
 			panic(err)
 		}
 		os.Exit(0)
@@ -50,6 +52,26 @@ func TestStartConfigHelper(_ *testing.T) {
 	}
 	rootCmd.SetArgs(args)
 	Execute("v9.9.9", "abc1234", "2026-01-02T03:04:05Z")
+}
+
+// renderTelemetry prints the telemetry provider flagd start selects and each of its settings, in key order: the
+// telemetry flags reach the runtime there.
+func renderTelemetry(components runtime.Components) string {
+	var b strings.Builder
+	if components.Telemetry == nil {
+		b.WriteString("Telemetry: <nil>\n")
+		return b.String()
+	}
+	fmt.Fprintf(&b, "Telemetry: %s\n", components.Telemetry.Type())
+	for _, key := range slices.Sorted(maps.Keys(components.TelemetryConfig)) {
+		value := components.TelemetryConfig[key]
+		if d, ok := value.(time.Duration); ok {
+			fmt.Fprintf(&b, "TelemetryConfig.%s: %s\n", key, d)
+			continue
+		}
+		fmt.Fprintf(&b, "TelemetryConfig.%s: %#v\n", key, value)
+	}
+	return b.String()
 }
 
 // renderRuntimeConfig prints every field of the runtime.Config in declaration order. Sync providers are JSON, so that

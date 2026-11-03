@@ -119,7 +119,8 @@ func (f Factory) Create(ctx context.Context, s coretel.Settings) (coretel.Provid
 			return nil, fmt.Errorf("telemetry provider %q: failed to setup metric reader: %w", Type, err)
 		}
 	}
-	p.meterProvider = newMeterProvider(reader, rsc, s.DistributionName)
+	p.sdkMeterProvider = newMeterProvider(reader, rsc, s.DistributionName)
+	p.meterProvider = p.sdkMeterProvider
 	p.recorder = newRecorder(p.meterProvider.Meter(s.DistributionName))
 
 	if !f.opts.withoutGlobals {

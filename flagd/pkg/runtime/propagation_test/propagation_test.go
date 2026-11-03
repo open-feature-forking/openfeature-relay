@@ -29,6 +29,7 @@ import (
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	otelprovider "github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"github.com/open-feature/flagd/flagd/pkg/runtime"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sys/unix"
@@ -127,7 +128,7 @@ func TestTracePropagationCharacterization(t *testing.T) {
 		KeepAliveMinTime:             runtime.KeepAliveMinTimeDefault,
 		KeepAlivePermitWithoutStream: runtime.KeepAlivePermitWithoutStreamDefault,
 		SyncProviders:                []coresync.SourceConfig{{URI: file, Provider: "file"}},
-	}, runtime.Official())
+	}, withOpenTelemetry(runtime.Official()))
 	require.NoError(t, err)
 
 	done := make(chan error, 1)
@@ -190,4 +191,11 @@ func TestTracePropagationCharacterization(t *testing.T) {
 		return len(got) >= len(want)
 	}, 10*time.Second, 50*time.Millisecond, "the server spans are exported")
 	require.ElementsMatch(t, want, slices.Collect(maps.Keys(got)))
+}
+
+// withOpenTelemetry is the components of flagd-full with the OpenTelemetry telemetry provider, as flagd's command
+// line selects it.
+func withOpenTelemetry(components runtime.Components) runtime.Components {
+	components.Telemetry = otelprovider.NewFactory()
+	return components
 }

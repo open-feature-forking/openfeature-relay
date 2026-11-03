@@ -22,6 +22,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	otelprovider "github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"github.com/open-feature/flagd/flagd/pkg/runtime"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
@@ -87,7 +88,7 @@ func start(
 		SyncProviders:                providers,
 		ConfigurationFormats:         []configformat.Factory{factory},
 		SyncFactories:                extra,
-	}, runtime.Official())
+	}, withOpenTelemetry(runtime.Official()))
 	require.NoError(t, err)
 
 	done := make(chan error, 1)
@@ -251,4 +252,11 @@ func TestConfigFileSourcesListTheirTriggers(t *testing.T) {
 	require.Equal(t, []coresync.TriggerConfig{
 		{Type: "signal", Config: map[string]any{"name": "reload", "count": 2}},
 	}, sources[0].Triggers)
+}
+
+// withOpenTelemetry is the components of flagd-full with the OpenTelemetry telemetry provider, as flagd's command
+// line selects it.
+func withOpenTelemetry(components runtime.Components) runtime.Components {
+	components.Telemetry = otelprovider.NewFactory()
+	return components
 }
