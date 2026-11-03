@@ -1,0 +1,18 @@
+configuration format, all samples
+  1. accepts a valid delivery: PASS
+  2. reports a stable version: PASS
+  3. reports changes: PASS
+  4. rejects an invalid delivery naming source and entry: PASS
+  5. leaves the store unchanged after a rejection: PASS
+  6. replaces only the delivering source: PASS
+  7. replaces only the flag sets of an incremental update: PASS
+  8. names dropped entries: PASS
+configuration format, without optional samples
+  1. accepts a valid delivery: PASS
+  2. reports a stable version: PASS
+  3. reports changes: PASS
+  4. rejects an invalid delivery naming source and entry: PASS
+  5. leaves the store unchanged after a rejection: PASS
+  6. replaces only the delivering source: PASS
+  7. replaces only the flag sets of an incremental update: PASS
+  8. names dropped entries: PASS
