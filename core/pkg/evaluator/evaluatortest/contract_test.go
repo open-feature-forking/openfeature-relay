@@ -223,3 +223,15 @@ func (e *reference) roundFor(snapshot int64) int64 {
 	}
 	return snapshot
 }
+
+// A bulk result without a value may carry a typed zero value; the single result of the same flag carries none.
+func TestSameIgnoresTheValueOfResultsWithoutOne(t *testing.T) {
+	single := evaluator.Result{FlagKey: "k", Reason: model.DisabledReason}
+	bulk := single
+	bulk.Value = false
+	require.True(t, same(single, bulk))
+
+	single.HasValue, bulk.HasValue = true, true
+	single.Value = true
+	require.False(t, same(single, bulk))
+}

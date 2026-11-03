@@ -39,7 +39,7 @@ func runStringFlagEvalTests(t *testing.T, ctx context.Context, source string, so
 			je := NewJSON(log, s)
 			je.store.Update(source, tt.flags, model.Metadata{}, false)
 
-			value, variant, reason, _, err := resolve[string](ctx, reqID, tt.flagKey, tt.context, je.evaluateVariant)
+			value, variant, reason, _, err := je.ResolveStringValue(ctx, reqID, tt.flagKey, tt.context)
 
 			assert.Equal(t, tt.expectedValue, value)
 			assert.Equal(t, tt.expectedVariant, variant)
@@ -74,7 +74,7 @@ func runErrorFallbackTests(t *testing.T, ctx context.Context, source, flagKey st
 				Targeting: []byte(tt.targeting),
 			}}, model.Metadata{}, false)
 
-			value, variant, reason, _, err := resolve[string](ctx, "default", flagKey, tt.context, je.evaluateVariant)
+			value, variant, reason, _, err := je.ResolveStringValue(ctx, "default", flagKey, tt.context)
 			assert.NoError(t, err)
 			assert.Equal(t, "fallback", value)
 			assert.Equal(t, "fallback", variant)

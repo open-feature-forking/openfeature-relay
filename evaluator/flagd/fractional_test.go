@@ -574,7 +574,7 @@ func TestFractionalEvaluation(t *testing.T) {
 				t.Fatalf("setupEvaluator failed: %v", err)
 			}
 
-			value, variant, reason, _, err := resolve[string](ctx, reqID, tt.flagKey, tt.context, je.evaluateVariant)
+			value, variant, reason, _, err := je.ResolveStringValue(ctx, reqID, tt.flagKey, tt.context)
 
 			if value != tt.expectedValue {
 				t.Errorf("expected value '%s', got '%s'", tt.expectedValue, value)
@@ -699,8 +699,7 @@ func BenchmarkFractionalEvaluation(b *testing.B) {
 			}
 
 			for i := 0; i < b.N; i++ {
-				value, variant, reason, _, err := resolve[string](
-					ctx, reqID, tt.flagKey, tt.context, je.evaluateVariant)
+				value, variant, reason, _, err := je.ResolveStringValue(ctx, reqID, tt.flagKey, tt.context)
 
 				if value != tt.expectedValue {
 					b.Errorf("expected value '%s', got '%s'", tt.expectedValue, value)
@@ -805,7 +804,7 @@ func TestFractionalEvaluationNegativeClamping(t *testing.T) {
 		t.Fatalf("setupEvaluator failed: %v", err)
 	}
 
-	value, variant, reason, _, err := resolve[string](ctx, "default", flagKey, evalContext, je.evaluateVariant)
+	value, variant, reason, _, err := je.ResolveStringValue(ctx, "default", flagKey, evalContext)
 	assert.Equal(t, greenVariant, variant)
 	assert.Equal(t, greenHex, value)
 	assert.Equal(t, model.TargetingMatchReason, reason)
@@ -976,7 +975,7 @@ func TestFractionalEvaluationWithNestedJSONLogic(t *testing.T) {
 				t.Fatalf("setupEvaluator failed: %v", err)
 			}
 
-			value, variant, reason, _, err := resolve[string](ctx, reqID, tt.flagKey, tt.context, je.evaluateVariant)
+			value, variant, reason, _, err := je.ResolveStringValue(ctx, reqID, tt.flagKey, tt.context)
 
 			if tt.expectedVariant != "" && variant != tt.expectedVariant {
 				t.Errorf("expected variant '%s', got '%s'", tt.expectedVariant, variant)
@@ -1120,7 +1119,7 @@ func TestFractionalEvaluation_ErrorFallbackWhenUsedDirectly(t *testing.T) {
 			}})
 			assert.NoError(t, err)
 
-			value, variant, reason, _, err := resolve[string](ctx, "default", "fractional-op-error-fallback", tt.context, je.evaluateVariant)
+			value, variant, reason, _, err := je.ResolveStringValue(ctx, "default", "fractional-op-error-fallback", tt.context)
 			assert.NoError(t, err)
 			assert.Equal(t, "fallback", value)
 			assert.Equal(t, "fallback", variant)
