@@ -353,10 +353,14 @@ func (r run) consistentResolution() {
 		go func() {
 			defer wg.Done()
 			keys := p.Keys[:]
-			for {
+			// every reader resolves at least once: a writer that finishes before the readers are scheduled
+			// must not leave the probe without an observation
+			for observed := false; ; observed = true {
 				select {
 				case <-done:
-					return
+					if observed {
+						return
+					}
 				default:
 				}
 				results, _, err := ev.Evaluate(context.Background(), evaluator.Request{FlagKeys: keys}, nil)
