@@ -626,23 +626,17 @@ func caseReacts(e *env) error {
 		return errors.New("expected an announcement for a change that concerns the client's selector\nobserved: none within 2s")
 	}
 
-	// a burst can overflow the endpoint's subscription; it must still announce the latest state
-	for i := 0; i < 256; i++ {
-		e.change(flagSet, "burst-"+strconv.Itoa(i))
-	}
-	for {
-		select {
-		case <-announced:
-			continue
-		case <-time.After(500 * time.Millisecond):
-		}
-		break
-	}
-	e.change(flagSet, "final")
+	// A subscription that missed events cannot tell what changed: the endpoint must reread the store, whatever
+	// the event says. The harness changes the documents without an event, then publishes an event for another
+	// flag set that carries a count of missed events.
+	e.putDocuments("silent")
+	events.PublishConfigurationChange(e.bus, events.ConfigurationChange{
+		Source: source, Format: "flagd", FlagSet: otherSet, Version: "silent", Missed: 3,
+	})
 	select {
 	case <-announced:
 	case <-time.After(2 * time.Second):
-		return errors.New("expected an announcement after a burst of changes\nobserved: none within 2s")
+		return errors.New("expected an announcement after a configuration change event that reports missed events, the documents behind the client's selector having changed unannounced\nobserved: none within 2s; the endpoint did not reread the store")
 	}
 	return nil
 }
@@ -700,11 +694,15 @@ func caseEffectiveSelector(e *env) error {
 		name, bound, client string
 		wantSet, wantSource string
 		noFlag              bool
+		// invalid is a bound selector the harness cannot parse: nothing may be evaluated and the client must
+		// not be answered as if nothing restricted it
+		invalid bool
 	}{
 		{name: "bound only", bound: "flagSetId=" + flagSet, wantSet: flagSet},
 		{name: "client only", client: "flagSetId=" + flagSet, wantSet: flagSet},
 		{name: "narrowing", bound: "flagSetId=" + flagSet, client: "source=" + source, wantSet: flagSet, wantSource: source},
 		{name: "conflict", bound: "flagSetId=" + flagSet, client: "flagSetId=" + otherSet, noFlag: true},
+		{name: "invalid bound selector", bound: "colour=red", client: "source=" + source, invalid: true},
 	}
 	for _, row := range rows {
 		e.rec.reset()
@@ -717,6 +715,13 @@ func caseEffectiveSelector(e *env) error {
 		}
 		answer, err := e.resolve(r, flagKey, row.client)
 		stopErr := r.stop()
+		if row.invalid {
+			if seen := e.rec.requests(); len(seen) != 0 || (err == nil && answer.ErrorCode == "") {
+				return fmt.Errorf("selector row %q: expected the request to fail without evaluating, the bound selector is invalid\nobserved: %d evaluations, error code %q, error %v",
+					row.name, len(seen), answer.ErrorCode, err)
+			}
+			continue
+		}
 		if err != nil {
 			return fmt.Errorf("selector row %q: expected an answer\nobserved: %w", row.name, err)
 		}
