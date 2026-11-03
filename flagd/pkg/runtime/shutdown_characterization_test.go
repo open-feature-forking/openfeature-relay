@@ -4,11 +4,11 @@ package runtime
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
+	"sync"
 	"path/filepath"
 	"testing"
 	"time"
@@ -96,31 +96,40 @@ func startRuntime(t *testing.T, cfg Config) (cancel func(), done <-chan error) {
 	return stop, result
 }
 
-// streamOutcome is what a client stream saw when the context of start ended.
+// streamOutcome is what a client stream saw by the time start returned and the stream had its moment to end.
 type streamOutcome struct {
 	events []string
-	err    error
+	// err is why the stream ended, nil while it is still open
+	err error
+	// open is whether the stream was still open then
+	open bool
 }
 
 // shutdownRun starts a runtime, opens one client stream through open and ends the context of start. It returns what
-// the stream saw, start's result and how long start took.
+// the stream saw, start's result and how long start took. The events are read while the stream is open, so a
+// stream that never ends still reports what it received.
 func shutdownRun(t *testing.T, open func(p ports) (next func() (string, error))) (streamOutcome, error, time.Duration) {
 	t.Helper()
 	p := newPorts(t)
 	stop, done := startRuntime(t, characterizedConfig(t, p))
 	next := open(p)
 
-	ended := make(chan streamOutcome, 1)
+	var mu sync.Mutex
+	var seen []string
+	var endErr error
+	ended := make(chan struct{})
 	go func() {
-		var o streamOutcome
+		defer close(ended)
 		for {
 			e, err := next()
+			mu.Lock()
 			if err != nil {
-				o.err = err
-				ended <- o
+				endErr = err
+				mu.Unlock()
 				return
 			}
-			o.events = append(o.events, e)
+			seen = append(seen, e)
+			mu.Unlock()
 		}
 	}()
 	time.Sleep(300 * time.Millisecond)
@@ -134,13 +143,16 @@ func shutdownRun(t *testing.T, open func(p ports) (next func() (string, error)))
 		t.Fatal("start did not return")
 	}
 	took := time.Since(began)
-	var out streamOutcome
+
+	var stillOpen bool
 	select {
-	case out = <-ended:
+	case <-ended:
 	case <-time.After(3 * time.Second):
-		out.err = errors.New("still open")
+		stillOpen = true
 	}
-	return out, startErr, took
+	mu.Lock()
+	defer mu.Unlock()
+	return streamOutcome{events: append([]string(nil), seen...), err: endErr, open: stillOpen}, startErr, took
 }
 
 func TestShutdownEvaluationEventStream(t *testing.T) {
@@ -156,13 +168,14 @@ func TestShutdownEvaluationEventStream(t *testing.T) {
 		}
 	})
 	// The graceful shutdown of the server waits for the open stream until its 5s limit expires, so start
-	// fails, and the provider_shutdown notification that follows reaches nobody: the stream gets no event
-	// and stays open. The endpoint that sends it itself is PR 3 (3e).
+	// fails with that error. Only then does the runtime's deferred Shutdown send provider_shutdown, which the
+	// stream still receives; the stream itself stays open. The endpoint that sends provider_shutdown when its
+	// context ends is PR 3 (3e).
 	require.ErrorContains(t, startErr, "error shutting down server: context deadline exceeded")
 	require.GreaterOrEqual(t, took, 4*time.Second)
 	require.Less(t, took, 8*time.Second)
-	require.Empty(t, out.events)
-	require.EqualError(t, out.err, "still open")
+	require.Equal(t, []string{"provider_ready", "provider_shutdown"}, out.events)
+	require.True(t, out.open, "the stream stays open")
 }
 
 func TestShutdownFlagSyncStream(t *testing.T) {
