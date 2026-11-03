@@ -4,11 +4,13 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
 	evalmock "github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator/mock"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
@@ -30,7 +32,10 @@ func (*fakeFormat) Type() string { return fakeFormatType }
 
 func (f *fakeFormat) Accept(_ context.Context, in configformat.Input) (configformat.Result, error) {
 	f.accepted = append(f.accepted, in)
-	return configformat.Result{}, f.err
+	if f.err != nil {
+		return configformat.Result{}, f.err
+	}
+	return configformat.Result{Documents: []configformat.DocumentReport{{FlagSet: in.Source, Version: strconv.Itoa(len(f.accepted))}}}, nil
 }
 
 type fakeFactory struct{ created []*fakeFormat }
@@ -103,7 +108,6 @@ func TestUnknownConfigurationFormatSkipsSource(t *testing.T) {
 	rt := Runtime{
 		Evaluator:       evalmock.NewMockIEvaluator(gomock.NewController(t)),
 		Logger:          log,
-		SyncService:     &recordingSyncService{},
 		sourceReadiness: readiness,
 	}
 	rt.Evaluator.(*evalmock.MockIEvaluator).EXPECT().SetState(gomock.Any()).Return(nil)
@@ -115,12 +119,13 @@ func TestSourceWithFormatGoesThroughAccept(t *testing.T) {
 	const source = "vendor-source"
 	log := logger.NewLogger(nil, false)
 	format := &fakeFormat{}
-	syncService := &recordingSyncService{}
+	bus := events.NewBus()
+	delivered := deliveredSources(t, bus)
 	rt := Runtime{
 		// no expectations: a source with a format must not reach the evaluator
 		Evaluator:       evalmock.NewMockIEvaluator(gomock.NewController(t)),
 		Logger:          log,
-		SyncService:     syncService,
+		Bus:             bus,
 		Formats:         map[string]configformat.ConfigurationFormat{source: format},
 		sourceReadiness: map[string]bool{source: false},
 	}
@@ -129,7 +134,7 @@ func TestSourceWithFormatGoesThroughAccept(t *testing.T) {
 	rt.updateAndEmit(coresync.DataSync{Source: source, FlagData: "payload", Selector: "sel", IncrementalUpdates: true})
 
 	require.Equal(t, []configformat.Input{{Source: source, Data: "payload", Selector: "sel", IncrementalUpdate: true}}, format.accepted)
-	require.Equal(t, []string{source}, syncService.emitted)
+	require.Equal(t, []string{source}, delivered())
 	require.True(t, rt.initialized.Load())
 	require.Equal(t, "jsonEvaluator/flagSync[internal]{feature_flag.source=vendor-source}\n", renderSpans(spanRecorder.Ended()))
 }
@@ -138,11 +143,12 @@ func TestRejectionLogNamesSourceAndEntry(t *testing.T) {
 	const source = "vendor-source"
 	log, logs := observedLogger()
 	format := &fakeFormat{err: configformat.Rejection{Source: source, Entry: "flag-7", Reason: "no value"}}
-	syncService := &recordingSyncService{}
+	bus := events.NewBus()
+	delivered := deliveredSources(t, bus)
 	rt := Runtime{
 		Evaluator:       evalmock.NewMockIEvaluator(gomock.NewController(t)),
 		Logger:          log,
-		SyncService:     syncService,
+		Bus:             bus,
 		Formats:         map[string]configformat.ConfigurationFormat{source: format},
 		sourceReadiness: map[string]bool{source: false},
 	}
@@ -150,7 +156,7 @@ func TestRejectionLogNamesSourceAndEntry(t *testing.T) {
 
 	rt.updateAndEmit(coresync.DataSync{Source: source})
 
-	require.Empty(t, syncService.emitted, "a rejection emits nothing")
+	require.Empty(t, delivered(), "a rejection publishes no event")
 	require.False(t, rt.initialized.Load())
 	errs := logs.FilterLevelExact(zap.ErrorLevel).All()
 	require.Len(t, errs, 1)

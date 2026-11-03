@@ -7,10 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	flagdformat "github.com/open-feature-forking/openfeature-relay/configformat/flagd"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	"github.com/open-feature/flagd/flagd/pkg/evaluation"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
@@ -95,18 +96,19 @@ func TestFlagSyncSpan(t *testing.T) {
 			log := logger.NewLogger(nil, false)
 			flagStore, err := store.NewStore(log, []string{spanTestSource})
 			require.NoError(t, err)
-			syncService := &recordingSyncService{}
+			bus := events.NewBus()
+			delivered := deliveredSources(t, bus)
 			runtime := Runtime{
-				Evaluator:       evaluation.NewEvaluator(log, flagStore),
+				DefaultFormat:   flagdformat.NewFormat(flagStore, log),
 				Logger:          log,
-				SyncService:     syncService,
+				Bus:             bus,
 				sourceReadiness: map[string]bool{spanTestSource: false},
 			}
 			spanRecorder.Reset()
 
 			runtime.updateAndEmit(coresync.DataSync{FlagData: tt.flagData, Source: spanTestSource})
 
-			require.Equal(t, tt.wantEmitted, syncService.emitted)
+			require.Equal(t, tt.wantEmitted, delivered())
 			require.Equal(t, tt.want, renderSpans(spanRecorder.Ended()))
 		})
 	}
