@@ -50,6 +50,7 @@
 | Engine Module | A component module that provides a configuration format and the evaluator paired with it, as vendors ship their engines. |  |
 | Fetcher | The part of a sync provider that fetches a source on request, with conditional requests, and knows nothing about when to fetch (file read, HTTP GET, blob read). | retriever |
 | Fetch Trigger | A component that tells a fetcher to fetch: an interval with jitter and backoff (the core's poller), a server-sent event stream, a file watch, a webhook, or a vendor's change events. | notifier, watcher |
+| Source Version | An opaque value a fetcher returns for its source's flag configuration as read (an ETag, a content hash, a generation) and gets back on the next fetch; not a document version. | |
 | Streaming Sync Provider | A sync provider that detects changes and delivers flag configurations in one, such as flagd's gRPC sync protocol and the OpenFeature Operator's FeatureFlag watch. | |
 | Fetching Sync Provider | A sync provider built as a fetcher plus the fetch triggers attached to its source. | retriever |
 | Encoding | The serialization of a flag configuration (JSON, YAML, TOML), decoded by the core before its configuration format validates it; independent of the configuration format. |  |
