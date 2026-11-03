@@ -30,8 +30,10 @@ type Provider struct {
 	sdkTracerProvider *trace.TracerProvider
 	tracerProvider    oteltrace.TracerProvider
 	propagator        propagation.TextMapPropagator
-	meterProvider     *msdk.MeterProvider
-	recorder          *MetricsRecorder
+	meterProvider     metric.MeterProvider
+	// sdkMeterProvider is nil for a provider over the global state; see FromGlobals.
+	sdkMeterProvider *msdk.MeterProvider
+	recorder         *MetricsRecorder
 }
 
 var _ coretel.Provider = (*Provider)(nil)
@@ -40,7 +42,7 @@ var _ coretel.Provider = (*Provider)(nil)
 // before the telemetry provider existed: the meter provider always, the tracer provider and the propagator only
 // with a span exporter.
 func (p *Provider) installGlobals() {
-	otel.SetMeterProvider(p.meterProvider)
+	otel.SetMeterProvider(p.sdkMeterProvider)
 	if p.sdkTracerProvider != nil {
 		otel.SetTracerProvider(p.sdkTracerProvider)
 		otel.SetTextMapPropagator(p.propagator)
@@ -76,8 +78,18 @@ func (p *Provider) Shutdown(ctx context.Context) error {
 	if p.sdkTracerProvider != nil {
 		errs = append(errs, p.sdkTracerProvider.Shutdown(ctx))
 	}
-	errs = append(errs, p.meterProvider.Shutdown(ctx))
+	if p.sdkMeterProvider != nil {
+		errs = append(errs, p.sdkMeterProvider.Shutdown(ctx))
+	}
 	return errors.Join(errs...)
+}
+
+// ForceFlush exports the spans the provider still holds.
+func (p *Provider) ForceFlush(ctx context.Context) error {
+	if p.sdkTracerProvider == nil {
+		return nil
+	}
+	return p.sdkTracerProvider.ForceFlush(ctx)
 }
 
 // ConnectHandlerOptions instrument a ConnectRPC handler with otelconnect, as flagd's flag evaluation and flag sync
@@ -184,12 +196,27 @@ func (m meter) Float64Histogram(name string, opts ...coretel.InstrumentOption) c
 	return float64Histogram{h}
 }
 
+func (m meter) Int64Gauge(name string, opts ...coretel.InstrumentOption) coretel.Int64Gauge {
+	description, unit, _ := instrumentOptions(opts)
+	g, err := m.m.Int64Gauge(name, metric.WithDescription(description), metric.WithUnit(unit))
+	if err != nil {
+		otel.Handle(err)
+	}
+	return int64Gauge{g}
+}
+
 // The SDK returns a usable instrument together with an error, so the instruments below are never nil.
 
 type int64Counter struct{ c metric.Int64Counter }
 
 func (c int64Counter) Add(ctx context.Context, incr int64, attrs ...coretel.Attribute) {
 	c.c.Add(ctx, incr, metric.WithAttributes(convert(attrs)...))
+}
+
+type int64Gauge struct{ g metric.Int64Gauge }
+
+func (g int64Gauge) Record(ctx context.Context, value int64, attrs ...coretel.Attribute) {
+	g.g.Record(ctx, value, metric.WithAttributes(convert(attrs)...))
 }
 
 type int64UpDownCounter struct{ c metric.Int64UpDownCounter }

@@ -13,7 +13,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
-	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
+	flagdService "github.com/open-feature/flagd/flagd/pkg/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -64,7 +64,7 @@ func TestSyncHandler_SyncFlags(t *testing.T) {
 					contextValues:       tt.contextValues,
 					log:                 logger.NewLogger(nil, false),
 					disableSyncMetadata: disableSyncMetadata,
-					metricsRecorder:     &telemetry.NoopMetricsRecorder{},
+					metricsRecorder:     flagdService.NoopMetrics(),
 				}
 
 				// Test getting metadata from `GetMetadata` (deprecated)
@@ -204,7 +204,7 @@ func TestSyncHandler_SelectorLocationPrecedence(t *testing.T) {
 				store:           flagStore,
 				log:             logger.NewLogger(nil, false),
 				contextValues:   map[string]any{},
-				metricsRecorder: &telemetry.NoopMetricsRecorder{},
+				metricsRecorder: flagdService.NoopMetrics(),
 			}
 
 			var header http.Header
@@ -259,7 +259,7 @@ func TestSyncHandler_InvalidSelector(t *testing.T) {
 		store:           flagStore,
 		log:             logger.NewLogger(nil, false),
 		contextValues:   map[string]any{},
-		metricsRecorder: &telemetry.NoopMetricsRecorder{},
+		metricsRecorder: flagdService.NoopMetrics(),
 	}
 
 	header := selectorHeader(invalidSelector)

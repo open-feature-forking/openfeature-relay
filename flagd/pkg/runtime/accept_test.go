@@ -133,6 +133,7 @@ func TestChangeEventForVendorFormat(t *testing.T) {
 // TestFlagSyncSpanOnAcceptPath pins that the flagSync span is there when the delivery goes through a format.
 func TestFlagSyncSpanOnAcceptPath(t *testing.T) {
 	rt, _, source, _ := acceptRuntime(t)
+	rt.Telemetry = spanRecorder
 	spanRecorder.Reset()
 
 	rt.updateAndEmit(coresync.DataSync{Source: source, FlagData: changeFlags})

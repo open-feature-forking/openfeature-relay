@@ -23,6 +23,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	otelprovider "github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"github.com/open-feature/flagd/flagd/pkg/runtime"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
@@ -99,7 +100,7 @@ func baseConfig(t *testing.T, providers []coresync.SourceConfig, factory *fakeFa
 func startConfig(t *testing.T, config runtime.Config) (*runtime.Runtime, func()) {
 	t.Helper()
 	managementPort := config.ManagementPort
-	rt, err := runtime.FromConfig(logger.NewLogger(nil, false), "test", config, runtime.Official())
+	rt, err := runtime.FromConfig(logger.NewLogger(nil, false), "test", config, withOpenTelemetry(runtime.Official()))
 	require.NoError(t, err)
 
 	done := make(chan error, 1)
@@ -285,4 +286,11 @@ func TestStrictNumericRangeReachesTheRuntime(t *testing.T) {
 			require.Equal(t, int64(10000000000000000), value)
 		})
 	}
+}
+
+// withOpenTelemetry is the components of flagd-full with the OpenTelemetry telemetry provider, as flagd's command
+// line selects it.
+func withOpenTelemetry(components runtime.Components) runtime.Components {
+	components.Telemetry = otelprovider.NewFactory()
+	return components
 }
