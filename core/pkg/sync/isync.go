@@ -7,10 +7,11 @@ import (
 )
 
 /*
-ISync implementations watch for changes in the flag sources (HTTP backend, local file, K8s CRDs ...),fetch the latest
-value and communicate to the Runtime with DataSync channel
+StreamingSyncProvider implementations watch for changes in the flag sources (a gRPC stream, K8s CRDs ...), fetch the
+latest value and communicate to the Runtime with DataSync channel. A source that is only read on request is a Fetcher
+that the core's fetching sync provider drives.
 */
-type ISync interface {
+type StreamingSyncProvider interface {
 	// Init is used by the sync provider to initialize its data structures and external dependencies.
 	Init(ctx context.Context) error
 
@@ -25,6 +26,11 @@ type ISync interface {
 	// IsReady shall return true if the provider is ready to communicate with the Runtime
 	IsReady() bool
 }
+
+// ISync is the former name of StreamingSyncProvider.
+//
+// Deprecated: use StreamingSyncProvider.
+type ISync = StreamingSyncProvider
 
 // DataSync is the data contract between Runtime and sync implementations
 type DataSync struct {
