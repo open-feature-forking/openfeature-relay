@@ -192,13 +192,14 @@ func (k *Sync) fetch(ctx context.Context) (string, error) {
 	}
 
 	if exist {
-		configuration, err := toFFCfg(item)
+		// the resource is checked to be a FeatureFlag, and delivered as it was written
+		_, err := toFFCfg(item)
 		if err != nil {
 			return "", err
 		}
 
 		k.logger.Debug(fmt.Sprintf("resource %s served from the informer cache", k.URI))
-		return marshallFeatureFlagSpec(configuration)
+		return marshalFlagSpec(item)
 	}
 
 	// fallback to API access - this is an informer cache miss. Could happen at the startup where cache is not filled
@@ -213,11 +214,11 @@ func (k *Sync) fetch(ctx context.Context) (string, error) {
 
 	k.logger.Debug(fmt.Sprintf("resource %s served from API server", k.URI))
 
-	ff, err := toFFCfg(ffObj)
+	_, err = toFFCfg(ffObj)
 	if err != nil {
 		return "", fmt.Errorf("unable to convert object %s/%s to FeatureFlag: %w", k.namespace, k.crdName, err)
 	}
-	return marshallFeatureFlagSpec(ff)
+	return marshalFlagSpec(ffObj)
 }
 
 func (k *Sync) notify(ctx context.Context, c chan<- INotify) {
@@ -331,11 +332,27 @@ func toFFCfg(object interface{}) (*v1beta1.FeatureFlag, error) {
 	return ff, nil
 }
 
-// marshallFeatureFlagSpec marshals the FlagSpec of a FeatureFlag to JSON
-func marshallFeatureFlagSpec(ff *v1beta1.FeatureFlag) (string, error) {
-	b, err := json.Marshal(ff.Spec.FlagSpec)
+// marshalFlagSpec returns the flag configuration of a FeatureFlag as written in the resource: its spec.flagSpec, not
+// the operator's typed view of it, which has no place for fields it does not define. A resource without one holds no
+// flags.
+func marshalFlagSpec(resource any) (string, error) {
+	if tombstone, ok := resource.(cache.DeletedFinalStateUnknown); ok {
+		resource = tombstone.Obj
+	}
+	u, ok := resource.(*unstructured.Unstructured)
+	if !ok {
+		return "", fmt.Errorf("provided value is not of type *unstructured.Unstructured")
+	}
+	flagSpec, found, err := unstructured.NestedFieldNoCopy(u.Object, "spec", "flagSpec")
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal FlagSpec: %w", err)
+		return "", fmt.Errorf("unable to read spec.flagSpec: %w", err)
+	}
+	if !found || flagSpec == nil {
+		return "{}", nil
+	}
+	b, err := json.Marshal(flagSpec)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal spec.flagSpec: %w", err)
 	}
 	return string(b), nil
 }

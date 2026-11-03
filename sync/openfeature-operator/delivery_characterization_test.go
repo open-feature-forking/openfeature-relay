@@ -137,7 +137,7 @@ func TestDeliveryCharacterization(t *testing.T) {
 		require.NoError(t, <-stopped)
 	})
 
-	t.Run("the delivered JSON is the operator's typed flag specification", func(t *testing.T) {
+	t.Run("the delivered JSON is the flag specification as written in the resource", func(t *testing.T) {
 		ff := featureFlag("1", map[string]interface{}{
 			"$schema": "https://flagd.dev/schema/v0/flags.json",
 			"flags": map[string]interface{}{
@@ -145,15 +145,16 @@ func TestDeliveryCharacterization(t *testing.T) {
 					"state":          "ENABLED",
 					"variants":       map[string]interface{}{"on": true, "off": false},
 					"defaultVariant": "on",
-					"unknownKey":     "dropped",
+					"unknownKey":     "kept",
 				},
 			},
 		})
 		s := newSync(fake.NewSimpleDynamicClient(scheme.Scheme, ff))
 		deliveries, _ := startOperatorSync(t, s)
 
-		// `$schema` and the flag-level key the operator's type does not define are not delivered
-		requireOperatorDelivery(t, deliveries, `{"flags":{"f":{"state":"ENABLED","variants":{"on":true,"off":false},"defaultVariant":"on"}}}`)
+		// `$schema` and the flag-level key the operator's type does not define are delivered too
+		requireOperatorDelivery(t, deliveries, `{"$schema":"https://flagd.dev/schema/v0/flags.json","flags":{"f":{"state":"ENABLED",`+
+			`"variants":{"on":true,"off":false},"defaultVariant":"on","unknownKey":"kept"}}}`)
 	})
 
 	t.Run("readiness, changes and deletion", func(t *testing.T) {

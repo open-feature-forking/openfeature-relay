@@ -994,54 +994,56 @@ func (m *MockInformer) GetStore() cache.Store {
 	return &m.fakeStore
 }
 
-func TestMarshallFeatureFlagSpec(t *testing.T) {
-	res, err := marshallFeatureFlagSpec(&v1beta1.FeatureFlag{
-		Spec: v1beta1.FeatureFlagSpec{
-			FlagSpec: v1beta1.FlagSpec{
-				Flags: v1beta1.Flags{
-					FlagsMap: map[string]v1beta1.Flag{
-						"flag": {
-							DefaultVariant: "kubernetes",
-						},
+func TestMarshalFlagSpec(t *testing.T) {
+	tests := []struct {
+		name     string
+		resource any
+		want     string
+		wantErr  string
+	}{
+		{
+			name: "the spec as written, with the fields the operator's type does not define",
+			resource: featureFlag("1", map[string]interface{}{
+				"$schema":  "https://flagd.dev/schema/v0/flags.json",
+				"metadata": map[string]interface{}{"scope": "app-1"},
+				"flags": map[string]interface{}{
+					"flag": map[string]interface{}{
+						"state":          "ENABLED",
+						"variants":       map[string]interface{}{"on": true, "off": false},
+						"defaultVariant": "on",
+						"unknownKey":     "kept",
 					},
 				},
-			},
+			}),
+			want: `{"$schema":"https://flagd.dev/schema/v0/flags.json","metadata":{"scope":"app-1"},"flags":{"flag":{` +
+				`"state":"ENABLED","variants":{"on":true,"off":false},"defaultVariant":"on","unknownKey":"kept"}}}`,
 		},
-	})
-
-	require.NoError(t, err)
-	require.JSONEq(t, `{"flags":{"flag":{"state":"","variants":null,"defaultVariant":"kubernetes"}}}`, res)
-}
-
-func TestMarshallFeatureFlagSpec_metadata(t *testing.T) {
-	res, err := marshallFeatureFlagSpec(&v1beta1.FeatureFlag{
-		Spec: v1beta1.FeatureFlagSpec{
-			FlagSpec: v1beta1.FlagSpec{
-				Metadata: json.RawMessage(`{"scope":"app-1"}`),
-				Flags: v1beta1.Flags{
-					FlagsMap: map[string]v1beta1.Flag{
-						"flag-with-meta": {
-							State:          "ENABLED",
-							DefaultVariant: "on",
-							Variants:       json.RawMessage(`{"on":true,"off":false}`),
-							Metadata:       json.RawMessage(`{"owner":"team-x"}`),
-						},
-					},
-				},
-			},
+		{
+			name:     "a tombstone",
+			resource: cache.DeletedFinalStateUnknown{Obj: featureFlag("1", simpleFlags("on"))},
+			want:     `{"flags":{"f":{"defaultVariant":"on","state":"ENABLED","variants":{"on":true}}}}`,
 		},
-	})
-
-	require.NoError(t, err)
-	require.JSONEq(t, `{
-		"metadata": {"scope": "app-1"},
-		"flags": {
-			"flag-with-meta": {
-				"state": "ENABLED",
-				"variants": {"on": true, "off": false},
-				"defaultVariant": "on",
-				"metadata": {"owner": "team-x"}
+		{
+			name:     "a resource without a flag spec holds no flags",
+			resource: &unstructured.Unstructured{Object: map[string]interface{}{"spec": map[string]interface{}{}}},
+			want:     "{}",
+		},
+		{
+			name:     "a flag spec that is not an object",
+			resource: &unstructured.Unstructured{Object: map[string]interface{}{"spec": "text"}},
+			wantErr:  "unable to read spec.flagSpec",
+		},
+		{name: "something that is not a resource", resource: "text", wantErr: "not of type *unstructured.Unstructured"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := marshalFlagSpec(tt.resource)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
 			}
-		}
-	}`, res)
+			require.NoError(t, err)
+			require.JSONEq(t, tt.want, got)
+		})
+	}
 }
