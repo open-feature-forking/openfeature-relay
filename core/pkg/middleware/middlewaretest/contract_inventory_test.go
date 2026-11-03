@@ -30,7 +30,7 @@ func TestContractInventory(t *testing.T) {
 
 	var got strings.Builder
 	for _, r := range runs {
-		report := middlewaretest.Check(r.factory, r.inputs)
+		report := middlewaretest.Check(t, r.factory, r.inputs)
 		require.Empty(t, report.Aborted)
 		require.Empty(t, report.FailedCases())
 

@@ -23,12 +23,12 @@ middleware that never answers and takes no configuration
   3. answers an answered request without the wrapped handler
      expected: a middleware that passes every request on calls the wrapped handler for the passed request
   4. passes a request on or answers it, never both
-     expected: each response comes from exactly one of them: the wrapped handler's, untouched, or the middleware's alone
+     expected: each response comes from exactly one of them: the wrapped handler's, untouched, or the middleware's alone (NeverAnswers: every request is passed on)
   5. makes its selector and request attributes visible to the wrapped handler
      expected: the wrapped handler sees no bound selector and no request attributes
   6. ends every span it starts through the injected telemetry provider
-     expected: the middleware is handed the distribution's telemetry provider, may record through it, and ends every span it starts
+     expected: the middleware is handed the distribution's telemetry provider, may record through it, and ends every span it starts (NeverAnswers: every request is passed on)
   7. works under concurrent requests
-     expected: 64 goroutines send passed and answered requests at once; every passed request gets the wrapped handler's response
+     expected: 64 goroutines send passed and answered requests at once; every passed request gets the wrapped handler's response (NeverAnswers: every request is passed on)
   8. rejects an invalid configuration naming the faulty value
      expected: a middleware that takes no configuration is created from any configuration
