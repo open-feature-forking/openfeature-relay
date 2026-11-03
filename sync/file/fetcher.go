@@ -102,16 +102,16 @@ func (Factory) CreateFetcher(settings sync.Settings) (sync.Fetcher, error) {
 // links, and polling the file's status outside.
 func (Factory) DefaultTriggers(sync.SourceConfig) []sync.TriggerConfig {
 	if os.Getenv("KUBERNETES_SERVICE_HOST") == "" {
-		return []sync.TriggerConfig{{Type: FILEINFO}}
+		return []sync.TriggerConfig{fileWatch(FILEINFO)}
 	}
-	return []sync.TriggerConfig{{Type: FSNOTIFY}}
+	return []sync.TriggerConfig{fileWatch(FSNOTIFY)}
 }
 
 // Aliases are the provider names that select the file provider with one specific file watch.
 func (Factory) Aliases() []sync.Alias {
 	return []sync.Alias{
-		{Name: FSNOTIFY, Trigger: sync.TriggerConfig{Type: FSNOTIFY}},
-		{Name: FILEINFO, Trigger: sync.TriggerConfig{Type: FILEINFO}},
+		{Name: FSNOTIFY, Trigger: fileWatch(FSNOTIFY)},
+		{Name: FILEINFO, Trigger: fileWatch(FILEINFO)},
 	}
 }
 
@@ -137,4 +137,9 @@ func NewSyncProvider(
 		SourceType: sync.SourceFile,
 		Metrics:    recorder,
 	}), nil
+}
+
+// fileWatch is the trigger of a file source.
+func fileWatch(name string) sync.TriggerConfig {
+	return sync.TriggerConfig{Type: name}
 }

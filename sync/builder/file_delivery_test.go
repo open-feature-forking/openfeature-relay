@@ -55,14 +55,18 @@ func TestFileDeliveryCharacterization(t *testing.T) {
 				src.requireDelivery(t, sync.DataSync{FlagData: "{}", Source: path})
 			})
 
-			t.Run("content that cannot be decoded delivers an empty flag configuration", func(t *testing.T) {
+			t.Run("content that cannot be decoded keeps the flags in force", func(t *testing.T) {
 				path := filepath.Join(t.TempDir(), "flags.yaml")
 				replaceFile(t, path, "flags: {}\n", 0o600)
 				src := startSource(t, sync.SourceConfig{URI: path, Provider: provider})
 				src.requireDelivery(t, sync.DataSync{FlagData: `{"flags":{}}`, Source: path})
 
 				replaceFile(t, path, "flags: [\n", 0o600)
-				src.requireDelivery(t, sync.DataSync{FlagData: "{}", Source: path})
+				src.requireNoDelivery(t)
+
+				// the next content that can be decoded is accepted
+				replaceFile(t, path, "flags: {a: {}}\n", 0o600)
+				src.requireDelivery(t, sync.DataSync{FlagData: `{"flags":{"a":{}}}`, Source: path})
 			})
 
 			t.Run("a deleted file delivers an empty flag configuration", func(t *testing.T) {
@@ -77,7 +81,7 @@ func TestFileDeliveryCharacterization(t *testing.T) {
 		})
 	}
 
-	t.Run("fsnotify: a file that can no longer be read delivers an empty flag configuration", func(t *testing.T) {
+	t.Run("fsnotify: a file that can no longer be read keeps the flags in force", func(t *testing.T) {
 		if os.Geteuid() == 0 {
 			t.Skip("file permissions do not apply to root")
 		}
@@ -87,6 +91,7 @@ func TestFileDeliveryCharacterization(t *testing.T) {
 		src.requireDelivery(t, sync.DataSync{FlagData: flagsA, Source: path})
 
 		replaceFile(t, path, flagsB, 0o000)
-		src.requireDelivery(t, sync.DataSync{FlagData: "{}", Source: path})
+		// the watch is added again for about a second before the file is given up
+		src.requireNoDeliveryWithin(t, 2*time.Second)
 	})
 }

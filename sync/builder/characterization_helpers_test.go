@@ -114,3 +114,14 @@ func resolveSource(t *testing.T, cfg sync.SourceConfig, opts ...func(*SyncBuilde
 }
 
 func loggerForTests() *logger.Logger { return logger.NewLogger(nil, false) }
+
+// requireNoDeliveryWithin waits for the given time and checks that nothing was delivered in it.
+func (s *runningSource) requireNoDeliveryWithin(t *testing.T, d time.Duration) {
+	t.Helper()
+
+	select {
+	case got := <-s.deliveries:
+		t.Fatalf("unexpected delivery of %q from %s", got.FlagData, got.Source)
+	case <-time.After(d):
+	}
+}

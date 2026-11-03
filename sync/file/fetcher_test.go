@@ -111,14 +111,14 @@ func TestFactory(t *testing.T) {
 	require.False(t, ok)
 
 	require.Equal(t, []sync.Alias{
-		{Name: "fsnotify", Trigger: sync.TriggerConfig{Type: "fsnotify"}},
-		{Name: "fileinfo", Trigger: sync.TriggerConfig{Type: "fileinfo"}},
+		{Name: "fsnotify", Trigger: fileWatch("fsnotify")},
+		{Name: "fileinfo", Trigger: fileWatch("fileinfo")},
 	}, f.Aliases())
 
 	t.Setenv("KUBERNETES_SERVICE_HOST", "")
-	require.Equal(t, []sync.TriggerConfig{{Type: "fileinfo"}}, f.DefaultTriggers(sync.SourceConfig{}))
+	require.Equal(t, []sync.TriggerConfig{fileWatch("fileinfo")}, f.DefaultTriggers(sync.SourceConfig{}))
 	t.Setenv("KUBERNETES_SERVICE_HOST", "10.0.0.1")
-	require.Equal(t, []sync.TriggerConfig{{Type: "fsnotify"}}, f.DefaultTriggers(sync.SourceConfig{}))
+	require.Equal(t, []sync.TriggerConfig{fileWatch("fsnotify")}, f.DefaultTriggers(sync.SourceConfig{}))
 }
 
 func TestNewSyncProvider(t *testing.T) {

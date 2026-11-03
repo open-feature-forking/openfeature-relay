@@ -3,6 +3,8 @@ package file
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -87,4 +89,24 @@ func TestTriggerFactoryNeedsAPath(t *testing.T) {
 		_, err := f.CreateTrigger(sync.Settings{Logger: logger.NewLogger(nil, false)})
 		require.EqualError(t, err, "no filepath string set", f.Type())
 	}
+}
+
+func TestChmodSignalsWhenConfigured(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "flags.json")
+	require.NoError(t, os.WriteFile(path, []byte(flagsA), 0o600))
+	chmod := fsnotify.Event{Name: path, Op: fsnotify.Chmod}
+
+	for _, signalOnChmod := range []bool{false, true} {
+		trigger := &watchTrigger{path: path, logger: logger.NewLogger(nil, false), signalOnChmod: signalOnChmod}
+		signals := 0
+		trigger.handle(context.Background(), &reAddMockWatcher{}, chmod, func() { signals++ })
+		require.Equal(t, map[bool]int{false: 0, true: 1}[signalOnChmod], signals, "signalOnChmod %v", signalOnChmod)
+	}
+
+	t.Run("a file that is gone signals either way", func(t *testing.T) {
+		trigger := &watchTrigger{path: filepath.Join(t.TempDir(), "gone.json"), logger: logger.NewLogger(nil, false)}
+		signals := 0
+		trigger.handle(context.Background(), &reAddMockWatcher{}, chmod, func() { signals++ })
+		require.Equal(t, 1, signals)
+	})
 }
