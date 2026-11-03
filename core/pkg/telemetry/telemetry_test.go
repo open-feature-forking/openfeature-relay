@@ -93,6 +93,17 @@ func TestNoopAllocatesNothing(t *testing.T) {
 	}
 }
 
+func TestIsNoopMeter(t *testing.T) {
+	if !telemetry.IsNoopMeter(telemetry.Noop().Meter("test")) {
+		t.Error("the noop provider's meter is not reported as noop")
+	}
+	if telemetry.IsNoopMeter(countingMeter{}) {
+		t.Error("another meter is reported as noop")
+	}
+}
+
+type countingMeter struct{ telemetry.Meter }
+
 func TestAttributeValues(t *testing.T) {
 	tests := []struct {
 		attr telemetry.Attribute
@@ -168,14 +179,14 @@ func (namedFactory) Create(context.Context, telemetry.Settings) (telemetry.Provi
 	return telemetry.Noop(), nil
 }
 
-func TestValidateDeclaration(t *testing.T) {
-	if err := telemetry.ValidateDeclaration(telemetry.NoopFactory()); err != nil {
+func TestValidateDeclarations(t *testing.T) {
+	if err := telemetry.ValidateDeclarations(telemetry.NoopFactory()); err != nil {
 		t.Errorf("noop factory: %v", err)
 	}
-	if err := telemetry.ValidateDeclaration(namedFactory(" ")); err == nil {
+	if err := telemetry.ValidateDeclarations(namedFactory(" ")); err == nil {
 		t.Error("an empty type name is accepted")
 	}
-	if err := telemetry.ValidateDeclaration(nil); err == nil {
+	if err := telemetry.ValidateDeclarations(nil); err == nil {
 		t.Error("a nil factory is accepted")
 	}
 }
@@ -192,4 +203,13 @@ func TestNoopLeavesHandlersUnchanged(t *testing.T) {
 	if err := p.Shutdown(context.Background()); err != nil {
 		t.Errorf("shutdown: %v", err)
 	}
+}
+
+// TestNoopMeterHasGauges pins that the noop telemetry provider offers gauges, and records nothing in them.
+func TestNoopMeterHasGauges(t *testing.T) {
+	gauges, ok := telemetry.Noop().Meter("scope").(telemetry.GaugeMeter)
+	if !ok {
+		t.Fatal("the noop meter has no gauges")
+	}
+	gauges.Int64Gauge("last", telemetry.WithUnit("s")).Record(context.Background(), 1, telemetry.String("k", "v"))
 }

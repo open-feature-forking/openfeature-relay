@@ -121,6 +121,7 @@ func TestSourceWithFormatGoesThroughAccept(t *testing.T) {
 		Evaluator:       evalmock.NewMockIEvaluator(gomock.NewController(t)),
 		Logger:          log,
 		SyncService:     syncService,
+		Telemetry:       spanRecorder,
 		Formats:         map[string]configformat.ConfigurationFormat{source: format},
 		sourceReadiness: map[string]bool{source: false},
 	}
@@ -143,6 +144,7 @@ func TestRejectionLogNamesSourceAndEntry(t *testing.T) {
 		Evaluator:       evalmock.NewMockIEvaluator(gomock.NewController(t)),
 		Logger:          log,
 		SyncService:     syncService,
+		Telemetry:       spanRecorder,
 		Formats:         map[string]configformat.ConfigurationFormat{source: format},
 		sourceReadiness: map[string]bool{source: false},
 	}

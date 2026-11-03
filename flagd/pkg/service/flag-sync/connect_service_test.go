@@ -18,7 +18,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
-	"github.com/open-feature/flagd/flagd/pkg/service/middleware/metrics/metricstest"
+	"github.com/open-feature/flagd/flagd/internal/telemetrytest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	semconv "go.opentelemetry.io/otel/semconv/v1.34.0"
@@ -301,11 +301,11 @@ func TestInstrumentFlagsRouteMetrics(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			recorder, reader := metricstest.NewRecorder(t, "flagd")
+			tel := telemetrytest.New()
 			cfg := SvcConfigurations{
-				Logger:          logger.NewLogger(nil, false),
-				ServiceName:     "flagd",
-				MetricsRecorder: recorder,
+				Logger:      logger.NewLogger(nil, false),
+				ServiceName: "flagd",
+				Telemetry:   tel,
 			}
 			h := instrumentFlagsRoute(cfg, flagsPath, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(test.status)
@@ -314,7 +314,7 @@ func TestInstrumentFlagsRouteMetrics(t *testing.T) {
 			req.Host = "attacker.example:9999"
 			h.ServeHTTP(httptest.NewRecorder(), req)
 
-			scopes, points := metricstest.RequestDurationPoints(t, reader)
+			scopes, points := telemetrytest.RequestDurationPoints(t, tel.Metrics)
 			require.Equal(t, map[string]bool{"flagd": true}, scopes, "request should be recorded once, by flagd only")
 			require.Len(t, points, 1)
 			require.Equal(t, uint64(1), points[0].Count, "request should be recorded once")
@@ -339,11 +339,11 @@ func TestFlagsRouteMetricsByMethod(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.method, func(t *testing.T) {
-			recorder, reader := metricstest.NewRecorder(t, "flagd")
+			tel := telemetrytest.New()
 			cfg := SvcConfigurations{
-				Logger:          logger.NewLogger(nil, false),
-				ServiceName:     "flagd",
-				MetricsRecorder: recorder,
+				Logger:      logger.NewLogger(nil, false),
+				ServiceName: "flagd",
+				Telemetry:   tel,
 			}
 			flags := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 			server := newConnectServer(cfg, syncv1connect.UnimplementedFlagSyncServiceHandler{}, flags)
@@ -355,7 +355,7 @@ func TestFlagsRouteMetricsByMethod(t *testing.T) {
 				require.Equal(t, "GET, HEAD", response.Header().Get("Allow"))
 			}
 
-			_, points := metricstest.RequestDurationPoints(t, reader)
+			_, points := telemetrytest.RequestDurationPoints(t, tel.Metrics)
 			require.Len(t, points, 1, "request should be recorded")
 			code, _ := points[0].Attributes.Value(semconv.HTTPResponseStatusCodeKey)
 			require.Equal(t, strconv.Itoa(test.expectedCode), code.AsString())

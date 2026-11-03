@@ -52,7 +52,7 @@ type Pipeline struct {
 // core-owned keys of settings.Config size the pipeline (see ParseOptions); an invalid one, or a sink the factory
 // rejects, is an error that names the sink.
 func NewPipeline(bus *events.Bus, f Factory, settings Settings, opts ...Option) (*Pipeline, error) {
-	if err := ValidateDeclaration(f); err != nil {
+	if err := ValidateDeclarations(f); err != nil {
 		return nil, fmt.Errorf("event sink: invalid declaration: %w", err)
 	}
 	o, err := ParseOptions(settings.Config)
@@ -191,7 +191,7 @@ func (p *Pipeline) run() {
 // flush delivers the collected batch, retrying it with backoff.
 func (p *Pipeline) flush() {
 	p.mu.Lock()
-	if p.accounted || len(p.batch) == 0 {
+	if p.accounted || len(p.batch) == 0 || p.deliverCtx.Err() != nil {
 		p.mu.Unlock()
 		return
 	}
@@ -203,7 +203,8 @@ func (p *Pipeline) flush() {
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.accounted {
+	if p.accounted || p.deliverCtx.Err() != nil {
+		// Close is counting what is left, the batch included
 		return
 	}
 	p.inflight = nil

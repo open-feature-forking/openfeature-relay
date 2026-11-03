@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"testing"
@@ -10,24 +9,17 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	"github.com/open-feature/flagd/flagd/internal/telemetrytest"
 	"github.com/open-feature/flagd/flagd/pkg/evaluation"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 const spanTestSource = "test-source"
 
-// Tracers may be fetched when components are built, so the provider is installed before any test
-// builds one. A global provider cannot be restored; tests reset the recorder instead.
-var spanRecorder = tracetest.NewSpanRecorder()
-
-func TestMain(m *testing.M) {
-	otel.SetTracerProvider(sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanRecorder)))
-	os.Exit(m.Run())
-}
+// spanRecorder is the telemetry provider the tests inject, with the spans it recorded.
+var spanRecorder = telemetrytest.New()
 
 // renderSpans renders ended spans in start order, one per line, without timestamps or IDs. A span
 // with a parent is indented beneath it.
@@ -100,6 +92,7 @@ func TestFlagSyncSpan(t *testing.T) {
 				Evaluator:       evaluation.NewEvaluator(log, flagStore),
 				Logger:          log,
 				SyncService:     syncService,
+				Telemetry:       spanRecorder,
 				sourceReadiness: map[string]bool{spanTestSource: false},
 			}
 			spanRecorder.Reset()

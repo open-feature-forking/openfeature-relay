@@ -329,6 +329,7 @@ func TestRuntimeStartsAnyEndpointSet(t *testing.T) {
 		{
 			name: "OFREP alone", endpoints: []service.Factory{ofrep.Factory{}}, evaluator: true,
 			check: func(t *testing.T, p ports) {
+				waitForPort(t, p.ofrep)
 				resp, err := http.Post(fmt.Sprintf("http://127.0.0.1:%d/ofrep/v1/evaluate/flags/f1", p.ofrep), "application/json", strings.NewReader("{}")) //nolint:noctx // local
 				require.NoError(t, err)
 				resp.Body.Close()
@@ -338,18 +339,14 @@ func TestRuntimeStartsAnyEndpointSet(t *testing.T) {
 		{
 			name: "flag sync alone", endpoints: []service.Factory{flagsync.Factory{}}, evaluator: false,
 			check: func(t *testing.T, p ports) {
-				conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", p.sync), time.Second)
-				require.NoError(t, err)
-				conn.Close()
+				waitForPort(t, p.sync)
 			},
 		},
 		{
 			name: "all three", endpoints: officialEndpoints(), evaluator: true,
 			check: func(t *testing.T, p ports) {
 				for _, port := range []uint16{p.service, p.ofrep, p.sync} {
-					conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), time.Second)
-					require.NoError(t, err)
-					conn.Close()
+					waitForPort(t, port)
 				}
 			},
 		},

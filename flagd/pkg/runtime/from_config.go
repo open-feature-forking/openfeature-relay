@@ -3,12 +3,13 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"maps"
+	"net/http"
 	"slices"
 	"sort"
 	"strings"
 	"time"
 
-	"connectrpc.com/connect"
 	flagdformat "github.com/open-feature-forking/openfeature-relay/configformat/flagd"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
@@ -17,10 +18,10 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	flagdeval "github.com/open-feature-forking/openfeature-relay/evaluator/flagd"
 	syncbuilder "github.com/open-feature-forking/openfeature-relay/sync/builder"
 	flagdgrpc "github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc"
-	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	flageval "github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation"
 	"github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation/ofrep"
 	flagsync "github.com/open-feature/flagd/flagd/pkg/service/flag-sync"
@@ -34,17 +35,11 @@ const svcName = "flagd"
 
 // Config is the configuration structure derived from startup arguments.
 type Config struct {
-	MetricExporter         string
 	ManagementPort         uint16
 	OfrepServicePort       uint16
 	OfrepSSEEnabled        bool
 	OfrepSSEInactivityDel  int
 	OfrepSSEPublicURL      string
-	OtelCollectorURI       string
-	OtelCertPath           string
-	OtelKeyPath            string
-	OtelCAPath             string
-	OtelReloadInterval     time.Duration
 	ServiceCertPath        string
 	ServiceKeyPath         string
 	ServicePort            uint16
@@ -73,6 +68,9 @@ type Config struct {
 	// SyncFactories are the sync components, besides the official ones, that sources may select.
 	SyncFactories []sync.Factory
 	CORS          []string
+	// EndpointSettings are the settings of the service endpoints of a distribution, besides the official ones, keyed by
+	// the endpoint's type. An endpoint gets its own as Settings.Config.
+	EndpointSettings map[string]map[string]any
 
 	ContextValues              map[string]any
 	HeaderToContextKeyMappings map[string]string
@@ -99,37 +97,22 @@ func warnOnNoOpConfig(logger *logger.Logger, config Config) {
 
 // FromConfig builds a runtime from startup configurations
 // nolint: funlen
-func FromConfig(logger *logger.Logger, version string, config Config, components Components) (*Runtime, error) {
+func FromConfig(logger *logger.Logger, version string, config Config, components Components) (rt *Runtime, err error) {
 	config = withComponents(config, components)
 	warnOnNoOpConfig(logger, config)
 
-	telCfg := telemetry.Config{
-		MetricsExporter: config.MetricExporter,
-		CollectorConfig: telemetry.CollectorConfig{
-			Target:         config.OtelCollectorURI,
-			CertPath:       config.OtelCertPath,
-			KeyPath:        config.OtelKeyPath,
-			CAPath:         config.OtelCAPath,
-			ReloadInterval: config.OtelReloadInterval,
-		},
-	}
-
-	// register error handling for OpenTelemetry
-	telemetry.RegisterErrorHandling(logger)
-
-	// register trace provider for the runtime
-	err := telemetry.BuildTraceProvider(context.Background(), logger, svcName, version, telCfg)
+	tp, shutdownTelemetry, err := telemetryProvider(logger, version, components)
 	if err != nil {
-		// log the error but continue
-		logger.Error(fmt.Sprintf("error building trace provider: %v", err))
+		return nil, err
 	}
-
-	// build metrics recorder with startup configurations
-	recorder, err := telemetry.BuildMetricsRecorder(context.Background(), svcName, version, telCfg)
-	if err != nil {
-		// log the error but continue
-		logger.Error(fmt.Sprintf("error building metrics recorder: %v", err))
-	}
+	// a runtime that is not built releases what the telemetry provider holds
+	defer func() {
+		if rt == nil && shutdownTelemetry != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), hookBudget)
+			defer cancel()
+			_ = shutdownTelemetry(ctx)
+		}
+	}()
 
 	syncProviders := sourcesWithKnownFormat(logger, config.SyncProviders, config.ConfigurationFormats)
 	sources := []string{}
@@ -167,17 +150,12 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		formatTypes = append(formatTypes, f.Type())
 	}
 
-	options, err := telemetry.BuildConnectOptions(telCfg)
-	if err != nil {
-		// log the error but continue
-		logger.Error("failed to build connect options", zap.Error(err))
-	}
-
 	bus := events.NewBus()
-	rt := &Runtime{
+	rt = &Runtime{
 		Logger:         logger.WithFields(zap.String("component", "runtime")),
 		Bus:            bus,
-		MetricsHandler: components.MetricsHandler,
+		Telemetry:      tp,
+		MetricsHandler: metricsHandler(tp, components),
 		ServiceConfig: service.Configuration{
 			Port:                       config.ServicePort,
 			ManagementPort:             config.ManagementPort,
@@ -205,7 +183,7 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		rt.Evaluator = inputs.router.IEvaluator()
 	}
 	endpointConfigs := endpointConfigs{
-		config: config, serviceConfig: rt.ServiceConfig, sources: sources, recorder: recorder, options: options,
+		formats: append([]string{flagdformat.Type}, formatTypes...), config: config, serviceConfig: rt.ServiceConfig, sources: sources,
 	}
 	for _, factory := range components.Endpoints {
 		if err := service.ValidateDeclarations(factory); err != nil {
@@ -213,6 +191,7 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		}
 		settings := inputs.settings(factory)
 		settings.Initialized = rt.Initialized()
+		settings.Telemetry = tp
 		settings.Config = endpointConfigs.forEndpoint(factory.Type())
 		endpoint, err := factory.Create(settings)
 		if err != nil {
@@ -225,29 +204,51 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 	// provider (grpc, http, file, kubernetes, blob) emits the universal client-side sync
 	// metrics into the same reader as the rest of flagd's telemetry.
 	syncLogger := logger.WithFields(zap.String("component", "sync"))
-	syncMetricsRecorder := telemetry.NewSyncRecorder(nil)
-	iSyncs, err := syncProvidersFromConfig(
-		syncLogger, syncProviders, syncMetricsRecorder, telemetry.NewStreamRecorder(nil), config.SyncFactories)
+	iSyncs, err := syncProvidersFromConfig(syncLogger, syncProviders, tp, config.SyncFactories)
 	if err != nil {
 		return nil, err
 	}
 	rt.Syncs = iSyncs
-
 	staleLimits, err := staleLimitsOf(syncProviders, iSyncs)
 	if err != nil {
 		return nil, err
 	}
 	rt.staleLimits = staleLimits
+	if shutdownTelemetry != nil {
+		rt.onShutdown("telemetry", shutdownTelemetry)
+	}
 	return rt, nil
+}
+
+// telemetryProvider returns the telemetry provider of the runtime, and how to shut it down. It is the provider of the
+// factory in the components, or the noop telemetry provider without one.
+func telemetryProvider(
+	logger *logger.Logger, version string, components Components,
+) (telemetry.Provider, func(context.Context) error, error) {
+	if components.Telemetry == nil {
+		return telemetry.Noop(), nil, nil
+	}
+	if err := telemetry.ValidateDeclarations(components.Telemetry); err != nil {
+		return nil, nil, fmt.Errorf("the telemetry provider declares: %w", err)
+	}
+	tp, err := components.Telemetry.Create(context.Background(), telemetry.Settings{
+		Logger:              logger,
+		DistributionName:    svcName,
+		DistributionVersion: version,
+		Config:              components.TelemetryConfig,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("error creating the telemetry provider %q: %w", components.Telemetry.Type(), err)
+	}
+	return tp, tp.Shutdown, nil
 }
 
 // endpointConfigs derives the settings of the official endpoints from the operator's configuration.
 type endpointConfigs struct {
+	formats       []string // the configuration formats of the distribution, flagd's first
 	config        Config
 	serviceConfig service.Configuration
 	sources       []string
-	recorder      telemetry.IMetricsRecorder
-	options       []connect.HandlerOption
 }
 
 // forEndpoint returns Settings.Config for the endpoint type; an extension's endpoint has no settings of the
@@ -256,14 +257,14 @@ func (c endpointConfigs) forEndpoint(endpointType string) map[string]any {
 	switch endpointType {
 	case flageval.Type:
 		return map[string]any{flageval.ConfigKey: flageval.EndpointConfig{
-			Configuration: c.serviceConfig, Metrics: c.recorder, Options: c.options,
+			Configuration: c.serviceConfig,
 		}}
 	case ofrep.Type:
 		return map[string]any{ofrep.ConfigKey: ofrep.EndpointConfig{
+			Formats: c.formats,
 			Service: ofrep.SvcConfiguration{
 				Port:                  c.config.OfrepServicePort,
 				ServiceName:           svcName,
-				MetricsRecorder:       c.recorder,
 				MaxRequestBodyBytes:   c.config.MaxRequestBodyBytes,
 				MaxRequestHeaderBytes: c.config.MaxRequestHeaderBytes,
 				SSEEnabled:            c.config.OfrepSSEEnabled,
@@ -285,15 +286,17 @@ func (c endpointConfigs) forEndpoint(endpointType string) map[string]any {
 			HTTPEnabled:           c.config.SyncServiceHTTPEnabled,
 			ServiceName:           svcName,
 			CORS:                  c.config.CORS,
-			Options:               c.options,
 			StreamDeadline:        c.config.StreamDeadline,
 			DisableSyncMetadata:   c.config.DisableSyncMetadata,
-			MetricsRecorder:       c.recorder,
 			MaxRequestHeaderBytes: c.config.MaxRequestHeaderBytes,
 			MaxRequestBodyBytes:   c.config.MaxRequestBodyBytes,
 		}}
 	}
-	return map[string]any{}
+	settings := maps.Clone(c.config.EndpointSettings[endpointType])
+	if settings == nil {
+		settings = map[string]any{}
+	}
+	return settings
 }
 
 // staleLimitsOf pairs the sources that set staleAfter with their sync providers, which must report their last contact.
@@ -315,22 +318,30 @@ func staleLimitsOf(sources []sync.SourceConfig, syncs []sync.ISync) ([]staleLimi
 	return limits, nil
 }
 
+// grpcClientInstrumentation is implemented by a telemetry provider that instruments outbound gRPC connections.
+type grpcClientInstrumentation interface {
+	GRPCDialOptions() []googlegrpc.DialOption
+}
+
 // syncProvidersFromConfig is a helper to build ISync implementations from SourceConfig.
-// The syncMetricsRecorder is forwarded to every sync provider so they can record the
-// universal client-side sync metrics. A nil recorder is safe (methods no-op).
+// The sync providers record the universal client-side sync metrics, and the stream metrics of the gRPC source,
+// through the telemetry provider, whose gRPC client instrumentation the gRPC source dials with.
 func syncProvidersFromConfig(
 	logger *logger.Logger,
 	sources []sync.SourceConfig,
-	syncMetricsRecorder sync.MetricsRecorder,
-	streamMetricsRecorder flagdgrpc.StreamMetricsRecorder,
+	tp telemetry.Provider,
 	extra []sync.Factory,
 ) ([]sync.ISync, error) {
+	var dialOptions []googlegrpc.DialOption
+	if p, ok := tp.(grpcClientInstrumentation); ok {
+		dialOptions = p.GRPCDialOptions()
+	}
 	factories := syncbuilder.OfficialWith(syncbuilder.OfficialOptions{
-		StreamMetrics:   streamMetricsRecorder,
-		GRPCDialOptions: []googlegrpc.DialOption{telemetry.GRPCClientDialOption()},
+		StreamMetrics:   flagdgrpc.NewStreamMetrics(tp.Meter(flagdgrpc.StreamMetricsScope)),
+		GRPCDialOptions: dialOptions,
 	})
 	builder := syncbuilder.NewSyncBuilder(append(factories, extra...)...)
-	builder.SyncMetricsRecorder = syncMetricsRecorder
+	builder.SyncMetricsRecorder = sync.NewMetricsRecorder(tp.Meter(sync.MetricsScope))
 	syncs, err := builder.SyncsFromConfig(sources, logger)
 	if err != nil {
 		return nil, fmt.Errorf("could not create sync sources from config: %w", err)
@@ -398,4 +409,16 @@ func withComponents(config Config, components Components) Config {
 	config.Evaluators = append(slices.Clone(config.Evaluators), components.Evaluators...)                               //nolint:staticcheck // deprecated, still applied
 	config.SyncFactories = append(slices.Clone(config.SyncFactories), components.Sync...)                               //nolint:staticcheck // deprecated, still applied
 	return config
+}
+
+// metricsHandler returns what serves /metrics on the management port: the handler of the components, or else the one
+// of the telemetry provider if it has one.
+func metricsHandler(tp telemetry.Provider, components Components) http.Handler {
+	if components.MetricsHandler != nil {
+		return components.MetricsHandler
+	}
+	if p, ok := tp.(interface{ MetricsHandler() http.Handler }); ok {
+		return p.MetricsHandler()
+	}
+	return nil
 }

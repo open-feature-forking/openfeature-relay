@@ -80,6 +80,8 @@ func samples() evaluatortest.Samples {
 				return int(v), ok
 			},
 		},
+		// the example format has no disabled flags and no flag without a value
+		Without: []evaluatortest.Feature{evaluatortest.FeatureDisabled, evaluatortest.FeatureAbsentDefault},
 	}
 }
 

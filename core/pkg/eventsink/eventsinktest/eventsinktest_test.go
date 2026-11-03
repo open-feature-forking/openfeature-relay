@@ -225,3 +225,62 @@ func TestDrops(t *testing.T) {
 	require.Equal(t, 2, d.Total(), "only the sink metric is counted")
 	require.Equal(t, 2, d.Count(""), "without a reason attribute it counts under the empty reason")
 }
+
+// TestBrokenInputsFailTheirCases: the cases of the kinds, the buffer and the shutdown depend on what the author's inputs
+// report, so an external system that does not behave as the contract assumes fails the cases that rely on it.
+func TestBrokenInputsFailTheirCases(t *testing.T) {
+	tests := map[string]struct {
+		change func(ext *external, in *eventsinktest.Inputs)
+		failed []string
+		// maybe are cases the broken input may fail, depending on how fast the sink drains its buffer
+		maybe []string
+	}{
+		"receives an event of a kind the sink does not subscribe to": {
+			change: func(ext *external, in *eventsinktest.Inputs) {
+				received := in.Received
+				in.Received = func(t testing.TB) [][]events.Event {
+					var out [][]events.Event
+					for _, batch := range received(t) {
+						stray := events.ConfigurationChange{Time: time.Now(), Source: "stray", Format: "eventsinktest", Version: "1"}
+						out = append(out, append(slices.Clone(batch), stray))
+					}
+					return out
+				}
+			},
+			// the other cases count every event the system received, so the stray one fails them too
+			failed: []string{eventsinktest.CaseKindsOnly, eventsinktest.CaseBatches, eventsinktest.CaseFlushesOnShutdown},
+		},
+		"does not stall when asked to": {
+			change: func(ext *external, in *eventsinktest.Inputs) {
+				in.Stall = func(testing.TB) func() { return func() {} }
+			},
+			// without a stall the sink drains the buffer as fast as the events arrive, so how many events are dropped
+			// depends on the machine's load; the stalled shutdown does not
+			failed: []string{eventsinktest.CaseReturnsInTime},
+			maybe:  []string{eventsinktest.CaseFullBufferDrops},
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			ext := newExternal()
+			in := inputs(ext)
+			tt.change(ext, &in)
+			report := eventsinktest.Check(t, stubFactory{ext: ext}, in)
+
+			require.Empty(t, report.Aborted)
+			var failed []string
+			for _, name := range report.FailedCases() {
+				if !slices.Contains(tt.maybe, name) {
+					failed = append(failed, name)
+				}
+			}
+			require.ElementsMatch(t, tt.failed, failed)
+			for _, c := range report.Cases {
+				if !c.Passed {
+					require.NotEmpty(t, c.Expected)
+					require.NotEmpty(t, c.Observed)
+				}
+			}
+		})
+	}
+}

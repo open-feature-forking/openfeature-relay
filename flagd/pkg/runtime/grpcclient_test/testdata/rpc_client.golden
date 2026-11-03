@@ -1,0 +1,2 @@
+# TYPE rpc_client_call_duration_seconds HISTOGRAM
+rpc_client_call_duration_seconds{error_type=CANCELLED,otel_scope_name=go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc,otel_scope_schema_url=https://opentelemetry.io/schemas/1.43.0,otel_scope_version=0.72.0,rpc_method=flagd.sync.v1.FlagSyncService/SyncFlags,rpc_response_status_code=CANCELLED,rpc_system_name=grpc,server_address=*,server_port=*}

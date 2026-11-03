@@ -1,0 +1,39 @@
+sync components
+  file
+    schemes: ["file:"]
+    capabilities: fetcher,default-triggers
+  fsnotify
+    capabilities: trigger
+  fileinfo
+    capabilities: trigger
+  kubernetes
+    schemes: ["core.openfeature.dev/"]
+    capabilities: streaming
+  http
+    schemes: ["http://" "https://"]
+    capabilities: fetcher
+  grpc
+    schemes: ["grpc://" "grpcs://" "envoy" "dns" "uds" "xds"]
+    capabilities: streaming
+  gcs
+    schemes: ["gs://"]
+    capabilities: fetcher
+  azblob
+    schemes: ["azblob://"]
+    capabilities: fetcher
+  s3
+    schemes: ["s3://"]
+    capabilities: fetcher
+configuration format
+  flagd (built in; the default of a source that names none)
+evaluator
+  jsonlogic for the configuration format flagd (built in)
+service endpoints
+  flag-evaluation
+    needs: router=true format=""
+  ofrep
+    needs: router=true format=""
+  flag-sync
+    needs: router=false format=""
+metrics handler override: false
+telemetry provider: false
