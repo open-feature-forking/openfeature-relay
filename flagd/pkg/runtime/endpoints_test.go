@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
@@ -10,6 +11,8 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	flagdeval "github.com/open-feature-forking/openfeature-relay/evaluator/flagd"
 	"github.com/stretchr/testify/require"
 )
 
@@ -45,7 +48,7 @@ func inputsStore(t *testing.T) *store.Store {
 func TestNoEvaluatorWithoutNeed(t *testing.T) {
 	created := 0
 	in, err := newEndpointInputs(logger.NewLogger(nil, false), inputsStore(t), events.NewBus(),
-		[]service.Factory{needyFactory{name: "sync-only"}}, nil, []evaluator.Factory{countingEvaluator{&created}}, nil)
+		[]service.Factory{needyFactory{name: "sync-only"}}, []string{"flagd"}, []evaluator.Factory{countingEvaluator{&created}}, nil, false)
 	require.NoError(t, err)
 
 	require.Nil(t, in.router)
@@ -57,7 +60,7 @@ func TestNoEvaluatorWithoutNeed(t *testing.T) {
 
 func TestFormatNeedWithoutEvaluatorFailsStartup(t *testing.T) {
 	_, err := newEndpointInputs(logger.NewLogger(nil, false), inputsStore(t), events.NewBus(),
-		[]service.Factory{needyFactory{name: "vendor-api", needs: service.Needs{Format: "keyvalue"}}}, nil, nil, nil)
+		[]service.Factory{needyFactory{name: "vendor-api", needs: service.Needs{Format: "keyvalue"}}}, []string{"flagd"}, []evaluator.Factory{flagdeval.NewFactory()}, nil, false)
 	require.EqualError(t, err, `the service endpoint "vendor-api" needs the evaluator of the configuration format "keyvalue", which the distribution lacks`)
 }
 
@@ -68,7 +71,7 @@ func TestResolverPublishesAnEvaluationEvent(t *testing.T) {
 	sub := bus.Subscribe(events.SubscribeOptions{Kinds: []events.Kind{events.KindEvaluation}, Buffer: 4})
 	defer sub.Close()
 	factory := needyFactory{name: "rest", needs: service.Needs{Router: true}}
-	in, err := newEndpointInputs(logger.NewLogger(nil, false), inputsStore(t), bus, []service.Factory{factory}, nil, nil, nil)
+	in, err := newEndpointInputs(logger.NewLogger(nil, false), inputsStore(t), bus, []service.Factory{factory}, []string{"flagd"}, []evaluator.Factory{flagdeval.NewFactory()}, nil, false)
 	require.NoError(t, err)
 
 	_, _, _, _, err = in.settings(factory).Resolver.ResolveBooleanValue(context.Background(), "", "missing", nil)
@@ -78,4 +81,51 @@ func TestResolverPublishesAnEvaluationEvent(t *testing.T) {
 	require.Equal(t, "rest", ev.Endpoint)
 	require.Equal(t, "missing", ev.FlagKey)
 	require.Equal(t, model.FlagNotFoundErrorCode, ev.ErrorCode)
+}
+
+// TestSourceWithoutFormatNeedsFlagdFormat pins that a distribution without flagd's configuration format fails a
+// source that names none, and lists the formats it has.
+func TestSourceWithoutFormatNeedsFlagdFormat(t *testing.T) {
+	log := logger.NewLogger(nil, false)
+	_, err := defaultFormatOf(log, inputsStore(t), []sync.SourceConfig{{URI: "file:flags.json"}}, nil)
+	require.ErrorContains(t, err, `source "file:flags.json" names no configuration format`)
+	require.ErrorContains(t, err, "available formats")
+}
+
+// TestStrictNumericRangeReachesTheAdapter pins that the runtime's typed adapter of an endpoint refuses an integer
+// outside the range a double holds exactly when the range is strict, and resolves it when it is not.
+func TestStrictNumericRangeReachesTheAdapter(t *testing.T) {
+	for _, strict := range []bool{false, true} {
+		t.Run(fmt.Sprintf("strict=%v", strict), func(t *testing.T) {
+			st := inputsStore(t)
+			st.Update("s", []model.Flag{{
+				Key: "big", State: "ENABLED", DefaultVariant: "on",
+				Variants: map[string]any{"on": float64(1e16)},
+			}}, nil, false)
+			factory := needyFactory{name: "rest", needs: service.Needs{Router: true}}
+			in, err := newEndpointInputs(logger.NewLogger(nil, false), st, events.NewBus(), []service.Factory{factory},
+				[]string{"flagd"}, []evaluator.Factory{flagdeval.NewFactory()}, nil, strict)
+			require.NoError(t, err)
+
+			value, _, _, _, err := in.settings(factory).Resolver.ResolveIntValue(context.Background(), "", "big", nil)
+			if strict {
+				require.EqualError(t, err, model.TypeMismatchErrorCode)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, int64(1e16), value)
+		})
+	}
+}
+
+// TestAbsentComponentSettingsIgnored pins that a distribution without an endpoint ignores flagd-full's flags that
+// belong to it: its Config holds the ports of all three endpoints, and a runtime of one starts without a word about
+// the others.
+func TestAbsentComponentSettingsIgnored(t *testing.T) {
+	cfg := Config{ServicePort: 1, OfrepServicePort: 2, SyncServicePort: 3, EndpointSettings: map[string]map[string]any{"absent": {"port": 4}}}
+
+	require.Equal(t, 1, int(endpointSettings(cfg, flagEvaluationType)["port"].(uint16)))
+	require.Equal(t, 2, int(endpointSettings(cfg, ofrepType)["port"].(uint16)))
+	require.Equal(t, map[string]any{"port": 4}, endpointSettings(cfg, "absent"), "an extension's entry is handed over as it is")
+	require.Empty(t, endpointSettings(cfg, "unknown"), "an endpoint nobody maps gets no settings")
 }

@@ -21,6 +21,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"github.com/open-feature/flagd/flagd/pkg/runtime"
 	"github.com/stretchr/testify/require"
 )
@@ -79,7 +80,7 @@ func TestTryInDistribution(t *testing.T) {
 			{URI: vendorSource, Provider: "file", Format: keyvalue.Type},
 		},
 		ConfigurationFormats: []configformat.Factory{factory},
-	}, runtime.Official())
+	}, flagdcomponents.Official())
 	require.NoError(t, err)
 
 	done := make(chan error, 1)
@@ -139,7 +140,7 @@ func TestSourceWithoutFormatIsRejectedByFlagd(t *testing.T) {
 	rt, err := runtime.FromConfig(log, "test", runtime.Config{
 		SyncProviders:        []coresync.SourceConfig{{URI: path, Provider: "file", Format: keyvalue.Type}},
 		ConfigurationFormats: []configformat.Factory{keyvalue.Factory{}},
-	}, runtime.Official())
+	}, flagdcomponents.Official())
 	require.NoError(t, err)
 
 	format, named := rt.Formats[path]

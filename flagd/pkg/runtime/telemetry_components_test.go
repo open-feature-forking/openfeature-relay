@@ -71,11 +71,11 @@ func TestTelemetryProviderIsHandedToEveryComponent(t *testing.T) {
 	factory := &recordingTelemetry{}
 	var endpointSettings service.Settings
 
-	rt, err := FromConfig(logger.NewLogger(nil, false), "1.2.3", Config{SyncProviders: oneFileSource(t)}, Components{
+	rt, err := FromConfig(logger.NewLogger(nil, false), "1.2.3", Config{SyncProviders: oneFileSource(t)}, withFlagd(Components{
 		Telemetry:       factory,
 		TelemetryConfig: map[string]any{"key": "value"},
 		Endpoints:       []service.Factory{capturingEndpoint{settings: &endpointSettings}},
-	})
+	}))
 	require.NoError(t, err)
 
 	require.Equal(t, 1, factory.createdOn)
@@ -110,10 +110,10 @@ func TestTelemetryProviderIsShutDownWhenFromConfigFails(t *testing.T) {
 	factory := &recordingTelemetry{}
 	var endpointSettings service.Settings
 
-	rt, err := FromConfig(logger.NewLogger(nil, false), "test", Config{SyncProviders: oneFileSource(t)}, Components{
+	rt, err := FromConfig(logger.NewLogger(nil, false), "test", Config{SyncProviders: oneFileSource(t)}, withFlagd(Components{
 		Telemetry: factory,
 		Endpoints: []service.Factory{capturingEndpoint{settings: &endpointSettings, err: errors.New("no port")}},
-	})
+	}))
 
 	require.Nil(t, rt)
 	require.ErrorContains(t, err, "no port")

@@ -16,12 +16,38 @@ import (
 // Type is the type of the flag evaluation service endpoint.
 const Type = "flag-evaluation"
 
-// ConfigKey is the key of Settings.Config under which the runtime hands the endpoint its EndpointConfig.
+// ConfigKey is the key of Settings.Config under which a caller may hand the endpoint its EndpointConfig as a Go value.
 const ConfigKey = "config"
 
-// EndpointConfig is what the runtime derives from the operator's settings for the endpoint.
+// EndpointConfig is the settings of the endpoint as a Go value; the plain keys of Settings.Config, which
+// decodeConfig documents, apply on top of it.
 type EndpointConfig struct {
 	Configuration service.Configuration
+}
+
+// decodeConfig reads Settings.Config. Its keys are:
+//
+//	port, management-port                 numbers
+//	service-name, cert-path, key-path, socket-path   strings
+//	cors                                  a list of strings
+//	context-values                        a mapping
+//	header-to-context-key-mappings        a mapping of strings
+//	stream-deadline                       a duration, such as 5s
+//	max-request-header-bytes, max-request-body-bytes   numbers
+func decodeConfig(config map[string]any) (EndpointConfig, error) {
+	cfg, _ := config[ConfigKey].(EndpointConfig)
+	c := &cfg.Configuration
+	err := service.ConfigDecoder{
+		"port": service.Set(&c.Port, service.Uint16), "management-port": service.Set(&c.ManagementPort, service.Uint16),
+		"service-name": service.Set(&c.ServiceName, service.String), "cert-path": service.Set(&c.CertPath, service.String),
+		"key-path": service.Set(&c.KeyPath, service.String), "socket-path": service.Set(&c.SocketPath, service.String),
+		"cors": service.Set(&c.CORS, service.Strings), "context-values": service.Set(&c.ContextValues, service.Map),
+		"header-to-context-key-mappings": service.Set(&c.HeaderToContextKeyMappings, service.StringMap),
+		"stream-deadline": service.Set(&c.StreamDeadline, service.Duration),
+		"max-request-header-bytes": service.Set(&c.MaxRequestHeaderBytes, service.Int64),
+		"max-request-body-bytes": service.Set(&c.MaxRequestBodyBytes, service.Int64),
+	}.Decode(config, ConfigKey)
+	return cfg, err
 }
 
 // connectInstrumentation is implemented by a telemetry provider that instruments ConnectRPC handlers.
@@ -46,9 +72,9 @@ func (Factory) Create(s service.Settings) (service.Endpoint, error) {
 	if s.Resolver == nil {
 		return nil, fmt.Errorf("the %s endpoint needs a resolver", Type)
 	}
-	cfg, _ := s.Config[ConfigKey].(EndpointConfig)
-	if port, ok := s.Config["port"].(int); ok {
-		cfg.Configuration.Port = uint16(port)
+	cfg, err := decodeConfig(s.Config)
+	if err != nil {
+		return nil, fmt.Errorf("the %s endpoint: %w", Type, err)
 	}
 	var options []connect.HandlerOption
 	if p, ok := s.Telemetry.(connectInstrumentation); ok {

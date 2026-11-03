@@ -14,6 +14,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"io"
 	"maps"
 	"net"
@@ -128,7 +129,7 @@ func TestTracePropagationCharacterization(t *testing.T) {
 		KeepAliveMinTime:             runtime.KeepAliveMinTimeDefault,
 		KeepAlivePermitWithoutStream: runtime.KeepAlivePermitWithoutStreamDefault,
 		SyncProviders:                []coresync.SourceConfig{{URI: file, Provider: "file"}},
-	}, withOpenTelemetry(runtime.Official()))
+	}, withOpenTelemetry(flagdcomponents.Official()))
 	require.NoError(t, err)
 
 	done := make(chan error, 1)

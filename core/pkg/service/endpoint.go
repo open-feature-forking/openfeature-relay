@@ -48,6 +48,10 @@ type Settings struct {
 	// Telemetry is the telemetry provider the endpoint records spans and metrics through. Nil means the noop
 	// telemetry provider; see TelemetryProvider.
 	Telemetry telemetry.Provider
+	// Formats are the types of the configuration formats of the distribution, flagd's first when it has it.
+	Formats []string
+	// Sources are the URIs of the sources the runtime reads.
+	Sources []string
 	// Config holds the endpoint's own settings.
 	Config map[string]any
 }

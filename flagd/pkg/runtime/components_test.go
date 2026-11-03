@@ -1,8 +1,10 @@
 package runtime
 
 import (
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"net/http"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
@@ -52,4 +54,14 @@ func TestMetricsHandlerSelection(t *testing.T) {
 	require.Equal(t, reflect.ValueOf(fromProvider).Pointer(),
 		reflect.ValueOf(metricsHandler(withHandler, Components{})).Pointer())
 	require.Nil(t, metricsHandler(telemetry.Noop(), Components{}), "the noop telemetry provider serves no metrics")
+}
+
+// withFlagd adds the official sync components, flagd's configuration format and evaluator, which a Components literal of
+// a test lacks, as the distribution flagd-full has them.
+func withFlagd(c Components) Components {
+	official := flagdcomponents.Official()
+	c.ConfigurationFormats = append(slices.Clone(official.ConfigurationFormats), c.ConfigurationFormats...)
+	c.Evaluators = append(slices.Clone(official.Evaluators), c.Evaluators...)
+	c.Sync = append(slices.Clone(official.Sync), c.Sync...)
+	return c
 }

@@ -5,6 +5,7 @@ package runtime
 import (
 	"errors"
 	"fmt"
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -74,13 +75,13 @@ func TestMiddlewareOrder(t *testing.T) {
 	var first, second middleware.Settings
 	var endpointSettings service.Settings
 
-	rt, err := FromConfig(logger.NewLogger(nil, false), "test", Config{SyncProviders: oneFileSource(t)}, Components{
+	rt, err := FromConfig(logger.NewLogger(nil, false), "test", Config{SyncProviders: oneFileSource(t)}, withFlagd(Components{
 		Endpoints: []service.Factory{capturingEndpoint{settings: &endpointSettings}},
 		Middleware: []middleware.Configured{
 			{Factory: taggingFactory{name: "first", settings: &first}, Config: map[string]any{"tag": "first"}},
 			{Factory: taggingFactory{name: "second", settings: &second}, Config: map[string]any{"tag": "second"}},
 		},
-	})
+	}))
 	require.NoError(t, err)
 	require.NotNil(t, rt)
 
@@ -99,9 +100,9 @@ func TestMiddlewareOrder(t *testing.T) {
 
 	t.Run("none", func(t *testing.T) {
 		var settings service.Settings
-		_, err := FromConfig(logger.NewLogger(nil, false), "test", Config{SyncProviders: oneFileSource(t)}, Components{
+		_, err := FromConfig(logger.NewLogger(nil, false), "test", Config{SyncProviders: oneFileSource(t)}, withFlagd(Components{
 			Endpoints: []service.Factory{capturingEndpoint{settings: &settings}},
-		})
+		}))
 		require.NoError(t, err)
 		require.Nil(t, settings.HTTPMiddleware, "the endpoints are left unwrapped")
 	})
@@ -115,7 +116,7 @@ func TestPreflightBeforeAnyMiddleware(t *testing.T) {
 	p := newPorts(t)
 	cfg := characterizedConfig(t, p)
 	cfg.CORS = []string{"*"}
-	components := Official()
+	components := flagdcomponents.Official()
 	components.Middleware = []middleware.Configured{{Factory: keyRequiredFactory{seen: &seen}}}
 	startRuntimeWith(t, cfg, components)
 
@@ -187,9 +188,9 @@ func TestInvalidMiddlewareConfigStops(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rt, err := FromConfig(logger.NewLogger(nil, false), "test", Config{SyncProviders: oneFileSource(t)}, Components{
+			rt, err := FromConfig(logger.NewLogger(nil, false), "test", Config{SyncProviders: oneFileSource(t)}, withFlagd(Components{
 				Middleware: tt.middleware,
-			})
+			}))
 			require.Error(t, err)
 			require.Nil(t, rt)
 			for _, want := range tt.want {

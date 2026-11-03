@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"os"
 	"strings"
 	"testing"
@@ -11,7 +12,7 @@ import (
 	flagdformat "github.com/open-feature-forking/openfeature-relay/configformat/flagd"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	flagdeval "github.com/open-feature-forking/openfeature-relay/evaluator/flagd"
-	syncbuilder "github.com/open-feature-forking/openfeature-relay/sync/builder"
+	"github.com/open-feature-forking/openfeature-relay/sync/builder/official"
 	"github.com/stretchr/testify/require"
 )
 
@@ -29,7 +30,7 @@ func TestOfficialComponentsCharacterization(t *testing.T) {
 	var out strings.Builder
 
 	out.WriteString("sync components\n")
-	for _, f := range syncbuilder.Official() {
+	for _, f := range official.Factories() {
 		fmt.Fprintf(&out, "  %s\n", f.Type())
 		if sf, ok := f.(coresync.SchemeFactory); ok {
 			fmt.Fprintf(&out, "    schemes: %q\n", sf.Schemes())
@@ -45,14 +46,14 @@ func TestOfficialComponentsCharacterization(t *testing.T) {
 	fmt.Fprintf(&out, "  %s for the configuration format %s (built in)\n", ev.Type(), ev.ConfigurationFormat())
 
 	out.WriteString("service endpoints\n")
-	for _, f := range Official().Endpoints {
+	for _, f := range flagdcomponents.Official().Endpoints {
 		needs := f.Needs()
 		fmt.Fprintf(&out, "  %s\n    needs: router=%v format=%q\n", f.Type(), needs.Router, needs.Format)
 	}
 	// /metrics is served by the telemetry provider's MetricsHandler; flagd start adds the OpenTelemetry provider
 	// (TestStartSelectsOpenTelemetry), and the management port characterization pins what it serves.
-	fmt.Fprintf(&out, "metrics handler override: %v\n", Official().MetricsHandler != nil)
-	fmt.Fprintf(&out, "telemetry provider: %v\n", Official().Telemetry != nil)
+	fmt.Fprintf(&out, "metrics handler override: %v\n", flagdcomponents.Official().MetricsHandler != nil)
+	fmt.Fprintf(&out, "telemetry provider: %v\n", flagdcomponents.Official().Telemetry != nil)
 
 	if *updateOfficialComponents {
 		require.NoError(t, os.MkdirAll("testdata", 0o755))

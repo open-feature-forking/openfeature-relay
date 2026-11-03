@@ -27,11 +27,10 @@ func ParseSources(sourcesFlag string) ([]sync.SourceConfig, error) {
 }
 
 // ParseSyncProviderURIs uri flag based sync sources to SourceConfig array. Replaces uri prefixes where necessary to
-// derive SourceConfig. Each URI is claimed by the first factory whose scheme it starts with; without factories, the
-// official ones.
+// derive SourceConfig. Each URI is claimed by the first factory whose scheme it starts with.
 func ParseSyncProviderURIs(uris []string, factories ...sync.Factory) ([]sync.SourceConfig, error) {
-	if len(factories) == 0 {
-		factories = Official()
+	if len(factories) == 0 && defaultFactories != nil {
+		factories = defaultFactories(NewSyncBuilder())
 	}
 	syncProvidersParsed := []sync.SourceConfig{}
 

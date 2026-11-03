@@ -10,6 +10,7 @@ package tracingoff_test
 import (
 	"context"
 	"fmt"
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"net"
 	"net/http"
 	"os"
@@ -60,7 +61,7 @@ func TestTracingOffCharacterization(t *testing.T) {
 		KeepAliveMinTime:             runtime.KeepAliveMinTimeDefault,
 		KeepAlivePermitWithoutStream: runtime.KeepAlivePermitWithoutStreamDefault,
 		SyncProviders:                []coresync.SourceConfig{{URI: file, Provider: "file"}},
-	}, withOpenTelemetry(runtime.Official()))
+	}, withOpenTelemetry(flagdcomponents.Official()))
 	require.NoError(t, err)
 
 	require.Empty(t, otel.GetTextMapPropagator().Fields(), "no propagator is installed")

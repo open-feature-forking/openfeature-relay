@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"net"
 	"net/http"
 	"os"
@@ -19,10 +20,12 @@ import (
 
 	flagdformat "github.com/open-feature-forking/openfeature-relay/configformat/flagd"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
+	flagdeval "github.com/open-feature-forking/openfeature-relay/evaluator/flagd"
 	flageval "github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation"
 	"github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation/ofrep"
 	flagsync "github.com/open-feature/flagd/flagd/pkg/service/flag-sync"
@@ -47,7 +50,7 @@ func officialSettings(t *testing.T, factory service.Factory) (service.Settings, 
 	require.NoError(t, err)
 
 	bus := events.NewBus()
-	inputs, err := newEndpointInputs(log, st, bus, []service.Factory{factory}, nil, nil, nil)
+	inputs, err := newEndpointInputs(log, st, bus, []service.Factory{factory}, []string{"flagd"}, []evaluator.Factory{flagdeval.NewFactory()}, nil, false)
 	require.NoError(t, err)
 	settings := inputs.settings(factory)
 	initialized := make(chan struct{})
@@ -343,7 +346,7 @@ func TestRuntimeStartsAnyEndpointSet(t *testing.T) {
 			},
 		},
 		{
-			name: "all three", endpoints: officialEndpoints(), evaluator: true,
+			name: "all three", endpoints: flagdcomponents.Endpoints(), evaluator: true,
 			check: func(t *testing.T, p ports) {
 				for _, port := range []uint16{p.service, p.ofrep, p.sync} {
 					waitForPort(t, port)
@@ -355,7 +358,10 @@ func TestRuntimeStartsAnyEndpointSet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			p := newPorts(t)
 			cfg := characterizedConfig(t, p)
-			rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, Components{Endpoints: tt.endpoints})
+			rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, Components{
+				Sync:                 flagdcomponents.Official().Sync,
+				ConfigurationFormats: flagdcomponents.Official().ConfigurationFormats, Evaluators: flagdcomponents.Official().Evaluators, Endpoints: tt.endpoints,
+			})
 			require.NoError(t, err)
 			require.Equal(t, tt.evaluator, rt.Evaluator != nil, "an evaluator is built only for an endpoint that needs one")
 			require.Len(t, rt.Endpoints, len(tt.endpoints))

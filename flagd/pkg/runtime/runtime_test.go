@@ -3,16 +3,15 @@ package runtime
 import (
 	"context"
 	"errors"
+	"strconv"
 	"testing"
 	"time"
 
-	evalmock "github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator/mock"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	flagsync "github.com/open-feature/flagd/flagd/pkg/service/flag-sync"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 )
 
 type readySync struct {
@@ -35,30 +34,48 @@ func (s readySync) IsReady() bool {
 	return s.ready
 }
 
-type recordingSyncService struct {
-	emitted []string
+// deliveryFormat is a configuration format that accepts every delivery as a new version of the document of its
+// source, so that each delivery publishes a configuration change event. errs are the outcomes of the first
+// deliveries: a nil entry accepts, an error rejects.
+type deliveryFormat struct {
+	errs []error
+	n    int
+	// accepted are the sources of the deliveries, in order, rejected ones included.
+	accepted []string
 }
 
-var _ flagsync.ISyncService = (*recordingSyncService)(nil)
+func (*deliveryFormat) Type() string { return "delivery" }
 
-func (s *recordingSyncService) Start(context.Context) error {
-	return nil
+func (f *deliveryFormat) Accept(_ context.Context, in configformat.Input) (configformat.Result, error) {
+	f.n++
+	f.accepted = append(f.accepted, in.Source)
+	if len(f.errs) > 0 {
+		err := f.errs[0]
+		f.errs = f.errs[1:]
+		if err != nil {
+			return configformat.Result{}, err
+		}
+	}
+	return configformat.Result{Documents: []configformat.DocumentReport{{FlagSet: in.Source, Version: strconv.Itoa(f.n)}}}, nil
 }
 
-func (s *recordingSyncService) Emit(source string) {
-	s.emitted = append(s.emitted, source)
-}
-
-type signalingSyncService struct {
-	emitted chan<- struct{}
-}
-
-func (s signalingSyncService) Start(context.Context) error {
-	return nil
-}
-
-func (s signalingSyncService) Emit(string) {
-	s.emitted <- struct{}{}
+// deliveredSources subscribes to the configuration change events of the bus; the returned function returns the
+// sources of the events published since its last call.
+func deliveredSources(t *testing.T, bus *events.Bus) func() []string {
+	t.Helper()
+	sub := bus.Subscribe(events.SubscribeOptions{Kinds: []events.Kind{events.KindConfigurationChange}, Buffer: 16})
+	t.Cleanup(sub.Close)
+	return func() []string {
+		var sources []string
+		for {
+			select {
+			case ev := <-sub.C():
+				sources = append(sources, ev.(events.ConfigurationChange).Source)
+			default:
+				return sources
+			}
+		}
+	}
 }
 
 type controlledSync struct {
@@ -99,30 +116,18 @@ func (s controlledSync) IsReady() bool {
 	return true
 }
 
-type blockingEvaluationService struct {
+// blockingEndpoint serves until the context ends, or fails once stop is closed.
+type blockingEndpoint struct {
 	stop <-chan struct{}
 }
 
-var _ service.IFlagEvaluationService = blockingEvaluationService{}
-
-func (s blockingEvaluationService) Serve(ctx context.Context, _ service.Configuration) error {
+func (e blockingEndpoint) Serve(ctx context.Context) error {
 	select {
-	case <-s.stop:
+	case <-e.stop:
 		return errors.New("test complete")
 	case <-ctx.Done():
 		return nil
 	}
-}
-
-func (blockingEvaluationService) Notify(service.Notification) {}
-
-func (blockingEvaluationService) Shutdown() {}
-
-type blockingOfrepService struct{}
-
-func (blockingOfrepService) Start(ctx context.Context) error {
-	<-ctx.Done()
-	return nil
 }
 
 func requireSignal(t *testing.T, signal <-chan struct{}) {
@@ -145,17 +150,13 @@ func TestRuntimeReadinessRequiresSuccessfulStateForEverySource(t *testing.T) {
 	secondPayload := coresync.DataSync{Source: secondSource}
 	evaluatorError := errors.New("invalid flag configuration")
 
-	ctrl := gomock.NewController(t)
-	evaluator := evalmock.NewMockIEvaluator(ctrl)
-	evaluator.EXPECT().SetState(firstPayload).Return(evaluatorError)
-	evaluator.EXPECT().SetState(firstPayload).Return(nil)
-	evaluator.EXPECT().SetState(secondPayload).Return(nil)
-
-	syncService := &recordingSyncService{}
+	bus := events.NewBus()
+	delivered := deliveredSources(t, bus)
+	format := &deliveryFormat{errs: []error{evaluatorError}}
 	runtime := Runtime{
-		Evaluator:   evaluator,
-		Logger:      logger.NewLogger(nil, false),
-		SyncService: syncService,
+		DefaultFormat: format,
+		Logger:        logger.NewLogger(nil, false),
+		Bus:           bus,
 		Syncs: []coresync.ISync{
 			readySync{ready: true},
 			readySync{ready: true},
@@ -176,7 +177,8 @@ func TestRuntimeReadinessRequiresSuccessfulStateForEverySource(t *testing.T) {
 
 	runtime.updateAndEmit(secondPayload)
 	require.True(t, runtime.isReady())
-	require.Equal(t, []string{firstSource, secondSource}, syncService.emitted)
+	require.Equal(t, []string{firstSource, secondSource}, delivered())
+	require.Equal(t, []string{firstSource, firstSource, secondSource}, format.accepted, "the rejected delivery and its retry both reach the format")
 }
 
 func TestRuntimeStartWaitsForEverySource(t *testing.T) {
@@ -190,20 +192,24 @@ func TestRuntimeStartWaitsForEverySource(t *testing.T) {
 	started := make(chan struct{}, 2)
 	firstProviderData := make(chan coresync.DataSync)
 	secondProviderData := make(chan coresync.DataSync)
-	emitted := make(chan struct{}, 2)
 	stop := make(chan struct{})
 
-	ctrl := gomock.NewController(t)
-	evaluator := evalmock.NewMockIEvaluator(ctrl)
-	evaluator.EXPECT().SetState(firstPayload).Return(nil)
-	evaluator.EXPECT().SetState(secondPayload).Return(nil)
+	bus := events.NewBus()
+	sub := bus.Subscribe(events.SubscribeOptions{Kinds: []events.Kind{events.KindConfigurationChange}, Buffer: 2})
+	defer sub.Close()
+	emitted := make(chan struct{}, 2)
+	go func() {
+		for range sub.C() {
+			emitted <- struct{}{}
+		}
+	}()
 
+	format := &deliveryFormat{}
 	runtime := Runtime{
-		Evaluator:         evaluator,
-		Logger:            logger.NewLogger(nil, false),
-		SyncService:       signalingSyncService{emitted: emitted},
-		OfrepService:      blockingOfrepService{},
-		EvaluationService: blockingEvaluationService{stop: stop},
+		DefaultFormat: format,
+		Logger:        logger.NewLogger(nil, false),
+		Bus:           bus,
+		Endpoints:     []NamedEndpoint{{Type: "blocking", Endpoint: blockingEndpoint{stop: stop}}},
 		Syncs: []coresync.ISync{
 			controlledSync{payloads: firstProviderData, started: started},
 			controlledSync{payloads: secondProviderData, started: started},
@@ -222,15 +228,21 @@ func TestRuntimeStartWaitsForEverySource(t *testing.T) {
 	requireSignal(t, started)
 	requireSignal(t, started)
 
-	// Emit runs after the readiness bookkeeping, so waiting on it makes isReady deterministic.
+	// The event is published while the runtime holds its lock, so taking the lock after it waits for the readiness
+	// bookkeeping of the delivery.
 	firstProviderData <- firstPayload
 	requireSignal(t, emitted)
+	runtime.mu.Lock()
+	runtime.mu.Unlock() //nolint:staticcheck // SA2001 waits for the delivery to finish
 	require.False(t, runtime.isReady())
 
 	secondProviderData <- secondPayload
 	requireSignal(t, emitted)
+	runtime.mu.Lock()
+	runtime.mu.Unlock() //nolint:staticcheck // SA2001 waits for the delivery to finish
 	require.True(t, runtime.isReady())
 
+	require.Equal(t, []string{firstSource, secondSource}, format.accepted)
 	close(stop)
 	require.Error(t, <-startErr)
 }

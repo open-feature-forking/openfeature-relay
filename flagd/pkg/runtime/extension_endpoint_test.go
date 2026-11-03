@@ -86,7 +86,7 @@ func TestRuntimeStartsExtensionEndpoint(t *testing.T) {
 	extensionPort := int(freePort(t))
 	cfg.EndpointSettings = map[string]map[string]any{extensionFactory{}.Type(): {"port": extensionPort}}
 
-	rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, Components{Endpoints: []service.Factory{extensionFactory{}}})
+	rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, withFlagd(Components{Endpoints: []service.Factory{extensionFactory{}}}))
 	require.NoError(t, err)
 	require.Len(t, rt.Endpoints, 1)
 	require.Equal(t, "extension-api", rt.Endpoints[0].Type)

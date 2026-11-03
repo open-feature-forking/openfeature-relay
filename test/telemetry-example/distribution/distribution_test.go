@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"net"
 	"net/http"
 	"os"
@@ -46,7 +47,7 @@ func TestExtensionTelemetryProvider(t *testing.T) {
 	require.NoError(t, os.WriteFile(source, []byte(flags), 0o600))
 	out := filepath.Join(dir, "telemetry.jsonl")
 
-	components := runtime.Official()
+	components := flagdcomponents.Official()
 	components.Telemetry = telemetryexample.Factory{}
 	components.TelemetryConfig = map[string]any{telemetryexample.SettingPath: out}
 	ofrepPort := freePort(t)

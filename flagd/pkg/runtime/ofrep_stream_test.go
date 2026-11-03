@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -27,10 +28,10 @@ func TestOFREPEventStreamAnnouncesAVendorChange(t *testing.T) {
 	vendor := filepath.Join(filepath.Dir(cfg.SyncProviders[0].URI), "vendor.json")
 	require.NoError(t, os.WriteFile(vendor, []byte(`{}`), 0o600))
 	cfg.SyncProviders = append(cfg.SyncProviders, coresync.SourceConfig{URI: vendor, Provider: "file", Format: "versioned"})
-	rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, Components{
-		Endpoints:            officialEndpoints(),
+	rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, withFlagd(Components{
+		Endpoints:            flagdcomponents.Endpoints(),
 		ConfigurationFormats: []configformat.Factory{versionedFactory{}},
-	})
+	}))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())

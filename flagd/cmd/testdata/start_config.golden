@@ -21,6 +21,7 @@ ConfigurationFormats: []configformat.Factory(nil)
 Evaluators: []evaluator.Factory(nil)
 SyncFactories: []sync.Factory(nil)
 CORS: []string{}
+EvaluatorSettings: map[string]map[string]interface {}(nil)
 EndpointSettings: map[string]map[string]interface {}(nil)
 ContextValues: map[string]interface {}{}
 HeaderToContextKeyMappings: map[string]string{}
@@ -57,6 +58,7 @@ ConfigurationFormats: []configformat.Factory(nil)
 Evaluators: []evaluator.Factory(nil)
 SyncFactories: []sync.Factory(nil)
 CORS: []string{"https://a.cli", "https://b.cli"}
+EvaluatorSettings: map[string]map[string]interface {}(nil)
 EndpointSettings: map[string]map[string]interface {}(nil)
 ContextValues: map[string]interface {}{"cliKey1":"cliValue1", "cliKey2":"cliValue2"}
 HeaderToContextKeyMappings: map[string]string{"X-Cli-A":"cliA", "X-Cli-B":"cliB"}
@@ -93,6 +95,7 @@ ConfigurationFormats: []configformat.Factory(nil)
 Evaluators: []evaluator.Factory(nil)
 SyncFactories: []sync.Factory(nil)
 CORS: []string{"https://a.env", "https://b.env"}
+EvaluatorSettings: map[string]map[string]interface {}(nil)
 EndpointSettings: map[string]map[string]interface {}(nil)
 ContextValues: map[string]interface {}{"envKey1":"envValue1"}
 HeaderToContextKeyMappings: map[string]string{"X-Env-A":"envA"}
@@ -130,6 +133,7 @@ ConfigurationFormats: []configformat.Factory(nil)
 Evaluators: []evaluator.Factory(nil)
 SyncFactories: []sync.Factory(nil)
 CORS: []string{"https://a.file", "https://b.file"}
+EvaluatorSettings: map[string]map[string]interface {}(nil)
 EndpointSettings: map[string]map[string]interface {}(nil)
 ContextValues: map[string]interface {}{"filekey1":"fileValue1"}
 HeaderToContextKeyMappings: map[string]string{"x-file-a":"fileA"}
@@ -167,6 +171,7 @@ ConfigurationFormats: []configformat.Factory(nil)
 Evaluators: []evaluator.Factory(nil)
 SyncFactories: []sync.Factory(nil)
 CORS: []string{}
+EvaluatorSettings: map[string]map[string]interface {}(nil)
 EndpointSettings: map[string]map[string]interface {}(nil)
 ContextValues: map[string]interface {}{}
 HeaderToContextKeyMappings: map[string]string{}
@@ -204,6 +209,7 @@ ConfigurationFormats: []configformat.Factory(nil)
 Evaluators: []evaluator.Factory(nil)
 SyncFactories: []sync.Factory(nil)
 CORS: []string{}
+EvaluatorSettings: map[string]map[string]interface {}(nil)
 EndpointSettings: map[string]map[string]interface {}(nil)
 ContextValues: map[string]interface {}{}
 HeaderToContextKeyMappings: map[string]string{}

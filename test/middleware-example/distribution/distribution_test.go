@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"net"
 	"net/http"
 	"os"
@@ -49,7 +50,7 @@ func TestExtensionMiddlewareBindsSelector(t *testing.T) {
 	source := filepath.Join(dir, "flags.json")
 	require.NoError(t, os.WriteFile(source, []byte(flags), 0o600))
 
-	components := runtime.Official()
+	components := flagdcomponents.Official()
 	components.Middleware = []middleware.Configured{{
 		Factory: middlewareexample.Factory{},
 		Config: map[string]any{middlewareexample.SettingKeys: map[string]any{

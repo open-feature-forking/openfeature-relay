@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	flagdformat "github.com/open-feature-forking/openfeature-relay/configformat/flagd"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
@@ -20,14 +19,8 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
-	flagdeval "github.com/open-feature-forking/openfeature-relay/evaluator/flagd"
 	syncbuilder "github.com/open-feature-forking/openfeature-relay/sync/builder"
-	flagdgrpc "github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc"
-	flageval "github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation"
-	"github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation/ofrep"
-	flagsync "github.com/open-feature/flagd/flagd/pkg/service/flag-sync"
 	"go.uber.org/zap"
-	googlegrpc "google.golang.org/grpc"
 )
 
 // from_config is a collection of structures and parsers responsible for deriving flagd runtime
@@ -66,9 +59,12 @@ type Config struct {
 	// Each one's format must be flagd's own or one of ConfigurationFormats.
 	Evaluators []evaluator.Factory
 	// Deprecated: pass Components.Sync; both apply.
-	// SyncFactories are the sync components, besides the official ones, that sources may select.
+	// SyncFactories are the sync components that sources may select.
 	SyncFactories []sync.Factory
 	CORS          []string
+	// EvaluatorSettings are the settings of the evaluators of a distribution, keyed by the type of the evaluator's
+	// factory; an evaluator gets its own as Settings.Config.
+	EvaluatorSettings map[string]map[string]any
 	// EndpointSettings are the settings of the service endpoints of a distribution, besides the official ones, keyed by
 	// the endpoint's type. An endpoint gets its own as Settings.Config.
 	EndpointSettings map[string]map[string]any
@@ -140,11 +136,10 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		return nil, err
 	}
 
-	// derive the evaluator options and the service endpoints
-	var evalOpts []flagdeval.JSONEvaluatorOption
-	// TODO(#2101): remove
-	if config.StrictNumericRange {
-		evalOpts = append(evalOpts, flagdeval.WithStrictNumericRange())
+	// derive the default format and the service endpoints
+	defaultFormat, err := defaultFormatOf(logger, store, syncProviders, config.ConfigurationFormats)
+	if err != nil {
+		return nil, err
 	}
 	formatTypes := make([]string, 0, len(config.ConfigurationFormats))
 	for _, f := range config.ConfigurationFormats {
@@ -172,23 +167,20 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 			MaxRequestHeaderBytes:      config.MaxRequestHeaderBytes,
 		},
 		Formats:         formats,
-		DefaultFormat:   flagdformat.NewFormat(store, logger.WithFields(zap.String("component", "configformat"))),
+		DefaultFormat:   defaultFormat,
 		sourceReadiness: sourceReadiness,
 	}
 
-	inputs, err := newEndpointInputs(logger, store, bus, components.Endpoints, formatTypes, config.Evaluators, evalOpts)
+	inputs, err := newEndpointInputs(logger, store, bus, components.Endpoints, formatTypes, config.Evaluators,
+		func(evaluatorType string) map[string]any { return maps.Clone(config.EvaluatorSettings[evaluatorType]) },
+		config.StrictNumericRange)
 	if err != nil {
 		return nil, err
 	}
-	if inputs.router != nil {
-		rt.Evaluator = inputs.router.IEvaluator()
-	}
+	rt.Evaluator = inputs.evaluator()
 	wrapHTTP, err := httpMiddleware(logger, tp, components.Middleware)
 	if err != nil {
 		return nil, err
-	}
-	endpointConfigs := endpointConfigs{
-		formats: append([]string{flagdformat.Type}, formatTypes...), config: config, serviceConfig: rt.ServiceConfig, sources: sources,
 	}
 	for _, factory := range components.Endpoints {
 		if err := service.ValidateDeclarations(factory); err != nil {
@@ -197,8 +189,10 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		settings := inputs.settings(factory)
 		settings.Initialized = rt.Initialized()
 		settings.Telemetry = tp
+		settings.Config = endpointSettings(config, factory.Type())
+		settings.Formats = append([]string{configformat.DefaultType}, formatTypes...)
+		settings.Sources = sources
 		settings.HTTPMiddleware = wrapHTTP
-		settings.Config = endpointConfigs.forEndpoint(factory.Type())
 		endpoint, err := factory.Create(settings)
 		if err != nil {
 			return nil, fmt.Errorf("error creating the service endpoint %q: %w", factory.Type(), err)
@@ -256,62 +250,6 @@ func telemetryProvider(
 	return tp, tp.Shutdown, nil
 }
 
-// endpointConfigs derives the settings of the official endpoints from the operator's configuration.
-type endpointConfigs struct {
-	formats       []string // the configuration formats of the distribution, flagd's first
-	config        Config
-	serviceConfig service.Configuration
-	sources       []string
-}
-
-// forEndpoint returns Settings.Config for the endpoint type; an extension's endpoint has no settings of the
-// operator's yet.
-func (c endpointConfigs) forEndpoint(endpointType string) map[string]any {
-	switch endpointType {
-	case flageval.Type:
-		return map[string]any{flageval.ConfigKey: flageval.EndpointConfig{
-			Configuration: c.serviceConfig,
-		}}
-	case ofrep.Type:
-		return map[string]any{ofrep.ConfigKey: ofrep.EndpointConfig{
-			Formats: c.formats,
-			Service: ofrep.SvcConfiguration{
-				Port:                  c.config.OfrepServicePort,
-				ServiceName:           svcName,
-				MaxRequestBodyBytes:   c.config.MaxRequestBodyBytes,
-				MaxRequestHeaderBytes: c.config.MaxRequestHeaderBytes,
-				SSEEnabled:            c.config.OfrepSSEEnabled,
-				SSEInactivityDelaySec: c.config.OfrepSSEInactivityDel,
-				SSEPublicURL:          c.config.OfrepSSEPublicURL,
-			},
-			CORS:                       c.config.CORS,
-			ContextValues:              c.config.ContextValues,
-			HeaderToContextKeyMappings: c.config.HeaderToContextKeyMappings,
-		}}
-	case flagsync.Type:
-		return map[string]any{flagsync.ConfigKey: flagsync.SvcConfigurations{
-			Port:                  c.config.SyncServicePort,
-			Sources:               c.sources,
-			ContextValues:         c.config.ContextValues,
-			KeyPath:               c.config.ServiceKeyPath,
-			CertPath:              c.config.ServiceCertPath,
-			SocketPath:            c.config.SyncServiceSocketPath,
-			HTTPEnabled:           c.config.SyncServiceHTTPEnabled,
-			ServiceName:           svcName,
-			CORS:                  c.config.CORS,
-			StreamDeadline:        c.config.StreamDeadline,
-			DisableSyncMetadata:   c.config.DisableSyncMetadata,
-			MaxRequestHeaderBytes: c.config.MaxRequestHeaderBytes,
-			MaxRequestBodyBytes:   c.config.MaxRequestBodyBytes,
-		}}
-	}
-	settings := maps.Clone(c.config.EndpointSettings[endpointType])
-	if settings == nil {
-		settings = map[string]any{}
-	}
-	return settings
-}
-
 // staleLimitsOf pairs the sources that set staleAfter with their sync providers, which must report their last contact.
 func staleLimitsOf(sources []sync.SourceConfig, syncs []sync.ISync) ([]staleLimit, error) {
 	var limits []staleLimit
@@ -331,11 +269,6 @@ func staleLimitsOf(sources []sync.SourceConfig, syncs []sync.ISync) ([]staleLimi
 	return limits, nil
 }
 
-// grpcClientInstrumentation is implemented by a telemetry provider that instruments outbound gRPC connections.
-type grpcClientInstrumentation interface {
-	GRPCDialOptions() []googlegrpc.DialOption
-}
-
 // syncProvidersFromConfig is a helper to build ISync implementations from SourceConfig.
 // The sync providers record the universal client-side sync metrics, and the stream metrics of the gRPC source,
 // through the telemetry provider, whose gRPC client instrumentation the gRPC source dials with.
@@ -343,17 +276,10 @@ func syncProvidersFromConfig(
 	logger *logger.Logger,
 	sources []sync.SourceConfig,
 	tp telemetry.Provider,
-	extra []sync.Factory,
+	factories []sync.Factory,
 ) ([]sync.ISync, error) {
-	var dialOptions []googlegrpc.DialOption
-	if p, ok := tp.(grpcClientInstrumentation); ok {
-		dialOptions = p.GRPCDialOptions()
-	}
-	factories := syncbuilder.OfficialWith(syncbuilder.OfficialOptions{
-		StreamMetrics:   flagdgrpc.NewStreamMetrics(tp.Meter(flagdgrpc.StreamMetricsScope)),
-		GRPCDialOptions: dialOptions,
-	})
-	builder := syncbuilder.NewSyncBuilder(append(factories, extra...)...)
+	builder := syncbuilder.NewSyncBuilder(factories...)
+	builder.Telemetry = tp
 	builder.SyncMetricsRecorder = sync.NewMetricsRecorder(tp.Meter(sync.MetricsScope))
 	syncs, err := builder.SyncsFromConfig(sources, logger)
 	if err != nil {
@@ -361,6 +287,38 @@ func syncProvidersFromConfig(
 	}
 
 	return syncs, nil
+}
+
+// defaultFormatOf creates the format of the sources that name none, through the factory of the type
+// configformat.DefaultType. A distribution without that factory fails when a source needs it, naming the formats it has.
+func defaultFormatOf(
+	logger *logger.Logger, st *store.Store, providers []sync.SourceConfig, factories []configformat.Factory,
+) (configformat.ConfigurationFormat, error) {
+	for _, f := range factories {
+		if f.Type() == configformat.DefaultType {
+			format, err := f.Create(configformat.Settings{Store: st, Logger: logger.WithFields(zap.String("component", "configformat"))})
+			if err != nil {
+				return nil, fmt.Errorf("error creating configuration format %q: %w", f.Type(), err)
+			}
+			return format, nil
+		}
+	}
+	for _, provider := range providers {
+		if usesDefaultFormat(provider) {
+			return nil, fmt.Errorf("source %q names no configuration format, and this distribution has no %q format; available formats: %s",
+				provider.URI, configformat.DefaultType, strings.Join(formatTypesOf(factories), ", "))
+		}
+	}
+	return nil, nil
+}
+
+func formatTypesOf(factories []configformat.Factory) []string {
+	types := make([]string, 0, len(factories))
+	for _, f := range factories {
+		types = append(types, f.Type())
+	}
+	sort.Strings(types)
+	return types
 }
 
 func usesDefaultFormat(provider sync.SourceConfig) bool {
@@ -372,11 +330,11 @@ func usesDefaultFormat(provider sync.SourceConfig) bool {
 func sourcesWithKnownFormat(
 	logger *logger.Logger, providers []sync.SourceConfig, factories []configformat.Factory,
 ) []sync.SourceConfig {
-	available := []string{configformat.DefaultType}
-	for _, f := range factories {
-		available = append(available, f.Type())
-	}
+	// flagd's format is named available, as it always was; a distribution that lacks it fails at startup instead,
+	// for a source that needs it (defaultFormatOf)
+	available := append([]string{configformat.DefaultType}, formatTypesOf(factories)...)
 	sort.Strings(available)
+	available = slices.Compact(available)
 
 	kept := make([]sync.SourceConfig, 0, len(providers))
 	for _, provider := range providers {

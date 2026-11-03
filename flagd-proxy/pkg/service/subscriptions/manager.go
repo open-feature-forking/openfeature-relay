@@ -11,6 +11,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	isync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	syncbuilder "github.com/open-feature-forking/openfeature-relay/sync/builder"
+	"github.com/open-feature-forking/openfeature-relay/sync/builder/official"
 )
 
 // Manager defines the interface for the subscription management
@@ -54,7 +55,7 @@ func NewManager(ctx context.Context, logger *logger.Logger) *Coordinator {
 		multiplexers: map[string]*multiplexer{},
 		logger:       logger,
 		mu:           &sync.RWMutex{},
-		syncBuilder:  syncbuilder.NewSyncBuilder(),
+		syncBuilder:  syncbuilder.NewSyncBuilder(official.Factories()...),
 	}
 	go mgr.cleanup()
 	return &mgr

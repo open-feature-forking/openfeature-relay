@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"log"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	syncbuilder "github.com/open-feature-forking/openfeature-relay/sync/builder"
+	"github.com/open-feature-forking/openfeature-relay/sync/builder/official"
 	otelprovider "github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"github.com/open-feature/flagd/flagd/pkg/runtime"
 	"github.com/spf13/cobra"
@@ -185,7 +187,7 @@ var startCmd = &cobra.Command{
 			rtLogger.Fatal("refusing to start", zap.Error(err))
 		}
 
-		syncProviders, err := syncbuilder.ParseSyncProviderURIs(viper.GetStringSlice(uriFlagName), syncbuilder.Official()...)
+		syncProviders, err := syncbuilder.ParseSyncProviderURIs(viper.GetStringSlice(uriFlagName), official.Factories()...)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -266,7 +268,7 @@ var startCmd = &cobra.Command{
 // officialComponents are the components of flagd-full: the official ones with the OpenTelemetry telemetry
 // provider, configured from the telemetry flags.
 func officialComponents() runtime.Components {
-	components := runtime.Official()
+	components := flagdcomponents.Official()
 	components.Telemetry = otelprovider.NewFactory()
 	components.TelemetryConfig = map[string]any{
 		otelprovider.SettingMetricsExporter: viper.GetString(metricsExporter),
