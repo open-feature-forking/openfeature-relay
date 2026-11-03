@@ -33,3 +33,5 @@ service/transport:openfeature-relay/(runtime|service/(flag-evaluation|ofrep|flag
 service/flag-evaluation:openfeature-relay/(runtime|service/(ofrep|flag-sync))
 service/ofrep:openfeature-relay/(runtime|service/(flag-evaluation|flag-sync))
 service/flag-sync:openfeature-relay/(runtime|service/(flag-evaluation|ofrep))
+# The Builder (UC-001 Q1) depends on no relay module: it only reads manifests and runs the go binary.
+builder:open-feature/flagd/|openfeature-relay/(core|runtime|sync|evaluator|configformat|telemetry|service|distribution)

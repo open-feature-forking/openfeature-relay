@@ -1,0 +1,219 @@
+== defaults
+ManagementPort: 8014
+OfrepServicePort: 8016
+OfrepSSEEnabled: true
+OfrepSSEInactivityDel: 120
+OfrepSSEPublicURL: ""
+ServiceCertPath: ""
+ServiceKeyPath: ""
+ServicePort: 8013
+ServiceSocketPath: ""
+SyncServicePort: 8015
+SyncServiceHTTPEnabled: true
+SyncServiceSocketPath: ""
+StreamDeadline: 0s
+DisableSyncMetadata: false
+StrictNumericRange: false
+KeepAliveMinTime: 30s
+KeepAlivePermitWithoutStream: true
+SyncProviders: []
+ConfigurationFormats: []configformat.Factory(nil)
+Evaluators: []evaluator.Factory(nil)
+SyncFactories: []sync.Factory(nil)
+CORS: []string{}
+EvaluatorSettings: map[string]map[string]interface {}(nil)
+EndpointSettings: map[string]map[string]interface {}(nil)
+ContextValues: map[string]interface {}{}
+HeaderToContextKeyMappings: map[string]string{}
+MaxRequestBodyBytes: 1000000
+MaxRequestHeaderBytes: 1000000
+telemetry.caPath: ""
+telemetry.certPath: ""
+telemetry.collectorURI: ""
+telemetry.keyPath: ""
+telemetry.metricsExporter: ""
+telemetry.reloadInterval: 0
+
+== every flag on the command line
+ManagementPort: 9014
+OfrepServicePort: 9016
+OfrepSSEEnabled: false
+OfrepSSEInactivityDel: 77
+OfrepSSEPublicURL: "https://cli.example"
+ServiceCertPath: "/cli/server.crt"
+ServiceKeyPath: "/cli/server.key"
+ServicePort: 9013
+ServiceSocketPath: "/cli/evaluation.sock"
+SyncServicePort: 9015
+SyncServiceHTTPEnabled: false
+SyncServiceSocketPath: "/cli/sync.sock"
+StreamDeadline: 3s
+DisableSyncMetadata: true
+StrictNumericRange: true
+KeepAliveMinTime: 45s
+KeepAlivePermitWithoutStream: false
+SyncProviders: [{"uri":"/cli/a.json","provider":"file"},{"uri":"/cli/b.json","provider":"file"},{"uri":"cli.example:8015","provider":"grpc","selector":"cli"}]
+ConfigurationFormats: []configformat.Factory(nil)
+Evaluators: []evaluator.Factory(nil)
+SyncFactories: []sync.Factory(nil)
+CORS: []string{"https://a.cli", "https://b.cli"}
+EvaluatorSettings: map[string]map[string]interface {}(nil)
+EndpointSettings: map[string]map[string]interface {}(nil)
+ContextValues: map[string]interface {}{"cliKey1":"cliValue1", "cliKey2":"cliValue2"}
+HeaderToContextKeyMappings: map[string]string{"X-Cli-A":"cliA", "X-Cli-B":"cliB"}
+MaxRequestBodyBytes: 4321
+MaxRequestHeaderBytes: 8765
+telemetry.caPath: "/cli/otel-ca.crt"
+telemetry.certPath: "/cli/otel.crt"
+telemetry.collectorURI: "cli-collector:4317"
+telemetry.keyPath: "/cli/otel.key"
+telemetry.metricsExporter: "otel"
+telemetry.reloadInterval: 0
+
+== every flag as an environment variable
+ManagementPort: 10014
+OfrepServicePort: 10016
+OfrepSSEEnabled: false
+OfrepSSEInactivityDel: 88
+OfrepSSEPublicURL: "https://env.example"
+ServiceCertPath: "/env/server.crt"
+ServiceKeyPath: "/env/server.key"
+ServicePort: 10013
+ServiceSocketPath: "/env/evaluation.sock"
+SyncServicePort: 10015
+SyncServiceHTTPEnabled: false
+SyncServiceSocketPath: "/env/sync.sock"
+StreamDeadline: 4s
+DisableSyncMetadata: true
+StrictNumericRange: true
+KeepAliveMinTime: 46s
+KeepAlivePermitWithoutStream: false
+SyncProviders: [{"uri":"/env/a.json","provider":"file"},{"uri":"/env/b.json","provider":"file"},{"uri":"env.example:8015","provider":"grpc","selector":"env"}]
+ConfigurationFormats: []configformat.Factory(nil)
+Evaluators: []evaluator.Factory(nil)
+SyncFactories: []sync.Factory(nil)
+CORS: []string{"https://a.env", "https://b.env"}
+EvaluatorSettings: map[string]map[string]interface {}(nil)
+EndpointSettings: map[string]map[string]interface {}(nil)
+ContextValues: map[string]interface {}{"envKey1":"envValue1"}
+HeaderToContextKeyMappings: map[string]string{"X-Env-A":"envA"}
+MaxRequestBodyBytes: 5432
+MaxRequestHeaderBytes: 9876
+telemetry.caPath: "/env/otel-ca.crt"
+telemetry.certPath: "/env/otel.crt"
+telemetry.collectorURI: "env-collector:4317"
+telemetry.keyPath: "/env/otel.key"
+telemetry.metricsExporter: "otel"
+telemetry.reloadInterval: 10800000000000
+
+== every key in the configuration file given with --config
+stderr: using config file: $HOME/flagd.yaml
+ManagementPort: 11014
+OfrepServicePort: 11016
+OfrepSSEEnabled: false
+OfrepSSEInactivityDel: 99
+OfrepSSEPublicURL: "https://file.example"
+ServiceCertPath: "/file/server.crt"
+ServiceKeyPath: "/file/server.key"
+ServicePort: 11013
+ServiceSocketPath: "/file/evaluation.sock"
+SyncServicePort: 11015
+SyncServiceHTTPEnabled: false
+SyncServiceSocketPath: "/file/sync.sock"
+StreamDeadline: 5s
+DisableSyncMetadata: true
+StrictNumericRange: true
+KeepAliveMinTime: 47s
+KeepAlivePermitWithoutStream: false
+SyncProviders: [{"uri":"/file/a.json","provider":"file"},{"uri":"/file/b.json","provider":"file"},{"uri":"file.example:8015","provider":"grpc","selector":"file"}]
+ConfigurationFormats: []configformat.Factory(nil)
+Evaluators: []evaluator.Factory(nil)
+SyncFactories: []sync.Factory(nil)
+CORS: []string{"https://a.file", "https://b.file"}
+EvaluatorSettings: map[string]map[string]interface {}(nil)
+EndpointSettings: map[string]map[string]interface {}(nil)
+ContextValues: map[string]interface {}{"filekey1":"fileValue1"}
+HeaderToContextKeyMappings: map[string]string{"x-file-a":"fileA"}
+MaxRequestBodyBytes: 6543
+MaxRequestHeaderBytes: 10987
+telemetry.caPath: "/file/otel-ca.crt"
+telemetry.certPath: "/file/otel.crt"
+telemetry.collectorURI: "file-collector:4317"
+telemetry.keyPath: "/file/otel.key"
+telemetry.metricsExporter: "otel"
+telemetry.reloadInterval: 18000000000000
+
+== the default configuration file in the home directory
+stderr: using config file: $HOME/.agent.yaml
+ManagementPort: 8014
+OfrepServicePort: 8016
+OfrepSSEEnabled: true
+OfrepSSEInactivityDel: 120
+OfrepSSEPublicURL: ""
+ServiceCertPath: ""
+ServiceKeyPath: ""
+ServicePort: 12013
+ServiceSocketPath: ""
+SyncServicePort: 8015
+SyncServiceHTTPEnabled: true
+SyncServiceSocketPath: ""
+StreamDeadline: 0s
+DisableSyncMetadata: false
+StrictNumericRange: false
+KeepAliveMinTime: 30s
+KeepAlivePermitWithoutStream: true
+SyncProviders: [{"uri":"home.example:8015","provider":"grpc"}]
+ConfigurationFormats: []configformat.Factory(nil)
+Evaluators: []evaluator.Factory(nil)
+SyncFactories: []sync.Factory(nil)
+CORS: []string{}
+EvaluatorSettings: map[string]map[string]interface {}(nil)
+EndpointSettings: map[string]map[string]interface {}(nil)
+ContextValues: map[string]interface {}{}
+HeaderToContextKeyMappings: map[string]string{}
+MaxRequestBodyBytes: 1000000
+MaxRequestHeaderBytes: 1000000
+telemetry.caPath: ""
+telemetry.certPath: ""
+telemetry.collectorURI: ""
+telemetry.keyPath: ""
+telemetry.metricsExporter: ""
+telemetry.reloadInterval: 0
+
+== command line over environment over configuration file
+stderr: using config file: $HOME/flagd.yaml
+ManagementPort: 14014
+OfrepServicePort: 8016
+OfrepSSEEnabled: true
+OfrepSSEInactivityDel: 120
+OfrepSSEPublicURL: ""
+ServiceCertPath: ""
+ServiceKeyPath: ""
+ServicePort: 13013
+ServiceSocketPath: ""
+SyncServicePort: 15015
+SyncServiceHTTPEnabled: true
+SyncServiceSocketPath: ""
+StreamDeadline: 0s
+DisableSyncMetadata: false
+StrictNumericRange: false
+KeepAliveMinTime: 30s
+KeepAlivePermitWithoutStream: true
+SyncProviders: []
+ConfigurationFormats: []configformat.Factory(nil)
+Evaluators: []evaluator.Factory(nil)
+SyncFactories: []sync.Factory(nil)
+CORS: []string{}
+EvaluatorSettings: map[string]map[string]interface {}(nil)
+EndpointSettings: map[string]map[string]interface {}(nil)
+ContextValues: map[string]interface {}{}
+HeaderToContextKeyMappings: map[string]string{}
+MaxRequestBodyBytes: 1000000
+MaxRequestHeaderBytes: 1000000
+telemetry.caPath: ""
+telemetry.certPath: ""
+telemetry.collectorURI: ""
+telemetry.keyPath: ""
+telemetry.metricsExporter: ""
+telemetry.reloadInterval: 0
+

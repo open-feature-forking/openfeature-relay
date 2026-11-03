@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/contracttest"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/middleware"
@@ -346,22 +347,24 @@ func inputsFor(f features, withHTTP bool) Inputs {
 	return in
 }
 
-func failed(results []Result) []string {
-	var names []string
-	for _, r := range results {
-		if r.Err != nil {
-			names = append(names, r.Name)
-		}
-	}
-	return names
+func failed(report contracttest.Report) []string {
+	return report.FailedCases()
 }
 
-func names(results []Result) []string {
-	out := make([]string, 0, len(results))
-	for _, r := range results {
-		out = append(out, r.Name)
+// names are the cases the run exercised, in order.
+func names(report contracttest.Report) []string {
+	out := make([]string, 0, len(report.Cases))
+	for _, c := range report.Cases {
+		if c.NotApplicable == "" {
+			out = append(out, c.Name)
+		}
 	}
 	return out
+}
+
+// text is what a failed case says of the expected and the observed behaviour.
+func text(c contracttest.Case) string {
+	return c.Expected + "\n" + c.Observed
 }
 
 const (
@@ -425,7 +428,7 @@ func TestStubsMeetTheContract(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			results := Check(tt.factory, tt.inputs)
+			results := Check(t, tt.factory, tt.inputs)
 			require.Empty(t, failed(results), "%+v", results)
 			ran := names(results)
 			require.Subset(t, ran, tt.ran)
@@ -524,13 +527,13 @@ func TestBrokenStubsFailExactlyTheirCases(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.broken, func(t *testing.T) {
-			results := Check(tt.factory, tt.inputs)
+			results := Check(t, tt.factory, tt.inputs)
 			require.Equal(t, tt.wantFail, failed(results))
-			for _, r := range results {
-				if r.Err != nil {
-					require.Contains(t, r.Err.Error(), tt.wantText)
-					require.Contains(t, r.Err.Error(), "observed", "a failure states the observed behaviour")
-					require.Contains(t, r.Err.Error(), "expected", "a failure states the expected behaviour")
+			for _, r := range results.Cases {
+				if !r.Passed && r.NotApplicable == "" {
+					require.Contains(t, text(r), tt.wantText)
+					require.NotEmpty(t, r.Observed, "a failure states the observed behaviour")
+					require.NotEmpty(t, r.Expected, "a failure states the expected behaviour")
 					break
 				}
 			}
@@ -542,31 +545,31 @@ func TestBrokenStubsFailExactlyTheirCases(t *testing.T) {
 func TestMissingInputFailsNamingIt(t *testing.T) {
 	in := inputsFor(resolverFeatures, false)
 	in.Resolve = nil
-	results := Check(stub{typeName: "x", needs: service.Needs{Router: true}, features: resolverFeatures}, in)
+	results := Check(t, stub{typeName: "x", needs: service.Needs{Router: true}, features: resolverFeatures}, in)
 
 	require.Equal(t, []string{nameResolves, nameEvent}, failed(results))
-	for _, r := range results {
-		if r.Err != nil {
-			require.ErrorContains(t, r.Err, "the input Resolve is required")
+	for _, r := range results.Cases {
+		if !r.Passed && r.NotApplicable == "" {
+			require.Contains(t, text(r), "the input Resolve is required")
 		}
 	}
 
 	in = inputsFor(features{}, false)
 	in.Connect = nil
-	results = Check(stub{typeName: "x"}, in)
+	results = Check(t, stub{typeName: "x"}, in)
 	require.Equal(t, []string{nameServes}, failed(results))
-	require.ErrorContains(t, results[2].Err, "the input Connect is required")
+	require.Contains(t, text(results.Cases[2]), "the input Connect is required")
 
 	in = inputsFor(features{}, false)
 	in.PortKey = ""
-	results = Check(stub{typeName: "x"}, in)
+	results = Check(t, stub{typeName: "x"}, in)
 	require.Contains(t, failed(results), nameServeError)
 }
 
 func TestInvalidDeclarationsFailTheDeclarationsCase(t *testing.T) {
-	results := Check(stub{typeName: ""}, inputsFor(features{}, false))
-	require.Equal(t, "declarations", results[0].Name)
-	require.ErrorContains(t, results[0].Err, "the type name is empty")
+	results := Check(t, stub{typeName: ""}, inputsFor(features{}, false))
+	require.Equal(t, "declarations", results.Cases[0].Name)
+	require.Contains(t, text(results.Cases[0]), "the type name is empty")
 }
 
 func evaluatorRequest(key string, selector store.Selector) evaluator.Request {
@@ -579,35 +582,35 @@ func TestLeavingAnInputOutFails(t *testing.T) {
 	in := inputsFor(serverFeatures, false)
 	in.Documents = nil
 	in.Without = removeFeature(in.Without, FeatureDocuments)
-	results := Check(stub{typeName: "x", features: serverFeatures}, in)
+	results := Check(t, stub{typeName: "x", features: serverFeatures}, in)
 
 	require.Equal(t, []string{nameDocuments}, failed(results))
-	for _, r := range results {
-		if r.Err != nil {
-			require.ErrorContains(t, r.Err, "the input Documents is required")
-			require.ErrorContains(t, r.Err, "name Documents in Without")
+	for _, r := range results.Cases {
+		if !r.Passed && r.NotApplicable == "" {
+			require.Contains(t, text(r), "the input Documents is required")
+			require.Contains(t, text(r), "name Documents in Without")
 		}
 	}
 
 	in = inputsFor(serverFeatures, false)
 	in.Without = append(in.Without, FeatureValidator)
-	results = Check(stub{typeName: "x", features: serverFeatures}, in)
+	results = Check(t, stub{typeName: "x", features: serverFeatures}, in)
 	require.Contains(t, failed(results), "inputs")
 
 	in = inputsFor(features{}, false)
 	in.Without = append(in.Without, "Colour")
-	require.Contains(t, failed(Check(stub{typeName: "x"}, in)), "inputs")
+	require.Contains(t, failed(Check(t, stub{typeName: "x"}, in)), "inputs")
 }
 
 // TestResolverNeedsDeclaresHTTP pins that an endpoint that resolves flags says whether it serves HTTP.
 func TestResolverNeedsDeclaresHTTP(t *testing.T) {
 	in := inputsFor(resolverFeatures, false)
 	in.Without = removeFeature(in.Without, FeatureHTTP)
-	results := Check(stub{typeName: "x", needs: service.Needs{Router: true}, features: resolverFeatures}, in)
+	results := Check(t, stub{typeName: "x", needs: service.Needs{Router: true}, features: resolverFeatures}, in)
 	require.Equal(t, []string{nameSelector}, failed(results))
 
 	in = inputsFor(resolverFeatures, false) // names HTTP in Without
-	require.Empty(t, failed(Check(stub{typeName: "x", needs: service.Needs{Router: true}, features: resolverFeatures}, in)))
+	require.Empty(t, failed(Check(t, stub{typeName: "x", needs: service.Needs{Router: true}, features: resolverFeatures}, in)))
 }
 
 func removeFeature(list []Feature, drop Feature) []Feature {

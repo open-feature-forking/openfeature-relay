@@ -58,3 +58,5 @@ service/transport:./...:go.opentelemetry.io|prometheus/client_golang|otelconnect
 service/flag-evaluation:./...:go.opentelemetry.io|prometheus/client_golang|otelconnect|openfeature-relay/telemetry/|openfeature-relay/(runtime|service/(ofrep|flag-sync))
 service/ofrep:./...:go.opentelemetry.io|prometheus/client_golang|otelconnect|openfeature-relay/telemetry/|openfeature-relay/(runtime|service/(flag-evaluation|flag-sync))
 service/flag-sync:./...:go.opentelemetry.io|prometheus/client_golang|otelconnect|openfeature-relay/telemetry/|openfeature-relay/(runtime|service/(flag-evaluation|ofrep))
+# The Builder (UC-001 Q1) depends on no relay module: it only reads manifests and runs the go binary.
+builder:./...:open-feature/flagd/|openfeature-relay/(core|runtime|sync|evaluator|configformat|telemetry|service|distribution)
