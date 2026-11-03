@@ -1,6 +1,8 @@
 package contracttest_test
 
 import (
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -82,4 +84,58 @@ func TestRunReportsOneSubtestPerCase(t *testing.T) {
 		ran++
 	}
 	require.Equal(t, 2, ran)
+}
+
+const runHelper = "CONTRACTTEST_RUN_HELPER"
+
+// TestRunHelper calls Report.Run the way an author's test does. It runs only as the helper process of the tests below,
+// which read how it ended: Run must fail the test of an aborted run and of a failed case, and nothing else.
+func TestRunHelper(t *testing.T) {
+	switch os.Getenv(runHelper) {
+	case "":
+		t.Skip("runs only as a helper process")
+	case "aborted":
+		contracttest.Abort("test input %s is missing", "Inputs.Passed").Run(t)
+	case "failed":
+		contracttest.Report{Cases: []contracttest.Case{
+			contracttest.Pass("a", "a works"),
+			contracttest.Check("b", "b works", "b was broken"),
+		}}.Run(t)
+	case "passing":
+		contracttest.Report{Cases: []contracttest.Case{
+			contracttest.Pass("a", "a works"),
+			contracttest.NotApplicable("c", "Without: listen"),
+		}}.Run(t)
+	}
+}
+
+func runInHelper(t *testing.T, mode string) (string, error) {
+	t.Helper()
+	cmd := exec.Command(os.Args[0], "-test.run=^TestRunHelper$", "-test.v")
+	cmd.Env = append(os.Environ(), runHelper+"="+mode)
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+func TestRunFailsAnAbortedRun(t *testing.T) {
+	out, err := runInHelper(t, "aborted")
+
+	require.Error(t, err, out)
+	require.Contains(t, out, "the contract tests were not run: test input Inputs.Passed is missing")
+}
+
+func TestRunFailsAFailedCaseWithExpectedAndObserved(t *testing.T) {
+	out, err := runInHelper(t, "failed")
+
+	require.Error(t, err, out)
+	require.Contains(t, out, "expected: b works")
+	require.Contains(t, out, "observed: b was broken")
+	require.NotContains(t, out, "--- FAIL: TestRunHelper/a")
+}
+
+func TestRunPassesAReportWithoutFailures(t *testing.T) {
+	out, err := runInHelper(t, "passing")
+
+	require.NoError(t, err, out)
+	require.Contains(t, out, "not applicable (Without: listen)")
 }
