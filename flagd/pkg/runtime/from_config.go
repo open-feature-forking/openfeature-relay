@@ -100,39 +100,22 @@ func warnOnNoOpConfig(logger *logger.Logger, config Config) {
 
 // FromConfig builds a runtime from startup configurations
 // nolint: funlen
-func FromConfig(logger *logger.Logger, version string, config Config, components Components) (*Runtime, error) {
+func FromConfig(logger *logger.Logger, version string, config Config, components Components) (rt *Runtime, err error) {
 	config = withComponents(config, components)
 	warnOnNoOpConfig(logger, config)
 
-	telCfg := otelprovider.Config{
-		MetricsExporter: config.MetricExporter,
-		CollectorConfig: otelprovider.CollectorConfig{
-			Target:         config.OtelCollectorURI,
-			CertPath:       config.OtelCertPath,
-			KeyPath:        config.OtelKeyPath,
-			CAPath:         config.OtelCAPath,
-			ReloadInterval: config.OtelReloadInterval,
-		},
-	}
-
-	// register error handling for OpenTelemetry
-	otelprovider.RegisterErrorHandling(logger)
-
-	// register trace provider for the runtime
-	err := otelprovider.BuildTraceProvider(context.Background(), logger, svcName, version, telCfg)
+	tp, shutdownTelemetry, err := telemetryProvider(logger, version, config, components)
 	if err != nil {
-		// log the error but continue
-		logger.Error(fmt.Sprintf("error building trace provider: %v", err))
+		return nil, err
 	}
-
-	// build metrics recorder with startup configurations
-	_, err = otelprovider.BuildMetricsRecorder(context.Background(), svcName, version, telCfg)
-	if err != nil {
-		// log the error but continue
-		logger.Error(fmt.Sprintf("error building metrics recorder: %v", err))
-	}
-	// the providers built above are global state; the components record through the telemetry provider over it
-	tp := otelprovider.FromGlobals(svcName)
+	// a runtime that is not built releases what the telemetry provider holds
+	defer func() {
+		if rt == nil && shutdownTelemetry != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), hookBudget)
+			defer cancel()
+			_ = shutdownTelemetry(ctx)
+		}
+	}()
 
 	syncProviders := sourcesWithKnownFormat(logger, config.SyncProviders, config.ConfigurationFormats)
 	sources := []string{}
@@ -171,7 +154,7 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 	}
 
 	bus := events.NewBus()
-	rt := &Runtime{
+	rt = &Runtime{
 		Logger:         logger.WithFields(zap.String("component", "runtime")),
 		Bus:            bus,
 		Telemetry:      tp,
@@ -229,7 +212,64 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		return nil, err
 	}
 	rt.Syncs = iSyncs
+	if shutdownTelemetry != nil {
+		rt.onShutdown("telemetry", shutdownTelemetry)
+	}
 	return rt, nil
+}
+
+// telemetryProvider returns the telemetry provider of the runtime, and how to shut it down. With a telemetry factory
+// in the components it is the factory's provider; without one, it is the provider over the global OpenTelemetry
+// state that the runtime installs itself from Config, which logs what it cannot build and goes on without it.
+func telemetryProvider(
+	logger *logger.Logger, version string, config Config, components Components,
+) (telemetry.Provider, func(context.Context) error, error) {
+	if components.Telemetry == nil {
+		return legacyTelemetryProvider(logger, version, config), nil, nil
+	}
+	if err := telemetry.ValidateDeclaration(components.Telemetry); err != nil {
+		return nil, nil, fmt.Errorf("the telemetry provider declares: %w", err)
+	}
+	tp, err := components.Telemetry.Create(context.Background(), telemetry.Settings{
+		Logger:              logger,
+		DistributionName:    svcName,
+		DistributionVersion: version,
+		Config:              components.TelemetryConfig,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("error creating the telemetry provider %q: %w", components.Telemetry.Type(), err)
+	}
+	return tp, tp.Shutdown, nil
+}
+
+func legacyTelemetryProvider(logger *logger.Logger, version string, config Config) telemetry.Provider {
+	telCfg := otelprovider.Config{
+		MetricsExporter: config.MetricExporter,
+		CollectorConfig: otelprovider.CollectorConfig{
+			Target:         config.OtelCollectorURI,
+			CertPath:       config.OtelCertPath,
+			KeyPath:        config.OtelKeyPath,
+			CAPath:         config.OtelCAPath,
+			ReloadInterval: config.OtelReloadInterval,
+		},
+	}
+
+	// register error handling for OpenTelemetry
+	otelprovider.RegisterErrorHandling(logger)
+
+	// register trace provider for the runtime
+	if err := otelprovider.BuildTraceProvider(context.Background(), logger, svcName, version, telCfg); err != nil {
+		// log the error but continue
+		logger.Error(fmt.Sprintf("error building trace provider: %v", err))
+	}
+
+	// build metrics recorder with startup configurations
+	if _, err := otelprovider.BuildMetricsRecorder(context.Background(), svcName, version, telCfg); err != nil {
+		// log the error but continue
+		logger.Error(fmt.Sprintf("error building metrics recorder: %v", err))
+	}
+	// the providers built above are global state; the components record through the telemetry provider over it
+	return otelprovider.FromGlobals(svcName)
 }
 
 // endpointConfigs derives the settings of the official endpoints from the operator's configuration.

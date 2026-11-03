@@ -7,6 +7,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	flageval "github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation"
 	"github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation/ofrep"
 	flagsync "github.com/open-feature/flagd/flagd/pkg/service/flag-sync"
@@ -25,6 +26,11 @@ type Components struct {
 	Evaluators []evaluator.Factory
 	// Endpoints are the service endpoints the runtime serves.
 	Endpoints []service.Factory
+	// Telemetry creates the telemetry provider the runtime, the sync providers and the service endpoints record
+	// through. Nil leaves the runtime to build the OpenTelemetry providers it always has from Config.
+	Telemetry telemetry.Factory
+	// TelemetryConfig is the configuration of Telemetry, as the keys of telemetry.Settings.Config.
+	TelemetryConfig map[string]any
 	// MetricsHandler serves /metrics on the management port. Nil leaves it to the telemetry provider, and answers
 	// 404 if the provider serves none.
 	MetricsHandler http.Handler
