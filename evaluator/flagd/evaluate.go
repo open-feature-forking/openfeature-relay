@@ -170,7 +170,9 @@ func (je *Resolver) resolveFlag(
 	ctx context.Context, flag, typed model.Flag, metadata model.Metadata, evalCtx map[string]any, bulk bool,
 ) evaluator.Result {
 	variant, variants, reason, metadata, err := je.evaluateFlag(ctx, flag, metadata, evalCtx)
-	result := evaluator.Result{FlagKey: flag.Key, Variant: variant, Reason: reason, Metadata: metadata}
+	result := evaluator.Result{
+		FlagKey: flag.Key, FlagSet: store.FlagSetID(typed, nil), Variant: variant, Reason: reason, Metadata: metadata,
+	}
 
 	var zero any
 	if bulk {

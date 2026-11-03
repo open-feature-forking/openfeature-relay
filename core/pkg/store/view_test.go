@@ -62,3 +62,32 @@ func TestViewDocumentsAreSnapshot(t *testing.T) {
 	require.Equal(t, []string{"a"}, view.Documents("fmt", "src")[0].FlagKeys)
 	require.Equal(t, []string{"a", "b"}, st.View().Documents("fmt", "src")[0].FlagKeys)
 }
+
+func TestSourcesAreInPriorityOrderAndCopied(t *testing.T) {
+	st, err := NewStore(logger.NewLogger(nil, false), []string{"low", "high"})
+	require.NoError(t, err)
+
+	sources := st.Sources()
+	require.Equal(t, []string{"low", "high"}, sources)
+	sources[0] = "changed"
+	require.Equal(t, []string{"low", "high"}, st.Sources())
+}
+
+func TestSelectorDocumentFlagSet(t *testing.T) {
+	for expression, want := range map[string]struct {
+		set   string
+		named bool
+	}{
+		"":              {"", false},
+		"source=a":      {"", false},
+		"flagSetId=x":   {"x", true},
+		"flagSetId=":    {"", true},
+		"flagSetId=a b": {"a b", true},
+	} {
+		selector, err := NewSelector(expression)
+		require.NoError(t, err)
+		set, named := selector.DocumentFlagSet()
+		require.Equal(t, want.set, set, expression)
+		require.Equal(t, want.named, named, expression)
+	}
+}

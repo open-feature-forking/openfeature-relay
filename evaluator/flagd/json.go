@@ -116,6 +116,9 @@ type Resolver struct {
 	typed              evaluator.IResolver
 }
 
+// StrictNumericRange reports whether the evaluator was built with WithStrictNumericRange.
+func (je *Resolver) StrictNumericRange() bool { return je.strictNumericRange }
+
 func NewResolver(store store.IStore, logger *logger.Logger) Resolver {
 	// register supported json logic custom operator implementations
 	jl.AddOperator(FractionEvaluationName, NewFractional(logger).Evaluate)
