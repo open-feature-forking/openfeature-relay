@@ -3,11 +3,12 @@
 
     compare-allocs.py <base> <head>
 
-Only allocs/op is compared. ns/op depends on the runner and is ignored. A benchmark that ran several times counts with
-its lowest allocs/op, which drops the noise of amortized setup. Benchmarks that allocate a hundred or more
-times per operation vary by one allocation between runs of the same code, so a rise of one, or of up to 0.1% of
-the base, is noise there and does not fail. Below a hundred allocs/op any rise fails. A benchmark that exists in only one of the
-outputs is listed and never fails the comparison. A table of the benchmarks whose allocs/op changed goes to stdout and, when GITHUB_STEP_SUMMARY is set, to the job summary.
+Only allocs/op is compared. ns/op depends on the runner and is ignored. A benchmark that ran several times has a
+range of allocs/op, and the base's own range is the noise: the comparison fails when the lowest allocs/op of the head
+is above the highest of the base. A benchmark that allocates the same on every run of the base therefore fails on any
+rise. A rise that stays inside the base's range is listed as noise. A benchmark that exists in only one of the outputs
+is listed and never fails the comparison. A table of the benchmarks whose allocs/op changed, the packages that were
+benchmarked and the benchmarks within noise go to stdout and, when GITHUB_STEP_SUMMARY is set, to the job summary.
 """
 import os
 import re
@@ -18,7 +19,7 @@ LINE = re.compile(r"^(Benchmark\S*?)(?:-\d+)?\s+\d+\s+.*?\s(\d+) allocs/op")
 
 
 def parse(path):
-    """Returns {"<package> <benchmark>": allocs/op}."""
+    """Returns {"<package> <benchmark>": [allocs/op of each run]}."""
     results = {}
     package = ""
     with open(path, encoding="utf-8") as f:
@@ -29,14 +30,22 @@ def parse(path):
                 continue
             m = LINE.match(line)
             if m:
-                key, allocs = f"{package} {m.group(1)}", int(m.group(2))
-                results[key] = min(allocs, results.get(key, allocs))
+                results.setdefault(f"{package} {m.group(1)}", []).append(int(m.group(2)))
     return results
 
 
-def tolerance(base_allocs):
-    """The rise in allocs/op that is noise for a benchmark with base_allocs."""
-    return max(base_allocs // 1000, 1 if base_allocs >= 100 else 0)
+def show(values):
+    low, high = min(values), max(values)
+    return str(low) if low == high else f"{low}..{high}"
+
+
+def trim(package):
+    """Drops the host and the repository from a package path."""
+    return re.sub(r"^github\.com/[^/]+/[^/]+/", "", package)
+
+
+def packages(results):
+    return {key.rsplit(" ", 1)[0] for key in results}
 
 
 def short(key):
@@ -58,9 +67,9 @@ def main(argv):
         return 2
 
     common = sorted(set(base) & set(head))
-    rose = [k for k in common if head[k] - base[k] > tolerance(base[k])]
-    fell = [k for k in common if head[k] < base[k]]
-    noise = [k for k in common if 0 < head[k] - base[k] <= tolerance(base[k])]
+    rose = [k for k in common if min(head[k]) > max(base[k])]
+    fell = [k for k in common if max(head[k]) < min(base[k])]
+    noise = [k for k in common if k not in rose and min(head[k]) > min(base[k])]
     added = sorted(set(head) - set(base))
     removed = sorted(set(base) - set(head))
 
@@ -68,12 +77,19 @@ def main(argv):
     if rose or fell:
         out += ["| benchmark | base allocs/op | head allocs/op | change |", "|---|---:|---:|---:|"]
         for k in rose + fell:
-            out.append(f"| {short(k)} | {base[k]} | {head[k]} | {head[k] - base[k]:+d} |")
+            out.append(f"| {short(k)} | {show(base[k])} | {show(head[k])} | {min(head[k]) - min(base[k]):+d} |")
         out.append("")
     out.append(
         f"{len(common)} benchmarks compared: {len(rose)} allocate more, {len(fell)} allocate less, "
         f"{len(added)} new, {len(removed)} removed."
     )
+    head_packages, base_packages = packages(head), packages(base)
+    out.append("Packages benchmarked: " + ", ".join(sorted(trim(p) for p in head_packages)))
+    if head_packages != base_packages:
+        out.append(
+            "Only in the base: " + (", ".join(sorted(trim(p) for p in base_packages - head_packages)) or "none")
+            + "; only in the head: " + (", ".join(sorted(trim(p) for p in head_packages - base_packages)) or "none")
+        )
     if noise:
         out.append("Within noise: " + ", ".join(short(k) for k in noise))
     if added:
