@@ -191,7 +191,7 @@ func (p *Pipeline) run() {
 // flush delivers the collected batch, retrying it with backoff.
 func (p *Pipeline) flush() {
 	p.mu.Lock()
-	if p.accounted || len(p.batch) == 0 {
+	if p.accounted || len(p.batch) == 0 || p.deliverCtx.Err() != nil {
 		p.mu.Unlock()
 		return
 	}
@@ -203,7 +203,8 @@ func (p *Pipeline) flush() {
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.accounted {
+	if p.accounted || p.deliverCtx.Err() != nil {
+		// Close is counting what is left, the batch included
 		return
 	}
 	p.inflight = nil
