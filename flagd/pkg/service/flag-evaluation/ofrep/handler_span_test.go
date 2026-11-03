@@ -5,7 +5,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"sort"
 	"strings"
 	"testing"
@@ -13,13 +12,12 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	"github.com/open-feature/flagd/flagd/internal/telemetrytest"
 	"github.com/open-feature/flagd/flagd/pkg/evaluation"
 	"github.com/open-feature/flagd/flagd/pkg/service"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 const (
@@ -33,14 +31,8 @@ const (
 	invalidSelector = "invalid=selector"
 )
 
-// Tracers may be fetched when components are built, so the provider is installed before any test
-// builds one. A global provider cannot be restored; tests reset the recorder instead.
-var spanRecorder = tracetest.NewSpanRecorder()
-
-func TestMain(m *testing.M) {
-	otel.SetTracerProvider(sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanRecorder)))
-	os.Exit(m.Run())
-}
+// spanRecorder is the telemetry provider the tests inject, with the spans it recorded.
+var spanRecorder = telemetrytest.New()
 
 // renderSpanTree renders ended spans as an indented tree in start order, without timestamps or IDs.
 func renderSpanTree(spans []sdktrace.ReadOnlySpan) string {
@@ -109,7 +101,7 @@ func TestOfrepEvaluationSpans(t *testing.T) {
 	eval := evaluation.NewEvaluator(log, flagStore)
 	require.NoError(t, eval.SetState(coresync.DataSync{FlagData: spanTestFlags, Source: spanTestSource}))
 
-	server := httptest.NewServer(NewOfrepHandler(log, eval, nil, nil, nil, "flagd", SSEConfig{}, newCompression(t)))
+	server := httptest.NewServer(NewOfrepHandler(log, eval, nil, nil, spanRecorder, "flagd", SSEConfig{}, newCompression(t)))
 	t.Cleanup(server.Close)
 
 	post := func(t *testing.T, path string, header http.Header) *http.Response {

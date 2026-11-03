@@ -124,7 +124,7 @@ func NewConnectService(
 	tp = telemetry.OrNoop(tp)
 	cs := &ConnectService{
 		logger:         logger,
-		eval:           TraceEvaluations(evaluator),
+		eval:           TraceEvaluations(evaluator, tp.Tracer(EvaluatorTracerName)),
 		metrics:        flagdService.NewMetrics(tp.Meter(flagdService.MetricsScope)),
 		telemetry:      tp,
 		handlerOptions: handlerOptions,

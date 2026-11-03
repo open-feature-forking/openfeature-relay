@@ -45,6 +45,14 @@ func (m *capturingEvaluationMetrics) RecordEvaluation(
 	})
 }
 
+// testSpan is a span the evaluation hands to resolve; these tests read nothing from it.
+func testSpan(t *testing.T) telemetry.Span {
+	t.Helper()
+
+	_, span := telemetry.Noop().Tracer("test").Start(t.Context(), "test")
+	return span
+}
+
 type boolResponseCapture struct{}
 
 func (boolResponseCapture) SetResult(bool, string, string, map[string]interface{}) error {
@@ -62,7 +70,7 @@ func TestTypedSingleEvaluationRecordsFlagSetID(t *testing.T) {
 			name: "legacy success",
 			resolve: func(metrics evaluationRecorder) error {
 				return resolve(
-					t.Context(), logger.NewLogger(nil, false),
+					t.Context(), testSpan(t), logger.NewLogger(nil, false),
 					func(context.Context, string, string, map[string]any) (bool, string, string, map[string]interface{}, error) {
 						return true, "on", model.StaticReason, model.Metadata{"flagSetId": "set-a"}, nil
 					},
@@ -75,7 +83,7 @@ func TestTypedSingleEvaluationRecordsFlagSetID(t *testing.T) {
 			name: "v2 selected lookup error passes metadata to recorder",
 			resolve: func(metrics evaluationRecorder) error {
 				return resolveV2(
-					t.Context(), logger.NewLogger(nil, false),
+					t.Context(), testSpan(t), logger.NewLogger(nil, false),
 					func(context.Context, string, string, map[string]any) (bool, string, string, map[string]interface{}, error) {
 						return false, "", model.ErrorReason, model.Metadata{"flagSetId": "selected-set"}, errors.New(model.FlagNotFoundErrorCode)
 					},

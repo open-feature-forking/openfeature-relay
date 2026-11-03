@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	"connectrpc.com/connect"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	otelprovider "github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"github.com/stretchr/testify/require"
@@ -38,6 +39,11 @@ func New() *Recorder {
 	r.Provider = p
 	r.flush = p.(*otelprovider.Provider).ForceFlush
 	return r
+}
+
+// ConnectHandlerOptions instrument a ConnectRPC handler with the provider, as FromConfig does.
+func (r *Recorder) ConnectHandlerOptions() []connect.HandlerOption {
+	return r.Provider.(*otelprovider.Provider).ConnectHandlerOptions()
 }
 
 // ProviderFor returns a telemetry provider that records its metrics to reader and does not expose its spans.

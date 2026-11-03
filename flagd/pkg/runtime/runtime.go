@@ -17,12 +17,9 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	"github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation/ofrep"
 	flagsync "github.com/open-feature/flagd/flagd/pkg/service/flag-sync"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -48,6 +45,9 @@ type Runtime struct {
 	hooks     []shutdownHook
 	// MetricsHandler serves /metrics on the management port; nil answers 404.
 	MetricsHandler http.Handler
+	// Telemetry is the telemetry provider the runtime records its flagSync spans through; nil means the noop
+	// telemetry provider.
+	Telemetry telemetry.Provider
 	// shuttingDown makes the readiness probe fail once the runtime stops.
 	shuttingDown atomic.Bool
 
@@ -199,10 +199,10 @@ func (r *Runtime) updateAndEmit(payload sync.DataSync) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	_, span := otel.Tracer("jsonEvaluator").Start(
+	_, span := telemetry.OrNoop(r.Telemetry).Tracer("jsonEvaluator").Start(
 		context.Background(),
 		"flagSync",
-		trace.WithAttributes(attribute.String("feature_flag.source", payload.Source)))
+		telemetry.WithAttributes(telemetry.String("feature_flag.source", payload.Source)))
 	var err error
 	if format, ok := r.Formats[payload.Source]; ok {
 		err = r.accept(format, payload)
@@ -217,7 +217,7 @@ func (r *Runtime) updateAndEmit(payload sync.DataSync) {
 		err = r.Evaluator.SetState(payload)
 	}
 	if err != nil {
-		span.SetStatus(codes.Error, "flagSync error")
+		span.SetError("flagSync error")
 		span.RecordError(err)
 	}
 	span.End()

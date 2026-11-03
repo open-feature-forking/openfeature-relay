@@ -179,6 +179,7 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 	rt := &Runtime{
 		Logger:         logger.WithFields(zap.String("component", "runtime")),
 		Bus:            bus,
+		Telemetry:      tp,
 		MetricsHandler: components.MetricsHandler,
 		ServiceConfig: service.Configuration{
 			Port:                       config.ServicePort,

@@ -21,8 +21,6 @@ import (
 	"github.com/open-feature/flagd/flagd/pkg/service/middleware"
 	metricsmw "github.com/open-feature/flagd/flagd/pkg/service/middleware/metrics"
 	"github.com/rs/xid"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"go.opentelemetry.io/otel/metric/noop"
 )
 
 const (
@@ -72,7 +70,7 @@ func NewOfrepHandler(
 ) http.Handler {
 	h := handler{
 		Logger:                     logger,
-		evaluator:                  evalservice.TraceEvaluations(evaluator),
+		evaluator:                  evalservice.TraceEvaluations(evaluator, telemetry.OrNoop(tp).Tracer(evalservice.EvaluatorTracerName)),
 		contextValues:              contextValues,
 		headerToContextKeyMappings: headerToContextKeyMappings,
 		metricsRecorder:            service.NewMetrics(telemetry.OrNoop(tp).Meter(service.MetricsScope)),
@@ -113,7 +111,7 @@ func NewOfrepHandler(
 	}))
 
 	// tracing only; metrics are recorded by metricsmw above
-	return otelhttp.NewHandler(router, "flagd.ofrep", otelhttp.WithMeterProvider(noop.NewMeterProvider()))
+	return telemetry.OrNoop(tp).HTTPServerSpans(router, "flagd.ofrep")
 }
 
 func (h *handler) HandleFlagEvaluation(w http.ResponseWriter, r *http.Request) {

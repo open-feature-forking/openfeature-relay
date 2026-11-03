@@ -14,16 +14,12 @@ import (
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature/flagd/flagd/pkg/evaluation"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace/noop"
 )
 
 // newBenchmarkClient serves the flag evaluation endpoint over a real evaluator with today's noop metrics
-// recorder and a noop tracer provider, which replaces the recording one of TestMain; the benchmarks run
-// after the tests.
+// recorder and the noop telemetry provider.
 func newBenchmarkClient(b *testing.B) evaluationV1.ServiceClient {
 	b.Helper()
-	otel.SetTracerProvider(noop.NewTracerProvider())
 
 	log := logger.NewLogger(nil, false)
 	flagStore, err := store.NewStore(log, []string{spanTestSource})

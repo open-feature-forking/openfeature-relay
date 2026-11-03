@@ -13,16 +13,12 @@ import (
 	"github.com/open-feature/flagd/flagd/pkg/evaluation"
 	compressmw "github.com/open-feature/flagd/flagd/pkg/service/middleware/compress"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace/noop"
 )
 
 // newBenchmarkServer serves the OFREP endpoint over a real evaluator with today's noop metrics recorder
-// and a noop tracer provider, which replaces the recording one of TestMain; the benchmarks run after the
-// tests.
+// and the noop telemetry provider.
 func newBenchmarkServer(b *testing.B) *httptest.Server {
 	b.Helper()
-	otel.SetTracerProvider(noop.NewTracerProvider())
 
 	log := logger.NewLogger(nil, false)
 	flagStore, err := store.NewStore(log, []string{spanTestSource})

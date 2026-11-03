@@ -15,7 +15,6 @@ import (
 	iservice "github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	telemetry "github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"github.com/open-feature/flagd/flagd/pkg/evaluation"
 	"github.com/stretchr/testify/require"
 )
@@ -26,15 +25,12 @@ var updateGolden = flag.Bool("update", false, "rewrite the golden files")
 // interceptor FromConfig installs: the interceptor's server span above the service's span and the evaluator's.
 // TestEvaluationSpans builds the service without handler options.
 func TestEvaluationSpansWithInterceptor(t *testing.T) {
-	options, err := telemetry.BuildConnectOptions(telemetry.Config{})
-	require.NoError(t, err)
-
 	log := logger.NewLogger(nil, false)
 	flagStore, err := store.NewStore(log, []string{spanTestSource})
 	require.NoError(t, err)
 	eval := evaluation.NewEvaluator(log, flagStore)
 	require.NoError(t, eval.SetState(coresync.DataSync{FlagData: spanTestFlags, Source: spanTestSource}))
-	svc := NewConnectService(log, eval, flagStore, nil, options...)
+	svc := NewConnectService(log, eval, flagStore, spanRecorder, spanRecorder.ConnectHandlerOptions()...)
 	svc.setupHandler(iservice.Configuration{ServiceName: "spanTest"})
 	server := httptest.NewServer(svc.server.Handler)
 	t.Cleanup(server.Close)
