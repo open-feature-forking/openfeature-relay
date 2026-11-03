@@ -46,9 +46,19 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=bind,source=./configformat/flagd/go.sum,target=./configformat/flagd/go.sum \
     --mount=type=bind,source=./flagd/go.mod,target=./flagd/go.mod \
     --mount=type=bind,source=./flagd/go.sum,target=./flagd/go.sum \
+    --mount=type=bind,source=./runtime/go.mod,target=./runtime/go.mod \
+    --mount=type=bind,source=./runtime/go.sum,target=./runtime/go.sum \
+    --mount=type=bind,source=./service/transport/go.mod,target=./service/transport/go.mod \
+    --mount=type=bind,source=./service/transport/go.sum,target=./service/transport/go.sum \
+    --mount=type=bind,source=./service/flag-evaluation/go.mod,target=./service/flag-evaluation/go.mod \
+    --mount=type=bind,source=./service/flag-evaluation/go.sum,target=./service/flag-evaluation/go.sum \
+    --mount=type=bind,source=./service/ofrep/go.mod,target=./service/ofrep/go.mod \
+    --mount=type=bind,source=./service/ofrep/go.sum,target=./service/ofrep/go.sum \
+    --mount=type=bind,source=./service/flag-sync/go.mod,target=./service/flag-sync/go.mod \
+    --mount=type=bind,source=./service/flag-sync/go.sum,target=./service/flag-sync/go.sum \
     --mount=type=bind,source=./flagd-proxy/go.mod,target=./flagd-proxy/go.mod \
     --mount=type=bind,source=./flagd-proxy/go.sum,target=./flagd-proxy/go.sum \
-    go work init ./core ./sync/file ./sync/flagd-grpc ./sync/http ./sync/openfeature-operator ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel ./evaluator/flagd ./configformat/flagd ./flagd ./flagd-proxy && go mod download
+    go work init ./core ./sync/file ./sync/flagd-grpc ./sync/http ./sync/openfeature-operator ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel ./evaluator/flagd ./configformat/flagd ./runtime ./service/transport ./service/flag-evaluation ./service/ofrep ./service/flag-sync ./flagd ./flagd-proxy && go mod download
 
 # Build the application.
 # Leverage a cache mount to /go/pkg/mod/ to speed up subsequent builds.
@@ -61,6 +71,8 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=bind,source=./telemetry,target=./telemetry \
     --mount=type=bind,source=./evaluator,target=./evaluator \
     --mount=type=bind,source=./configformat,target=./configformat \
+    --mount=type=bind,source=./runtime,target=./runtime \
+    --mount=type=bind,source=./service,target=./service \
     --mount=type=bind,source=./flagd,target=./flagd \
     --mount=type=bind,source=./flagd-proxy,target=./flagd-proxy \
     if [ "${FIPS}" = on ]; then export GOFIPS140=v1.0.0 TAGS=fips140; else TAGS=; fi; \

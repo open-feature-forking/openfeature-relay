@@ -95,6 +95,11 @@ github.com/munnerz/goautoneg
 github.com/open-feature-forking/openfeature-relay/configformat/flagd
 github.com/open-feature-forking/openfeature-relay/core
 github.com/open-feature-forking/openfeature-relay/evaluator/flagd
+github.com/open-feature-forking/openfeature-relay/runtime
+github.com/open-feature-forking/openfeature-relay/service/flag-evaluation
+github.com/open-feature-forking/openfeature-relay/service/flag-sync
+github.com/open-feature-forking/openfeature-relay/service/ofrep
+github.com/open-feature-forking/openfeature-relay/service/transport
 github.com/open-feature-forking/openfeature-relay/sync/azblob
 github.com/open-feature-forking/openfeature-relay/sync/builder
 github.com/open-feature-forking/openfeature-relay/sync/file

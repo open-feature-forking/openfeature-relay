@@ -7,14 +7,14 @@ core:./pkg/configformat/...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|jsonlog
 # The service interfaces and the OFREP models stay light.
 core:./pkg/service/...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|jsonlogic|jsonschema
 # NFR-006: the telemetry interface and its contract tests carry no telemetry SDK, metrics client or ConnectRPC instrumentation.
-core:./pkg/telemetry/...:robfig|opentelemetry|grpc|connectrpc|k8s.io|gocloud|cloud.google.com|github.com/Azure|github.com/aws|jsonlogic|jsonschema|openfeature-relay/(sync|telemetry|evaluator|configformat)/|prometheus|otelconnect|go.opentelemetry.io
+core:./pkg/telemetry/...:robfig|opentelemetry|grpc|connectrpc|k8s.io|gocloud|cloud.google.com|github.com/Azure|github.com/aws|jsonlogic|jsonschema|openfeature-relay/((sync|telemetry|evaluator|configformat|service)/|runtime)|prometheus|otelconnect|go.opentelemetry.io
 # The core module imports no telemetry, transport, platform client, JsonLogic engine, schema library or other library module.
-core:./...:robfig|opentelemetry|grpc|connectrpc|k8s.io|gocloud|cloud.google.com|github.com/Azure|github.com/aws|jsonlogic|jsonschema|openfeature-relay/(sync|telemetry|evaluator|configformat)/
+core:./...:robfig|opentelemetry|grpc|connectrpc|k8s.io|gocloud|cloud.google.com|github.com/Azure|github.com/aws|jsonlogic|jsonschema|openfeature-relay/((sync|telemetry|evaluator|configformat|service)/|runtime)
 # The event bus, the selector functions and the service endpoint contract stay light: no metrics or tracing library.
-core:./pkg/events/...:prometheus|otelconnect|go.opentelemetry.io|grpc|connectrpc|k8s.io|gocloud|jsonlogic|jsonschema|openfeature-relay/(sync|telemetry|evaluator|configformat)/
-core:./pkg/eventsink/...:prometheus|otelconnect|go.opentelemetry.io|grpc|connectrpc|k8s.io|gocloud|jsonlogic|jsonschema|openfeature-relay/(sync|telemetry|evaluator|configformat)/
-core:./pkg/middleware/...:prometheus|otelconnect|go.opentelemetry.io|grpc|connectrpc|k8s.io|gocloud|jsonlogic|jsonschema|openfeature-relay/(sync|telemetry|evaluator|configformat)/
-core:./pkg/service/servicetest/...:prometheus|otelconnect|go.opentelemetry.io|grpc|connectrpc|k8s.io|gocloud|jsonlogic|jsonschema|openfeature-relay/(sync|telemetry|evaluator|configformat)/
+core:./pkg/events/...:prometheus|otelconnect|go.opentelemetry.io|grpc|connectrpc|k8s.io|gocloud|jsonlogic|jsonschema|openfeature-relay/((sync|telemetry|evaluator|configformat|service)/|runtime)
+core:./pkg/eventsink/...:prometheus|otelconnect|go.opentelemetry.io|grpc|connectrpc|k8s.io|gocloud|jsonlogic|jsonschema|openfeature-relay/((sync|telemetry|evaluator|configformat|service)/|runtime)
+core:./pkg/middleware/...:prometheus|otelconnect|go.opentelemetry.io|grpc|connectrpc|k8s.io|gocloud|jsonlogic|jsonschema|openfeature-relay/((sync|telemetry|evaluator|configformat|service)/|runtime)
+core:./pkg/service/servicetest/...:prometheus|otelconnect|go.opentelemetry.io|grpc|connectrpc|k8s.io|gocloud|jsonlogic|jsonschema|openfeature-relay/((sync|telemetry|evaluator|configformat|service)/|runtime)
 # NFR-005, NFR-011: the embeddable modules import no telemetry, transport or platform clients, and flagd's
 # configuration format knows no evaluator, engine or sync provider.
 evaluator/flagd:./...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|openfeature-relay/(sync|telemetry)/
@@ -33,15 +33,21 @@ sync/builder:./...:openfeature-relay/telemetry/
 # The telemetry module imports core only: no sync module and no platform client.
 telemetry/otel:./...:openfeature-relay/sync/|k8s.io|gocloud|cloud.google.com|github.com/Azure|github.com/aws
 # BR-001 of UC-004: a service endpoint component module imports the core module and no other flagd module, and no telemetry, transport or platform client.
-test/service-example:./...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|open-feature/flagd/flagd|openfeature-relay/(sync|telemetry|evaluator|configformat)/
+test/service-example:./...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|open-feature/flagd/flagd|openfeature-relay/((sync|telemetry|evaluator|configformat|service)/|runtime)
 # BR-001 of UC-003: the example sync extension imports no sync provider, telemetry, transport or platform client.
-test/sync-example:./...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|open-feature/flagd/flagd|openfeature-relay/(sync|telemetry|evaluator|configformat)/
+test/sync-example:./...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|open-feature/flagd/flagd|openfeature-relay/((sync|telemetry|evaluator|configformat|service)/|runtime)
 # The example telemetry provider requires the core only: no telemetry SDK, transport or flagd module.
-test/telemetry-example:./...:opentelemetry|google.golang.org/grpc|connectrpc|k8s.io|gocloud|open-feature/flagd/flagd|openfeature-relay/(sync|telemetry|evaluator|configformat)/
+test/telemetry-example:./...:opentelemetry|google.golang.org/grpc|connectrpc|k8s.io|gocloud|open-feature/flagd/flagd|openfeature-relay/((sync|telemetry|evaluator|configformat|service)/|runtime)
 # BR-001 of UC-005: the example middleware requires the core only, no telemetry SDK, transport or flagd module.
-test/middleware-example:./...:opentelemetry|google.golang.org/grpc|connectrpc|k8s.io|gocloud|open-feature/flagd/flagd|openfeature-relay/(sync|telemetry|evaluator|configformat)/
+test/middleware-example:./...:opentelemetry|google.golang.org/grpc|connectrpc|k8s.io|gocloud|open-feature/flagd/flagd|openfeature-relay/((sync|telemetry|evaluator|configformat|service)/|runtime)
 # BR-009 and FR-048: an engine module's format and evaluator import core only, no telemetry, transport, platform client,
 # JsonLogic engine or other library module (the module's tests run a distribution and carry flagd's runtime).
-test/configformat-example:. ./evaluator:opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud|jsonlogic|jsonschema|openfeature-relay/(sync|telemetry|evaluator|configformat)/
+test/configformat-example:. ./evaluator:opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud|jsonlogic|jsonschema|openfeature-relay/((sync|telemetry|evaluator|configformat|service)/|runtime)
 # The example event sink requires the core only: no vendor client, transport or flagd module.
-test/eventsink-example:./...:opentelemetry|google.golang.org/grpc|connectrpc|k8s.io|gocloud|open-feature/flagd/flagd|openfeature-relay/(sync|telemetry|evaluator|configformat)/
+test/eventsink-example:./...:opentelemetry|google.golang.org/grpc|connectrpc|k8s.io|gocloud|open-feature/flagd/flagd|openfeature-relay/((sync|telemetry|evaluator|configformat|service)/|runtime)
+# UC-001 Q7: the service endpoints share their helpers through the transport module and know neither the runtime
+# nor one another.
+service/transport:./...:openfeature-relay/(runtime|service/(flag-evaluation|ofrep|flag-sync))
+service/flag-evaluation:./...:openfeature-relay/(runtime|service/(ofrep|flag-sync))
+service/ofrep:./...:openfeature-relay/(runtime|service/(flag-evaluation|flag-sync))
+service/flag-sync:./...:openfeature-relay/(runtime|service/(flag-evaluation|ofrep))

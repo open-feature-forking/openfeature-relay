@@ -20,11 +20,13 @@ cd "$dir"
 export GOWORK=$PWD/go.work
 make workspace-init >/dev/null
 
-# GO_LIB_MODULE_DIRS comes from the checkout's own Makefile, so a base commit is measured over its own modules.
-libs=$(printf 'include Makefile\nprint-libs:\n\t@echo $(GO_LIB_MODULE_DIRS)\n' | make -s -f - print-libs)
+# GO_LIB_MODULE_DIRS and FLAGD_MODULE_DIRS come from the checkout's own Makefile, so a base commit is measured over its own modules.
+libs=$(printf 'include Makefile\nprint-libs:\n\t@echo $(GO_LIB_MODULE_DIRS) $(FLAGD_MODULE_DIRS)\n' | make -s -f - print-libs)
 patterns=()
+declare -A seen
+# a base without FLAGD_MODULE_DIRS has the flagd module alone, so flagd is named here as well
 for lib in $libs ./flagd ./flagd-proxy; do
-  if [ -d "$lib" ]; then patterns+=("$lib/..."); fi
+  if [ -d "$lib" ] && [ -z "${seen[$lib]:-}" ]; then seen[$lib]=1; patterns+=("$lib/..."); fi
 done
 
 go test -run '^$' -bench=Bench -short -benchtime="$benchtime" -count="$count" -benchmem "${patterns[@]}" | tee "$out"
