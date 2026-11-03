@@ -36,15 +36,12 @@ func newBenchmarkServer(b *testing.B, tp telemetry.Provider) *httptest.Server {
 	return server
 }
 
-// benchmarkPost runs a benchmark with the noop telemetry provider, which a distribution without telemetry injects,
-// and with the OpenTelemetry provider, which flagd-full injects.
-func benchmarkPost(b *testing.B, path string) {
-	b.Run("noop", func(b *testing.B) { benchmarkPostWith(b, path, telemetry.Noop()) })
-	b.Run("opentelemetry", func(b *testing.B) {
-		tel := telemetrytest.ProviderFor(metric.NewManualReader())
-		b.Cleanup(func() { _ = tel.Shutdown(context.Background()) })
-		benchmarkPostWith(b, path, tel)
-	})
+// openTelemetry is the OpenTelemetry telemetry provider flagd-full injects, over an in-memory reader.
+func openTelemetry(b *testing.B) telemetry.Provider {
+	b.Helper()
+	tel := telemetrytest.ProviderFor(metric.NewManualReader())
+	b.Cleanup(func() { _ = tel.Shutdown(context.Background()) })
+	return tel
 }
 
 func benchmarkPostWith(b *testing.B, path string, tp telemetry.Provider) {
@@ -63,6 +60,19 @@ func benchmarkPostWith(b *testing.B, path string, tp telemetry.Provider) {
 	}
 }
 
-func BenchmarkOFREPSingle(b *testing.B) { benchmarkPost(b, "/ofrep/v1/evaluate/flags/bool-flag") }
+// The benchmarks without a suffix run with the noop telemetry provider, which a distribution without telemetry
+// injects; those with OpenTelemetry run with the provider flagd-full injects.
 
-func BenchmarkOFREPBulk(b *testing.B) { benchmarkPost(b, "/ofrep/v1/evaluate/flags") }
+func BenchmarkOFREPSingle(b *testing.B) {
+	benchmarkPostWith(b, "/ofrep/v1/evaluate/flags/bool-flag", telemetry.Noop())
+}
+
+func BenchmarkOFREPSingleOpenTelemetry(b *testing.B) {
+	benchmarkPostWith(b, "/ofrep/v1/evaluate/flags/bool-flag", openTelemetry(b))
+}
+
+func BenchmarkOFREPBulk(b *testing.B) { benchmarkPostWith(b, "/ofrep/v1/evaluate/flags", telemetry.Noop()) }
+
+func BenchmarkOFREPBulkOpenTelemetry(b *testing.B) {
+	benchmarkPostWith(b, "/ofrep/v1/evaluate/flags", openTelemetry(b))
+}

@@ -40,6 +40,9 @@ var streamDurationBuckets = []float64{30, 60, 120, 300, 480, 600, 1200, 1800, 36
 // endpoint. It creates its instruments on a telemetry.Meter, under flagd's metric names. The HTTP server metrics
 // are the telemetry provider's.
 type Metrics struct {
+	// noop skips building the attributes of the evaluation metrics when nothing records them.
+	noop bool
+
 	impressions telemetry.Int64Counter
 	reasons     telemetry.Int64Counter
 
@@ -50,6 +53,7 @@ type Metrics struct {
 // NewMetrics creates the instruments of the service endpoints on meter.
 func NewMetrics(meter telemetry.Meter) *Metrics {
 	return &Metrics{
+		noop: telemetry.IsNoopMeter(meter),
 		impressions: meter.Int64Counter(impressionMetric,
 			telemetry.WithDescription("Measures the number of evaluations for a given flag."),
 			telemetry.WithUnit("{impression}")),
@@ -72,6 +76,9 @@ func NoopMetrics() *Metrics { return NewMetrics(telemetry.Noop().Meter(MetricsSc
 func (m *Metrics) RecordEvaluation(
 	ctx context.Context, err error, reason, variant, key string, metadata model.Metadata,
 ) {
+	if m.noop {
+		return
+	}
 	if err == nil {
 		m.Impressions(ctx, reason, variant, key, metadata)
 	}

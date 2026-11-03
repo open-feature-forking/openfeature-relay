@@ -56,6 +56,13 @@ func (noopSpan) SetError(string) {}
 
 func (noopSpan) End() {}
 
+// IsNoopMeter reports whether m is the noop telemetry provider's meter, which records nothing, so a caller can skip
+// building the attributes of its measurements.
+func IsNoopMeter(m Meter) bool {
+	_, ok := m.(noopMeter)
+	return ok
+}
+
 type noopMeter struct{}
 
 func (noopMeter) Int64Counter(string, ...InstrumentOption) Int64Counter { return noopInstrument{} }
