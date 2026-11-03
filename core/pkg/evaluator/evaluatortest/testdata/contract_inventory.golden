@@ -1,0 +1,22 @@
+evaluator, all samples
+  1. static values
+  2. error codes and reasons
+  3. disabled
+  4. absent default
+  5. unknown key
+  6. bulk equals single
+  7. attributes
+  8. bulk flag sets
+  9. append to dst
+  10. consistent resolution
+evaluator, without optional samples
+  1. static values
+  2. error codes and reasons
+  3. disabled (not applicable: Without: Disabled)
+  4. absent default (not applicable: Without: AbsentDefault)
+  5. unknown key
+  6. bulk equals single
+  7. attributes (not applicable: Without: Attribute)
+  8. bulk flag sets (not applicable: Without: Shared)
+  9. append to dst
+  10. consistent resolution (not applicable: Without: Paired)

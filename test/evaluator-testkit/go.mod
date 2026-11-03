@@ -1,4 +1,4 @@
-module github.com/open-feature/flagd/test/evaluator-testkit
+module github.com/open-feature-forking/openfeature-relay/test/evaluator-testkit
 
 go 1.27
 
