@@ -4,6 +4,7 @@ package runtime
 
 import (
 	"fmt"
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -43,10 +44,10 @@ func TestSinkReceivesOneEntryPerFlag(t *testing.T) {
 	require.NoError(t, os.WriteFile(source, []byte(twoFlags), 0o600))
 	cfg.SyncProviders = []coresync.SourceConfig{{URI: source, Provider: "file"}}
 	sink := &recordingSink{}
-	startRuntimeWith(t, cfg, Components{
-		Endpoints:  officialEndpoints(),
+	startRuntimeWith(t, cfg, withFlagd(Components{
+		Endpoints:  flagdcomponents.Endpoints(),
 		EventSinks: []eventsink.Configured{{Factory: recordingSinkFactory{sink: sink}, Config: sinkSettings()}},
-	})
+	}))
 
 	post := func(url, body string, header map[string]string) {
 		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(body))
@@ -118,13 +119,13 @@ func TestSinkReceivesOneEntryPerDocument(t *testing.T) {
 		{URI: vendorSource, Provider: "file", Format: "versioned"},
 	}
 	sink := &recordingSink{}
-	rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, Components{
+	rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, withFlagd(Components{
 		ConfigurationFormats: []configformat.Factory{versionedFactory{}},
 		EventSinks: []eventsink.Configured{{
 			Factory: recordingSinkFactory{kinds: []events.Kind{events.KindConfigurationChange}, sink: sink},
 			Config:  sinkSettings(),
 		}},
-	})
+	}))
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		rt.Bus.Close()

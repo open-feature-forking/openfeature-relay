@@ -169,7 +169,7 @@ func (c dropCounter) Add(_ context.Context, n int64, attrs ...telemetry.Attribut
 
 func fromConfigWithSinks(t *testing.T, components Components) (*Runtime, error) {
 	t.Helper()
-	return FromConfig(logger.NewLogger(nil, false), "test", Config{SyncProviders: oneFileSource(t)}, components)
+	return FromConfig(logger.NewLogger(nil, false), "test", Config{SyncProviders: oneFileSource(t)}, withFlagd(components))
 }
 
 // TestInvalidEventSinkConfigStops pins UC-020 BR-009: an event sink that is declared wrongly, or that the factory or

@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -85,7 +86,7 @@ func TestExtensionEventSink(t *testing.T) {
 	webhook := httptest.NewServer(rcv)
 	t.Cleanup(webhook.Close)
 
-	components := runtime.Official()
+	components := flagdcomponents.Official()
 	components.EventSinks = []eventsink.Configured{{
 		Factory: eventsinkexample.Factory{},
 		Config: map[string]any{

@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"io"
 	"net/http"
 	"net/url"
@@ -47,7 +48,7 @@ func selectorSettings(t *testing.T, factory service.Factory) service.Settings {
 		})
 		require.NoError(t, err)
 	}
-	inputs, err := newEndpointInputs(log, st, events.NewBus(), []service.Factory{factory}, nil, nil, nil)
+	inputs, err := newEndpointInputs(log, st, events.NewBus(), []service.Factory{factory}, []string{"flagd"}, flagdcomponents.Official().Evaluators, nil, false)
 	require.NoError(t, err)
 	settings := inputs.settings(factory)
 	initialized := make(chan struct{})
