@@ -285,6 +285,38 @@ func TestHTTPMiddlewareSeesH2CRequests(t *testing.T) {
 	}
 }
 
+// TestOFREPChainOrder pins S2's CORS → HTTPMiddleware → router for OFREP: a request reaches the middleware of the
+// distribution, and a CORS preflight, which CORS answers, does not. Were the middleware outside CORS, an
+// authentication middleware would answer the browsers' preflights.
+func TestOFREPChainOrder(t *testing.T) {
+	settings, _ := officialSettings(t, ofrep.Factory{})
+	log := &requestLog{}
+	settings.HTTPMiddleware = log.middleware
+	port := freePort(t)
+	settings.Config = map[string]any{ofrep.ConfigKey: ofrep.EndpointConfig{
+		Service: ofrep.SvcConfiguration{Port: port, ServiceName: "flagd"}, CORS: []string{"*"},
+	}}
+	serveFactory(t, ofrep.Factory{}, settings)
+	waitForPort(t, port)
+	url := fmt.Sprintf("http://127.0.0.1:%d/ofrep/v1/evaluate/flags/a", port)
+
+	resp, err := http.Post(url, "application/json", strings.NewReader("{}")) //nolint:noctx // local test server
+	require.NoError(t, err)
+	resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, int64(1), log.seen.Load(), "the middleware saw the request")
+
+	req, err := http.NewRequest(http.MethodOptions, url, nil) //nolint:noctx // local test server
+	require.NoError(t, err)
+	req.Header.Set("Origin", "https://example.com")
+	req.Header.Set("Access-Control-Request-Method", "POST")
+	resp, err = http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	resp.Body.Close()
+	require.Less(t, resp.StatusCode, 300, "CORS answered the preflight")
+	require.Equal(t, int64(1), log.seen.Load(), "the preflight never reached the middleware")
+}
+
 // TestRuntimeStartsAnyEndpointSet pins that the runtime serves whichever endpoints the distribution passes: OFREP
 // alone, flag sync alone with no evaluator built, and all three.
 func TestRuntimeStartsAnyEndpointSet(t *testing.T) {
