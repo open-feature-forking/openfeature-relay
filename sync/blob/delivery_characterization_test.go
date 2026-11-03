@@ -53,7 +53,7 @@ func (o lockedOpener) OpenBucketURL(context.Context, *url.URL) (*blob.Bucket, er
 	return blob.NewBucket(o.drv), nil
 }
 
-func newBlobSync(t *testing.T, scheme string, drv *lockedDriver) sync.ISync {
+func newBlobSync(t *testing.T, scheme string, drv *lockedDriver, recorder sync.MetricsRecorder) sync.ISync {
 	t.Helper()
 
 	mux := new(blob.URLMux)
@@ -62,7 +62,7 @@ func newBlobSync(t *testing.T, scheme string, drv *lockedDriver) sync.ISync {
 		scheme, regexp.MustCompile("^mock://.+?/"),
 		// incrementalUpdates is set to show that deliveries do not carry it
 		sync.SourceConfig{URI: sourceURI, Interval: 1, IncrementalUpdates: true},
-		logger.NewLogger(nil, false), nil, mux)
+		logger.NewLogger(nil, false), recorder, mux)
 	require.NoError(t, err)
 	return s
 }
@@ -73,7 +73,8 @@ func TestDeliveryRulesCharacterization(t *testing.T) {
 	t.Run("deliveries across polls", func(t *testing.T) {
 		drv := &lockedDriver{fakeBlobDriver: &fakeBlobDriver{}}
 		drv.setObject("etag-1", flagsA)
-		s := newBlobSync(t, "mock", drv)
+		rec := &receivedRecorder{}
+		s := newBlobSync(t, "mock", drv, rec)
 
 		ctx, cancel := context.WithCancel(context.Background())
 		deliveries := make(chan sync.DataSync, 8)
@@ -128,6 +129,12 @@ func TestDeliveryRulesCharacterization(t *testing.T) {
 		// a resync delivers although nothing changed
 		require.NoError(t, s.ReSync(ctx, deliveries))
 		requireDelivery(flagsB)
+
+		// every delivery was recorded as received from a blob source named by the configured URI, without
+		// a selector
+		require.Equal(t, []receivedCall{
+			{"blob", sourceURI, ""}, {"blob", sourceURI, ""}, {"blob", sourceURI, ""},
+		}, rec.snapshot())
 	})
 
 	t.Run("a failed initial fetch stops the provider", func(t *testing.T) {
@@ -142,4 +149,24 @@ func TestDeliveryRulesCharacterization(t *testing.T) {
 		require.ErrorContains(t, err, "couldn't get bucket")
 		require.False(t, s.IsReady())
 	})
+}
+
+type receivedCall struct{ sourceType, uri, selector string }
+
+// receivedRecorder records the calls a provider makes to its sync.MetricsRecorder.
+type receivedRecorder struct {
+	mu    stdsync.Mutex
+	calls []receivedCall
+}
+
+func (r *receivedRecorder) RecordFlagConfigReceived(_ context.Context, sourceType, uri, selector string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.calls = append(r.calls, receivedCall{sourceType, uri, selector})
+}
+
+func (r *receivedRecorder) snapshot() []receivedCall {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]receivedCall(nil), r.calls...)
 }

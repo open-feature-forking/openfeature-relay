@@ -2,6 +2,7 @@ package ofoperator
 
 import (
 	"context"
+	stdsync "sync"
 	"testing"
 	"time"
 
@@ -46,6 +47,24 @@ func simpleFlags(variant string) map[string]interface{} {
 			},
 		},
 	}
+}
+
+// receivedRecorder records the calls a provider makes to its sync.MetricsRecorder.
+type receivedRecorder struct {
+	mu    stdsync.Mutex
+	calls [][3]string
+}
+
+func (r *receivedRecorder) RecordFlagConfigReceived(_ context.Context, sourceType, uri, selector string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.calls = append(r.calls, [3]string{sourceType, uri, selector})
+}
+
+func (r *receivedRecorder) snapshot() [][3]string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([][3]string(nil), r.calls...)
 }
 
 func startOperatorSync(t *testing.T, s *Sync) (chan sync.DataSync, chan error) {
@@ -125,6 +144,8 @@ func TestDeliveryCharacterization(t *testing.T) {
 			return true, w, nil
 		})
 		s := newSync(fc)
+		rec := &receivedRecorder{}
+		s.SyncMetricsRecorder = rec
 		require.False(t, s.IsReady())
 		deliveries, _ := startOperatorSync(t, s)
 
@@ -152,6 +173,12 @@ func TestDeliveryCharacterization(t *testing.T) {
 			t.Fatalf("unexpected delivery after the deletion: %s", got.FlagData)
 		case <-time.After(time.Second):
 		}
+
+		// each of the three deliveries was recorded as received from a kubernetes source named by the
+		// resource, without a selector
+		require.Equal(t, [][3]string{
+			{"kubernetes", opURI, ""}, {"kubernetes", opURI, ""}, {"kubernetes", opURI, ""},
+		}, rec.snapshot())
 
 		// the provider stays ready when the watch ends
 		watcher.Stop()
