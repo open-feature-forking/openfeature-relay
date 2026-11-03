@@ -7,13 +7,18 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -237,4 +242,63 @@ func TestManifestMissingAReplaceIsReported(t *testing.T) {
 	require.Error(t, b.err, "a manifest that forgets a replace does not build")
 	require.Contains(t, b.out, fmt.Sprintf("%sservice/transport", relay))
 	require.Contains(t, b.out, "replaces")
+}
+
+func freePort(t *testing.T) int {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port
+}
+
+// TestBuildExampleDistribution (NFR-010) builds the example distribution, which brings its own command line, starts it
+// with a file source, waits for readiness and resolves a flag through the example endpoint.
+func TestBuildExampleDistribution(t *testing.T) {
+	path := filepath.Join(root(t), "test", "distributions", "example", "manifest.yaml")
+	b := build(t, path)
+	require.NoError(t, b.err, b.out)
+	bin := binary(t, path)
+
+	version, err := exec.Command(bin, "version").Output()
+	require.NoError(t, err)
+	require.True(t, strings.HasPrefix(string(version), "example 0.0.0 "), "the distribution's own command line answers: %s", version)
+
+	flags := filepath.Join(t.TempDir(), "flags.json")
+	require.NoError(t, os.WriteFile(flags, []byte(`{"flags":{"greeting":{"state":"ENABLED","defaultVariant":"hello",
+		"variants":{"hello":"hello","bye":"bye"}}}}`), 0o600))
+	port, management := freePort(t), freePort(t)
+
+	cmd := exec.Command(bin, "start", "--uri", flags, "--port", fmt.Sprint(port), "--management-port", fmt.Sprint(management))
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	require.NoError(t, cmd.Start())
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	t.Cleanup(func() {
+		_ = cmd.Process.Signal(syscall.SIGTERM)
+		select {
+		case <-done:
+		case <-time.After(20 * time.Second):
+			_ = cmd.Process.Kill()
+		}
+	})
+
+	ready := fmt.Sprintf("http://127.0.0.1:%d/readyz", management)
+	require.Eventually(t, func() bool {
+		resp, err := http.Get(ready) //nolint:noctx // a local probe
+		if err != nil {
+			return false
+		}
+		defer resp.Body.Close()
+		return resp.StatusCode == http.StatusOK
+	}, 30*time.Second, 200*time.Millisecond, "the distribution becomes ready: %s", &stderr)
+
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/v0/flags/greeting", port)) //nolint:noctx // a local request
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode, string(body))
+	require.Contains(t, string(body), "hello", "the example endpoint resolves the flag through the router")
 }
