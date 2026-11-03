@@ -333,6 +333,11 @@ func inputsFor(f features, withHTTP bool) Inputs {
 			return resp.Body.Close()
 		}
 	}
+	for _, feature := range allFeatures {
+		if !feature.supplied(in) {
+			in.Without = append(in.Without, feature)
+		}
+	}
 	return in
 }
 
@@ -547,4 +552,51 @@ func TestInvalidDeclarationsFailTheDeclarationsCase(t *testing.T) {
 
 func evaluatorRequest(key string, selector store.Selector) evaluator.Request {
 	return evaluator.Request{FlagKey: key, Selector: selector}
+}
+
+// TestLeavingAnInputOutFails is the fail-closed rule: a feature that is neither supplied nor named in Without
+// fails its case, naming the input, and a feature both supplied and named is reported.
+func TestLeavingAnInputOutFails(t *testing.T) {
+	in := inputsFor(serverFeatures, false)
+	in.Documents = nil
+	in.Without = removeFeature(in.Without, FeatureDocuments)
+	results := Check(stub{typeName: "x", features: serverFeatures}, in)
+
+	require.Equal(t, []string{nameDocuments}, failed(results))
+	for _, r := range results {
+		if r.Err != nil {
+			require.ErrorContains(t, r.Err, "the input Documents is required")
+			require.ErrorContains(t, r.Err, "name Documents in Without")
+		}
+	}
+
+	in = inputsFor(serverFeatures, false)
+	in.Without = append(in.Without, FeatureValidator)
+	results = Check(stub{typeName: "x", features: serverFeatures}, in)
+	require.Contains(t, failed(results), "inputs")
+
+	in = inputsFor(features{}, false)
+	in.Without = append(in.Without, "Colour")
+	require.Contains(t, failed(Check(stub{typeName: "x"}, in)), "inputs")
+}
+
+// TestResolverNeedsDeclaresHTTP pins that an endpoint that resolves flags says whether it serves HTTP.
+func TestResolverNeedsDeclaresHTTP(t *testing.T) {
+	in := inputsFor(resolverFeatures, false)
+	in.Without = removeFeature(in.Without, FeatureHTTP)
+	results := Check(stub{typeName: "x", needs: service.Needs{Router: true}, features: resolverFeatures}, in)
+	require.Equal(t, []string{nameSelector}, failed(results))
+
+	in = inputsFor(resolverFeatures, false) // names HTTP in Without
+	require.Empty(t, failed(Check(stub{typeName: "x", needs: service.Needs{Router: true}, features: resolverFeatures}, in)))
+}
+
+func removeFeature(list []Feature, drop Feature) []Feature {
+	var out []Feature
+	for _, f := range list {
+		if f != drop {
+			out = append(out, f)
+		}
+	}
+	return out
 }

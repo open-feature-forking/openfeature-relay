@@ -18,7 +18,7 @@ var ErrNoFlags = errors.New("the bound selector and the client's selector name d
 
 type boundSelectorKey struct{}
 
-type bound struct {
+type boundValue struct {
 	selector store.Selector
 	err      error
 }
@@ -28,17 +28,21 @@ type bound struct {
 // bound selector.
 func BindSelector(ctx context.Context, expression string) context.Context {
 	selector, err := store.NewSelector(expression)
-	return context.WithValue(ctx, boundSelectorKey{}, bound{selector: selector, err: err})
+	return context.WithValue(ctx, boundSelectorKey{}, boundValue{selector: selector, err: err})
 }
 
-// BoundSelector returns the selector BindSelector bound to the context. It reports false when there is none,
-// or when the bound expression is invalid.
-func BoundSelector(ctx context.Context) (store.Selector, bool) {
-	b, ok := ctx.Value(boundSelectorKey{}).(bound)
-	if !ok || b.err != nil {
-		return store.Selector{}, false
+// BoundSelector returns the selector BindSelector bound to the context. bound reports whether a binding exists,
+// valid or not. An invalid expression is an error, never "no binding": a caller that ignored it would serve
+// every flag to a request the middleware meant to narrow.
+func BoundSelector(ctx context.Context) (selector store.Selector, bound bool, err error) {
+	b, ok := ctx.Value(boundSelectorKey{}).(boundValue)
+	if !ok {
+		return store.Selector{}, false, nil
 	}
-	return b.selector, true
+	if b.err != nil {
+		return store.Selector{}, true, fmt.Errorf("invalid bound selector: %w", b.err)
+	}
+	return b.selector, true, nil
 }
 
 // EffectiveSelector is the selector a service endpoint resolves a request for: the intersection of the
@@ -54,7 +58,7 @@ func EffectiveSelector(ctx context.Context, clientExpression string) (store.Sele
 	if err != nil {
 		return store.Selector{}, fmt.Errorf("invalid selector: %w", err)
 	}
-	b, ok := ctx.Value(boundSelectorKey{}).(bound)
+	b, ok := ctx.Value(boundSelectorKey{}).(boundValue)
 	if !ok {
 		return client, nil
 	}

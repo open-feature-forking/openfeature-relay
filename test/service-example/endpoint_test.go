@@ -195,6 +195,8 @@ func TestEndpointContract(t *testing.T) {
 		PortKey: "port",
 		Config:  map[string]any{"formats": []string{"flagd", servicetest.VendorFormat}, "sources": []string{servicetest.Source}},
 		HTTP:    true,
+		// the example serves no flag configurations and collects no events
+		Without: []servicetest.Feature{servicetest.FeatureDocuments, servicetest.FeatureSendEvents},
 		Connect: func(_ context.Context, addr string) (<-chan struct{}, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
