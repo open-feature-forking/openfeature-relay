@@ -119,6 +119,8 @@ type Inputs struct {
 // Result is the outcome of one case.
 type Result struct {
 	Name string
+	// Duration is how long the case took.
+	Duration time.Duration
 	// Err is nil when the case passed; it states the expected and the observed behaviour.
 	Err error
 }
@@ -128,6 +130,7 @@ func Run(t *testing.T, f service.Factory, in Inputs) {
 	t.Helper()
 	for _, r := range Check(f, in) {
 		t.Run(r.Name, func(t *testing.T) {
+			t.Logf("took %v", r.Duration)
 			if r.Err != nil {
 				t.Error(r.Err)
 			}
@@ -206,7 +209,9 @@ func Check(f service.Factory, in Inputs) []Result {
 				c.feature, c.feature)})
 			continue
 		}
-		results = append(results, Result{Name: c.name, Err: guarded(func() error { return c.run(newEnv(f, in)) })})
+		began := time.Now()
+		err := guarded(func() error { return c.run(newEnv(f, in)) })
+		results = append(results, Result{Name: c.name, Err: err, Duration: time.Since(began)})
 	}
 	return results
 }
