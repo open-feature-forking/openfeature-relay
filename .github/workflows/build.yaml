@@ -111,6 +111,9 @@ jobs:
         run: git submodule update --init test-harness
       - run: make workspace-init
       - run: make test
+        env:
+          # test/contract-external.sh fetches core at this commit; a pull request's merge commit is on no branch
+          CONTRACT_EXTERNAL_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044 # v4
 

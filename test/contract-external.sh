@@ -10,10 +10,12 @@
 # in testdata/contract-external.txt must name exactly those: the run fails when a listed module stops qualifying and
 # when a qualifying one is missing from the file.
 #
-# The core module is fetched at the commit under test, by pseudo-version, when the commit is on the remote. For a commit
-# that is not (a local one), core comes from a `git archive` copy of the checkout in a second temporary directory, which
-# holds no submodules; the output says so. CONTRACT_EXTERNAL_CORE names such a copy of core/ directly (for a checkout whose
-# git cannot run where the tests do).
+# The core module is fetched by pseudo-version at a commit a branch of the remote serves: CONTRACT_EXTERNAL_COMMIT when it
+# is set (CI passes a pull request's head there, because the merge commit actions/checkout builds is on no branch), else
+# HEAD when a remote branch contains it. For any other commit (a local one), core comes from a `git archive` copy of the
+# checkout in a second temporary directory, which holds no submodules. CONTRACT_EXTERNAL_CORE names such a copy of core/
+# directly (for a checkout whose git cannot run where the tests do). The output names the core version, and every module
+# is checked to resolve exactly that one: a core that cannot be fetched fails the run instead of resolving to another.
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -52,25 +54,57 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
 core_replace=""
+want=""
 if [ -n "${CONTRACT_EXTERNAL_CORE:-}" ]; then
-	echo "== core from $CONTRACT_EXTERNAL_CORE (CONTRACT_EXTERNAL_CORE)"
 	core_replace=$CONTRACT_EXTERNAL_CORE
-elif sha=$(git rev-parse HEAD) && [ -n "$(git branch -r --contains "$sha" 2>/dev/null)" ]; then
-	echo "== core at commit ${sha:0:12}, fetched by pseudo-version"
+	echo "== core from $core_replace (CONTRACT_EXTERNAL_CORE)"
 else
-	echo "== commit ${sha:0:12} is not on the remote: core comes from a git archive copy of the checkout"
-	mkdir -p "$work/archive"
-	git archive "$sha" core | tar -x -C "$work/archive"
-	core_replace="$work/archive/core"
+	sha=${CONTRACT_EXTERNAL_COMMIT:-$(git rev-parse HEAD)}
+	# refs/remotes/pull/* are the refs actions/checkout fetches for a pull request; no branch serves their commits
+	on_branch=$(git for-each-ref --contains "$sha" --format='%(refname)' refs/remotes/ 2>/dev/null | grep -v '^refs/remotes/pull/' || true)
+	if [ -n "${CONTRACT_EXTERNAL_COMMIT:-}" ] || [ -n "$on_branch" ]; then
+		probe="$work/probe"
+		mkdir -p "$probe"
+		want=$(cd "$probe" && GOWORK=off GOFLAGS=-mod=mod go mod init probe >/dev/null 2>&1 &&
+			GOWORK=off GOPROXY=direct GONOSUMDB="github.com/open-feature-forking/*" go list -m -f '{{.Version}}' "$relay/core@$sha") ||
+			{ echo "core cannot be fetched at commit $sha" >&2; exit 1; }
+		case "$want" in
+		*-"${sha:0:12}") ;;
+		*)
+			echo "core at commit $sha resolved to $want, which is not that commit" >&2
+			exit 1
+			;;
+		esac
+		echo "== core $want: commit $sha, fetched by pseudo-version"
+	else
+		echo "== commit ${sha:0:12} is on no branch of the remote: core comes from a git archive copy of the checkout"
+		mkdir -p "$work/archive"
+		git archive "$sha" core | tar -x -C "$work/archive"
+		core_replace="$work/archive/core"
+	fi
 fi
+
+# check_core fails unless the module in the current directory resolves core to the one chosen above.
+check_core() {
+	local got
+	if [ -n "$core_replace" ]; then
+		got=$(go list -m -f '{{with .Replace}}{{.Path}}{{end}}' "$relay/core") || return 1
+		[ "$got" = "$core_replace" ] || { echo "core resolves to ${got:-no replacement}, not $core_replace" >&2; return 1; }
+	else
+		got=$(go list -m -f '{{.Version}}' "$relay/core") || return 1
+		[ "$got" = "$want" ] || { echo "core resolves to $got, not $want" >&2; return 1; }
+	fi
+	echo "core: $(go list -m "$relay/core")"
+}
 
 status=0
 for dir in $derived; do
 	echo "== $dir"
 	copy="$work/$(basename "$dir")"
 	cp -r "$dir" "$copy"
+	# Each command ends the module's run on failure itself: set -e does not apply inside a subshell tested with ||.
 	(
-		cd "$copy"
+		cd "$copy" || exit 1
 		export GOWORK=off GOFLAGS=-mod=mod
 		# drop every replace directive: single lines and blocks
 		awk '
@@ -79,16 +113,18 @@ for dir in $derived; do
 			skip { next }
 			/^replace[ \t]/ { next }
 			{ print }
-		' go.mod >go.mod.new && mv go.mod.new go.mod
+		' go.mod >go.mod.new && mv go.mod.new go.mod || exit 1
 		if [ -n "$core_replace" ]; then
-			go mod edit -replace "$relay/core=$core_replace"
-			go mod tidy
+			go mod edit -replace "$relay/core=$core_replace" || exit 1
+			go mod tidy || exit 1
 		else
 			# the requirement names a core version no tag publishes; only the replace made it resolvable
-			go mod edit -droprequire "$relay/core"
-			GOPROXY=direct GONOSUMDB="github.com/open-feature-forking/*" go get "$relay/core@$sha"
+			go mod edit -droprequire "$relay/core" || exit 1
+			GOPROXY=direct GONOSUMDB="github.com/open-feature-forking/*" go get "$relay/core@$want" || exit 1
 		fi
-		go test -race -count=2 ./...
+		check_core || exit 1
+		go test -race -count=2 ./... || exit 1
+		check_core >/dev/null || exit 1
 	) || status=1
 done
 exit $status
