@@ -7,8 +7,6 @@ import (
 	"os"
 	"regexp"
 
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature-forking/openfeature-relay/sync/blob"
 	gocloud "gocloud.dev/blob"
 	_ "gocloud.dev/blob/azureblob" // needed to initialize Azure Blob Storage driver
@@ -23,21 +21,6 @@ var scheme = regexp.MustCompile("^azblob://.+?/")
 // Matches reports whether uri is an azblob:// URI.
 func Matches(uri string) bool {
 	return scheme.MatchString(uri)
-}
-
-// New builds the sync for an azblob://bucket/path/to/object source: azblob://bucket/ is the bucket
-// URI and path/to/object the object name. The storage account comes from AZURE_STORAGE_ACCOUNT.
-func New(config sync.SourceConfig, log *logger.Logger, recorder sync.MetricsRecorder) (*blob.Sync, error) {
-	// Required to generate the azblob service URL
-	storageAccountName := os.Getenv("AZURE_STORAGE_ACCOUNT")
-	if storageAccountName == "" {
-		return nil, fmt.Errorf("environment variable AZURE_STORAGE_ACCOUNT not set or is blank")
-	}
-	if regexp.MustCompile(`\s`).MatchString(storageAccountName) {
-		return nil, fmt.Errorf("environment variable AZURE_STORAGE_ACCOUNT contains whitespace")
-	}
-
-	return blob.NewLegacy(Provider, scheme, config, log, recorder, gocloud.DefaultURLMux())
 }
 
 // checkEnvironment validates the storage account, which generates the azblob service URL.
