@@ -7,7 +7,7 @@
 **Primary Actor:** Extension Author  
 **Goal:** Publish a telemetry provider in the Extension Author's own component module, verified against the telemetry provider contract, so that a distribution reports the traces and metrics of its service endpoints and middleware to a backend other than OpenTelemetry.  
 **Trigger:** Extension Author needs flagd to report to a backend no official telemetry provider supports  
-**Status:** Draft  
+**Status:** Implemented  
 
 **Requirements:** [FR-013, FR-015, FR-024, FR-033, FR-003, FR-008, NFR-006](../requirements.md)
 
@@ -78,9 +78,9 @@ A telemetry provider component module depends on the core module and on no other
 
 A distribution contains at most one telemetry provider. A manifest may omit it; the distribution then uses the noop telemetry provider, which records nothing and carries no observability dependency.
 
-### BR-003: Consumers Are Service Endpoints and Middleware
+### BR-003: Consumers Are the Runtime and Its Components
 
-A telemetry provider serves service endpoints and middleware only. The evaluator receives no telemetry provider and emits no telemetry; in-process providers observe evaluations through hooks.
+A telemetry provider serves the runtime, sync providers, service endpoints, middleware and event sinks; never the evaluator or a configuration format. The evaluator receives no telemetry provider and emits no telemetry; in-process providers observe evaluations through hooks.
 
 ### BR-004: Evaluation Spans Come From Service Endpoints
 
@@ -109,3 +109,14 @@ Once started, a telemetry provider never makes a service endpoint wait for the b
 ### BR-010: Same Selection as Official Components
 
 An extension is referenced in a manifest by Go module path and version in the same way as an official telemetry provider; no registration with the Maintainers is needed.
+
+## Delivered by Later Use Cases
+
+This use case is `Implemented` for the telemetry provider side: the telemetry factory interface and the noop telemetry provider in the core module, the telemetry provider contract tests, the OpenTelemetry telemetry provider in its own component module, the runtime that hands the selected telemetry provider to the runtime, sync providers, service endpoints, middleware and event sinks and stops when its configuration is invalid, and `test/telemetry-example`, which reports the evaluation spans and request metrics of a flagd-full distribution. These parts are delivered by the use cases named here, and are accepted gaps of this one:
+
+| Gap | Delivered by |
+|-----|--------------|
+| Main scenario steps 7–8, A2, BR-010, FR-003, FR-008 | UC-001 |
+| A distribution with no observability code compiled in (BR-002, FR-024), and the noop telemetry provider and the official middleware as component modules of their own | UC-001 with UC-010 |
+| The OpenTelemetry instrumentation of Google's client libraries in any distribution with the GCS sync provider, whatever telemetry provider it selects | UC-010 (flagd-minimal leaves out the GCS sync provider) and UC-001 (the runtime stops importing every sync provider) |
+| flagd-proxy's own sync metrics | UC-017 |

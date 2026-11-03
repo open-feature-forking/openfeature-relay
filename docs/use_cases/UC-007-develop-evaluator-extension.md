@@ -157,5 +157,5 @@ This use case is `Implemented` for the evaluator side: the untyped evaluator int
 - FR-047 and A3's middleware half (middleware attaches the request attributes the evaluator reads): UC-005.
 - FR-027 (a distribution that serves another vendor's flags behind OFREP, with the vendor's sync provider, configuration format and evaluator): UC-019.
 - Flag sync of vendor documents (the flag sync endpoint sends documents of another format): UC-017.
-- Contract packaging across component types (one run that exercises every component type's contract): UC-008. The evaluator contract itself, `evaluatortest.Run`, and the exported flagd suite, `testkit.Run`, are delivered here.
+- Contract packaging across component types is delivered by UC-008, except that the exported flagd suite, `testkit.Run`, runs only inside this repository, because the testbed carries no licence to redistribute it: UC-012, or an upstream change of the testbed that the project lead decides. The evaluator contract itself, `evaluatortest.Run`, is delivered here.
 - Whether `NewJSON` over a foreign `IStore` retires, which keeps its per-call reads without the consistency guarantee of BR-011, and the note for embedders that the error text of an unmarshalable context changed from `ERROR` to `GENERAL` (BR-010): UC-015.

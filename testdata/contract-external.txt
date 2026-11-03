@@ -1,0 +1,11 @@
+# The example modules that run their contract tests outside the checkout, from the module cache (test/contract-external.sh).
+# A module qualifies when its module graph holds core and no other module of this repository, under the relay path or the
+# path the flagd modules still carry. The engine example (test/inprocess-example/engine) imports the configuration format
+# example and so does not qualify. The script derives the list and
+# fails when it differs from this file.
+test/configformat-example
+test/eventsink-example
+test/middleware-example
+test/service-example
+test/sync-example
+test/telemetry-example

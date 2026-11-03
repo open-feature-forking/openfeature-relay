@@ -87,7 +87,7 @@ func (s *FlagEvaluationServiceV2) EventStream(
 
 	s.logger.Debug("starting event stream for request")
 	requestNotificationChan := make(chan service.Notification, 1)
-	selector, err := selectorFromHeader(req.Header())
+	selector, err := selectorFromHeader(ctx, s.logger, req.Header())
 	if err != nil {
 		return err
 	}
@@ -266,6 +266,9 @@ func resolveV2[T constraints](ctx context.Context, span telemetry.Span, logger *
 	)
 
 	var evalErrFormatted error
+	if selector, _ := ctx.Value(store.SelectorContextKey{}).(store.Selector); flagdService.MatchesNoFlags(selector) {
+		resolver = flagNotFound[T]
+	}
 	result, variant, reason, metadata, evalErr := resolver(ctx, reqID, flagKey, mergedContext)
 	if evalErr != nil {
 		logger.WarnWithID(reqID, fmt.Sprintf("returning error response, reason: %v", evalErr))
@@ -306,7 +309,7 @@ func (s *FlagEvaluationServiceV2) startResolveV2(
 ) (context.Context, telemetry.Span, error) {
 	ctx, span := s.flagEvalTracer.Start(ctx, spanName, telemetry.WithSpanKind(telemetry.SpanKindServer))
 
-	selector, err := selectorFromHeader(header)
+	selector, err := selectorFromHeader(ctx, s.logger, header)
 	if err != nil {
 		span.RecordError(err)
 		span.SetError(err.Error())
