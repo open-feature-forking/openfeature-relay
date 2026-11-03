@@ -84,7 +84,7 @@ func (sb *SyncBuilder) resolveFetcher(
 		if trigger.Type != polling.TriggerType {
 			continue
 		}
-		interval, _, err := polling.NewSourcePoller(source.Interval, source.IntervalSeed)
+		interval, err := polling.ResolveInterval(source.Interval)
 		if err != nil {
 			return Resolution{}, fmt.Errorf("invalid %s sync configuration: %w", source.Provider, err)
 		}

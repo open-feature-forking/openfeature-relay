@@ -123,7 +123,7 @@ func TestPollOffset_DifferentSeeds(t *testing.T) {
 	}
 }
 
-func TestCronPoller_Offset(t *testing.T) {
+func TestIntervalTrigger_Offset(t *testing.T) {
 	tests := []struct {
 		name     string
 		interval uint32
@@ -137,7 +137,7 @@ func TestCronPoller_Offset(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p, err := NewCronPoller(tt.interval, tt.seed)
+			p, err := NewIntervalTrigger(tt.interval, tt.seed)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -152,9 +152,9 @@ func TestCronPoller_Offset(t *testing.T) {
 	}
 }
 
-func TestCronPoller_Offset_MatchesPollOffset(t *testing.T) {
+func TestIntervalTrigger_Offset_MatchesPollOffset(t *testing.T) {
 	// Offset() should return the same value as pollOffset() for the same inputs
-	p, err := NewCronPoller(60, "my-pod")
+	p, err := NewIntervalTrigger(60, "my-pod")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -164,12 +164,12 @@ func TestCronPoller_Offset_MatchesPollOffset(t *testing.T) {
 	}
 }
 
-func TestCronPoller_Offset_Deterministic(t *testing.T) {
-	pa, err := NewCronPoller(30, "my-pod")
+func TestIntervalTrigger_Offset_Deterministic(t *testing.T) {
+	pa, err := NewIntervalTrigger(30, "my-pod")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	pb, err := NewCronPoller(30, "my-pod")
+	pb, err := NewIntervalTrigger(30, "my-pod")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -178,19 +178,44 @@ func TestCronPoller_Offset_Deterministic(t *testing.T) {
 	}
 }
 
-func TestNewCronPoller_ExceedsMaxInterval(t *testing.T) {
-	_, err := NewCronPoller(MaxInterval+1, "my-pod")
+func TestNewIntervalTrigger_ExceedsMaxInterval(t *testing.T) {
+	_, err := NewIntervalTrigger(MaxInterval+1, "my-pod")
 	if err == nil {
 		t.Fatal("expected error for interval exceeding MaxInterval")
 	}
 }
 
-func TestNewCronPoller_AtMaxInterval(t *testing.T) {
-	p, err := NewCronPoller(MaxInterval, "my-pod")
+func TestNewIntervalTrigger_AtMaxInterval(t *testing.T) {
+	p, err := NewIntervalTrigger(MaxInterval, "my-pod")
 	if err != nil {
 		t.Fatalf("unexpected error at MaxInterval: %v", err)
 	}
 	if p.Offset() >= MaxInterval {
 		t.Errorf("offset %d should be less than MaxInterval %d", p.Offset(), MaxInterval)
+	}
+}
+
+func TestResolveInterval(t *testing.T) {
+	tests := []struct {
+		name     string
+		interval uint32
+		want     uint32
+		wantErr  bool
+	}{
+		{"unset is the default", 0, DefaultInterval, false},
+		{"as configured", 30, 30, false},
+		{"at the maximum", MaxInterval, MaxInterval, false},
+		{"beyond the maximum", MaxInterval + 1, 0, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ResolveInterval(tt.interval)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if got != tt.want {
+				t.Errorf("expected %d, got %d", tt.want, got)
+			}
+		})
 	}
 }

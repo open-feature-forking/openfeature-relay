@@ -2,6 +2,7 @@ package polling
 
 import (
 	"context"
+	"fmt"
 	"math/rand/v2"
 	"sync"
 	"time"
@@ -66,15 +67,14 @@ type IntervalTrigger struct {
 	finished  chan struct{}
 }
 
-// NewIntervalTrigger creates an IntervalTrigger. As for NewCronPoller, an empty seed means offset 0, and it fails
+// NewIntervalTrigger creates an IntervalTrigger. An empty seed means offset 0, and it fails
 // for an interval beyond MaxInterval.
 func NewIntervalTrigger(interval uint32, intervalSeed string) (*IntervalTrigger, error) {
-	poller, err := NewCronPoller(interval, intervalSeed)
-	if err != nil {
-		return nil, err
+	if interval > MaxInterval {
+		return nil, fmt.Errorf("polling interval %ds exceeds maximum %ds", interval, MaxInterval)
 	}
 	return &IntervalTrigger{
-		schedule: OffsetSchedule{Interval: interval, Offset: poller.offset},
+		schedule: OffsetSchedule{Interval: interval, Offset: pollOffset(intervalSeed, interval)},
 		backoff:  Backoff{Interval: time.Duration(interval) * time.Second},
 		now:      time.Now,
 		sleep:    sleep,

@@ -129,7 +129,7 @@ func NewSync(
 	kind string, scheme *regexp.Regexp, config sync.SourceConfig, log *logger.Logger,
 	recorder sync.MetricsRecorder, mux *blob.URLMux,
 ) (sync.StreamingSyncProvider, error) {
-	interval, _, err := polling.NewSourcePoller(config.Interval, config.IntervalSeed)
+	interval, err := polling.ResolveInterval(config.Interval)
 	if err != nil {
 		return nil, fmt.Errorf("invalid %s sync configuration: %w", kind, err)
 	}
