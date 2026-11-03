@@ -49,3 +49,7 @@ test/configformat-example:. ./evaluator:opentelemetry|google.golang.org/grpc|con
 flagd:./pkg/service/...:go.opentelemetry.io|prometheus/client_golang|otelconnect|openfeature-relay/telemetry/
 # The example event sink requires the core only: no vendor client, transport or flagd module.
 test/eventsink-example:./...:opentelemetry|google.golang.org/grpc|connectrpc|k8s.io|gocloud|open-feature/flagd/flagd|openfeature-relay/(sync|telemetry|evaluator|configformat)/
+# Q6, Q15: the runtime holds no component. Its package graph, which go list -deps reads without the tests, contains no
+# sync provider module, evaluator, configuration format, telemetry provider or SDK, or service endpoint package; the
+# distribution's components package passes them in.
+flagd:./pkg/runtime:go.opentelemetry.io|prometheus|openfeature-relay/(sync/(file|http|flagd-grpc|openfeature-operator|gcs|azblob|s3)|evaluator/|configformat/|telemetry/)|flagd/pkg/service/(flag-evaluation|flag-sync)
