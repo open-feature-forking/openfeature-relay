@@ -12,12 +12,13 @@
 package middlewaretest
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
-	"maps"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -39,12 +40,12 @@ const Goroutines = 64
 
 // Names of the contract cases of a middleware (UC-008 BR-002).
 const (
-	CasePassesUnchanged = "returns the wrapped handler's response unchanged for a passed request"
+	CasePassesUnchanged = "passes a request on as it was sent and returns the wrapped handler's response unchanged"
 	CaseFlushes         = "keeps http.Flusher and http.ResponseController working for the wrapped handler"
 	CaseAnswered        = "answers an answered request without the wrapped handler"
 	CaseNeverBoth       = "passes a request on or answers it, never both"
 	CaseBindings        = "makes its selector and request attributes visible to the wrapped handler"
-	CaseTelemetry       = "records only through the injected telemetry provider and ends the spans it starts"
+	CaseTelemetry       = "ends every span it starts through the injected telemetry provider"
 	CaseConcurrent      = "works under concurrent requests"
 	CaseInvalidConfig   = "rejects an invalid configuration naming the faulty value"
 )
@@ -217,6 +218,8 @@ const (
 
 // seen is what the wrapped handler observed of one request.
 type seen struct {
+	// request is what the wrapped handler received of the request, its body read in full
+	request    sentRequest
 	bound      bool
 	selector   store.Selector
 	boundErr   error
@@ -235,6 +238,8 @@ type recordingHandler struct {
 func (h *recordingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.calls.Add(1)
 	s := seen{attributes: evaluator.AttributesFromContext(r.Context())}
+	body, _ := io.ReadAll(r.Body)
+	s.request = sentRequest{method: r.Method, uri: r.RequestURI, contentType: r.Header.Get("Content-Type"), body: string(body)}
 	s.selector, s.bound, s.boundErr = middleware.BoundSelector(r.Context())
 
 	w.Header().Set("Trailer", innerTrailer)
@@ -321,18 +326,22 @@ func unchanged(resp response) string {
 }
 
 func (r runner) passesUnchanged() (string, string) {
-	const expected = "the wrapped handler is called once and its status, headers, body and trailers reach the client unchanged"
+	const expected = "the wrapped handler is called once with the request as it was sent, and its status, headers, body and trailers reach the client unchanged"
 	s, failure := r.serve(telemetry.Noop())
 	if failure != "" {
 		return expected, failure
 	}
 	defer s.close()
-	resp, err := s.send(r.limit, r.in.Passed())
+	req, sent := prepare(r.in.Passed())
+	resp, err := s.send(r.limit, req)
 	if err != nil {
 		return expected, fmt.Sprintf("the request failed: %v", err)
 	}
 	if n := s.inner.calls.Load(); n != 1 {
 		return expected, fmt.Sprintf("the wrapped handler was called %d times", n)
+	}
+	if diff := sent.differsFrom(s.inner.lastSeen().request); diff != "" {
+		return expected, "the request was changed on its way: " + diff
 	}
 	return expected, unchanged(resp)
 }
@@ -459,18 +468,18 @@ func (r runner) bindings() (string, string) {
 			return expected, fmt.Sprintf("bound %v: flag set %q, source %q", got.bound, got.selector.FlagSetId(), got.selector.Source())
 		}
 	}
-	if !maps.Equal(stringify(got.attributes), stringify(want.Attributes)) {
+	if !equalAttributes(got.attributes, want.Attributes) {
 		return expected, fmt.Sprintf("the request attributes are %v", got.attributes)
 	}
 	return expected, ""
 }
 
-func stringify(m map[string]any) map[string]string {
-	out := make(map[string]string, len(m))
-	for k, v := range m {
-		out[k] = fmt.Sprint(v)
+// equalAttributes compares attributes by type and value: evaluators read the typed value.
+func equalAttributes(got, want map[string]any) bool {
+	if len(got) == 0 && len(want) == 0 {
+		return true
 	}
-	return out
+	return reflect.DeepEqual(got, want)
 }
 
 func (r runner) telemetry() (string, string) {
@@ -611,4 +620,40 @@ func (s *recordingSpan) End() {
 	if s.ended.CompareAndSwap(false, true) {
 		s.p.ended.Add(1)
 	}
+}
+
+// sentRequest is what a request carries that a middleware that passes it on must not change: its method, target, media
+// type and body. A middleware may add to the request and may remove its credential, so other headers are not compared.
+type sentRequest struct {
+	method, uri, contentType, body string
+}
+
+// prepare reads the body of a request, to know what was sent, and gives the request a body to send.
+func prepare(req *http.Request) (*http.Request, sentRequest) {
+	var body []byte
+	if req.Body != nil {
+		body, _ = io.ReadAll(req.Body)
+		req.Body = io.NopCloser(bytes.NewReader(body))
+		req.ContentLength = int64(len(body))
+	}
+	uri := req.RequestURI
+	if uri == "" {
+		uri = req.URL.RequestURI()
+	}
+	return req, sentRequest{method: req.Method, uri: uri, contentType: req.Header.Get("Content-Type"), body: string(body)}
+}
+
+// differsFrom says how the request the wrapped handler received differs from the one that was sent, "" if it does not.
+func (want sentRequest) differsFrom(got sentRequest) string {
+	switch {
+	case got.method != want.method:
+		return fmt.Sprintf("the method is %q, the request was sent with %q", got.method, want.method)
+	case got.uri != want.uri:
+		return fmt.Sprintf("the target is %q, the request was sent to %q", got.uri, want.uri)
+	case got.contentType != want.contentType:
+		return fmt.Sprintf("the Content-Type is %q, the request was sent with %q", got.contentType, want.contentType)
+	case got.body != want.body:
+		return fmt.Sprintf("the body is %q, the request was sent with %q", got.body, want.body)
+	}
+	return ""
 }
