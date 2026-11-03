@@ -153,8 +153,11 @@ func NewFlags() *Store {
 }
 
 func (s *Store) Get(_ context.Context, key string, selector *Selector) (model.Flag, model.Metadata, error) {
+	return s.get(s.db.Txn(false), key, selector)
+}
+
+func (s *Store) get(txn *memdb.Txn, key string, selector *Selector) (model.Flag, model.Metadata, error) {
 	s.logger.Debug(fmt.Sprintf("getting flag %s", key))
-	txn := s.db.Txn(false)
 	queryMeta := selector.ToMetadata()
 
 	// if present, use the selector to query the flags
@@ -202,9 +205,13 @@ func (s *Store) Get(_ context.Context, key string, selector *Selector) (model.Fl
 
 // GetAll returns a copy of the store's state (copy in order to be concurrency safe)
 func (s *Store) GetAll(ctx context.Context, selector *Selector) ([]model.Flag, model.Metadata, error) {
+	return s.getAll(s.db.Txn(false), selector)
+}
+
+func (s *Store) getAll(txn *memdb.Txn, selector *Selector) ([]model.Flag, model.Metadata, error) {
 	var flags []model.Flag
 	queryMeta := selector.ToMetadata()
-	it, err := s.selectOrAll(selector)
+	it, err := s.selectOrAll(txn, selector)
 
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("flag query error: %v", err))
@@ -384,7 +391,7 @@ func (s *Store) Watch(ctx context.Context, selector *Selector, watcher chan<- Fl
 	go func() {
 		for {
 			ws := memdb.NewWatchSet()
-			it, err := s.selectOrAll(selector)
+			it, err := s.selectOrAll(s.db.Txn(false), selector)
 			if err != nil {
 				s.logger.WithFields(zap.String("selector", selector.ToLogString()), zap.Error(err)).Error("error getting flags")
 				close(watcher)
@@ -412,8 +419,7 @@ func (s *Store) Watch(ctx context.Context, selector *Selector, watcher chan<- Fl
 }
 
 // returns an iterator for the given selector, or all flags if the selector is nil or empty
-func (s *Store) selectOrAll(selector *Selector) (it memdb.ResultIterator, err error) {
-	txn := s.db.Txn(false)
+func (s *Store) selectOrAll(txn *memdb.Txn, selector *Selector) (it memdb.ResultIterator, err error) {
 	if !selector.IsEmpty() {
 		indexId, constraints := selector.ToQuery()
 		s.logger.Debug(fmt.Sprintf("getting all flags with query: %s, %v", indexId, constraints))
