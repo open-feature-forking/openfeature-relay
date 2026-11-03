@@ -81,9 +81,16 @@ func (o *observer) nextError(t *testing.T) error {
 	return nil
 }
 
+// writeFlags replaces the file the way a Kubernetes ConfigMap update does: a temporary file in the same directory is
+// renamed over it. The watch then never reads a file that is half written, which os.WriteFile leaves for a moment
+// (the watch reports the truncation, and the format would reject the partial content).
 func writeFlags(t *testing.T, path, content string) {
 	t.Helper()
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
 		t.Fatal(err)
 	}
 }
