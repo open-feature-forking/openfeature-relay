@@ -20,6 +20,12 @@ type Factory interface {
 	Create(settings Settings) (Sink, error)
 }
 
+// Configured is an event sink factory with the configuration a distribution creates it from.
+type Configured struct {
+	Factory Factory
+	Config  map[string]any
+}
+
 // Settings are what a factory gets to build a sink.
 type Settings struct {
 	Logger    *logger.Logger

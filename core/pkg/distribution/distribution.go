@@ -8,6 +8,7 @@ import (
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/eventsink"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/middleware"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
@@ -34,6 +35,9 @@ type Components struct {
 	// Middleware are the HTTP middleware of the service endpoints that serve HTTP, in list order: the first sees a request
 	// first. They run inside h2c and CORS, which stay layers of the endpoints. flagd-full lists none.
 	Middleware []middleware.Configured
+	// EventSinks are the event sinks the runtime delivers events to. Each one subscribes to the event bus for the kinds
+	// its factory declares. flagd-full lists none, and then nothing subscribes.
+	EventSinks []eventsink.Configured
 	// MetricsHandler serves /metrics on the management port. Nil leaves it to the telemetry provider, and answers
 	// 404 if the provider serves none.
 	MetricsHandler http.Handler
