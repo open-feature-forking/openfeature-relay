@@ -40,6 +40,7 @@ type flaws struct {
 	bulkDiffers     bool
 	ignoreAttrs     bool
 	tornPair        bool
+	ignoresDst      bool
 }
 
 // reference is a small evaluator over fixed flags, with a pair of flags updated together.
@@ -111,6 +112,9 @@ func (e *reference) result(key string, req evaluator.Request, round int64) evalu
 func (e *reference) Evaluate(_ context.Context, req evaluator.Request, dst []evaluator.Result) ([]evaluator.Result, model.Metadata, error) {
 	// one snapshot per request, unless the evaluator is flawed
 	round := e.round.Load()
+	if e.flaws.ignoresDst {
+		dst = nil
+	}
 	switch {
 	case req.Bulk:
 		for _, key := range []string{"audience", "absent", "bool", "disabled", "int", "pair-a", "pair-b"} {
@@ -170,6 +174,7 @@ func TestContractReportsExpectedAndObserved(t *testing.T) {
 		"bulk differs from single":         {flaws{bulkDiffers: true}, "bulk equals single"},
 		"attributes ignored":               {flaws{ignoreAttrs: true}, "attributes"},
 		"torn read of a pair":              {flaws{tornPair: true}, "consistent resolution"},
+		"results replace dst":              {flaws{ignoresDst: true}, "append to dst"},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
