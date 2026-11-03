@@ -1,11 +1,9 @@
 package builder
 
 import (
-
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/fetching"
 	"github.com/open-feature-forking/openfeature-relay/sync/azblob"
-	"github.com/open-feature-forking/openfeature-relay/sync/file"
 	"github.com/open-feature-forking/openfeature-relay/sync/gcs"
 	httpSync "github.com/open-feature-forking/openfeature-relay/sync/http"
 	"github.com/open-feature-forking/openfeature-relay/sync/s3"
@@ -16,11 +14,7 @@ import (
 
 // legacyFor gives the legacy switches of an official fetcher; any other fetcher has the behaviour of the fetching sync
 // provider.
-func legacyFor(f sync.Factory) fetching.Legacy {
-	switch f.Type() {
-	case file.Provider:
-		return fetching.Legacy{CountOnlyRead: true}
-	}
+func legacyFor(sync.Factory) fetching.Legacy {
 	return fetching.Legacy{}
 }
 
