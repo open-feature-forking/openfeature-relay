@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"net"
 	"net/http"
 	"os"
@@ -346,7 +347,7 @@ func TestRuntimeStartsAnyEndpointSet(t *testing.T) {
 			},
 		},
 		{
-			name: "all three", endpoints: officialEndpoints(), evaluator: true,
+			name: "all three", endpoints: flagdcomponents.Endpoints(), evaluator: true,
 			check: func(t *testing.T, p ports) {
 				for _, port := range []uint16{p.service, p.ofrep, p.sync} {
 					conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), time.Second)
@@ -361,7 +362,8 @@ func TestRuntimeStartsAnyEndpointSet(t *testing.T) {
 			p := newPorts(t)
 			cfg := characterizedConfig(t, p)
 			rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, Components{
-				ConfigurationFormats: Official().ConfigurationFormats, Evaluators: Official().Evaluators, Endpoints: tt.endpoints,
+				Sync:                 flagdcomponents.Official().Sync,
+				ConfigurationFormats: flagdcomponents.Official().ConfigurationFormats, Evaluators: flagdcomponents.Official().Evaluators, Endpoints: tt.endpoints,
 			})
 			require.NoError(t, err)
 			require.Equal(t, tt.evaluator, rt.Evaluator != nil, "an evaluator is built only for an endpoint that needs one")

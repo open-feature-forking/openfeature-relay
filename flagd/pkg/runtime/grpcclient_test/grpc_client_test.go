@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"io"
 	"net"
 	"os"
@@ -152,7 +153,7 @@ func TestGRPCSyncClientInstrumentationCharacterization(t *testing.T) {
 		KeepAliveMinTime:             runtime.KeepAliveMinTimeDefault,
 		KeepAlivePermitWithoutStream: runtime.KeepAlivePermitWithoutStreamDefault,
 		SyncProviders:                []coresync.SourceConfig{{URI: l.Addr().String(), Provider: "grpc"}},
-	}, withOpenTelemetry(runtime.Official()))
+	}, withOpenTelemetry(flagdcomponents.Official()))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())

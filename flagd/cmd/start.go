@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"log"
 	"strings"
 	"time"
@@ -222,7 +223,7 @@ var startCmd = &cobra.Command{
 		}
 
 		// Build Runtime -----------------------------------------------------------
-		components := runtime.Official()
+		components := flagdcomponents.Official()
 		components.Telemetry = otelprovider.NewFactory()
 		components.TelemetryConfig = map[string]any{
 			otelprovider.SettingMetricsExporter: viper.GetString(metricsExporter),

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"net"
 	"net/http"
 	"os"
@@ -119,7 +120,7 @@ func TestTryInDistribution(t *testing.T) {
 			{URI: vendorSource, Provider: "file", Format: keyvalue.Type},
 		},
 		ConfigurationFormats: []configformat.Factory{factory},
-	}, runtime.Official())
+	}, flagdcomponents.Official())
 	require.NoError(t, err)
 
 	done := make(chan error, 1)
@@ -179,7 +180,7 @@ func TestSourceWithoutFormatIsRejectedByFlagd(t *testing.T) {
 	rt, err := runtime.FromConfig(log, "test", runtime.Config{
 		SyncProviders:        []coresync.SourceConfig{{URI: path, Provider: "file", Format: keyvalue.Type}},
 		ConfigurationFormats: []configformat.Factory{keyvalue.Factory{}},
-	}, runtime.Official())
+	}, flagdcomponents.Official())
 	require.NoError(t, err)
 
 	format, named := rt.Formats[path]

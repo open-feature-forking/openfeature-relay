@@ -19,9 +19,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	syncbuilder "github.com/open-feature-forking/openfeature-relay/sync/builder"
-	flagdgrpc "github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc"
 	"go.uber.org/zap"
-	googlegrpc "google.golang.org/grpc"
 )
 
 // from_config is a collection of structures and parsers responsible for deriving flagd runtime
@@ -60,7 +58,7 @@ type Config struct {
 	// Each one's format must be flagd's own or one of ConfigurationFormats.
 	Evaluators []evaluator.Factory
 	// Deprecated: pass Components.Sync; both apply.
-	// SyncFactories are the sync components, besides the official ones, that sources may select.
+	// SyncFactories are the sync components that sources may select.
 	SyncFactories []sync.Factory
 	CORS          []string
 	// EvaluatorSettings are the settings of the evaluators of a distribution, keyed by the type of the evaluator's
@@ -258,11 +256,6 @@ func staleLimitsOf(sources []sync.SourceConfig, syncs []sync.ISync) ([]staleLimi
 	return limits, nil
 }
 
-// grpcClientInstrumentation is implemented by a telemetry provider that instruments outbound gRPC connections.
-type grpcClientInstrumentation interface {
-	GRPCDialOptions() []googlegrpc.DialOption
-}
-
 // syncProvidersFromConfig is a helper to build ISync implementations from SourceConfig.
 // The sync providers record the universal client-side sync metrics, and the stream metrics of the gRPC source,
 // through the telemetry provider, whose gRPC client instrumentation the gRPC source dials with.
@@ -270,17 +263,10 @@ func syncProvidersFromConfig(
 	logger *logger.Logger,
 	sources []sync.SourceConfig,
 	tp telemetry.Provider,
-	extra []sync.Factory,
+	factories []sync.Factory,
 ) ([]sync.ISync, error) {
-	var dialOptions []googlegrpc.DialOption
-	if p, ok := tp.(grpcClientInstrumentation); ok {
-		dialOptions = p.GRPCDialOptions()
-	}
-	factories := syncbuilder.OfficialWith(syncbuilder.OfficialOptions{
-		StreamMetrics:   flagdgrpc.NewStreamMetrics(tp.Meter(flagdgrpc.StreamMetricsScope)),
-		GRPCDialOptions: dialOptions,
-	})
-	builder := syncbuilder.NewSyncBuilder(append(factories, extra...)...)
+	builder := syncbuilder.NewSyncBuilderOf(factories...)
+	builder.Telemetry = tp
 	builder.SyncMetricsRecorder = sync.NewMetricsRecorder(tp.Meter(sync.MetricsScope))
 	syncs, err := builder.SyncsFromConfig(sources, logger)
 	if err != nil {

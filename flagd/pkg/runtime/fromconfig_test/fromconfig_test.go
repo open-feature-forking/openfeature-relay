@@ -10,6 +10,7 @@ package fromconfig_test
 import (
 	"context"
 	"fmt"
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"net"
 	"net/http"
 	"os"
@@ -100,7 +101,7 @@ func baseConfig(t *testing.T, providers []coresync.SourceConfig, factory *fakeFa
 func startConfig(t *testing.T, config runtime.Config) (*runtime.Runtime, func()) {
 	t.Helper()
 	managementPort := config.ManagementPort
-	rt, err := runtime.FromConfig(logger.NewLogger(nil, false), "test", config, withOpenTelemetry(runtime.Official()))
+	rt, err := runtime.FromConfig(logger.NewLogger(nil, false), "test", config, withOpenTelemetry(flagdcomponents.Official()))
 	require.NoError(t, err)
 
 	done := make(chan error, 1)

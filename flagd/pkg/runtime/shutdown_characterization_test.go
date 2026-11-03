@@ -5,6 +5,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"io"
 	"net"
 	"net/http"
@@ -68,7 +69,7 @@ func characterizedConfig(t *testing.T, p ports) Config {
 // startRuntime runs the runtime on a context the test cancels, and returns once it reports ready.
 func startRuntime(t *testing.T, cfg Config) (cancel func(), done <-chan error) {
 	t.Helper()
-	return startRuntimeWith(t, cfg, Official())
+	return startRuntimeWith(t, cfg, flagdcomponents.Official())
 }
 
 // startRuntimeWith is startRuntime for a distribution with these components.

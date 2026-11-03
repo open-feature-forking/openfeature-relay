@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"os"
 	"strings"
 	"testing"
@@ -45,11 +46,11 @@ func TestOfficialComponentsCharacterization(t *testing.T) {
 	fmt.Fprintf(&out, "  %s for the configuration format %s (built in)\n", ev.Type(), ev.ConfigurationFormat())
 
 	out.WriteString("service endpoints\n")
-	for _, f := range Official().Endpoints {
+	for _, f := range flagdcomponents.Official().Endpoints {
 		needs := f.Needs()
 		fmt.Fprintf(&out, "  %s\n    needs: router=%v format=%q\n", f.Type(), needs.Router, needs.Format)
 	}
-	fmt.Fprintf(&out, "metrics handler: %v\n", Official().MetricsHandler != nil)
+	fmt.Fprintf(&out, "metrics handler: %v\n", flagdcomponents.Official().MetricsHandler != nil)
 
 	if *updateOfficialComponents {
 		require.NoError(t, os.MkdirAll("testdata", 0o755))
