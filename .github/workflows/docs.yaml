@@ -41,7 +41,8 @@ jobs:
 
   deploy:
     # The site is this repository's; upstream flagd publishes flagd.dev from Netlify.
-    if: github.event_name != 'pull_request' && github.repository == 'open-feature-forking/openfeature-relay'
+    # Gated until GitHub Pages is enabled: set the repository variable PAGES=true.
+    if: github.event_name != 'pull_request' && github.repository == 'open-feature-forking/openfeature-relay' && vars.PAGES == 'true'
     needs: build
     permissions:
       pages: write

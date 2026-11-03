@@ -5,4 +5,5 @@
 {%
   include "https://raw.githubusercontent.com/open-feature/java-sdk-contrib/main/providers/flagd/README.md"
   start="## Installation"
+  end="## Provider conformance (TCK)"
 %}
