@@ -2,6 +2,8 @@ package evaluation
 
 import (
 	"context"
+	"slices"
+	"sort"
 	"testing"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
@@ -17,19 +19,46 @@ import (
 
 const kvFormat = "kv"
 
-// kvEvaluator resolves every key the kv documents of the store hold to "kv".
+// kvEvaluator resolves every key the kv documents of the store hold to "kv", once for each flag set holding it.
 type kvEvaluator struct{ st *store.Store }
 
 func (e kvEvaluator) Evaluate(_ context.Context, req evaluator.Request, dst []evaluator.Result) ([]evaluator.Result, model.Metadata, error) {
+	view := e.st.View()
 	keys := req.FlagKeys
 	if keys == nil {
 		keys = []string{req.FlagKey}
 	}
+	flagSet, named := req.Selector.DocumentFlagSet()
 	for _, key := range keys {
-		dst = append(dst, evaluator.Result{
-			FlagKey: key, Value: "kv", HasValue: true, Variant: "v", Reason: model.StaticReason,
-			Metadata: model.Metadata{"flagSetId": ""},
-		})
+		sets := map[string]struct{}{}
+		for _, source := range e.st.Sources() {
+			for _, doc := range view.Documents(kvFormat, source) {
+				if (named && doc.FlagSet != flagSet) || !slices.Contains(doc.FlagKeys, key) {
+					continue
+				}
+				sets[doc.FlagSet] = struct{}{}
+			}
+		}
+		if len(sets) == 0 {
+			dst = append(dst, evaluator.Result{
+				FlagKey: key, Reason: model.ErrorReason, ErrorCode: model.FlagNotFoundErrorCode,
+				ErrorMessage: model.GetErrorMessage(model.FlagNotFoundErrorCode),
+			})
+			continue
+		}
+		ordered := make([]string, 0, len(sets))
+		for set := range sets {
+			ordered = append(ordered, set)
+		}
+		sort.Strings(ordered)
+		for _, set := range ordered {
+			dst = append(dst, evaluator.Result{
+				FlagKey: key, FlagSet: set, Value: "kv", HasValue: true, Variant: "v", Reason: model.StaticReason,
+			})
+			if !req.Bulk && req.FlagKeys == nil {
+				break
+			}
+		}
 	}
 	return dst, nil, nil
 }
@@ -44,9 +73,14 @@ func (kvFactory) Create(s evaluator.Settings) (evaluator.Evaluator, error) {
 
 func deliverKV(t *testing.T, st *store.Store, source string, keys ...string) {
 	t.Helper()
+	deliverKVSet(t, st, source, "", keys...)
+}
+
+func deliverKVSet(t *testing.T, st *store.Store, source, flagSet string, keys ...string) {
+	t.Helper()
 	require.NoError(t, st.Apply(store.ApplyRequest{
 		Format: kvFormat, Source: source,
-		Documents: []store.Document{{Format: kvFormat, Source: source, FlagKeys: keys}},
+		Documents: []store.Document{{Format: kvFormat, Source: source, FlagSet: flagSet, FlagKeys: keys}},
 	}))
 }
 
@@ -165,8 +199,12 @@ func TestRoutedSingleEvaluatorAllocs(t *testing.T) {
 	ctx := context.Background()
 	viaRouter := testing.AllocsPerRun(200, func() { _, _, _, _, _ = routed.ResolveBooleanValue(ctx, "id", "flagd-only", nil) })
 	alone := testing.AllocsPerRun(200, func() { _, _, _, _, _ = direct.ResolveBooleanValue(ctx, "id", "flagd-only", nil) })
-	// under -race a sync.Pool drops some of the buffers it is given, which adds an allocation to a run now and then
-	require.LessOrEqual(t, viaRouter, alone+1)
+	slack := 0.0
+	if raceEnabled {
+		// under -race a sync.Pool drops some of the buffers it is given, which adds an allocation to a run now and then
+		slack = 1
+	}
+	require.LessOrEqual(t, viaRouter, alone+slack)
 }
 
 func TestNewEvaluatorOverAnotherStoreServesWithoutRouter(t *testing.T) {
