@@ -22,7 +22,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	"github.com/open-feature/flagd/flagd/pkg/runtime"
+	"github.com/open-feature-forking/openfeature-relay/runtime"
 	"github.com/stretchr/testify/require"
 )
 

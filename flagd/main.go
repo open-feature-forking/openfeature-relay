@@ -1,6 +1,12 @@
 package main
 
-import "github.com/open-feature/flagd/flagd/cmd"
+import (
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/distribution"
+	"github.com/open-feature-forking/openfeature-relay/runtime/cmd"
+)
+
+// distributionName is the name flagd-full has in its manifest.
+const distributionName = "flagd-full"
 
 var (
 	version = "dev"
@@ -9,5 +15,5 @@ var (
 )
 
 func main() {
-	cmd.Execute(version, commit, date)
+	cmd.Execute(distribution.Info{Name: distributionName, Version: version, Commit: commit, Date: date})
 }

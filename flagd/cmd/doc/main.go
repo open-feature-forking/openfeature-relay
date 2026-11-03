@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"github.com/open-feature/flagd/flagd/cmd"
+	"github.com/open-feature-forking/openfeature-relay/runtime/cmd"
 )
 
 const docPath = "../docs/reference/flagd-cli"

@@ -36,3 +36,13 @@ replace (
 	github.com/open-feature-forking/openfeature-relay/sync/s3 => ../../../sync/s3
 	github.com/open-feature-forking/openfeature-relay/telemetry/otel => ../../../telemetry/otel
 )
+
+replace github.com/open-feature-forking/openfeature-relay/runtime => ../../../runtime
+
+replace github.com/open-feature-forking/openfeature-relay/service/transport => ../../../service/transport
+
+replace github.com/open-feature-forking/openfeature-relay/service/flag-evaluation => ../../../service/flag-evaluation
+
+replace github.com/open-feature-forking/openfeature-relay/service/ofrep => ../../../service/ofrep
+
+replace github.com/open-feature-forking/openfeature-relay/service/flag-sync => ../../../service/flag-sync
