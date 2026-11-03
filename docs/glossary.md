@@ -15,7 +15,7 @@
 | Core Module           | The Go module holding the factory interfaces, the flag model and the sync data types that all component modules depend on.               | core package                  |
 | Factory               | The interface a component module implements so that a distribution can create its component from injected dependencies.                 |                               |
 | Extension             | A component written by an Extension Author in their own Go module rather than by the Maintainers.                                        | add-on                        |
-| Sync Provider         | A component type that reads flag configurations from a kind of source (file, HTTP, gRPC, Kubernetes, blob storage) and emits them.      | sync source, syncer           |
+| Sync Provider | A component type that obtains flag configurations from a kind of source and emits them: either a fetcher driven by fetch triggers, or a streaming sync provider that detects changes and delivers in one. | sync source, syncer |
 | Source | One configured location a sync provider reads from, given as a URI on the command line or in the configuration file; it may name its configuration format, flagd's being the default. |  |
 | Scheme | The prefix of a source (`file:`, `https://`, `s3://`, `core.openfeature.dev/`) that selects the sync provider handling it; it need not be a URI scheme. |  |
 | Service Endpoint      | A component type that serves flags to clients over a protocol: flag evaluation (gRPC/ConnectRPC), OFREP or flag sync.                     | server, access point          |
@@ -42,12 +42,16 @@
 | Contract Case         | One check within a contract test, such as rejecting an invalid flag configuration without changing the store. | |
 | Release Tag           | The git tag `<module path>/v<version>` that releases one component module, or the flagd release a standard distribution follows. | |
 | flagd Test Harness    | The Gherkin acceptance suites and test bed (open-feature/flagd-testbed) that flagd and its providers run to prove evaluation and sync behaviour. | |
-| Event Sink | A component type that subscribes to events on the event bus (configuration changes, evaluations, tracking) and delivers them to an external system, buffered and in batches where needed. | notifier |
+| Event Sink | A component type that subscribes to events on the event bus (configuration changes, evaluations, tracking) and delivers them to an external system, buffered and in batches where needed. |  |
+| Notifier | An event sink that tells people or systems about configuration changes (a chat message, a webhook call), as GO Feature Flag's notifiers do; outbound, the counterpart of an inbound fetch trigger. | |
 | Evaluation Event | The event a service endpoint publishes for each resolved flag, or relays from an in-process provider: flag key, flag set, variant, value, reason, targeting key and origin. | feature event |
 | Configuration Change Event | The event the runtime publishes when a configuration format accepts a changed document: source, configuration format, flag set, added, updated and removed flag keys, and the new version. | diff |
 | Tracking Event | An OpenFeature tracking event relayed to event sinks. |  |
 | Engine Module | A component module that provides a configuration format and the evaluator paired with it, as vendors ship their engines. |  |
-| Fetching Sync Provider | A sync provider that only fetches a source on request; the core's poller schedules it, sends conditional requests and refetches on a trigger. | retriever |
+| Fetcher | The part of a sync provider that fetches a source on request, with conditional requests, and knows nothing about when to fetch (file read, HTTP GET, blob read). | retriever |
+| Fetch Trigger | A component that tells a fetcher to fetch: an interval with jitter and backoff (the core's poller), a server-sent event stream, a file watch, a webhook, or a vendor's change events. | notifier, watcher |
+| Streaming Sync Provider | A sync provider that detects changes and delivers flag configurations in one, such as flagd's gRPC sync protocol and the OpenFeature Operator's FeatureFlag watch. | |
+| Fetching Sync Provider | A sync provider built as a fetcher plus the fetch triggers attached to its source. | retriever |
 | Encoding | The serialization of a flag configuration (JSON, YAML, TOML), decoded by the core before its configuration format validates it; independent of the configuration format. |  |
 | Document Version | An opaque value a configuration format reports for each document, such as a hash or the vendor's update time; service endpoints derive ETags and event stream events from it. |  |
 | Event Stream | The OFREP server-sent event stream that announces configuration changes for a selector, advertised in OFREP bulk responses. | SSE endpoint |

@@ -34,7 +34,7 @@ Plan: `.claude/plans/uc-014.md` revision 3 (main @ 450aefe). Commands ran in WSL
 - **Fix:**
   - For `sync/grpc` and `filegrpc`, forbid OTel in the **package** graph (`go list -deps`) only, and say why in the plan.
   - Keep module-graph checks for what a module graph can rule out: `sync/file` and the `file` example against gRPC, OTel, k8s and gocloud; core against everything heavy.
-  - If Simon's Q2 meant the module graph, that's impossible with grpc-go, and he has to hear that.
+  - If the project lead's Q2 meant the module graph, that's impossible with grpc-go, and he has to hear that.
 
 ### 3. major: the sync metrics pin (1d) can't observe anything the way it's specified
 
