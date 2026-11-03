@@ -51,7 +51,7 @@ func TestPortInUse(t *testing.T) {
 			require.NoError(t, err)
 			defer l.Close()
 
-			rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg)
+			rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, Official())
 			if tt.fromConfig != "" {
 				require.EqualError(t, err, fmt.Sprintf(tt.fromConfig, *busy))
 				return

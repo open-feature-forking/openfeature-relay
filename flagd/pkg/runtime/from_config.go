@@ -60,11 +60,14 @@ type Config struct {
 	KeepAlivePermitWithoutStream bool
 
 	SyncProviders []sync.SourceConfig
+	// Deprecated: pass Components.ConfigurationFormats; both apply.
 	// ConfigurationFormats are the formats, besides flagd's own, that sources may name.
 	ConfigurationFormats []configformat.Factory
+	// Deprecated: pass Components.Evaluators; both apply.
 	// Evaluators are the evaluators, besides flagd's own, that resolve the flags of a configuration format.
 	// Each one's format must be flagd's own or one of ConfigurationFormats.
 	Evaluators []evaluator.Factory
+	// Deprecated: pass Components.Sync; both apply.
 	// SyncFactories are the sync components, besides the official ones, that sources may select.
 	SyncFactories []sync.Factory
 	CORS          []string
@@ -94,7 +97,8 @@ func warnOnNoOpConfig(logger *logger.Logger, config Config) {
 
 // FromConfig builds a runtime from startup configurations
 // nolint: funlen
-func FromConfig(logger *logger.Logger, version string, config Config) (*Runtime, error) {
+func FromConfig(logger *logger.Logger, version string, config Config, components Components) (*Runtime, error) {
+	config = withComponents(config, components)
 	warnOnNoOpConfig(logger, config)
 
 	telCfg := telemetry.Config{
@@ -337,4 +341,12 @@ func configurationFormats(
 		formats[provider.URI] = format
 	}
 	return formats, nil
+}
+
+// withComponents appends the components to the deprecated slices of the Config, which keep applying.
+func withComponents(config Config, components Components) Config {
+	config.ConfigurationFormats = append(slices.Clone(config.ConfigurationFormats), components.ConfigurationFormats...) //nolint:staticcheck // deprecated, still applied
+	config.Evaluators = append(slices.Clone(config.Evaluators), components.Evaluators...)                               //nolint:staticcheck // deprecated, still applied
+	config.SyncFactories = append(slices.Clone(config.SyncFactories), components.Sync...)                               //nolint:staticcheck // deprecated, still applied
+	return config
 }

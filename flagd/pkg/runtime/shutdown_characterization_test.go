@@ -67,7 +67,7 @@ func characterizedConfig(t *testing.T, p ports) Config {
 // startRuntime runs the runtime on a context the test cancels, and returns once it reports ready.
 func startRuntime(t *testing.T, cfg Config) (cancel func(), done <-chan error) {
 	t.Helper()
-	rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg)
+	rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, Official())
 	require.NoError(t, err)
 	ctx, stop := context.WithCancel(context.Background())
 	result := make(chan error, 1)
