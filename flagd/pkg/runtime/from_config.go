@@ -8,8 +8,10 @@ import (
 	"strings"
 	"time"
 
+	flagdformat "github.com/open-feature-forking/openfeature-relay/configformat/flagd"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
@@ -262,6 +264,8 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		},
 		Syncs:           iSyncs,
 		Formats:         formats,
+		DefaultFormat:   flagdformat.NewFormat(store, logger.WithFields(zap.String("component", "configformat"))),
+		Bus:             events.NewBus(),
 		sourceReadiness: sourceReadiness,
 	}, nil
 }

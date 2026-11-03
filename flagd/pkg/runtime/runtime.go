@@ -12,6 +12,7 @@ import (
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
@@ -35,6 +36,19 @@ type Runtime struct {
 	// Formats holds the configuration format of each source that names one other than flagd's, keyed
 	// by source. Sources without an entry update the Evaluator.
 	Formats map[string]configformat.ConfigurationFormat
+	// DefaultFormat is the configuration format of the sources that name none, flagd's own. FromConfig sets it,
+	// and every source then goes through a format. Without it those sources update the Evaluator, publish no
+	// configuration change events and keep the log text of the evaluator.
+	DefaultFormat configformat.ConfigurationFormat
+	// Bus carries the configuration change events the runtime publishes once a format accepts a delivery.
+	Bus *events.Bus
+
+	// versions holds the version last accepted for each document, to tell a new version from a redelivery.
+	versions map[string]string
+	// initializedCh is closed once every configured source has delivered and been accepted.
+	initializedCh   chan struct{}
+	initializedOnce msync.Once
+	initChOnce      msync.Once
 
 	// sourceReadiness records whether each configured source has successfully updated the evaluator.
 	sourceReadiness map[string]bool
@@ -58,7 +72,7 @@ func (r *Runtime) start(ctx context.Context) error {
 	if len(r.Syncs) == 0 {
 		return errors.New("no sync implementation set")
 	}
-	if r.Evaluator == nil {
+	if r.Evaluator == nil && r.DefaultFormat == nil {
 		return errors.New("no evaluator set")
 	}
 	g, gCtx := errgroup.WithContext(ctx)
@@ -155,6 +169,13 @@ func (r *Runtime) updateAndEmit(payload sync.DataSync) {
 	var err error
 	if format, ok := r.Formats[payload.Source]; ok {
 		err = r.accept(format, payload)
+	} else if r.DefaultFormat != nil {
+		err = r.accept(r.DefaultFormat, payload)
+		// flagd's log text stays what the evaluator wrote; the span and the debug line name the source
+		var rejection configformat.Rejection
+		if errors.As(err, &rejection) {
+			err = errors.New(rejection.Reason)
+		}
 	} else {
 		err = r.Evaluator.SetState(payload)
 	}
@@ -179,6 +200,7 @@ func (r *Runtime) updateAndEmit(payload sync.DataSync) {
 		}
 		if allReady {
 			r.initialized.Store(true)
+			r.initializedOnce.Do(func() { close(r.initChan()) })
 		}
 	}
 	r.SyncService.Emit(payload.Source)
@@ -197,6 +219,7 @@ func (r *Runtime) accept(format configformat.ConfigurationFormat, payload sync.D
 		r.Logger.Debug(fmt.Sprintf(
 			"source %q, format %q, flag set %q, version %s: %d flags, %d added, %d updated, %d removed",
 			payload.Source, format.Type(), d.FlagSet, d.Version, len(d.FlagKeys), len(d.Added), len(d.Updated), len(d.Removed)))
+		r.publishChange(format.Type(), payload.Source, d)
 	}
 	for _, dropped := range result.Dropped {
 		r.Logger.Warn(fmt.Sprintf("dropped: %v", dropped))
