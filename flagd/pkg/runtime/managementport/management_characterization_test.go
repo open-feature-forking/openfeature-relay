@@ -24,6 +24,7 @@ import (
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature/flagd/flagd/pkg/runtime"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
 )
 
 const flags = `{"flags":{"f1":{"state":"ENABLED","defaultVariant":"on","variants":{"on":true,"off":false}}}}`
@@ -83,6 +84,9 @@ func TestManagementPort(t *testing.T) {
 		},
 	}, runtime.Official())
 	require.NoError(t, err)
+	// with OTEL_TRACES_EXPORTER unset, autoexport selects the OTLP span exporter, so FromConfig installs the trace
+	// provider and the W3C propagators; only OTEL_TRACES_EXPORTER=none leaves both noop
+	require.ElementsMatch(t, []string{"traceparent", "tracestate", "baggage"}, otel.GetTextMapPropagator().Fields())
 
 	done := make(chan error, 1)
 	go func() { done <- rt.Start() }()
