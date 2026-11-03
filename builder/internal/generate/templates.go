@@ -64,7 +64,7 @@ package main
 
 import (
 	"{{.CoreModule}}/pkg/distribution"
-	runtimecmd "{{.RuntimeModule}}/cmd"
+	runtimecmd "{{.CmdImport}}"
 	"{{.Module}}/components"
 )
 

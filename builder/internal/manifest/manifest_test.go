@@ -367,3 +367,27 @@ func TestReplaceToMissingOrWrongModule(t *testing.T) {
 	m.File = filepath.Join(dir, "manifest.yaml")
 	require.Equal(t, filepath.Join(root, "distributions", "x"), m.ReplacePath(m.Replaces[0]))
 }
+
+func TestCmdEntry(t *testing.T) {
+	withCmd := valid + "cmd: {module: example.com/edge/cmd, version: v1.0.0, import: example.com/edge/cmd/cli}\n"
+	m := parse(t, withCmd)
+	require.NoError(t, m.Validate())
+	require.NotNil(t, m.Cmd)
+	require.Equal(t, "example.com/edge/cmd", m.Cmd.Module)
+	require.Equal(t, "example.com/edge/cmd/cli", m.Cmd.Import)
+	require.Len(t, m.Entries(), 4, "the command line is not a component")
+
+	require.Nil(t, parse(t, valid).Cmd, "the command line is optional")
+
+	t.Run("at most one", func(t *testing.T) {
+		got := problems(t, valid+"cmd:\n  - {module: example.com/a, version: v1.0.0}\n  - {module: example.com/b, version: v1.0.0}\n")
+		require.Len(t, got, 1)
+		require.Contains(t, got[0], "cmd: a distribution has at most one command line")
+	})
+	t.Run("a version is mandatory and the module must differ from the components", func(t *testing.T) {
+		got := problems(t, valid+"cmd: {module: example.com/sync/file}\n")
+		require.Contains(t, strings.Join(got, "\n"), "cmd: version is mandatory")
+		got = problems(t, valid+"cmd: {module: example.com/sync/file, version: v0.1.0}\n")
+		require.Contains(t, strings.Join(got, "\n"), "listed more than once")
+	})
+}

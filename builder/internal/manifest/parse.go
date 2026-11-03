@@ -49,6 +49,12 @@ func Parse(file string, data []byte) (*Manifest, error) {
 			if e, ok := m.parseEntry(kv.value, "runtime"); ok {
 				m.Runtime = &e
 			}
+		case "cmd":
+			if kv.value.Kind == yaml.SequenceNode {
+				m.add(positionOf(kv.value), "cmd", "a distribution has at most one command line: give cmd one mapping with a module and a version, not a list")
+			} else if e, ok := m.parseEntry(kv.value, "cmd"); ok {
+				m.Cmd = &e
+			}
 		case string(SyncProviders):
 			m.SyncProviders = m.parseEntries(kv.value, key)
 		case string(ConfigurationFormats):
@@ -77,7 +83,7 @@ func Parse(file string, data []byte) (*Manifest, error) {
 		case "replaces":
 			m.parseReplaces(kv.value)
 		default:
-			m.add(positionOf(kv.key), "", fmt.Sprintf("unknown key %q (allowed: dist, runtime, %s, replaces)", key, allGroups()))
+			m.add(positionOf(kv.key), "", fmt.Sprintf("unknown key %q (allowed: dist, runtime, cmd, %s, replaces)", key, allGroups()))
 		}
 	}
 	return m, nil

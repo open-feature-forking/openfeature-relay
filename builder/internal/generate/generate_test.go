@@ -144,3 +144,23 @@ func TestPinnedRuntimeAndEveryModuleRequiredOnce(t *testing.T) {
 	require.Contains(t, gomod, "github.com/open-feature-forking/openfeature-relay/core v0.14.0")
 	require.Equal(t, 1, strings.Count(gomod, "example.com/keyvalue v1.0.0"))
 }
+
+// TestCustomCmdGolden pins the main package and the go.mod of a distribution that brings its own command line.
+func TestCustomCmdGolden(t *testing.T) {
+	text := sample + "cmd: {module: example.com/edge, version: v2.0.0, import: example.com/edge/cli}\n"
+	files, err := Render(parse(t, "/work/dist/manifest.yaml", text), Options{})
+	require.NoError(t, err)
+
+	for _, name := range []string{"main.go", "go.mod"} {
+		golden := filepath.Join("testdata", "golden-cmd", name+".golden")
+		if *update {
+			require.NoError(t, os.MkdirAll(filepath.Dir(golden), 0o755))
+			require.NoError(t, os.WriteFile(golden, files[name], 0o644))
+		}
+		want, err := os.ReadFile(golden)
+		require.NoError(t, err)
+		require.Equal(t, string(want), string(files[name]), name)
+	}
+	require.Contains(t, string(files["main.go"]), `runtimecmd "example.com/edge/cli"`)
+	require.NotContains(t, string(files["go.mod"]), "openfeature-relay/runtime ", "the runtime is not required when the distribution brings its command line")
+}

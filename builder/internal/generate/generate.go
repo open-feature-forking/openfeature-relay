@@ -101,8 +101,20 @@ func Render(m *manifest.Manifest, opts Options) (Files, error) {
 	data := templateData{
 		Module: m.ModulePath(), Name: m.Dist.Name, Items: items,
 		CoreModule: CoreModule, RuntimeModule: RuntimeModule, GoVersion: opts.GoVersion,
+		CmdImport: RuntimeModule + "/cmd",
 	}
-	requires := map[string]string{CoreModule: opts.CoreVersion, RuntimeModule: opts.RuntimeVersion}
+	if m.Cmd != nil {
+		data.CmdImport = m.Cmd.Import
+		if data.CmdImport == "" {
+			data.CmdImport = m.Cmd.Module
+		}
+	}
+	requires := map[string]string{CoreModule: opts.CoreVersion}
+	if m.Cmd == nil {
+		requires[RuntimeModule] = opts.RuntimeVersion
+	} else {
+		requires[m.Cmd.Module] = m.Cmd.Version
+	}
 	if m.Runtime != nil {
 		requires[RuntimeModule] = m.Runtime.Version
 	}
@@ -182,6 +194,8 @@ type moduleVersion struct{ Module, Version string }
 type templateData struct {
 	Module, Name, GoVersion   string
 	CoreModule, RuntimeModule string
-	Items                     []Item
-	Requires, Replaces        []moduleVersion
+	// CmdImport is the package whose Execute function is the command line of the distribution.
+	CmdImport          string
+	Items              []Item
+	Requires, Replaces []moduleVersion
 }

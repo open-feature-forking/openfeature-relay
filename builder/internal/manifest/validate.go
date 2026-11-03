@@ -72,6 +72,9 @@ func (m *Manifest) Validate() error {
 	if m.Runtime != nil {
 		entries = append([]GroupEntry{{Group: "runtime", Entry: *m.Runtime}}, entries...)
 	}
+	if m.Cmd != nil {
+		entries = append([]GroupEntry{{Group: "cmd", Entry: *m.Cmd}}, entries...)
+	}
 	m.validateEntries(entries, add)
 
 	// BR-001 and BR-002: what a distribution contains.
@@ -137,8 +140,8 @@ func (m *Manifest) validateEntries(entries []GroupEntry, add adder) {
 		if e.invalid {
 			continue
 		}
-		if ge.Group == "runtime" {
-			where = "runtime"
+		if ge.Group == "runtime" || ge.Group == "cmd" {
+			where = string(ge.Group)
 		}
 		switch {
 		case e.Module == "":
