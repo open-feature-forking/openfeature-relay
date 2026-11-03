@@ -1,0 +1,264 @@
+--config
+  shorthand: ""
+  type: string
+  default: ""
+  env: FLAGD_CONFIG
+  hidden: false
+  deprecated: ""
+  usage: config file (default is $HOME/.agent.yaml)
+--context-from-header
+  shorthand: "H"
+  type: stringToString
+  default: "[]"
+  env: FLAGD_CONTEXT_FROM_HEADER
+  hidden: false
+  deprecated: ""
+  usage: add key-value pairs to map header values to context values, where key is Header name, value is context key
+--context-value
+  shorthand: "X"
+  type: stringToString
+  default: "[]"
+  env: FLAGD_CONTEXT_VALUE
+  hidden: false
+  deprecated: ""
+  usage: add arbitrary key value pairs to the flag evaluation context
+--cors-origin
+  shorthand: "C"
+  type: stringSlice
+  default: "[]"
+  env: FLAGD_CORS_ORIGIN
+  hidden: false
+  deprecated: ""
+  usage: CORS allowed origins, * will allow all origins
+--debug
+  shorthand: "x"
+  type: bool
+  default: "false"
+  env: FLAGD_DEBUG
+  hidden: false
+  deprecated: ""
+  usage: verbose logging
+--disable-sync-metadata
+  shorthand: ""
+  type: bool
+  default: "false"
+  env: FLAGD_DISABLE_SYNC_METADATA
+  hidden: false
+  deprecated: ""
+  usage: Disables the getMetadata endpoint of the sync service. Defaults to false, but will default to true in later versions.
+--keep-alive-min-time
+  shorthand: ""
+  type: duration
+  default: "30s"
+  env: FLAGD_KEEP_ALIVE_MIN_TIME
+  hidden: false
+  deprecated: ""
+  usage: No-op, accepted for compatibility. The flag sync server is served by connect over net/http, which has no keepalive enforcement policy to configure and imposes no minimum ping interval.
+--keep-alive-permit-without-stream
+  shorthand: ""
+  type: bool
+  default: "true"
+  env: FLAGD_KEEP_ALIVE_PERMIT_WITHOUT_STREAM
+  hidden: false
+  deprecated: ""
+  usage: No-op, accepted for compatibility. The flag sync server is served by connect over net/http, which always permits keepalive pings without an active stream.
+--log-format
+  shorthand: "z"
+  type: string
+  default: "console"
+  env: FLAGD_LOG_FORMAT
+  hidden: false
+  deprecated: ""
+  usage: Set the logging format, e.g. console or json
+--management-port
+  shorthand: "m"
+  type: int32
+  default: "8014"
+  env: FLAGD_MANAGEMENT_PORT
+  hidden: false
+  deprecated: ""
+  usage: Port for management operations
+--max-request-body
+  shorthand: "B"
+  type: int64
+  default: "1000000"
+  env: FLAGD_MAX_REQUEST_BODY
+  hidden: false
+  deprecated: ""
+  usage: Maximum allowed request body size in bytes. Requests exceeding this are rejected with HTTP 413 (OFREP) or 429 (connect). Set to 0 to disable. WARNING: disabling this limit may allow memory exhaustion from oversized requests.
+--max-request-header
+  shorthand: "R"
+  type: int64
+  default: "1000000"
+  env: FLAGD_MAX_REQUEST_HEADER
+  hidden: false
+  deprecated: ""
+  usage: Maximum allowed request header size in bytes. Requests exceeding this are rejected with HTTP 431. Set to 0 to use Go's built-in default (1 MiB). WARNING: setting a very large or zero value may allow memory exhaustion from oversized headers.
+--metrics-exporter
+  shorthand: "t"
+  type: string
+  default: ""
+  env: FLAGD_METRICS_EXPORTER
+  hidden: false
+  deprecated: ""
+  usage: Set the metrics exporter. Default(if unset) is Prometheus. Can be override to otel - OpenTelemetry metric exporter. Overriding to otel require otelCollectorURI to be present
+--ofrep-port
+  shorthand: "r"
+  type: int32
+  default: "8016"
+  env: FLAGD_OFREP_PORT
+  hidden: false
+  deprecated: ""
+  usage: ofrep service port
+--ofrep-sse-enabled
+  shorthand: ""
+  type: bool
+  default: "true"
+  env: FLAGD_OFREP_SSE_ENABLED
+  hidden: false
+  deprecated: ""
+  usage: Enable the OFREP SSE change-notification endpoint (ADR-0008) at /ofrep/v1/sse/{channel} on the ofrep port, where the channel is a selector expression. Defaults to true.
+--ofrep-sse-inactivity-delay
+  shorthand: ""
+  type: int
+  default: "120"
+  env: FLAGD_OFREP_SSE_INACTIVITY_DELAY
+  hidden: false
+  deprecated: ""
+  usage: Inactivity delay (seconds) advertised to OFREP SSE clients in the eventStreams block. Clients close idle connections after this. Defaults to 120.
+--ofrep-sse-public-url
+  shorthand: ""
+  type: string
+  default: ""
+  env: FLAGD_OFREP_SSE_PUBLIC_URL
+  hidden: false
+  deprecated: ""
+  usage: Origin (scheme://host) advertised as the OFREP SSE eventStreams endpoint.origin. Omitted when empty, so clients resolve the requestUri against the OFREP base URL. Set when flagd is behind a proxy.
+--otel-ca-path
+  shorthand: "A"
+  type: string
+  default: ""
+  env: FLAGD_OTEL_CA_PATH
+  hidden: false
+  deprecated: ""
+  usage: tls certificate authority path to use with OpenTelemetry collector
+--otel-cert-path
+  shorthand: "D"
+  type: string
+  default: ""
+  env: FLAGD_OTEL_CERT_PATH
+  hidden: false
+  deprecated: ""
+  usage: tls certificate path to use with OpenTelemetry collector
+--otel-collector-uri
+  shorthand: "o"
+  type: string
+  default: ""
+  env: FLAGD_OTEL_COLLECTOR_URI
+  hidden: false
+  deprecated: ""
+  usage: Set the grpc URI of the OpenTelemetry collector for flagd runtime. If unset, the collector setup will be ignored and traces will not be exported.
+--otel-key-path
+  shorthand: "K"
+  type: string
+  default: ""
+  env: FLAGD_OTEL_KEY_PATH
+  hidden: false
+  deprecated: ""
+  usage: tls key path to use with OpenTelemetry collector
+--otel-reload-interval
+  shorthand: "I"
+  type: duration
+  default: "1h0m0s"
+  env: FLAGD_OTEL_RELOAD_INTERVAL
+  hidden: false
+  deprecated: ""
+  usage: how long between reloading the otel tls certificate from disk
+--port
+  shorthand: "p"
+  type: int32
+  default: "8013"
+  env: FLAGD_PORT
+  hidden: false
+  deprecated: ""
+  usage: Port to listen on
+--server-cert-path
+  shorthand: "c"
+  type: string
+  default: ""
+  env: FLAGD_SERVER_CERT_PATH
+  hidden: false
+  deprecated: ""
+  usage: Server side tls certificate path
+--server-key-path
+  shorthand: "k"
+  type: string
+  default: ""
+  env: FLAGD_SERVER_KEY_PATH
+  hidden: false
+  deprecated: ""
+  usage: Server side tls key path
+--socket-path
+  shorthand: "d"
+  type: string
+  default: ""
+  env: FLAGD_SOCKET_PATH
+  hidden: false
+  deprecated: ""
+  usage: Flagd unix socket path. With grpc the evaluations service will become available on this address. With http(s) the grpc-gateway proxy will use this address internally.
+--sources
+  shorthand: "s"
+  type: string
+  default: ""
+  env: FLAGD_SOURCES
+  hidden: false
+  deprecated: ""
+  usage: JSON representation of an array of SourceConfig objects. Required fields: uri (string) and provider (string). Optional source-specific fields are also available, see https://flagd.dev/reference/sync-configuration/#source-configuration
+--stream-deadline
+  shorthand: ""
+  type: duration
+  default: "0s"
+  env: FLAGD_STREAM_DEADLINE
+  hidden: false
+  deprecated: ""
+  usage: Set a server-side deadline for flagd sync and event streams (default 0, means no deadline).
+--strict-numeric-range
+  shorthand: ""
+  type: bool
+  default: "false"
+  env: FLAGD_STRICT_NUMERIC_RANGE
+  hidden: false
+  deprecated: ""
+  usage: Rejects numeric flag values outside [-(2^53-1), 2^53-1] with TYPE_MISMATCH. Defaults to false, but will default to true in later versions.
+--sync-http-enabled
+  shorthand: ""
+  type: bool
+  default: "true"
+  env: FLAGD_SYNC_HTTP_ENABLED
+  hidden: false
+  deprecated: ""
+  usage: Serve the flag configuration document over HTTP at /v1/flags on the sync port. Defaults to true.
+--sync-port
+  shorthand: "g"
+  type: int32
+  default: "8015"
+  env: FLAGD_SYNC_PORT
+  hidden: false
+  deprecated: ""
+  usage: Flag sync service port, serving gRPC, gRPC-Web and Connect
+--sync-socket-path
+  shorthand: "e"
+  type: string
+  default: ""
+  env: FLAGD_SYNC_SOCKET_PATH
+  hidden: false
+  deprecated: ""
+  usage: Flagd sync service socket path. With grpc the sync service will be available on this address.
+--uri
+  shorthand: "f"
+  type: stringSlice
+  default: "[]"
+  env: FLAGD_URI
+  hidden: false
+  deprecated: ""
+  usage: Set a sync provider uri to read data from, this can be a filepath, URL (HTTP and gRPC), FeatureFlag custom resource, or GCS, Azure Blob or S3. When flag keys are duplicated across multiple providers the merge priority follows the index of the flag arguments, as such flags from the uri at index 0 take the lowest precedence, with duplicated keys being overwritten by those from the uri at index 1. Please note that if you are using filepath, flagd only supports files with `.yaml/.yml/.json` extension.

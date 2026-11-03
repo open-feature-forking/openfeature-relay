@@ -1,0 +1,28 @@
+== configured
+connect on the service port, no header: "no"
+ofrep on the ofrep port, no header: "no"
+flag sync over HTTP on the sync port: status 200, Content-Type="application/json"
+connect, header X-Env: prod: "yes"
+ofrep, header X-Env: prod: "yes"
+ofrep, header X-Env: dev: "no"
+CORS preflight connect from https://app.example: status 204, Access-Control-Allow-Origin="https://app.example", Access-Control-Allow-Methods="POST"
+CORS preflight connect from https://other.example: status 204
+CORS preflight ofrep from https://app.example: status 204, Access-Control-Allow-Origin="https://app.example", Access-Control-Allow-Methods="POST"
+CORS preflight ofrep from https://other.example: status 204
+CORS preflight flag sync from https://app.example: status 204, Access-Control-Allow-Origin="https://app.example", Access-Control-Allow-Methods="POST"
+CORS preflight flag sync from https://other.example: status 204
+ofrep bulk: status 200, eventStreams [{"type":"sse","endpoint":{"origin":"https://relay.example","requestUri":"/ofrep/v1/sse"},"inactivityDelaySec":77}]
+ofrep body over the limit: status 413
+connect body over the limit: status 429
+ofrep header over the limit: status 200
+== sse and sync over http off
+ofrep bulk: status 200, eventStreams absent
+ofrep SSE endpoint: status 404
+flag sync over HTTP: status 404
+sync GetMetadata disabled: status 501
+== tls and stream deadline
+connect over https: status 200 "no"
+connect over plain http: status 400
+flag sync over https: status 200
+ofrep stays plain http: status 200
+flag sync stream: 1 message(s), ended by the deadline: true, error code: deadline_exceeded
