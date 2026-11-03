@@ -98,8 +98,15 @@ type SourceTyper interface {
 	SourceType() string
 }
 
-// Aliased is implemented by a FetcherFactory that is also selected by other provider names. Each alias names the
-// only fetch trigger attached to a source selected by it.
+// Alias is a provider name that selects a fetcher factory together with the only fetch trigger attached to the
+// sources it selects.
+type Alias struct {
+	Name    string
+	Trigger TriggerConfig
+}
+
+// Aliased is implemented by a FetcherFactory that is also selected by other provider names, in the order they are
+// listed to the Operator.
 type Aliased interface {
-	Aliases() map[string]TriggerConfig
+	Aliases() []Alias
 }

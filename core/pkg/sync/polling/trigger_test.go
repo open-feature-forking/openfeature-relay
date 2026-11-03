@@ -190,3 +190,31 @@ func TestCronPollerStartWaitsForRunningCallbacks(t *testing.T) {
 		t.Fatal("Start did not return once the callback had")
 	}
 }
+
+func TestIntervalTriggerWithoutBackoffStaysOnTheSchedule(t *testing.T) {
+	trigger, err := NewIntervalTrigger(30, "")
+	require.NoError(t, err)
+	trigger.WithoutBackoff()
+
+	sleeps := make(chan time.Duration)
+	trigger.now = func() time.Time { return at(14, 3, 17) }
+	trigger.sleep = func(ctx context.Context, d time.Duration) bool {
+		select {
+		case sleeps <- d:
+			return true
+		case <-ctx.Done():
+			return false
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	signals := make(chan struct{}, 8)
+	go func() { _ = trigger.Run(ctx, func() { signals <- struct{}{} }) }()
+
+	require.Equal(t, 13*time.Second, <-sleeps)
+	for range 4 {
+		<-signals
+		trigger.Observe(errors.New("down"))
+		require.Equal(t, 13*time.Second, <-sleeps)
+	}
+}

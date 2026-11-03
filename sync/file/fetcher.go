@@ -108,10 +108,10 @@ func (Factory) DefaultTriggers(sync.SourceConfig) []sync.TriggerConfig {
 }
 
 // Aliases are the provider names that select the file provider with one specific file watch.
-func (Factory) Aliases() map[string]sync.TriggerConfig {
-	return map[string]sync.TriggerConfig{
-		FSNOTIFY: {Type: FSNOTIFY},
-		FILEINFO: {Type: FILEINFO},
+func (Factory) Aliases() []sync.Alias {
+	return []sync.Alias{
+		{Name: FSNOTIFY, Trigger: sync.TriggerConfig{Type: FSNOTIFY}},
+		{Name: FILEINFO, Trigger: sync.TriggerConfig{Type: FILEINFO}},
 	}
 }
 

@@ -110,7 +110,10 @@ func TestFactory(t *testing.T) {
 	_, ok = f.ParseURI("http://host/flags")
 	require.False(t, ok)
 
-	require.Equal(t, map[string]sync.TriggerConfig{"fsnotify": {Type: "fsnotify"}, "fileinfo": {Type: "fileinfo"}}, f.Aliases())
+	require.Equal(t, []sync.Alias{
+		{Name: "fsnotify", Trigger: sync.TriggerConfig{Type: "fsnotify"}},
+		{Name: "fileinfo", Trigger: sync.TriggerConfig{Type: "fileinfo"}},
+	}, f.Aliases())
 
 	t.Setenv("KUBERNETES_SERVICE_HOST", "")
 	require.Equal(t, []sync.TriggerConfig{{Type: "fileinfo"}}, f.DefaultTriggers(sync.SourceConfig{}))
