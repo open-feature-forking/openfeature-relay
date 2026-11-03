@@ -2,7 +2,12 @@ module github.com/open-feature-forking/openfeature-relay/telemetry/otel
 
 go 1.26.0
 
-require github.com/open-feature-forking/openfeature-relay/core v0.20.0
+require (
+	github.com/open-feature-forking/openfeature-relay/core v0.20.0
+	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.72.0
+)
+
+require github.com/felixge/httpsnoop v1.1.0 // indirect
 
 require (
 	connectrpc.com/connect v1.19.1
@@ -42,7 +47,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.47.0
 	go.opentelemetry.io/otel/sdk/log v1.47.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.47.0
-	go.opentelemetry.io/otel/trace v1.47.0 // indirect
+	go.opentelemetry.io/otel/trace v1.47.0
 	go.opentelemetry.io/proto/otlp v1.11.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0
