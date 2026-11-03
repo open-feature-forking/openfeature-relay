@@ -56,8 +56,9 @@ func TestServingStartsAfterFiveSeconds(t *testing.T) {
 	require.GreaterOrEqual(t, time.Since(began), 5*time.Second)
 }
 
-// TestLastModifiedMovesOnUnchangedRedelivery pins that every delivery stamps Last-Modified, a redelivery
-// of unchanged flags included. Flipped when Last-Modified follows configuration change events.
+// TestLastModifiedMovesOnUnchangedRedelivery pins that the service stamps Last-Modified on every Emit, an unchanged
+// redelivery included. The runtime no longer emits for a delivery that changes nothing: the endpoint emits for
+// the configuration change events (TestLastModifiedFollowsConfigurationChangeEvents).
 func TestLastModifiedMovesOnUnchangedRedelivery(t *testing.T) {
 	const port = 18082
 

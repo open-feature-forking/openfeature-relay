@@ -1,0 +1,17 @@
+event sink
+  1. receives only the kinds it subscribes to
+     expected: events of the kinds the factory declares arrive, events of the other kinds do not
+  2. receives events in batches
+     expected: 25 events published with batchSize 10 arrive complete, in batches of at most 10, in fewer than 25 batches
+  3. drops and counts events instead of blocking the publisher when the buffer is full
+     expected: with a stalled external system and a buffer of 5, publishing 200 events returns within 200ms and counts all but a handful as dropped (buffer_full)
+  4. delivers the buffered events on shutdown
+     expected: 10 buffered events, none flushed yet by size or age, are delivered on Close, and none is counted as dropped
+  5. returns from shutdown within its context while the external system stalls
+     expected: Close returns within its context of 200ms while the external system stalls, and counts the 10 undelivered events as dropped (shutdown)
+  6. delivers a batch the external system refused for now once it accepts again
+     expected: 5 events refused for now are delivered after the external system accepts again, and none is dropped
+  7. does not repeat a batch the external system refused for good
+     expected: 5 events refused for good are counted as dropped (permanent) and never delivered, even after the external system accepts again
+  8. rejects an invalid configuration naming the faulty value
+     expected: the factory rejects the configuration with an error that contains "bogus"

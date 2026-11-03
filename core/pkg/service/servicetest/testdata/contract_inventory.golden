@@ -1,0 +1,34 @@
+resolver
+  1. declarations
+  2. creates from what it declared
+  3. serves and returns within the budget with its connections ended
+  4. a serve error is returned
+  5. resolves through the injected resolver with the effective selector
+  6. publishes one evaluation event per resolved flag
+  7. honours the bound selector and the client's selector
+vendor evaluator
+  1. declarations
+  2. creates from what it declared
+  3. serves and returns within the budget with its connections ended
+  4. a serve error is returned
+  5. resolves through the injected resolver with the effective selector
+  6. publishes one evaluation event per resolved flag
+config server
+  1. declarations
+  2. creates from what it declared
+  3. serves and returns within the budget with its connections ended
+  4. a serve error is returned
+  5. serves the documents of the requested format, unchanged, with versions
+  6. the validator follows the document version
+  7. reacts to a configuration change event for its selector only
+collector
+  1. declarations
+  2. creates from what it declared
+  3. serves and returns within the budget with its connections ended
+  4. a serve error is returned
+  5. relays events marked in-process
+silent
+  1. declarations
+  2. creates from what it declared
+  3. serves and returns within the budget with its connections ended
+  4. a serve error is returned

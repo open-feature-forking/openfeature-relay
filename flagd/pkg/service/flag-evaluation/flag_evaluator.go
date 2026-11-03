@@ -166,7 +166,11 @@ func (s *OldFlagEvaluationService) EventStream(
 			if err != nil {
 				s.logger.Error(err.Error())
 			}
-		case notification := <-requestNotificationChan:
+		case notification, open := <-requestNotificationChan:
+			if !open {
+				// the subscription ended with the store watch
+				return nil
+			}
 			d, err := structpb.NewStruct(notification.Data)
 			if err != nil {
 				s.logger.Error(err.Error())
@@ -179,6 +183,15 @@ func (s *OldFlagEvaluationService) EventStream(
 				s.logger.Error(err.Error())
 			}
 		case <-ctx.Done():
+			// a notification queued before the context ended, provider_shutdown for one, is still sent
+			select {
+			case notification, open := <-requestNotificationChan:
+				if open {
+					d, _ := structpb.NewStruct(notification.Data)
+					_ = stream.Send(&schemaV1.EventStreamResponse{Type: string(notification.Type), Data: d})
+				}
+			default:
+			}
 			return nil
 		}
 	}

@@ -253,7 +253,7 @@ var startCmd = &cobra.Command{
 			HeaderToContextKeyMappings:   headerToContextKeyMappings,
 			MaxRequestBodyBytes:          maxRequestBodyBytes,
 			MaxRequestHeaderBytes:        maxRequestHeaderBytes,
-		})
+		}, runtime.Official())
 		if err != nil {
 			rtLogger.Fatal(err.Error())
 		}

@@ -72,7 +72,7 @@ type entry struct {
 // for each evaluator.
 func (r *Router) Evaluate(ctx context.Context, req evaluator.Request, dst []evaluator.Result) ([]evaluator.Result, model.Metadata, error) {
 	if len(r.routes) == 1 {
-		return r.routes[0].Evaluator.Evaluate(ctx, req, dst)
+		return r.evaluate(ctx, r.routes[0], req, dst)
 	}
 
 	view := r.store.View()
@@ -116,7 +116,7 @@ func (r *Router) Evaluate(ctx context.Context, req evaluator.Request, dst []eval
 		if err != nil {
 			for _, key := range keysOf[i] {
 				results = append(results, evaluator.Result{
-					FlagKey: key, Reason: model.ErrorReason, ErrorCode: model.GeneralErrorCode,
+					FlagKey: key, Reason: model.ErrorReason, ErrorCode: model.GeneralErrorCode, Format: route.Format,
 					ErrorMessage: model.GetErrorMessage(model.GeneralErrorCode), Metadata: meta,
 				})
 			}
@@ -132,6 +132,7 @@ func (r *Router) Evaluate(ctx context.Context, req evaluator.Request, dst []eval
 			if w, ok := winners[pair{res.FlagSet, res.FlagKey}]; ok && w.route != i {
 				continue
 			}
+			res.Format = route.Format
 			results = append(results, res)
 		}
 	}
@@ -169,7 +170,27 @@ func (r *Router) single(
 	if best == -1 {
 		return append(dst, notFound(req.FlagKey, meta)), meta, nil
 	}
-	return r.routes[entries[best].route].Evaluator.Evaluate(ctx, req, dst)
+	return r.evaluate(ctx, r.routes[entries[best].route], req, dst)
+}
+
+// evaluate hands the request to the route and stamps the results it appended with the route's format.
+func (r *Router) evaluate(ctx context.Context, route Route, req evaluator.Request, dst []evaluator.Result) ([]evaluator.Result, model.Metadata, error) {
+	from := len(dst)
+	out, meta, err := route.Evaluator.Evaluate(ctx, req, dst)
+	for i := from; i < len(out); i++ {
+		out[i].Format = route.Format
+	}
+	return out, meta, err
+}
+
+// Evaluator returns the evaluator of a configuration format, for a caller that needs its native results.
+func (r *Router) Evaluator(format string) (evaluator.Evaluator, bool) {
+	for _, route := range r.routes {
+		if route.Format == format {
+			return route.Evaluator, true
+		}
+	}
+	return nil, false
 }
 
 // collect lists the flags the documents of all routes hold, restricted by the selector and the wanted keys.

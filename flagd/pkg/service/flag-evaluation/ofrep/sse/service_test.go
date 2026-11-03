@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/launchdarkly/eventsource"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -39,11 +39,12 @@ func streamURL(ts *httptest.Server, channel string) string {
 // a flagSetId selector receives an ADR-0008 refetchEvaluation event when that flag set changes.
 func TestService_PublishesRefetchOnChange(t *testing.T) {
 	log := logger.NewLogger(nil, false)
+	bus := events.NewBus()
 	s, err := store.NewStore(log, []string{"src1"})
 	require.NoError(t, err)
 
 	// long heartbeat so keep-alive comments do not interfere with the assertion
-	svc := New(s, Config{Logger: log, HeartbeatInterval: time.Hour})
+	svc := New(s, Config{Logger: log, HeartbeatInterval: time.Hour, Bus: bus, Formats: testFormats})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -59,7 +60,7 @@ func TestService_PublishesRefetchOnChange(t *testing.T) {
 	// eventsource writes the 200 before registering, so Subscribe returning is not enough
 	time.Sleep(100 * time.Millisecond)
 
-	s.Update("src1", []model.Flag{testFlag("fs1", "a", "on")}, model.Metadata{"flagSetId": "fs1"}, false)
+	deliver(t, s, bus, "flagd", "src1", "fs1", "v1", "a")
 
 	select {
 	case ev := <-stream.Events:
@@ -79,13 +80,14 @@ func TestService_PublishesRefetchOnChange(t *testing.T) {
 // catch-all channel and was woken by every change.
 func TestService_SelectorScopedNotifications(t *testing.T) {
 	log := logger.NewLogger(nil, false)
+	bus := events.NewBus()
 	s, err := store.NewStore(log, []string{"src1", "src2"})
 	require.NoError(t, err)
 
-	s.Update("src1", []model.Flag{testFlag("fs1", "a", "on")}, model.Metadata{"flagSetId": "fs1"}, false)
-	s.Update("src2", []model.Flag{testFlag("fs2", "b", "on")}, model.Metadata{"flagSetId": "fs2"}, false)
+	deliver(t, s, bus, "flagd", "src1", "fs1", "v1", "a")
+	deliver(t, s, bus, "flagd", "src2", "fs2", "v1", "b")
 
-	svc := New(s, Config{Logger: log, HeartbeatInterval: time.Hour})
+	svc := New(s, Config{Logger: log, HeartbeatInterval: time.Hour, Bus: bus, Formats: testFormats})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() { _ = svc.Start(ctx) }()
@@ -102,7 +104,7 @@ func TestService_SelectorScopedNotifications(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	s.Update("src2", []model.Flag{testFlag("fs2", "b", "off")}, model.Metadata{"flagSetId": "fs2"}, false)
+	deliver(t, s, bus, "flagd", "src2", "fs2", "v2", "b")
 
 	select {
 	case ev := <-byFlagSet.Events:

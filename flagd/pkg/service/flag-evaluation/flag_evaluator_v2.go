@@ -111,7 +111,11 @@ func (s *FlagEvaluationServiceV2) EventStream(
 			if err != nil {
 				s.logger.Error(err.Error())
 			}
-		case notification := <-requestNotificationChan:
+		case notification, open := <-requestNotificationChan:
+			if !open {
+				// the subscription ended with the store watch
+				return nil
+			}
 			d, err := structpb.NewStruct(notification.Data)
 			if err != nil {
 				s.logger.Error(err.Error())
@@ -124,6 +128,15 @@ func (s *FlagEvaluationServiceV2) EventStream(
 				s.logger.Error(err.Error())
 			}
 		case <-ctx.Done():
+			// a notification queued before the context ended, provider_shutdown for one, is still sent
+			select {
+			case notification, open := <-requestNotificationChan:
+				if open {
+					d, _ := structpb.NewStruct(notification.Data)
+					_ = stream.Send(&evalV2.EventStreamResponse{Type: string(notification.Type), Data: d})
+				}
+			default:
+			}
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				s.logger.Debug(fmt.Sprintf("server-side deadline of %s exceeded, exiting stream request with grpc error code 4", s.deadline.String()))
 				return connect.NewError(connect.CodeDeadlineExceeded, fmt.Errorf("%s", "stream closed due to server-side timeout"))

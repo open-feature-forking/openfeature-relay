@@ -23,6 +23,8 @@ test/service-example:opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|
 test/sync-example:robfig|opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|cloud.google.com|github.com/Azure|github.com/aws|open-feature/flagd/flagd|openfeature-relay/(sync|telemetry|evaluator|configformat)/
 # The example telemetry provider requires the core only: no telemetry SDK, transport or flagd module.
 test/telemetry-example:robfig|opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|cloud.google.com|github.com/Azure|github.com/aws|prometheus|open-feature/flagd/flagd|openfeature-relay/(sync|telemetry|evaluator|configformat)/
+# BR-001 of UC-005: the example middleware requires the core only, no telemetry SDK, transport or flagd module.
+test/middleware-example:robfig|opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|cloud.google.com|github.com/Azure|github.com/aws|prometheus|open-feature/flagd/flagd|openfeature-relay/(sync|telemetry|evaluator|configformat)/
 # The example event sink requires the core only: no vendor client, transport or flagd module.
 test/eventsink-example:robfig|opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|cloud.google.com|github.com/Azure|github.com/aws|prometheus|open-feature/flagd/flagd|openfeature-relay/(sync|telemetry|evaluator|configformat)/
 # UC-007 BR-009 of the engine module: the configuration format example, with its evaluator, needs core only. The tests that
