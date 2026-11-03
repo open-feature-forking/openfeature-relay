@@ -19,7 +19,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service/ofrep"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
+	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"github.com/open-feature/flagd/flagd/pkg/service/middleware"
 	compressmw "github.com/open-feature/flagd/flagd/pkg/service/middleware/compress"
 	"github.com/open-feature/flagd/flagd/pkg/service/middleware/metrics/metricstest"

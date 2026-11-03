@@ -17,7 +17,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
+	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	compressmw "github.com/open-feature/flagd/flagd/pkg/service/middleware/compress"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

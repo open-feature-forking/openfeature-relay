@@ -4,7 +4,7 @@ package metricstest
 import (
 	"testing"
 
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
+	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/metric/noop"

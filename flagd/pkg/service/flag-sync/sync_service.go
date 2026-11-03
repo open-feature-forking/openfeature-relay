@@ -13,7 +13,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
+	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )

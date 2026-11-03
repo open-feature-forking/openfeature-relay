@@ -3,17 +3,23 @@
 # NFR-011: the evaluator interfaces carry neither the JsonLogic engine nor the JSON schema library.
 core:./pkg/evaluator:opentelemetry|grpc|connectrpc|k8s.io|gocloud|jsonlogic|jsonschema
 core:./pkg/evaluator/...:opentelemetry|grpc|connectrpc|k8s.io|gocloud
-core:./pkg/configformat/...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|jsonlogic|core/pkg/evaluator|core/pkg/sync/
+core:./pkg/configformat/...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|jsonlogic|core/pkg/evaluator|openfeature-relay/sync/
 # The service interfaces and the OFREP models stay light.
 core:./pkg/service/...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|jsonlogic|jsonschema
-# Q2: the sync providers import no telemetry (blob carries OpenTelemetry through gocloud's own tracing).
-core:./pkg/sync/file:go.opentelemetry.io
-core:./pkg/sync/grpc:go.opentelemetry.io
-core:./pkg/sync/http:go.opentelemetry.io
-core:./pkg/sync/kubernetes:go.opentelemetry.io
+# The core module imports no telemetry, transport, platform client or other library module.
+core:./...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|cloud.google.com|github.com/Azure|github.com/aws|openfeature-relay/(sync|telemetry)/
+# Q2: the sync providers import no telemetry and no other sync module.
+sync/file:./...:go.opentelemetry.io|openfeature-relay/(telemetry|sync/(flagd-grpc|http|openfeature-operator|blob|gcs|azblob|s3|builder))
+sync/flagd-grpc:./...:go.opentelemetry.io|openfeature-relay/(telemetry|sync/(file|http|openfeature-operator|blob|gcs|azblob|s3|builder))
+sync/http:./...:go.opentelemetry.io|openfeature-relay/(telemetry|sync/(file|flagd-grpc|openfeature-operator|blob|gcs|azblob|s3|builder))
+sync/openfeature-operator:./...:go.opentelemetry.io|openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|blob|gcs|azblob|s3|builder))
 # Q12: each blob provider pulls only its own cloud's SDK into its package graph; the base none. (gocloud's shared user-agent code
 # brings a few cloud.google.com/go/auth packages into every driver that uses it, so azblob names the GCS SDK instead.)
-core:./pkg/sync/blob:cloud.google.com|github.com/Azure|github.com/aws
-core:./pkg/sync/gcs:github.com/Azure|github.com/aws
-core:./pkg/sync/azblob:cloud.google.com/go/storage|github.com/aws
-core:./pkg/sync/s3:cloud.google.com|github.com/Azure
+sync/blob:./...:cloud.google.com|github.com/Azure|github.com/aws|openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|openfeature-operator|gcs|azblob|s3|builder))
+sync/gcs:./...:github.com/Azure|github.com/aws|openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|openfeature-operator|azblob|s3|builder))
+sync/azblob:./...:cloud.google.com/go/storage|github.com/aws|openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|openfeature-operator|gcs|s3|builder))
+sync/s3:./...:cloud.google.com|github.com/Azure|openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|openfeature-operator|gcs|azblob|builder))
+# The sync builder dispatches to the sync modules and knows no telemetry module.
+sync/builder:./...:openfeature-relay/telemetry/
+# The telemetry module imports core only: no sync module and no platform client.
+telemetry/otel:./...:openfeature-relay/sync/|k8s.io|gocloud|cloud.google.com|github.com/Azure|github.com/aws

@@ -5,7 +5,7 @@ ALL_GO_MOD_DIRS := $(shell find . \( -path ./test/integration -o -path ./.claude
 
 # The library modules: what embedders import. Tests, the FIPS tests and the benchmarks run on exactly
 # these (plus the binaries), and testdata/go-packages.txt pins the packages they contain.
-GO_LIB_MODULE_DIRS := ./core
+GO_LIB_MODULE_DIRS := ./core ./sync/file ./sync/flagd-grpc ./sync/http ./sync/openfeature-operator ./sync/blob ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel
 
 # The FIPS variant builds against the CMVP-certified Go Cryptographic Module
 # v1.0.0 (certificate #5247). The literal version is required; the
@@ -133,6 +133,8 @@ check-package-coverage:
 # testdata/module-boundaries.txt lists <module dir>:<packages>:<forbidden import path regexp>; no package of
 # <packages>, nor anything it imports, may match.
 .PHONY: check-module-boundary check-evaluator-boundary
+# testdata/module-graph-boundaries.txt lists <module dir>:<forbidden module path regexp>; none of the modules in the
+# module graph of <module dir> (built outside the workspace, as an embedder would) may match.
 check-module-boundary:
 	@while IFS=: read -r dir pkgs forbidden; do \
 		forbidden=$$(printf '%s' "$$forbidden" | tr -d '\r'); \
@@ -142,15 +144,23 @@ check-module-boundary:
 			echo "$$dir $$pkgs must not depend on the packages listed above"; exit 1; \
 		fi; \
 	done < testdata/module-boundaries.txt
+	@while IFS=: read -r dir forbidden; do \
+		forbidden=$$(printf '%s' "$$forbidden" | tr -d '\r'); \
+		case "$$dir" in ''|'#'*) continue;; esac; \
+		mods=$$(cd $$dir && GOWORK=off go list -m all) || exit 1; \
+		if echo "$$mods" | grep -E "$$forbidden"; then \
+			echo "$$dir must not have the modules listed above in its module graph"; exit 1; \
+		fi; \
+	done < testdata/module-graph-boundaries.txt
 check-evaluator-boundary: check-module-boundary
 install-mockgen:
 	go install go.uber.org/mock/mockgen@v0.4.0
 mockgen: install-mockgen
-	cd core; mockgen -source=pkg/sync/http/http_sync.go -destination=pkg/sync/http/mock/http.go -package=syncmock
-	cd core; mockgen -source=pkg/sync/grpc/grpc_sync.go -destination=pkg/sync/grpc/mock/grpc.go -package=grpcmock
-	cd core; mockgen -source=pkg/sync/grpc/credentials/builder.go -destination=pkg/sync/grpc/credentials/mock/builder.go -package=credendialsmock
+	cd sync/http; mockgen -source=http_sync.go -destination=mock/http.go -package=syncmock
+	cd sync/flagd-grpc; mockgen -source=grpc_sync.go -destination=mock/grpc.go -package=grpcmock
+	cd sync/flagd-grpc; mockgen -source=credentials/builder.go -destination=credentials/mock/builder.go -package=credendialsmock
 	cd core; mockgen -source=pkg/evaluator/ievaluator.go -destination=pkg/evaluator/mock/ievaluator.go -package=evalmock
-	cd core; mockgen -source=pkg/sync/builder/syncbuilder.go -destination=pkg/sync/builder/mock/syncbuilder.go -package=middlewaremocksyncbuildermock
+	cd sync/builder; mockgen -source=syncbuilder.go -destination=mock/syncbuilder.go -package=middlewaremocksyncbuildermock
 	cd flagd; mockgen -source=pkg/service/middleware/interface.go -destination=pkg/service/middleware/mock/interface.go -package=middlewaremock
 	cd flagd; mockgen -source=pkg/service/flag-evaluation/flag_evaluator_v2.go -destination=pkg/service/flag-evaluation/mock/eventstream.go -package=flagevalmock
 generate-docs:

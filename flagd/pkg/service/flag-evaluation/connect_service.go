@@ -24,7 +24,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
+	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	flagdService "github.com/open-feature/flagd/flagd/pkg/service"
 	"github.com/open-feature/flagd/flagd/pkg/service/middleware"
 	corsmw "github.com/open-feature/flagd/flagd/pkg/service/middleware/cors"

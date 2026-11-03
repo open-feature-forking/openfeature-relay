@@ -10,7 +10,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
+	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation/ofrep/sse"
 	compressmw "github.com/open-feature/flagd/flagd/pkg/service/middleware/compress"
 	corsmw "github.com/open-feature/flagd/flagd/pkg/service/middleware/cors"

@@ -14,9 +14,9 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	syncbuilder "github.com/open-feature-forking/openfeature-relay/core/pkg/sync/builder"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/grpc"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
+	syncbuilder "github.com/open-feature-forking/openfeature-relay/sync/builder"
+	flagdgrpc "github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc"
+	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"github.com/open-feature/flagd/flagd/pkg/evaluation"
 	flageval "github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation"
 	"github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation/ofrep"
@@ -255,7 +255,7 @@ func syncProvidersFromConfig(
 	logger *logger.Logger,
 	sources []sync.SourceConfig,
 	syncMetricsRecorder sync.MetricsRecorder,
-	streamMetricsRecorder grpc.StreamMetricsRecorder,
+	streamMetricsRecorder flagdgrpc.StreamMetricsRecorder,
 ) ([]sync.ISync, error) {
 	builder := syncbuilder.NewSyncBuilder()
 	builder.SyncMetricsRecorder = syncMetricsRecorder
