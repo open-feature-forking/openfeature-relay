@@ -27,9 +27,8 @@ type StreamingSyncProvider interface {
 	IsReady() bool
 }
 
-// ISync is the former name of StreamingSyncProvider.
-//
-// Deprecated: use StreamingSyncProvider.
+// ISync is the former name of StreamingSyncProvider, kept as an alias so that existing code compiles. New code uses
+// StreamingSyncProvider.
 type ISync = StreamingSyncProvider
 
 // DataSync is the data contract between Runtime and sync implementations
