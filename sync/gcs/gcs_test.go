@@ -3,6 +3,7 @@ package gcs
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -11,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	gosync "sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
@@ -273,4 +275,49 @@ func TestFactory(t *testing.T) {
 	require.False(t, ok)
 	require.True(t, Matches("gs://bucket/o"))
 	require.False(t, Matches("s3://bucket/o"))
+}
+
+// TestClientIsCreatedOnceAndClosedOnShutdown: credentials are looked up when the first fetch creates the client, and
+// the client with its token source is kept for every later fetch.
+func TestClientIsCreatedOnceAndClosedOnShutdown(t *testing.T) {
+	s := startStub(t)
+	var created atomic.Int32
+	f, err := factory(nil, func() { created.Add(1) }).CreateFetcher(sync.Settings{
+		Source: sync.SourceConfig{URI: "gs://bucket/flags.json?anonymous=true"}, Logger: logger.NewLogger(nil, false),
+	})
+	require.NoError(t, err)
+	ctx := context.Background()
+	require.Zero(t, created.Load(), "no client before the first fetch")
+
+	first, err := f.Fetch(ctx, "")
+	require.NoError(t, err)
+	for range 3 {
+		res, err := f.Fetch(ctx, first.Version)
+		require.NoError(t, err)
+		require.True(t, res.Unchanged)
+	}
+	s.set(flagsB)
+	_, err = f.Fetch(ctx, first.Version)
+	require.NoError(t, err)
+	require.Equal(t, int32(1), created.Load(), "one client for all five fetches")
+
+	require.NoError(t, f.(io.Closer).Close())
+	_, err = f.Fetch(ctx, "")
+	require.NoError(t, err)
+	require.Equal(t, int32(2), created.Load(), "a closed client is not used again")
+}
+
+func TestFailedClientCreationIsTriedAgain(t *testing.T) {
+	startStub(t)
+	var created atomic.Int32
+	// a credentials file that does not exist makes the first creation fail
+	t.Setenv("GOOGLE_APPLICATION_CREDENTIALS", filepath.Join(t.TempDir(), "missing.json"))
+	t.Setenv("STORAGE_EMULATOR_HOST", "")
+	f, err := factory(nil, func() { created.Add(1) }).CreateFetcher(sync.Settings{
+		Source: sync.SourceConfig{URI: "gs://bucket/flags.json"}, Logger: logger.NewLogger(nil, false),
+	})
+	require.NoError(t, err, "missing credentials do not fail at startup")
+	_, err = f.Fetch(context.Background(), "")
+	require.Error(t, err)
+	require.Zero(t, created.Load())
 }

@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -160,4 +161,12 @@ func (f Factory) CreateFetcher(settings sync.Settings) (sync.Fetcher, error) {
 		}
 	}
 	return New(f.Kind, bucket, object, store, settings.Logger), nil
+}
+
+// Close closes the store when it is an io.Closer, which the fetching sync provider calls on shutdown.
+func (f *Fetcher) Close() error {
+	if closer, ok := f.store.(io.Closer); ok {
+		return closer.Close()
+	}
+	return nil
 }

@@ -39,15 +39,15 @@ func Matches(uri string) bool {
 
 // NewFactory creates the factory of gs:// sources.
 func NewFactory() blobfetch.Factory {
-	return factory(nil)
+	return factory(nil, nil)
 }
 
 // factory creates the factory with extra options for the storage client, which the tests use to reach a stub.
-func factory(clientOptions []option.ClientOption) blobfetch.Factory {
+func factory(clientOptions []option.ClientOption, created func()) blobfetch.Factory {
 	return blobfetch.Factory{
 		Kind: Provider, Prefix: "gs://", Scheme: scheme,
 		Open: func(bucketURL, object string) (blobfetch.Store, error) {
-			return open(bucketURL, object, clientOptions)
+			return open(bucketURL, object, clientOptions, created)
 		},
 	}
 }
@@ -59,13 +59,18 @@ type store struct {
 	object        string
 	anonymous     bool
 	clientOptions []option.ClientOption
+	// created is called each time a client is created, which the tests count
+	created func()
+
+	clientMu gosync.Mutex
+	c        *storage.Client
 
 	mu         gosync.Mutex
 	generation int64
 }
 
 // open reads the options of a bucket URL, as "gs://bucket?anonymous=true".
-func open(bucketURL, object string, clientOptions []option.ClientOption) (*store, error) {
+func open(bucketURL, object string, clientOptions []option.ClientOption, created func()) (*store, error) {
 	fail := func(err error) (*store, error) { return nil, fmt.Errorf("open bucket %v: %w", bucketURL, err) }
 	u, err := url.Parse(bucketURL)
 	if err != nil {
@@ -77,7 +82,7 @@ func open(bucketURL, object string, clientOptions []option.ClientOption) (*store
 			return fail(fmt.Errorf("invalid query parameter %q", k))
 		}
 	}
-	s := &store{bucket: u.Host, object: object, clientOptions: clientOptions}
+	s := &store{bucket: u.Host, object: object, clientOptions: clientOptions, created: created}
 	if anon := q.Get("anonymous"); anon != "" {
 		isAnon, err := strconv.ParseBool(anon)
 		if err != nil {
@@ -96,30 +101,53 @@ func open(bucketURL, object string, clientOptions []option.ClientOption) (*store
 	return s, nil
 }
 
-// client opens a client for one call; credentials are looked up when it is created.
-func (s *store) client(ctx context.Context) (*storage.Client, error) {
+// client returns the store's client, creating it on first use: credentials are looked up then, so a missing credential is
+// a failed fetch, and one that is found is kept, with its token source, until Close. A failed creation is tried again by
+// the next call.
+func (s *store) client() (*storage.Client, error) {
+	s.clientMu.Lock()
+	defer s.clientMu.Unlock()
+	if s.c != nil {
+		return s.c, nil
+	}
 	var opts []option.ClientOption
 	if s.anonymous {
 		opts = append(opts, option.WithoutAuthentication())
 	}
-	c, err := storage.NewClient(ctx, append(opts, s.clientOptions...)...)
+	// the client outlives the fetch that creates it, and so does its token source
+	c, err := storage.NewClient(context.Background(), append(opts, s.clientOptions...)...)
 	if err != nil {
 		return nil, err
 	}
 	// a failed fetch is tried again on the next poll, so the client gives up early
 	c.SetRetry(storage.WithMaxAttempts(maxAttempts))
+	if s.created != nil {
+		s.created()
+	}
+	s.c = c
 	return c, nil
+}
+
+// Close closes the client, if one was created.
+func (s *store) Close() error {
+	s.clientMu.Lock()
+	defer s.clientMu.Unlock()
+	if s.c == nil {
+		return nil
+	}
+	err := s.c.Close()
+	s.c = nil
+	return err
 }
 
 const maxAttempts = 3
 
 // Identity is the generation of the object, which changes with its content.
 func (s *store) Identity(ctx context.Context) (string, time.Time, error) {
-	c, err := s.client(ctx)
+	c, err := s.client()
 	if err != nil {
 		return "", time.Time{}, err
 	}
-	defer c.Close()
 	attrs, err := c.Bucket(s.bucket).Object(s.object).Attrs(ctx)
 	if err != nil {
 		return "", time.Time{}, err
@@ -132,11 +160,10 @@ func (s *store) Identity(ctx context.Context) (string, time.Time, error) {
 
 // Read reads the generation of the last Identity call, and fails when the object has moved on since.
 func (s *store) Read(ctx context.Context) ([]byte, string, error) {
-	c, err := s.client(ctx)
+	c, err := s.client()
 	if err != nil {
 		return nil, "", err
 	}
-	defer c.Close()
 	s.mu.Lock()
 	generation := s.generation
 	s.mu.Unlock()

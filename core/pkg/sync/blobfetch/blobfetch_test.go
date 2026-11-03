@@ -293,3 +293,19 @@ func TestDeliveryRules(t *testing.T) {
 	defer rec.mu.Unlock()
 	require.Equal(t, [][3]string{{"blob", sourceURI, ""}, {"blob", sourceURI, ""}, {"blob", sourceURI, ""}}, rec.calls)
 }
+
+type closableStore struct {
+	*fakeStore
+	closed atomic.Int32
+}
+
+func (s *closableStore) Close() error { s.closed.Add(1); return nil }
+
+func TestCloseClosesTheStore(t *testing.T) {
+	store := &closableStore{fakeStore: &fakeStore{}}
+	require.NoError(t, New("mock", "mock://bucket/", "flags.json", store, logger.NewLogger(nil, false)).Close())
+	require.Equal(t, int32(1), store.closed.Load())
+
+	require.NoError(t, New("mock", "mock://bucket/", "flags.json", &fakeStore{}, logger.NewLogger(nil, false)).Close(),
+		"a store that cannot be closed is fine")
+}
