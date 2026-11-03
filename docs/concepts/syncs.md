@@ -88,6 +88,7 @@ flagd start --uri gs://my-bucket/my-flags.json
 
 In this example, `gs://my-bucket/my-flags.json` is expected to be a valid GCS URI accessible by the flagd
 (either by being public or together with application default credentials).
+The URI takes these options in its query: `anonymous=true` reads without credentials, `access_id=-` does the same, and `private_key_path` must name a readable file. `STORAGE_EMULATOR_HOST` points the client at an emulator.
 The polling interval can be configured.
 See [sync source](../reference/sync-configuration.md#source-configuration) configuration for details.
 
@@ -123,6 +124,8 @@ See [sync source](../reference/sync-configuration.md#source-configuration) for d
 
 The URI takes these options in its query: `region`, `endpoint`, `profile`, `use_path_style` (or `s3ForcePathStyle`), `disable_https`, `dualstack`, `fips`, `accelerate`, `anonymous`, `hostname_immutable`, `rate_limiter_capacity` and `awssdk=v2`.
 The provider uses the AWS SDK for Go v2 only, so `awssdk=v1` stops flagd at start-up.
+
+The options of a blob source and its Azure account and credential variables are checked when flagd starts, so a source that cannot be configured stops flagd at start-up.
 
 ## Merging
 
