@@ -1,0 +1,240 @@
+// Package distributions builds the distributions of this repository with the Builder and checks what it made
+// (UC-001): the selected components and only those are linked (BR-005, NFR-004), every relay module of a build list is
+// replaced by its directory (Q14), and a manifest that forgets one is reported.
+package distributions
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sort"
+	"strings"
+	"sync"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
+)
+
+const (
+	relay = "github.com/open-feature-forking/openfeature-relay/"
+	flagd = "github.com/open-feature/flagd/flagd"
+)
+
+// infrastructure are the relay modules every distribution links besides the components it selects: the core, the
+// runtime that serves them, the endpoints' shared helpers, and the sync builder the runtime dispatches sources with.
+var infrastructure = []string{relay + "core", relay + "runtime", relay + "service/transport", relay + "sync/builder"}
+
+// root is the repository's directory.
+func root(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.Abs(filepath.Join("..", ".."))
+	require.NoError(t, err)
+	return dir
+}
+
+type built struct {
+	dir string // the generated source and binary
+	out string
+	err error
+}
+
+var (
+	buildsMu sync.Mutex
+	builds   = map[string]*built{}
+)
+
+// build runs the Builder on the manifest once per test binary and returns what it made. The Builder runs outside any
+// workspace, as the Distribution Builder runs it.
+func build(t *testing.T, manifestPath string) *built {
+	t.Helper()
+	buildsMu.Lock()
+	defer buildsMu.Unlock()
+	if b, ok := builds[manifestPath]; ok {
+		return b
+	}
+	cmd := exec.Command("go", "run", "./cmd/relay-builder", "--manifest", manifestPath)
+	cmd.Dir = filepath.Join(root(t), "builder")
+	cmd.Env = append(os.Environ(), "GOWORK=off")
+	out, err := cmd.CombinedOutput()
+	b := &built{dir: filepath.Join(filepath.Dir(manifestPath), "build"), out: string(out), err: err}
+	builds[manifestPath] = b
+	return b
+}
+
+type manifestFile struct {
+	Dist struct {
+		Binary string `yaml:"binary"`
+	} `yaml:"dist"`
+	SyncProviders        []entry `yaml:"sync_providers"`
+	ConfigurationFormats []entry `yaml:"configuration_formats"`
+	Evaluators           []entry `yaml:"evaluators"`
+	Engines              []entry `yaml:"engines"`
+	ServiceEndpoints     []entry `yaml:"service_endpoints"`
+	Telemetry            *entry  `yaml:"telemetry"`
+	Middleware           []entry `yaml:"middleware"`
+	EventSinks           []entry `yaml:"event_sinks"`
+	Runtime              *entry  `yaml:"runtime"`
+	Cmd                  *entry  `yaml:"cmd"`
+	Replaces             []entry `yaml:"replaces"`
+}
+
+type entry struct {
+	Module string `yaml:"module"`
+}
+
+func (m manifestFile) selected() []string {
+	var modules []string
+	for _, group := range [][]entry{m.SyncProviders, m.ConfigurationFormats, m.Evaluators, m.Engines, m.ServiceEndpoints, m.Middleware, m.EventSinks} {
+		for _, e := range group {
+			modules = append(modules, e.Module)
+		}
+	}
+	for _, e := range []*entry{m.Telemetry, m.Runtime, m.Cmd} {
+		if e != nil {
+			modules = append(modules, e.Module)
+		}
+	}
+	return modules
+}
+
+func readManifest(t *testing.T, path string) manifestFile {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var m manifestFile
+	require.NoError(t, yaml.Unmarshal(data, &m))
+	return m
+}
+
+func binary(t *testing.T, path string) string {
+	t.Helper()
+	m := readManifest(t, path)
+	name := m.Dist.Binary
+	if name == "" {
+		name = "flagd"
+	}
+	return filepath.Join(filepath.Dir(path), "build", name)
+}
+
+// linked returns the modules a binary links, from go version -m.
+func linked(t *testing.T, binaryPath string) []string {
+	t.Helper()
+	out, err := exec.Command("go", "version", "-m", binaryPath).Output()
+	require.NoError(t, err)
+	var modules []string
+	for _, line := range strings.Split(string(out), "\n") {
+		if fields := strings.Fields(line); len(fields) >= 2 && fields[0] == "dep" {
+			modules = append(modules, fields[1])
+		}
+	}
+	return modules
+}
+
+func isRelay(module string) bool { return strings.HasPrefix(module, relay) || module == flagd }
+
+// TestOnlySelectedComponents (BR-005) pins that the binary links the selected relay modules plus only the
+// infrastructure ones, and that nothing else of the repository comes along.
+func TestOnlySelectedComponents(t *testing.T) {
+	for _, name := range []string{"ofrep-only", "minimal-shape"} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(root(t), "test", "distributions", name, "manifest.yaml")
+			b := build(t, path)
+			require.NoError(t, b.err, b.out)
+
+			allowed := map[string]bool{}
+			for _, m := range append(readManifest(t, path).selected(), infrastructure...) {
+				allowed[m] = true
+			}
+			for _, module := range linked(t, binary(t, path)) {
+				if isRelay(module) {
+					require.True(t, allowed[module], "%s is linked, but the manifest does not select it", module)
+				}
+			}
+		})
+	}
+}
+
+// TestMinimalShapeLinksNoPlatformSDK (NFR-004) pins that file and http sync, flagd's format and evaluator, the flag
+// evaluation and OFREP endpoints and no telemetry link no Kubernetes, cloud or OpenTelemetry SDK module.
+func TestMinimalShapeLinksNoPlatformSDK(t *testing.T) {
+	path := filepath.Join(root(t), "test", "distributions", "minimal-shape", "manifest.yaml")
+	b := build(t, path)
+	require.NoError(t, b.err, b.out)
+
+	for _, module := range linked(t, binary(t, path)) {
+		for _, forbidden := range []string{"k8s.io/", "cloud.google.com/", "github.com/aws/", "github.com/Azure/", "go.opentelemetry.io/otel/sdk", "github.com/prometheus/"} {
+			require.False(t, strings.HasPrefix(module, forbidden), "the minimal shape links %s", module)
+		}
+	}
+}
+
+// manifests lists the manifests of the distributions of this repository.
+func manifests(t *testing.T) []string {
+	t.Helper()
+	var paths []string
+	for _, pattern := range []string{
+		filepath.Join(root(t), "distributions", "*", "manifest.yaml"),
+		filepath.Join(root(t), "test", "distributions", "*", "manifest.yaml"),
+	} {
+		found, err := filepath.Glob(pattern)
+		require.NoError(t, err)
+		paths = append(paths, found...)
+	}
+	sort.Strings(paths)
+	return paths
+}
+
+// missingReplaces returns the relay modules of the build list of a built distribution that its manifest does not
+// replace.
+func missingReplaces(t *testing.T, path string) []string {
+	t.Helper()
+	cmd := exec.Command("go", "list", "-m", "-json", "all")
+	cmd.Dir = filepath.Join(filepath.Dir(path), "build")
+	cmd.Env = append(os.Environ(), "GOWORK=off")
+	out, err := cmd.Output()
+	require.NoError(t, err)
+
+	var missing []string
+	dec := json.NewDecoder(bytes.NewReader(out))
+	for dec.More() {
+		var m struct {
+			Path    string
+			Main    bool
+			Replace *struct{ Path string }
+		}
+		require.NoError(t, dec.Decode(&m))
+		if !m.Main && isRelay(m.Path) && m.Replace == nil {
+			missing = append(missing, m.Path)
+		}
+	}
+	return missing
+}
+
+// TestRepositoryManifestsReplaceEveryRelayModule (Q14) pins that every manifest of this repository replaces each
+// relay module of its build list by a local path, so that no build needs a release of a module.
+func TestRepositoryManifestsReplaceEveryRelayModule(t *testing.T) {
+	paths := manifests(t)
+	require.NotEmpty(t, paths)
+	for _, path := range paths {
+		t.Run(filepath.Base(filepath.Dir(path)), func(t *testing.T) {
+			b := build(t, path)
+			require.NoError(t, b.err, b.out)
+			require.Empty(t, missingReplaces(t, path), "relay modules in the build list that the manifest does not replace")
+		})
+	}
+}
+
+// TestManifestMissingAReplaceIsReported pins that the Builder names the relay module a manifest forgets to replace,
+// and says what to add.
+func TestManifestMissingAReplaceIsReported(t *testing.T) {
+	path := filepath.Join(root(t), "test", "distributions", "fixtures", "missing-replace", "manifest.yaml")
+	b := build(t, path)
+
+	require.Error(t, b.err, "a manifest that forgets a replace does not build")
+	require.Contains(t, b.out, fmt.Sprintf("%sservice/transport", relay))
+	require.Contains(t, b.out, "replaces")
+}

@@ -1,7 +1,7 @@
 PHONY: .docker-build .build .run .mockgen
 PREFIX=/usr/local
 PUBLIC_JSON_SCHEMA_DIR=docs/schema/v0/
-ALL_GO_MOD_DIRS := $(shell find . \( -path ./test/integration -o -path ./.claude -o -path ./test-harness -o -path ./spec -o -path ./schemas -o -path ./playground-app \) -prune -o -type f -name 'go.mod' -exec dirname {} \; | sort)
+ALL_GO_MOD_DIRS := $(shell find . \( -path ./test/integration -o -path ./.claude -o -path ./test-harness -o -path ./spec -o -path ./schemas -o -path ./playground-app -o -path "./distributions/*/build" -o -path "./test/distributions/*/build" \) -prune -o -type f -name 'go.mod' -exec dirname {} \; | sort)
 
 # The library modules: what embedders import. Tests, the FIPS tests and the benchmarks run on exactly
 # these (plus the binaries), and testdata/go-packages.txt pins the packages they contain.
@@ -65,6 +65,7 @@ TEST_TARGETS += test-core
 TEST_TARGETS += test-flagd
 TEST_TARGETS += test-flagd-proxy
 TEST_TARGETS += test-builder
+TEST_TARGETS += test-distributions
 TEST_TARGETS += test-configformat-example
 TEST_TARGETS += test-service-example
 TEST_TARGETS += test-evaluator-testkit
@@ -102,6 +103,8 @@ test-inprocess-example:
 # The Builder is a tool of its own: it imports no relay module (UC-001 Q1).
 test-builder:
 	go test -race -short -count=1 ./builder/...
+test-distributions:
+	cd test/distributions && go test -count=1 -timeout 30m ./...
 test-flagd-proxy:
 	go test -race -covermode=atomic -cover -short ./flagd-proxy/pkg/... -coverprofile=flagd-proxy-coverage.out
 # fips140=only makes non-approved algorithms error or panic, so this fails if a
