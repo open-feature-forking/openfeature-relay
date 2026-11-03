@@ -9,6 +9,7 @@ import (
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/distribution"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	otelprovider "github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"github.com/stretchr/testify/require"
 )
 
@@ -76,6 +77,11 @@ func TestGeneratedComponentsEqualHandWritten(t *testing.T) {
 				Format string `json:"format"`
 			}{n.Router, n.Format}})
 	}
+
+	// flagd's command selects the OpenTelemetry provider on top of Official (flagd/main.go); the generated components
+	// must select it too, or the built flagd-full loses its telemetry and its /metrics with every other check green
+	want = append(want, probed{Group: distribution.GroupTelemetry, Type: otelprovider.Type,
+		Module: moduleOf(distribution.GroupTelemetry, otelprovider.Type)})
 
 	byKey := func(items []probed) {
 		sort.Slice(items, func(i, j int) bool {

@@ -216,6 +216,10 @@ func main() {
 		items = append(items, item{Group: distribution.GroupServiceEndpoint, Type: f.Type(),
 			Module: moduleOf(distribution.GroupServiceEndpoint, f.Type()), Needs: &needs{Router: n.Router, Format: n.Format}})
 	}
+	if c.Telemetry != nil {
+		items = append(items, item{Group: distribution.GroupTelemetry, Type: c.Telemetry.Type(),
+			Module: moduleOf(distribution.GroupTelemetry, c.Telemetry.Type())})
+	}
 	if err := json.NewEncoder(os.Stdout).Encode(items); err != nil {
 		os.Exit(1)
 	}
