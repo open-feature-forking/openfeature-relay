@@ -371,8 +371,8 @@ func TestPermanent(t *testing.T) {
 	require.Equal(t, "refused", wrapped.Error())
 }
 
-func TestValidateDeclaration(t *testing.T) {
-	require.Error(t, eventsink.ValidateDeclaration(nil))
-	require.NoError(t, eventsink.ValidateDeclaration(fakeFactory{}))
-	require.Error(t, eventsink.ValidateDeclaration(fakeFactory{kinds: []events.Kind{}}))
+func TestValidateDeclarations(t *testing.T) {
+	require.Error(t, eventsink.ValidateDeclarations(nil))
+	require.NoError(t, eventsink.ValidateDeclarations(fakeFactory{}))
+	require.Error(t, eventsink.ValidateDeclarations(fakeFactory{kinds: []events.Kind{}}))
 }

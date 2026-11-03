@@ -126,7 +126,7 @@ func Check(t testing.TB, f eventsink.Factory, in Inputs) Report {
 	if msg := missing(in); msg != "" {
 		return Report{Aborted: msg}
 	}
-	if err := eventsink.ValidateDeclaration(f); err != nil {
+	if err := eventsink.ValidateDeclarations(f); err != nil {
 		return Report{Aborted: fmt.Sprintf("invalid declaration: %v", err)}
 	}
 	r := runner{t: t, f: f, in: in, limit: in.Timeout}
