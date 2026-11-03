@@ -5,67 +5,47 @@ import (
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	"github.com/open-feature-forking/openfeature-relay/sync/blob"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_S3Config(t *testing.T) {
-	lg := logger.NewLogger(nil, false)
-	defaultInterval := uint32(5)
+	t.Setenv("AZURE_STORAGE_ACCOUNT", "myaccount")
 	tests := []struct {
-		name             string
-		uri              string
-		interval         uint32
-		expectedBucket   string
-		expectedObject   string
-		expectedInterval uint32
+		name           string
+		uri            string
+		expectedBucket string
+		expectedObject string
 	}{
 		{
-			name:             "simple path",
-			uri:              "s3://bucket/path/to/object",
-			interval:         10,
-			expectedBucket:   "s3://bucket/",
-			expectedObject:   "path/to/object",
-			expectedInterval: 10,
+			name:           "simple path",
+			uri:            "s3://bucket/path/to/object",
+			expectedBucket: "s3://bucket/",
+			expectedObject: "path/to/object",
 		},
 		{
-			name:             "default interval",
-			uri:              "s3://bucket/path/to/object",
-			expectedBucket:   "s3://bucket/",
-			expectedObject:   "path/to/object",
-			expectedInterval: defaultInterval,
+			name:           "no object set", // the fetcher fails Init
+			uri:            "s3://bucket/",
+			expectedBucket: "s3://bucket/",
+			expectedObject: "",
 		},
 		{
-			name:             "bucket options in query",
-			uri:              "s3://bucket/path/to/object?use_path_style=true",
-			expectedBucket:   "s3://bucket?use_path_style=true",
-			expectedObject:   "path/to/object",
-			expectedInterval: defaultInterval,
-		},
-		{
-			name:             "no object set", // Blob syncer will return error when fetching
-			uri:              "s3://bucket/",
-			expectedBucket:   "s3://bucket/",
-			expectedObject:   "",
-			expectedInterval: defaultInterval,
-		},
-		{
-			name:             "malformed uri", // Blob syncer will return error when opening bucket
-			uri:              "malformed",
-			expectedBucket:   "",
-			expectedObject:   "malformed",
-			expectedInterval: defaultInterval,
+			name:           "malformed uri", // the fetcher fails when opening the bucket
+			uri:            "malformed",
+			expectedBucket: "",
+			expectedObject: "malformed",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s3Sync, err := New(sync.SourceConfig{
-				URI:      tt.uri,
-				Interval: tt.interval,
-			}, lg, nil)
+			f, err := NewFactory().CreateFetcher(sync.Settings{
+				Source: sync.SourceConfig{URI: tt.uri}, Logger: logger.NewLogger(nil, false),
+			})
 			require.NoError(t, err)
-			require.Equal(t, tt.expectedBucket, s3Sync.Bucket)
-			require.Equal(t, tt.expectedObject, s3Sync.Object)
-			require.Equal(t, int(tt.expectedInterval), int(s3Sync.Interval))
+			fetcher, ok := f.(*blob.Fetcher)
+			require.True(t, ok)
+			require.Equal(t, tt.expectedBucket, fetcher.Bucket())
+			require.Equal(t, tt.expectedObject, fetcher.Object())
 		})
 	}
 }

@@ -111,8 +111,9 @@ func TestSyncMetricsCharacterization(t *testing.T) {
 	dir := t.TempDir()
 	filePath := filepath.Join(dir, "flags.json")
 	require.NoError(t, os.WriteFile(filePath, []byte(flagData), 0o600))
-	// an empty file is delivered as an empty flag configuration, which is not counted as received
+	// an empty file is delivered as an empty flag configuration, which is counted as received
 	emptyPath := filepath.Join(t.TempDir(), "empty.json")
+	emptyURI = emptyPath
 	require.NoError(t, os.WriteFile(emptyPath, nil, 0o600))
 
 	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -197,10 +198,11 @@ const (
 // Values of timestamps and of the rpc_client_* series vary and are not rendered.
 //
 // The sources are a file, an empty file, an HTTP source and two gRPC sources, one with a selector. The
-// empty file is delivered as an empty flag configuration, which is not counted as received, so it has
-// no series. The gRPC selector is an attribute of every series of its source, in the legacy and the new
+// empty file is delivered as an empty flag configuration, which is counted as received. The gRPC selector
+// is an attribute of every series of its source, in the legacy and the new
 // name.
 const (
+	emptyLabels   = "feature_flag_flagd_sync_type=file,feature_flag_flagd_sync_uri=<empty>,flagd_sync_provider=file,flagd_sync_uri=<empty>"
 	httpLabels    = "feature_flag_flagd_sync_type=http,feature_flag_flagd_sync_uri=<http>,flagd_sync_provider=http,flagd_sync_uri=<http>"
 	selGrpcLabels = "feature_flag_flagd_sync_selector=source=a,feature_flag_flagd_sync_type=grpc,feature_flag_flagd_sync_uri=,flagd_sync_provider=grpc,flagd_sync_selector=source=a,flagd_sync_uri="
 )
@@ -210,10 +212,12 @@ var wantBefore = []string{
 	helpReceived,
 	helpActive,
 	"feature_flag_flagd_sync_client_flag_config_last_received_timestamp_seconds GAUGE {" + selGrpcLabels + "," + syncScope + "} -",
+	"feature_flag_flagd_sync_client_flag_config_last_received_timestamp_seconds GAUGE {" + emptyLabels + "," + syncScope + "} -",
 	"feature_flag_flagd_sync_client_flag_config_last_received_timestamp_seconds GAUGE {" + fileLabels + "," + syncScope + "} -",
 	"feature_flag_flagd_sync_client_flag_config_last_received_timestamp_seconds GAUGE {" + grpcLabels + "," + syncScope + "} -",
 	"feature_flag_flagd_sync_client_flag_config_last_received_timestamp_seconds GAUGE {" + httpLabels + "," + syncScope + "} -",
 	"feature_flag_flagd_sync_client_flag_config_received_total COUNTER {" + selGrpcLabels + "," + syncScope + "} 1",
+	"feature_flag_flagd_sync_client_flag_config_received_total COUNTER {" + emptyLabels + "," + syncScope + "} 1",
 	"feature_flag_flagd_sync_client_flag_config_received_total COUNTER {" + fileLabels + "," + syncScope + "} 1",
 	"feature_flag_flagd_sync_client_flag_config_received_total COUNTER {" + grpcLabels + "," + syncScope + "} 1",
 	"feature_flag_flagd_sync_client_flag_config_received_total COUNTER {" + httpLabels + "," + syncScope + "} 1",
@@ -227,10 +231,12 @@ var wantAfter = []string{
 	helpActive,
 	helpReconnects,
 	"feature_flag_flagd_sync_client_flag_config_last_received_timestamp_seconds GAUGE {" + selGrpcLabels + "," + syncScope + "} -",
+	"feature_flag_flagd_sync_client_flag_config_last_received_timestamp_seconds GAUGE {" + emptyLabels + "," + syncScope + "} -",
 	"feature_flag_flagd_sync_client_flag_config_last_received_timestamp_seconds GAUGE {" + fileLabels + "," + syncScope + "} -",
 	"feature_flag_flagd_sync_client_flag_config_last_received_timestamp_seconds GAUGE {" + grpcLabels + "," + syncScope + "} -",
 	"feature_flag_flagd_sync_client_flag_config_last_received_timestamp_seconds GAUGE {" + httpLabels + "," + syncScope + "} -",
 	"feature_flag_flagd_sync_client_flag_config_received_total COUNTER {" + selGrpcLabels + "," + syncScope + "} 2",
+	"feature_flag_flagd_sync_client_flag_config_received_total COUNTER {" + emptyLabels + "," + syncScope + "} 1",
 	"feature_flag_flagd_sync_client_flag_config_received_total COUNTER {" + fileLabels + "," + syncScope + "} 1",
 	"feature_flag_flagd_sync_client_flag_config_received_total COUNTER {" + grpcLabels + "," + syncScope + "} 2",
 	"feature_flag_flagd_sync_client_flag_config_received_total COUNTER {" + httpLabels + "," + syncScope + "} 1",
@@ -285,7 +291,7 @@ func render(all []series, filePath string) string {
 		if strings.HasSuffix(s.name, "_timestamp_seconds") {
 			value = "-"
 		}
-		lines[strings.ReplaceAll(strings.ReplaceAll(fmt.Sprintf("%s %s {%s} %s", s.name, s.typ, strings.Join(ls, ","), value), filePath, "<file>"), httpURI, "<http>")] = true
+		lines[strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(fmt.Sprintf("%s %s {%s} %s", s.name, s.typ, strings.Join(ls, ","), value), filePath, "<file>"), httpURI, "<http>"), emptyURI, "<empty>")] = true
 	}
 	out := make([]string, 0, len(lines))
 	for l := range lines {
@@ -296,4 +302,4 @@ func render(all []series, filePath string) string {
 }
 
 // httpURI is the address of the test's HTTP source, which varies by run.
-var httpURI string
+var httpURI, emptyURI string

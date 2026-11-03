@@ -2,9 +2,11 @@ package blob
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"regexp"
 	stdsync "sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -60,7 +62,7 @@ func newBlobSync(t *testing.T, scheme string, drv *lockedDriver, recorder sync.M
 	mux.RegisterBucket("mock", lockedOpener{drv})
 	s, err := NewSync(
 		scheme, regexp.MustCompile("^mock://.+?/"),
-		// incrementalUpdates is set to show that deliveries do not carry it
+		// incrementalUpdates is set: every delivery is an incremental update
 		sync.SourceConfig{URI: sourceURI, Interval: 1, IncrementalUpdates: true},
 		logger.NewLogger(nil, false), recorder, mux)
 	require.NoError(t, err)
@@ -94,7 +96,7 @@ func TestDeliveryRulesCharacterization(t *testing.T) {
 			t.Helper()
 			select {
 			case got := <-deliveries:
-				require.Equal(t, sync.DataSync{FlagData: want, Source: sourceURI}, got)
+				require.Equal(t, sync.DataSync{FlagData: want, Source: sourceURI, IncrementalUpdates: true}, got)
 			case <-time.After(8 * time.Second):
 				t.Fatalf("no delivery of %q", want)
 			}
@@ -137,17 +139,48 @@ func TestDeliveryRulesCharacterization(t *testing.T) {
 		}, rec.snapshot())
 	})
 
-	t.Run("a failed initial fetch stops the provider", func(t *testing.T) {
+	t.Run("a failed initial fetch keeps the provider up and not ready until the source answers", func(t *testing.T) {
+		drv := &lockedDriver{fakeBlobDriver: &fakeBlobDriver{}}
+		drv.setObject("etag-1", flagsA)
+		gate := &gateOpener{opener: lockedOpener{drv}}
 		mux := new(blob.URLMux)
+		mux.RegisterBucket("mock", gate)
 		s, err := NewSync(
 			"mock", regexp.MustCompile("^mock://.+?/"), sync.SourceConfig{URI: sourceURI, Interval: 1},
 			logger.NewLogger(nil, false), nil, mux)
 		require.NoError(t, err)
-		require.NoError(t, s.Init(context.Background()))
 
-		err = s.Sync(context.Background(), make(chan sync.DataSync, 1))
-		require.ErrorContains(t, err, "couldn't get bucket")
+		ctx, cancel := context.WithCancel(context.Background())
+		deliveries := make(chan sync.DataSync, 4)
+		stopped := make(chan error, 1)
+		require.NoError(t, s.Init(ctx))
+		go func() { stopped <- s.Sync(ctx, deliveries) }()
+		t.Cleanup(func() {
+			cancel()
+			select {
+			case <-stopped:
+			case <-time.After(10 * time.Second):
+				t.Error("the sync provider did not stop")
+			}
+		})
+
+		select {
+		case err := <-stopped:
+			t.Fatalf("the provider stopped with %v", err)
+		case <-deliveries:
+			t.Fatal("unexpected delivery")
+		case <-time.After(1500 * time.Millisecond):
+		}
 		require.False(t, s.IsReady())
+
+		gate.open.Store(true)
+		select {
+		case got := <-deliveries:
+			require.Equal(t, sync.DataSync{FlagData: flagsA, Source: sourceURI}, got)
+		case <-time.After(8 * time.Second):
+			t.Fatal("no delivery once the source answered")
+		}
+		require.Eventually(t, s.IsReady, 5*time.Second, 10*time.Millisecond)
 	})
 }
 
@@ -169,4 +202,38 @@ func (r *receivedRecorder) snapshot() []receivedCall {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return append([]receivedCall(nil), r.calls...)
+}
+
+// brokenDriver fails every call once broken.
+type brokenDriver struct {
+	*lockedDriver
+	failed atomic.Bool
+}
+
+func (d *brokenDriver) fail() { d.failed.Store(true) }
+
+func (d *brokenDriver) Attributes(ctx context.Context, key string) (*driver.Attributes, error) {
+	if d.failed.Load() {
+		return nil, errors.New("the bucket is down")
+	}
+	return d.lockedDriver.Attributes(ctx, key)
+}
+
+type brokenOpener struct{ drv *brokenDriver }
+
+func (o brokenOpener) OpenBucketURL(context.Context, *url.URL) (*blob.Bucket, error) {
+	return blob.NewBucket(o.drv), nil
+}
+
+// gateOpener refuses to open its bucket until it is opened.
+type gateOpener struct {
+	opener lockedOpener
+	open   atomic.Bool
+}
+
+func (g *gateOpener) OpenBucketURL(ctx context.Context, u *url.URL) (*blob.Bucket, error) {
+	if !g.open.Load() {
+		return nil, errors.New("the store does not answer yet")
+	}
+	return g.opener.OpenBucketURL(ctx, u)
 }

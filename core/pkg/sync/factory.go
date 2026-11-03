@@ -91,3 +91,22 @@ func ValidateDeclarations(f Factory) error {
 	}
 	return errors.New(strings.Join(problems, "; "))
 }
+
+// SourceTyper is implemented by a factory whose components record the sync metrics under a source type other than
+// the factory's Type(), such as the cloud providers, which all record "blob".
+type SourceTyper interface {
+	SourceType() string
+}
+
+// Alias is a provider name that selects a fetcher factory together with the only fetch trigger attached to the
+// sources it selects.
+type Alias struct {
+	Name    string
+	Trigger TriggerConfig
+}
+
+// Aliased is implemented by a FetcherFactory that is also selected by other provider names, in the order they are
+// listed to the Operator.
+type Aliased interface {
+	Aliases() []Alias
+}

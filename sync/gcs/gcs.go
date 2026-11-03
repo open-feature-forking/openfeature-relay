@@ -5,8 +5,6 @@ package gcs
 import (
 	"regexp"
 
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature-forking/openfeature-relay/sync/blob"
 	gocloud "gocloud.dev/blob"
 	_ "gocloud.dev/blob/gcsblob" // needed to initialize GCS driver
@@ -23,8 +21,7 @@ func Matches(uri string) bool {
 	return scheme.MatchString(uri)
 }
 
-// New builds the sync for a gs://bucket/path/to/object source: gs://bucket/ is the bucket URI and
-// path/to/object the object name.
-func New(config sync.SourceConfig, log *logger.Logger, recorder sync.MetricsRecorder) (*blob.Sync, error) {
-	return blob.NewSync(Provider, scheme, config, log, recorder, gocloud.DefaultURLMux())
+// NewFactory creates the factory of gs:// sources.
+func NewFactory() blob.Factory {
+	return blob.Factory{Kind: Provider, Prefix: "gs://", Scheme: scheme, Mux: gocloud.DefaultURLMux()}
 }

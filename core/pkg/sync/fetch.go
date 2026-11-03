@@ -2,7 +2,6 @@ package sync
 
 import (
 	"context"
-	"errors"
 )
 
 // Fetcher reads one source on request. It knows nothing about when to fetch: the core's fetching sync provider
@@ -36,13 +35,11 @@ type FetchResult struct {
 	// Version is the source version: an opaque value (an ETag, a content hash, a generation) that identifies Data. The
 	// provider hands it back as previous on the next fetch.
 	Version string
-	// Unchanged reports that the source still has the flag configuration of previous. Data is then ignored.
+	// Unchanged reports that the source still has the flag configuration of previous. Data is then ignored. A
+	// non-empty Version replaces previous for the next fetch, for a source whose validator moved while its content
+	// did not.
 	Unchanged bool
 }
-
-// ErrRead marks a failed fetch that could not read the source's content, as opposed to reaching the source. A fetcher
-// wraps its error with it (fmt.Errorf("...: %w", ...) joined with ErrRead).
-var ErrRead = errors.New("unable to read the source")
 
 // Trigger tells the fetcher of a source to fetch. It never fetches and never delivers a flag configuration itself.
 type Trigger interface {
@@ -57,4 +54,11 @@ type Trigger interface {
 // poller, which backs off. The provider calls Observe once per finished fetch, with its error, nil on success.
 type OutcomeObserver interface {
 	Observe(err error)
+}
+
+// InitializingTrigger is a Trigger that needs a step before the first fetch, such as establishing a watch, so that no
+// change falls between that fetch and the moment the trigger listens. An error stops the distribution, as an error of
+// a sync provider's Init does.
+type InitializingTrigger interface {
+	Init(ctx context.Context) error
 }

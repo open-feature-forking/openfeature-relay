@@ -5,8 +5,6 @@ package s3
 import (
 	"regexp"
 
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature-forking/openfeature-relay/sync/blob"
 	gocloud "gocloud.dev/blob"
 	_ "gocloud.dev/blob/s3blob" // needed to initialize s3 driver
@@ -23,9 +21,7 @@ func Matches(uri string) bool {
 	return scheme.MatchString(uri)
 }
 
-// New builds the sync for an s3://bucket/path/to/object source: s3://bucket/ is the bucket URI and
-// path/to/object the object name. A query string (e.g. use_path_style, region) is moved onto the
-// bucket URL so gocloud's s3blob driver reads it.
-func New(config sync.SourceConfig, log *logger.Logger, recorder sync.MetricsRecorder) (*blob.Sync, error) {
-	return blob.NewSync(Provider, scheme, config, log, recorder, gocloud.DefaultURLMux())
+// NewFactory creates the factory of s3:// sources.
+func NewFactory() blob.Factory {
+	return blob.Factory{Kind: Provider, Prefix: "s3://", Scheme: scheme, Mux: gocloud.DefaultURLMux()}
 }

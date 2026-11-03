@@ -3,20 +3,20 @@ package builder
 import (
 	"fmt"
 	"os"
-	"regexp"
+	"strings"
+	"time"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/fetching"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/polling"
 	"github.com/open-feature-forking/openfeature-relay/sync/azblob"
 	"github.com/open-feature-forking/openfeature-relay/sync/file"
-	"github.com/open-feature-forking/openfeature-relay/sync/gcs"
 	flagdgrpc "github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc"
-	"github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc/credentials"
+	"github.com/open-feature-forking/openfeature-relay/sync/gcs"
 	httpSync "github.com/open-feature-forking/openfeature-relay/sync/http"
 	ofoperator "github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator"
 	"github.com/open-feature-forking/openfeature-relay/sync/s3"
-	"go.uber.org/zap"
 	googlegrpc "google.golang.org/grpc"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
@@ -24,67 +24,95 @@ import (
 )
 
 const (
-	syncProviderFile       = "file"
-	syncProviderFsNotify   = "fsnotify"
-	syncProviderFileInfo   = "fileinfo"
-	syncProviderGrpc       = "grpc"
-	syncProviderKubernetes = "kubernetes"
-	syncProviderHTTP       = "http"
+	syncProviderFile       = file.Provider
+	syncProviderFsNotify   = file.FSNOTIFY
+	syncProviderFileInfo   = file.FILEINFO
+	syncProviderGrpc       = flagdgrpc.Provider
+	syncProviderKubernetes = ofoperator.Provider
+	syncProviderHTTP       = httpSync.Provider
 	syncProviderGcs        = gcs.Provider
 	syncProviderAzblob     = azblob.Provider
 	syncProviderS3         = s3.Provider
 )
-
-var (
-	regCrd                *regexp.Regexp
-	regURL                *regexp.Regexp
-	regGRPC               *regexp.Regexp
-	regGRPCSecure         *regexp.Regexp
-	regGRPCCustomResolver *regexp.Regexp
-	regFile               *regexp.Regexp
-)
-
-func init() {
-	regCrd = regexp.MustCompile("^core.openfeature.dev/")
-	regURL = regexp.MustCompile("^https?://")
-	regGRPC = regexp.MustCompile("^" + flagdgrpc.Prefix)
-	regGRPCSecure = regexp.MustCompile("^" + flagdgrpc.PrefixSecure)
-	regGRPCCustomResolver = regexp.MustCompile("^" + flagdgrpc.SupportedScheme)
-	regFile = regexp.MustCompile("^file:")
-}
 
 type ISyncBuilder interface {
 	SyncFromURI(uri string, logger *logger.Logger) (sync.ISync, error)
 	SyncsFromConfig(sourceConfig []sync.SourceConfig, logger *logger.Logger) ([]sync.ISync, error)
 }
 
+// OfficialOptions are what a distribution injects into the official sync components.
+type OfficialOptions struct {
+	// StreamMetrics records the lifecycle of the gRPC sync streams.
+	StreamMetrics flagdgrpc.StreamMetricsRecorder
+	// GRPCDialOptions are added to the client connection of every gRPC sync source.
+	GRPCDialOptions []googlegrpc.DialOption
+	// K8sClient builds the Kubernetes client; nil reads the cluster configuration from the environment.
+	K8sClient ofoperator.ClientBuilder
+}
+
+// Official returns the official sync components: their factories and the factories of the fetch triggers they
+// attach, in the order the Operator is shown their provider names.
+func Official() []sync.Factory {
+	return OfficialWith(OfficialOptions{})
+}
+
+// OfficialWith returns the official sync components with what a distribution injects into them.
+func OfficialWith(opts OfficialOptions) []sync.Factory {
+	k8s := opts.K8sClient
+	if k8s == nil {
+		k8s = &KubernetesClientBuilder{}
+	}
+	return []sync.Factory{
+		file.Factory{},
+		file.FSNotifyTriggerFactory(),
+		file.FileInfoTriggerFactory(),
+		ofoperator.Factory{Client: k8s},
+		httpSync.Factory{},
+		flagdgrpc.Factory{DialOptions: opts.GRPCDialOptions, StreamMetrics: opts.StreamMetrics},
+		gcs.NewFactory(),
+		azblob.NewFactory(),
+		s3.NewFactory(),
+	}
+}
+
+// SyncBuilder creates the sync providers of sources from the factories of the sync components it knows.
 type SyncBuilder struct {
+	factories        []sync.Factory
 	k8sClientBuilder IK8sClientBuilder
 
 	// SyncMetricsRecorder, when non-nil, is passed to every sync provider so they can
 	// record the universal client-side sync metrics
 	SyncMetricsRecorder sync.MetricsRecorder
-
-	// StreamMetricsRecorder, when non-nil, is passed to gRPC sync providers to record their stream lifecycle.
-	StreamMetricsRecorder flagdgrpc.StreamMetricsRecorder
-
-	// GRPCDialOptions are passed to gRPC sync providers as client connection options.
-	GRPCDialOptions []googlegrpc.DialOption
 }
 
-func NewSyncBuilder() *SyncBuilder {
-	return &SyncBuilder{
-		k8sClientBuilder: &KubernetesClientBuilder{},
+// clientFunc adapts a function to a client builder.
+type clientFunc func() (dynamic.Interface, error)
+
+func (f clientFunc) GetK8sClient() (dynamic.Interface, error) { return f() }
+
+// NewSyncBuilder creates a builder for the given factories; without any it knows the official components.
+func NewSyncBuilder(factories ...sync.Factory) *SyncBuilder {
+	sb := &SyncBuilder{k8sClientBuilder: &KubernetesClientBuilder{}}
+	if len(factories) == 0 {
+		factories = OfficialWith(OfficialOptions{K8sClient: clientFunc(func() (dynamic.Interface, error) {
+			return sb.k8sClientBuilder.GetK8sClient()
+		})})
 	}
+	sb.factories = factories
+	return sb
 }
 
+// SyncFromURI creates the sync provider of a file or FeatureFlag source given as a --uri; the configuration proxy
+// uses it.
 func (sb *SyncBuilder) SyncFromURI(uri string, logger *logger.Logger) (sync.ISync, error) {
-	switch uriB := []byte(uri); {
-	// filepath may be used for debugging, not recommended in deployment
-	case regFile.Match(uriB):
-		return sb.newFile(uri, logger), nil
-	case regCrd.Match(uriB):
-		return sb.newK8s(uri, logger)
+	for _, provider := range []string{syncProviderFile, syncProviderKubernetes} {
+		f, ok := sb.schemeFactory(provider)
+		if !ok {
+			continue
+		}
+		if source, claimed := f.ParseURI(uri); claimed {
+			return sb.syncFromConfig(source, logger)
+		}
 	}
 	return nil, fmt.Errorf("unrecognized URI: %s", uri)
 }
@@ -101,139 +129,106 @@ func (sb *SyncBuilder) SyncsFromConfig(sourceConfigs []sync.SourceConfig, logger
 	return syncImpls, nil
 }
 
-func (sb *SyncBuilder) syncFromConfig(sourceConfig sync.SourceConfig, logger *logger.Logger) (sync.ISync, error) {
-	switch sourceConfig.Provider {
-	case syncProviderFile:
-		return sb.newFile(sourceConfig.URI, logger), nil
-	case syncProviderFsNotify:
-		logger.Debug(fmt.Sprintf("using fsnotify sync-provider for: %q", sourceConfig.URI))
-		return sb.newFsNotify(sourceConfig.URI, logger), nil
-	case syncProviderFileInfo:
-		logger.Debug(fmt.Sprintf("using fileinfo sync-provider for: %q", sourceConfig.URI))
-		return sb.newFileInfo(sourceConfig.URI, logger), nil
-	case syncProviderKubernetes:
-		logger.Debug(fmt.Sprintf("using kubernetes sync-provider for: %s", sourceConfig.URI))
-		return sb.newK8s(sourceConfig.URI, logger)
-	case syncProviderHTTP:
-		logger.Debug(fmt.Sprintf("using remote sync-provider for: %s", sourceConfig.URI))
-		return sb.newHTTP(sourceConfig, logger)
-	case syncProviderGrpc:
-		logger.Debug(fmt.Sprintf("using grpc sync-provider for: %s", sourceConfig.URI))
-		return sb.newGRPC(sourceConfig, logger), nil
-	case syncProviderGcs:
-		logger.Debug(fmt.Sprintf("using blob sync-provider with gcs driver for: %s", sourceConfig.URI))
-		return gcs.New(sourceConfig, logger, sb.SyncMetricsRecorder)
-	case syncProviderAzblob:
-		logger.Debug(fmt.Sprintf("using blob sync-provider with azblob driver for: %s", sourceConfig.URI))
-		return azblob.New(sourceConfig, logger, sb.SyncMetricsRecorder)
-	case syncProviderS3:
-		logger.Debug(fmt.Sprintf("using blob sync-provider with s3 driver for: %s", sourceConfig.URI))
-		return s3.New(sourceConfig, logger, sb.SyncMetricsRecorder)
-
-	default:
-		return nil, fmt.Errorf("invalid sync provider: %s, must be one of with "+
-			"'%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' or '%s'",
-			sourceConfig.Provider, syncProviderFile, syncProviderFsNotify, syncProviderFileInfo,
-			syncProviderKubernetes, syncProviderHTTP, syncProviderGrpc, syncProviderGcs, syncProviderAzblob, syncProviderS3)
-	}
-}
-
-// newFile returns an fsinfo sync if we are in k8s or fileinfo if not
-func (sb *SyncBuilder) newFile(uri string, logger *logger.Logger) *file.Sync {
-	switch os.Getenv("KUBERNETES_SERVICE_HOST") {
-	case "":
-		// no k8s service host env; use fileinfo
-		return sb.newFileInfo(uri, logger)
-	default:
-		// default to fsnotify
-		return sb.newFsNotify(uri, logger)
-	}
-}
-
-// return a new file.Sync that uses fsnotify under the hood
-func (sb *SyncBuilder) newFsNotify(uri string, logger *logger.Logger) *file.Sync {
-	s := file.NewFileSync(
-		regFile.ReplaceAllString(uri, ""),
-		file.FSNOTIFY,
-		0, // poll interval is unused by the fsnotify watcher
-		logger.WithFields(
-			zap.String("component", "sync"),
-			zap.String("sync", syncProviderFsNotify),
-		),
-	)
-	s.SyncMetricsRecorder = sb.SyncMetricsRecorder
-	return s
-}
-
-// return a new file.Sync that uses os.Stat/fs.FileInfo under the hood
-func (sb *SyncBuilder) newFileInfo(uri string, logger *logger.Logger) *file.Sync {
-	s := file.NewFileSync(
-		regFile.ReplaceAllString(uri, ""),
-		file.FILEINFO,
-		0, // 0 => use the fileinfo watcher's default poll interval
-		logger.WithFields(
-			zap.String("component", "sync"),
-			zap.String("sync", syncProviderFileInfo),
-		),
-	)
-	s.SyncMetricsRecorder = sb.SyncMetricsRecorder
-	return s
-}
-
-func (sb *SyncBuilder) newK8s(uri string, logger *logger.Logger) (*ofoperator.Sync, error) {
-	dynamicClient, err := sb.k8sClientBuilder.GetK8sClient()
+func (sb *SyncBuilder) syncFromConfig(sourceConfig sync.SourceConfig, log *logger.Logger) (sync.ISync, error) {
+	resolution, err := sb.Resolve(sourceConfig, log)
 	if err != nil {
-		return nil, fmt.Errorf("error creating kubernetes clients: %w", err)
+		return nil, err
+	}
+	if resolution.Streaming != nil {
+		log.Debug(fmt.Sprintf("using %s sync-provider for: %s", sourceConfig.Provider, sourceConfig.URI))
+		return resolution.Streaming, nil
 	}
 
-	s := ofoperator.NewK8sSync(
-		logger.WithFields(
-			zap.String("component", "sync"),
-			zap.String("sync", "kubernetes"),
-		),
-		regCrd.ReplaceAllString(uri, ""),
-		dynamicClient,
-	)
-	s.SyncMetricsRecorder = sb.SyncMetricsRecorder
-	return s, nil
-}
-
-func (sb *SyncBuilder) newGRPC(config sync.SourceConfig, logger *logger.Logger) *flagdgrpc.Sync {
-	return &flagdgrpc.Sync{
-		URI: config.URI,
-		Logger: logger.WithFields(
-			zap.String("component", "sync"),
-			zap.String("sync", "grpc"),
-		),
-		CredentialBuilder:   &credentials.CredentialBuilder{},
-		CertPath:            config.CertPath,
-		ProviderID:          config.ProviderID,
-		Secure:              config.TLS,
-		Selector:            config.Selector,
-		MaxMsgSize:          config.MaxMsgSize,
-		IncrementalUpdates:  config.IncrementalUpdates,
-		Headers:             config.Headers,
-		SyncMetricsRecorder: sb.SyncMetricsRecorder,
-
-		StreamMetricsRecorder: sb.StreamMetricsRecorder,
-		DialOptions:           sb.GRPCDialOptions,
+	triggers := make([]sync.Trigger, len(resolution.Triggers))
+	for i, config := range resolution.Triggers {
+		if triggers[i], err = sb.createTrigger(config, resolution, log); err != nil {
+			return nil, err
+		}
 	}
+	log.Debug(fmt.Sprintf("using %s sync-provider for: %s", sourceConfig.Provider, sourceConfig.URI))
+	return fetching.New(fetching.Options{
+		Fetcher:            resolution.Fetcher,
+		Triggers:           triggers,
+		Logger:             log,
+		Source:             resolution.Source.URI,
+		SourceType:         sourceType(resolution.Factory),
+		Metrics:            sb.SyncMetricsRecorder,
+		Interval:           time.Duration(resolution.Interval) * time.Second,
+		Timeout:            time.Duration(sourceConfig.TimeoutS) * time.Second,
+		IncrementalUpdates: sourceConfig.IncrementalUpdates,
+	}), nil
 }
 
-// defaultInterval returns the configured interval or 5 seconds if unset,
-// along with a validated poller.
-func newPoller(config sync.SourceConfig) (uint32, *polling.CronPoller, error) {
-	return polling.NewSourcePoller(config.Interval, config.IntervalSeed)
-}
-
-func (sb *SyncBuilder) newHTTP(config sync.SourceConfig, logger *logger.Logger) (*httpSync.Sync, error) {
-	interval, poller, err := newPoller(config)
-	if err != nil {
-		return nil, fmt.Errorf("invalid http sync configuration: %w", err)
+// createTrigger creates the fetch trigger a source names: the core's poller, or the trigger of a factory.
+func (sb *SyncBuilder) createTrigger(config sync.TriggerConfig, resolution Resolution, log *logger.Logger) (sync.Trigger, error) {
+	if config.Type == polling.TriggerType {
+		poller, err := polling.NewIntervalTrigger(resolution.Interval, resolution.Source.IntervalSeed)
+		if err != nil {
+			return nil, fmt.Errorf("invalid %s sync configuration: %w", resolution.Source.Provider, err)
+		}
+		return poller, nil
 	}
-	s := httpSync.NewHTTP(config, logger, poller, interval)
-	s.SetSyncMetricsRecorder(sb.SyncMetricsRecorder)
-	return s, nil
+	for _, f := range sb.factories {
+		if tf, ok := f.(sync.TriggerFactory); ok && tf.Type() == config.Type {
+			return tf.CreateTrigger(sync.Settings{Source: resolution.Source, Logger: log, Config: config.Config})
+		}
+	}
+	return nil, fmt.Errorf("unknown fetch trigger type %q, available: %s", config.Type, strings.Join(sb.triggerTypes(), ", "))
+}
+
+func (sb *SyncBuilder) triggerTypes() []string {
+	types := []string{polling.TriggerType}
+	for _, f := range sb.factories {
+		if tf, ok := f.(sync.TriggerFactory); ok {
+			types = append(types, tf.Type())
+		}
+	}
+	return types
+}
+
+func sourceType(f sync.Factory) string {
+	if st, ok := f.(sync.SourceTyper); ok {
+		return st.SourceType()
+	}
+	return f.Type()
+}
+
+// schemeFactory finds the fetcher or streaming factory of a provider name.
+func (sb *SyncBuilder) schemeFactory(provider string) (sync.SchemeFactory, bool) {
+	for _, f := range sb.factories {
+		if sf, ok := f.(sync.SchemeFactory); ok && f.Type() == provider {
+			return sf, true
+		}
+	}
+	return nil, false
+}
+
+// providerNames are the provider names the factories are selected by, in order.
+func (sb *SyncBuilder) providerNames() []string {
+	var names []string
+	for _, f := range sb.factories {
+		if _, ok := f.(sync.SchemeFactory); !ok {
+			continue
+		}
+		names = append(names, f.Type())
+		if aliased, ok := f.(sync.Aliased); ok {
+			for _, alias := range aliased.Aliases() {
+				names = append(names, alias.Name)
+			}
+		}
+	}
+	return names
+}
+
+func quoteAnd(names []string) string {
+	quoted := make([]string, len(names))
+	for i, n := range names {
+		quoted[i] = "'" + n + "'"
+	}
+	if len(quoted) < 2 {
+		return strings.Join(quoted, "")
+	}
+	return strings.Join(quoted[:len(quoted)-1], ", ") + " or " + quoted[len(quoted)-1]
 }
 
 type IK8sClientBuilder interface {
