@@ -7,10 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/contracttest"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
@@ -48,41 +51,146 @@ type Faulty struct {
 	Entries []string
 }
 
-// Samples are the format's own inputs for the contract. Incremental and Dropped are optional; the
-// checks that need them are skipped when they are nil.
+// Feature is an optional part of the contract. A format that does not have it names it in Samples.Without; one that
+// has it supplies the samples.
+type Feature string
+
+const (
+	// FeatureIncremental is the replacement of only the flag sets of an incremental update; its samples are
+	// Samples.Incremental.
+	FeatureIncremental Feature = "Incremental"
+	// FeatureDropped is the skipping of entries the format cannot use, with the rest accepted; its sample is
+	// Samples.Dropped.
+	FeatureDropped Feature = "Dropped"
+)
+
+// Samples are the format's own inputs for the contract. A feature is either supplied through its samples or named in
+// Without; one that is neither fails its check, naming the input, so that leaving a sample out cannot pass the contract.
 type Samples struct {
 	Valid   Delivery
 	Changed Change
 	Invalid Faulty
+	// Without names the features the format does not have.
+	Without []Feature
 	// Incremental holds two deliveries for different flag sets, to be applied one after the other.
 	Incremental *[2]Delivery
 	// Dropped is a delivery in which the format skips the entries named in Entries and accepts the rest.
 	Dropped *Faulty
 }
 
-// Run checks the format created by f against the contract.
-func Run(t testing.TB, f configformat.Factory, s Samples) {
+// Run checks the format created by f against the contract: one subtest per check.
+func Run(t *testing.T, f configformat.Factory, s Samples) {
 	t.Helper()
-	checks := []struct {
-		name string
-		run  func(testing.TB, configformat.Factory, Samples)
-	}{
-		{"accepts a valid delivery", checkAcceptsValid},
-		{"reports a stable version", checkVersionStable},
-		{"reports changes", checkChanges},
-		{"rejects an invalid delivery naming source and entry", checkRejects},
-		{"leaves the store unchanged after a rejection", checkRejectionKeepsStore},
-		{"replaces only the delivering source", checkOnlyDeliveringSource},
-		{"replaces only the flag sets of an incremental update", checkIncremental},
-		{"names dropped entries", checkDropped},
+	Check(t, f, s).Run(t)
+}
+
+// recorder collects the failures a check reports instead of failing the test.
+type recorder struct {
+	testing.TB
+	messages []string
+}
+
+type stopCheck struct{}
+
+func (r *recorder) Helper() {}
+func (r *recorder) Errorf(format string, args ...any) {
+	r.messages = append(r.messages, fmt.Sprintf(format, args...))
+}
+func (r *recorder) Fatalf(format string, args ...any) {
+	r.Errorf(format, args...)
+	panic(stopCheck{})
+}
+
+// Check runs the checks and returns the report, without failing a test. t is not used to report.
+func Check(t testing.TB, f configformat.Factory, s Samples) contracttest.Report {
+	t.Helper()
+	if err := configformat.ValidateDeclarations(f); err != nil {
+		return contracttest.Abort("invalid declarations: %v", err)
 	}
+	if msg := contracttest.Missing(
+		contracttest.Need("Samples.Valid", s.Valid.Data != "", "accepts a valid delivery", "reports a stable version", "reports changes"),
+		contracttest.Need("Samples.Changed", s.Changed.Data != "", "reports changes"),
+		contracttest.Need("Samples.Invalid", s.Invalid.Data != "", "rejects an invalid delivery naming source and entry"),
+	); msg != "" {
+		return contracttest.Report{Aborted: msg}
+	}
+	if err := contracttest.ValidateWithout(s.Without, map[Feature]bool{
+		FeatureIncremental: s.Incremental != nil,
+		FeatureDropped:     s.Dropped != nil,
+	}); err != nil {
+		return contracttest.Report{Aborted: err.Error()}
+	}
+	if _, err := probe(f); err != nil {
+		return contracttest.Report{Aborted: err.Error()}
+	}
+
+	checks := []struct {
+		name    string
+		run     func(testing.TB, configformat.Factory, Samples)
+		feature Feature
+		input   string
+		present bool
+	}{
+		{"accepts a valid delivery", checkAcceptsValid, "", "", true},
+		{"reports a stable version", checkVersionStable, "", "", true},
+		{"reports changes", checkChanges, "", "", true},
+		{"rejects an invalid delivery naming source and entry", checkRejects, "", "", true},
+		{"leaves the store unchanged after a rejection", checkRejectionKeepsStore, "", "", true},
+		{"replaces only the delivering source", checkOnlyDeliveringSource, "", "", true},
+		{"replaces only the flag sets of an incremental update", checkIncremental, FeatureIncremental, "Samples.Incremental", s.Incremental != nil},
+		{"names dropped entries", checkDropped, FeatureDropped, "Samples.Dropped", s.Dropped != nil},
+	}
+	var report contracttest.Report
 	for _, c := range checks {
-		if tt, ok := t.(*testing.T); ok {
-			tt.Run(c.name, func(t *testing.T) { c.run(t, f, s) })
+		if c.feature != "" && !c.present {
+			if slices.Contains(s.Without, c.feature) {
+				report.Cases = append(report.Cases, contracttest.NotApplicable(c.name, fmt.Sprintf("Without: %s", c.feature)))
+			} else {
+				report.Cases = append(report.Cases, contracttest.Case{
+					Name:     c.name,
+					Expected: fmt.Sprintf("the format supplies %s, or names %s in Without when it has no such feature", c.input, c.feature),
+					Observed: "neither",
+				})
+			}
 			continue
 		}
-		c.run(t, f, s)
+		rec := &recorder{TB: t}
+		runGuarded(func() { c.run(rec, f, s) }, rec)
+		if len(rec.messages) == 0 {
+			report.Cases = append(report.Cases, contracttest.Pass(c.name, c.name))
+			continue
+		}
+		report.Cases = append(report.Cases, contracttest.Case{
+			Name: c.name, Expected: c.name, Observed: strings.Join(rec.messages, "\n---\n"),
+		})
 	}
+	return report
+}
+
+// runGuarded runs a check and turns a panic, or a Fatalf, into a failure of the check.
+func runGuarded(run func(), rec *recorder) {
+	defer func() {
+		if v := recover(); v != nil {
+			if _, ok := v.(stopCheck); !ok {
+				rec.messages = append(rec.messages, fmt.Sprintf("panic: %v", v))
+			}
+		}
+	}()
+	run()
+}
+
+// probe creates a format, to see that the factory can.
+func probe(f configformat.Factory) (configformat.ConfigurationFormat, error) {
+	log := logger.NewLogger(nil, false)
+	st, err := store.NewStore(log, []string{sourceA, sourceB})
+	if err != nil {
+		return nil, fmt.Errorf("cannot create the store: %w", err)
+	}
+	format, err := f.Create(configformat.Settings{Store: st, Logger: log})
+	if err != nil || format == nil {
+		return nil, fmt.Errorf("the factory %q cannot create the format (format %v, error %v)", f.Type(), format, err)
+	}
+	return format, nil
 }
 
 func setup(t testing.TB, f configformat.Factory) (configformat.ConfigurationFormat, *store.Store) {

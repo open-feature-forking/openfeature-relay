@@ -190,8 +190,8 @@ type Settings struct {
 	Config              map[string]any
 }
 
-// ValidateDeclaration checks what a factory declares: a non-empty type name.
-func ValidateDeclaration(f Factory) error {
+// ValidateDeclarations checks what a factory declares: a non-empty type name.
+func ValidateDeclarations(f Factory) error {
 	if f == nil {
 		return errors.New("the factory is nil")
 	}

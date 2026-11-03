@@ -214,6 +214,8 @@ func flagdSamples() evaluatortest.Samples {
 				return int(v), ok
 			},
 		},
+		// the samples hold no flag that depends on the request's attributes
+		Without: []evaluatortest.Feature{evaluatortest.FeatureAttribute},
 	}
 }
 

@@ -50,17 +50,18 @@ jobs:
           found=$(grep -rn 'golang.org/x/exp' --include=go.mod . | grep -v indirect || true)
           if [ -n "$found" ]; then echo "::error::golang.org/x/exp is a direct requirement in:"; echo "$found"; exit 1; fi
 
-  # Allocations per operation (NFR-001) of the library benchmarks, on the pull request's head and on its base.
+  # Allocations per operation (NFR-001) of the library benchmarks, on the pull request's merge commit and on its base.
+  # The merge commit carries the scripts below even when the branch was cut before they existed.
   # ns/op is not compared: runners are too noisy for it.
   benchmark:
     name: Benchmarks (allocs/op)
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout the head
+      - name: Checkout the merge commit
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.sha }}
           path: head
       - name: Checkout the base
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
