@@ -5,6 +5,7 @@ github.com/open-feature-forking/openfeature-relay/core/pkg/configformat
 github.com/open-feature-forking/openfeature-relay/core/pkg/configformat/formattest
 github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator
 github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator/mock
+github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator/typed
 github.com/open-feature-forking/openfeature-relay/core/pkg/fips
 github.com/open-feature-forking/openfeature-relay/core/pkg/logger
 github.com/open-feature-forking/openfeature-relay/core/pkg/model
