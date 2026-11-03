@@ -3,6 +3,7 @@ package file
 import (
 	"context"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -49,9 +50,16 @@ func TestClosedWatcherDoesNotStopTheProvider(t *testing.T) {
 			replaceFile(t, path, flagsA, 0o600)
 			log := logger.NewLogger(nil, false)
 			watchers := make(chan *closableWatcher, 4)
+			// the watcher that replaces the closed one is created only when the test lets it, so that the file can change
+			// in between
+			reconnect := make(chan struct{})
+			var created atomic.Int32
 			trigger := &watchTrigger{
 				path: path, logger: log,
 				newWatcher: func(context.Context) (Watcher, error) {
+					if created.Add(1) > 1 {
+						<-reconnect
+					}
 					w := newClosableWatcher()
 					watchers <- w
 					return w, nil
@@ -73,6 +81,8 @@ func TestClosedWatcherDoesNotStopTheProvider(t *testing.T) {
 				t.Fatal("no delivery")
 			}
 			tt.close(<-watchers)
+			replaceFile(t, path, flagsB, 0o600)
+			close(reconnect)
 			select {
 			case <-watchers: // the trigger runs again with a new watcher
 			case err := <-done:
@@ -80,12 +90,17 @@ func TestClosedWatcherDoesNotStopTheProvider(t *testing.T) {
 			case <-time.After(5 * time.Second):
 				t.Fatal("the trigger was not run again")
 			}
+			select {
+			case got := <-deliveries:
+				require.Equal(t, flagsB, got.FlagData, "the change made while the watch was lost is picked up")
+			case <-time.After(5 * time.Second):
+				t.Fatal("the change made while the watch was lost was not delivered")
+			}
 			cancel()
 			require.NoError(t, <-done)
 		})
 	}
 }
-
 
 // closableWatcher is a Watcher whose channels the test closes.
 type closableWatcher struct {

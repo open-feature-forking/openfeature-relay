@@ -201,6 +201,8 @@ func (p *Provider) runTrigger(ctx context.Context, trigger sync.Trigger) {
 		if !sleep(ctx, wait) {
 			return
 		}
+		// whatever the trigger would have signalled while it was not running is lost, so fetch once
+		signal()
 	}
 }
 
