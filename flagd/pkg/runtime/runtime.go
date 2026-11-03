@@ -18,8 +18,6 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	"github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation/ofrep"
-	flagsync "github.com/open-feature/flagd/flagd/pkg/service/flag-sync"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -37,9 +35,6 @@ type staleLimit struct {
 type Runtime struct {
 	Evaluator         evaluator.IEvaluator
 	Logger            *logger.Logger
-	SyncService       flagsync.ISyncService
-	OfrepService      ofrep.IOfrepService
-	EvaluationService service.IFlagEvaluationService //nolint:staticcheck // the runtime serves endpoints instead from the runtime change on
 	ServiceConfig     service.Configuration
 	Syncs             []sync.ISync
 	// Formats holds the configuration format of each source that names one other than flagd's, keyed
@@ -86,7 +81,7 @@ func (r *Runtime) Start() error {
 
 //nolint:funlen
 func (r *Runtime) start(ctx context.Context) error {
-	if len(r.Endpoints) == 0 && r.EvaluationService == nil {
+	if len(r.Endpoints) == 0 {
 		return errors.New("no service set")
 	}
 	if len(r.Syncs) == 0 {
@@ -127,9 +122,6 @@ func (r *Runtime) start(ctx context.Context) error {
 
 	defer func() {
 		r.Logger.Info("Shutting down server...")
-		if r.EvaluationService != nil {
-			r.EvaluationService.Shutdown()
-		}
 		r.Logger.Info("Server successfully shutdown.")
 	}()
 
@@ -149,8 +141,6 @@ func (r *Runtime) start(ctx context.Context) error {
 		})
 	}
 
-	r.startLegacyServices(gCtx, g)
-
 	err := g.Wait()
 	// the endpoints are done: later events are dropped, and the shutdown hooks run in the order they were registered
 	if r.Bus != nil {
@@ -161,36 +151,6 @@ func (r *Runtime) start(ctx context.Context) error {
 		return fmt.Errorf("errgroup closed with error: %w", err)
 	}
 	return nil
-}
-
-// startLegacyServices starts the typed services of a Runtime that is not built by FromConfig.
-func (r *Runtime) startLegacyServices(ctx context.Context, g *errgroup.Group) {
-	if r.EvaluationService != nil {
-		g.Go(func() error {
-			// Readiness probe rely on the runtime
-			r.ServiceConfig.ReadinessProbe = r.isReady
-			if err := r.EvaluationService.Serve(ctx, r.ServiceConfig); err != nil {
-				return fmt.Errorf("error returned from serving flag evaluation service: %w", err)
-			}
-			return nil
-		})
-	}
-	if r.OfrepService != nil {
-		g.Go(func() error {
-			if err := r.OfrepService.Start(ctx); err != nil {
-				return fmt.Errorf("error from ofrep server: %w", err)
-			}
-			return nil
-		})
-	}
-	if r.SyncService != nil {
-		g.Go(func() error {
-			if err := r.SyncService.Start(ctx); err != nil {
-				return fmt.Errorf("error from sync server: %w", err)
-			}
-			return nil
-		})
-	}
 }
 
 func (r *Runtime) isReady() bool {
@@ -251,9 +211,6 @@ func (r *Runtime) updateAndEmit(payload sync.DataSync) {
 			r.initialized.Store(true)
 			r.initializedOnce.Do(func() { close(r.initChan()) })
 		}
-	}
-	if r.SyncService != nil {
-		r.SyncService.Emit(payload.Source)
 	}
 }
 
