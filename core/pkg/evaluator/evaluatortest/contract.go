@@ -8,9 +8,13 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
+	"strings"
 	"sync"
+	"testing"
 
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/contracttest"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
@@ -82,6 +86,9 @@ type Samples struct {
 	// documents a bulk-only rule for them. A bulk result without a value may carry the typed zero value of the
 	// flag, which needs no entry here.
 	BulkOnly []string
+	// Without names the features the evaluator does not have. A feature is either supplied through its sample or named
+	// here; one that is neither fails its case, naming the sample.
+	Without []Feature
 }
 
 var (
@@ -130,21 +137,30 @@ func (r run) expect(name string, ok bool, what string, expected, observed any) {
 	}
 }
 
-func (r run) create() (evaluator.Evaluator, *store.Store) {
-	r.t.Helper()
+// build creates a store, delivers the samples and creates the evaluator.
+func (r run) build() (evaluator.Evaluator, *store.Store, error) {
 	log := logger.NewLogger(nil, false)
 	st, err := store.NewStore(log, []string{Source})
 	if err != nil {
-		r.t.Fatalf("creating the store: %v", err)
+		return nil, nil, fmt.Errorf("creating the store: %v", err)
 	}
 	if r.samples.Setup != nil {
 		if err := r.samples.Setup(st); err != nil {
-			r.t.Fatalf("delivering the samples: %v", err)
+			return nil, nil, fmt.Errorf("delivering the samples: %v", err)
 		}
 	}
 	ev, err := r.factory.Create(evaluator.Settings{Store: st, Logger: log, Config: r.samples.Config})
+	if err != nil || ev == nil {
+		return nil, nil, fmt.Errorf("the factory %q cannot create the evaluator (evaluator %v, error %v)", r.factory.Type(), ev, err)
+	}
+	return ev, st, nil
+}
+
+func (r run) create() (evaluator.Evaluator, *store.Store) {
+	r.t.Helper()
+	ev, st, err := r.build()
 	if err != nil {
-		r.t.Fatalf("creating the evaluator: %v", err)
+		r.t.Fatalf("%v", err)
 	}
 	return ev, st
 }
@@ -168,24 +184,135 @@ func (r run) single(ev evaluator.Evaluator, key string, hint evaluator.Type, att
 	return results[0], true
 }
 
-// Run checks the evaluator the factory creates against the samples.
-func Run(t T, factory evaluator.Factory, samples Samples) {
+// Feature is an optional part of the contract. An evaluator that does not have it names it in Samples.Without; one that
+// has it supplies its sample.
+type Feature string
+
+const (
+	// FeatureDisabled is a disabled flag, Samples.Disabled.
+	FeatureDisabled Feature = "Disabled"
+	// FeatureAbsentDefault is an enabled flag with no value without targeting, Samples.AbsentDefault.
+	FeatureAbsentDefault Feature = "AbsentDefault"
+	// FeatureAttribute is a flag that depends on the request's attributes, Samples.Attribute.
+	FeatureAttribute Feature = "Attribute"
+	// FeaturePaired is two flags written together and read in one request, Samples.Paired.
+	FeaturePaired Feature = "Paired"
+	// FeatureShared is a key held by several flag sets, Samples.Shared.
+	FeatureShared Feature = "Shared"
+)
+
+// Run checks the evaluator the factory creates against the samples: one subtest per case.
+func Run(t *testing.T, factory evaluator.Factory, samples Samples) {
 	t.Helper()
-	r := run{t: t, factory: factory, samples: samples}
+	Check(t, factory, samples).Run(t)
+}
 
-	r.expect("factory", factory.Type() != "", "type", "a name", `""`)
-	r.expect("factory", factory.ConfigurationFormat() != "", "configuration format", "a name", `""`)
+// recorder collects the failures a case reports instead of failing the test. The consistency case reports from
+// several goroutines.
+type recorder struct {
+	mu       sync.Mutex
+	messages []string
+}
 
-	r.staticValues()
-	r.errorCodesAndReasons()
-	r.disabled()
-	r.absentDefault()
-	r.unknownKey()
-	r.bulkEqualsSingle()
-	r.attributes()
-	r.bulkFlagSets()
-	r.appendsToDst()
-	r.consistentResolution()
+type stopCase struct{}
+
+func (*recorder) Helper() {}
+
+func (r *recorder) Errorf(format string, args ...any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.messages = append(r.messages, fmt.Sprintf(format, args...))
+}
+
+func (r *recorder) Fatalf(format string, args ...any) {
+	r.Errorf(format, args...)
+	panic(stopCase{})
+}
+
+func (*recorder) Logf(string, ...any) {}
+
+// Check runs the cases and returns the report, without failing a test. t is only used to log.
+func Check(t T, factory evaluator.Factory, samples Samples) contracttest.Report {
+	t.Helper()
+	if err := evaluator.ValidateDeclarations(factory); err != nil {
+		return contracttest.Abort("invalid declarations: %v", err)
+	}
+	if msg := contracttest.Missing(contracttest.Need("Samples.Static", len(samples.Static) > 0,
+		"static values", "error codes and reasons", "bulk equals single")); msg != "" {
+		return contracttest.Report{Aborted: msg}
+	}
+	if err := contracttest.ValidateWithout(samples.Without, map[Feature]bool{
+		FeatureDisabled:      samples.Disabled != "",
+		FeatureAbsentDefault: samples.AbsentDefault != "",
+		FeatureAttribute:     samples.Attribute != nil,
+		FeaturePaired:        samples.Paired != nil,
+		FeatureShared:        samples.Shared != nil,
+	}); err != nil {
+		return contracttest.Report{Aborted: err.Error()}
+	}
+	probing := run{t: &recorder{}, factory: factory, samples: samples}
+	if _, _, err := probing.build(); err != nil {
+		return contracttest.Abort("%v", err)
+	}
+
+	r := run{factory: factory, samples: samples}
+	cases := []struct {
+		name    string
+		run     func(run)
+		feature Feature
+		input   string
+		present bool
+	}{
+		{"static values", run.staticValues, "", "", true},
+		{"error codes and reasons", run.errorCodesAndReasons, "", "", true},
+		{"disabled", run.disabled, FeatureDisabled, "Samples.Disabled", samples.Disabled != ""},
+		{"absent default", run.absentDefault, FeatureAbsentDefault, "Samples.AbsentDefault", samples.AbsentDefault != ""},
+		{"unknown key", run.unknownKey, "", "", true},
+		{"bulk equals single", run.bulkEqualsSingle, "", "", true},
+		{"attributes", run.attributes, FeatureAttribute, "Samples.Attribute", samples.Attribute != nil},
+		{"bulk flag sets", run.bulkFlagSets, FeatureShared, "Samples.Shared", samples.Shared != nil},
+		{"append to dst", run.appendsToDst, "", "", true},
+		{"consistent resolution", run.consistentResolution, FeaturePaired, "Samples.Paired", samples.Paired != nil},
+	}
+	var report contracttest.Report
+	for _, c := range cases {
+		if c.feature != "" && !c.present {
+			if slices.Contains(samples.Without, c.feature) {
+				report.Cases = append(report.Cases, contracttest.NotApplicable(c.name, fmt.Sprintf("Without: %s", c.feature)))
+			} else {
+				report.Cases = append(report.Cases, contracttest.Case{
+					Name:     c.name,
+					Expected: fmt.Sprintf("the evaluator supplies %s, or names %s in Without when it has no such feature", c.input, c.feature),
+					Observed: "neither",
+				})
+			}
+			continue
+		}
+		rec := &recorder{}
+		caseRun := r
+		caseRun.t = rec
+		runGuarded(func() { c.run(caseRun) }, rec)
+		if len(rec.messages) == 0 {
+			report.Cases = append(report.Cases, contracttest.Pass(c.name, c.name))
+			continue
+		}
+		report.Cases = append(report.Cases, contracttest.Case{
+			Name: c.name, Expected: c.name, Observed: strings.Join(rec.messages, "\n---\n"),
+		})
+	}
+	return report
+}
+
+// runGuarded runs a case and turns a panic, or a Fatalf, into a failure of the case.
+func runGuarded(run func(), rec *recorder) {
+	defer func() {
+		if v := recover(); v != nil {
+			if _, ok := v.(stopCase); !ok {
+				rec.Errorf("panic: %v", v)
+			}
+		}
+	}()
+	run()
 }
 
 func (r run) staticValues() {

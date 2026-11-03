@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/contracttest"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/synctest"
 	"github.com/stretchr/testify/require"
 )
@@ -15,7 +16,7 @@ import (
 // case that is dropped, renamed or loosened changes the golden file, which a commit may change only on purpose.
 // UPDATE_GOLDEN=1 rewrites it.
 
-func inventoryOf(component string, r synctest.Report) string {
+func inventoryOf(component string, r contracttest.Report) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n", component)
 	if r.Aborted != "" {

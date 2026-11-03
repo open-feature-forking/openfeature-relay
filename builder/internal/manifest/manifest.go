@@ -1,6 +1,7 @@
 // Package manifest reads and validates the manifest of the Builder (UC-001): the distribution it names and the
 // components, grouped by component type, that the distribution compiles in. Every error carries the line and column
-// of the faulty entry in the manifest (A1).
+// of the faulty field, or of its entry when the field is missing (A1). A document that is not YAML is reported at the
+// line yaml.v3 names, with column 1: the parser gives no column for a syntax error.
 package manifest
 
 import (
@@ -21,6 +22,17 @@ func (p Position) String() string { return fmt.Sprintf("%d:%d", p.Line, p.Column
 
 func positionOf(n *yaml.Node) Position { return Position{Line: n.Line, Column: n.Column} }
 
+// fields records where each field's value is, so that a problem with a field points at it.
+type fields map[string]Position
+
+// at returns where the field's value is, or fallback when the manifest does not set the field.
+func (f fields) at(field string, fallback Position) Position {
+	if pos, ok := f[field]; ok {
+		return pos
+	}
+	return fallback
+}
+
 // Dist names the distribution.
 type Dist struct {
 	Name       string
@@ -31,6 +43,8 @@ type Dist struct {
 	// Binary is the name of the binary; it defaults to "flagd" (the drop-in rule).
 	Binary string
 	Pos    Position
+
+	fields fields
 }
 
 // Entry is one component module of the manifest.
@@ -43,6 +57,7 @@ type Entry struct {
 
 	// invalid marks an entry whose shape Parse reported already, so that Validate does not repeat itself.
 	invalid bool
+	fields  fields
 }
 
 // Replace maps a module path to a local directory, as a replace directive does.
@@ -51,6 +66,8 @@ type Replace struct {
 	// Path is written as in the manifest and read relative to the manifest's directory.
 	Path string
 	Pos  Position
+
+	fields fields
 }
 
 // Group names a group of components in the manifest.

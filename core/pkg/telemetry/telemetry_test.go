@@ -179,14 +179,14 @@ func (namedFactory) Create(context.Context, telemetry.Settings) (telemetry.Provi
 	return telemetry.Noop(), nil
 }
 
-func TestValidateDeclaration(t *testing.T) {
-	if err := telemetry.ValidateDeclaration(telemetry.NoopFactory()); err != nil {
+func TestValidateDeclarations(t *testing.T) {
+	if err := telemetry.ValidateDeclarations(telemetry.NoopFactory()); err != nil {
 		t.Errorf("noop factory: %v", err)
 	}
-	if err := telemetry.ValidateDeclaration(namedFactory(" ")); err == nil {
+	if err := telemetry.ValidateDeclarations(namedFactory(" ")); err == nil {
 		t.Error("an empty type name is accepted")
 	}
-	if err := telemetry.ValidateDeclaration(nil); err == nil {
+	if err := telemetry.ValidateDeclarations(nil); err == nil {
 		t.Error("a nil factory is accepted")
 	}
 }

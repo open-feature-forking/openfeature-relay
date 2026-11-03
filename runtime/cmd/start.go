@@ -65,6 +65,9 @@ const (
 	keepAlivePermitWithoutStreamFlagName = "keep-alive-permit-without-stream"
 )
 
+// fromConfig builds the runtime `flagd start` runs; tests replace it to see the settings it is given.
+var fromConfig = runtime.FromConfig
+
 func init() {
 	flags := startCmd.Flags()
 	// allows environment variables to use _ instead of -
@@ -234,7 +237,7 @@ var startCmd = &cobra.Command{
 
 		// Build Runtime -----------------------------------------------------------
 		components := withTelemetryConfig(Components)
-		rt, err := runtime.FromConfig(logger, Version, runtime.Config{
+		rt, err := fromConfig(logger, Version, runtime.Config{
 			CORS:                   viper.GetStringSlice(corsFlagName),
 			ManagementPort:         viper.GetUint16(managementPortFlagName),
 			OfrepServicePort:       viper.GetUint16(ofrepPortFlagName),
