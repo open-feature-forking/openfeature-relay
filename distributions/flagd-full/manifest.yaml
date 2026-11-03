@@ -1,0 +1,46 @@
+# flagd-full: the distribution this repository releases as flagd. The Builder generates its components package and
+# compiles the binary (UC-001, Q12); CI checks that the generated components equal the ones flagd keeps in hand.
+# Every relay module of the build list is replaced by its directory (Q11, Q14): the placeholder version v0.0.0
+# resolves through the replaces, as in the OpenTelemetry Collector Builder's own manifest.
+dist:
+  name: flagd-full
+  version: 0.0.0
+  output_path: ./build
+  module: github.com/open-feature-forking/openfeature-relay/distributions/flagd-full
+  binary: flagd
+sync_providers:
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/file, version: v0.0.0}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator, version: v0.0.0}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/http, version: v0.0.0}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc, version: v0.0.0}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/gcs, version: v0.0.0}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/azblob, version: v0.0.0}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/s3, version: v0.0.0}
+configuration_formats:
+  - {module: github.com/open-feature-forking/openfeature-relay/configformat/flagd, version: v0.0.0}
+evaluators:
+  - {module: github.com/open-feature-forking/openfeature-relay/evaluator/flagd, version: v0.0.0}
+service_endpoints:
+  - {module: github.com/open-feature-forking/openfeature-relay/service/flag-evaluation, version: v0.0.0}
+  - {module: github.com/open-feature-forking/openfeature-relay/service/ofrep, version: v0.0.0}
+  - {module: github.com/open-feature-forking/openfeature-relay/service/flag-sync, version: v0.0.0}
+telemetry: {module: github.com/open-feature-forking/openfeature-relay/telemetry/otel, version: v0.0.0}
+runtime: {module: github.com/open-feature-forking/openfeature-relay/runtime, version: v0.0.0}
+replaces:
+  - {module: github.com/open-feature-forking/openfeature-relay/configformat/flagd, path: ../../configformat/flagd}
+  - {module: github.com/open-feature-forking/openfeature-relay/core, path: ../../core}
+  - {module: github.com/open-feature-forking/openfeature-relay/evaluator/flagd, path: ../../evaluator/flagd}
+  - {module: github.com/open-feature-forking/openfeature-relay/runtime, path: ../../runtime}
+  - {module: github.com/open-feature-forking/openfeature-relay/service/flag-evaluation, path: ../../service/flag-evaluation}
+  - {module: github.com/open-feature-forking/openfeature-relay/service/flag-sync, path: ../../service/flag-sync}
+  - {module: github.com/open-feature-forking/openfeature-relay/service/ofrep, path: ../../service/ofrep}
+  - {module: github.com/open-feature-forking/openfeature-relay/service/transport, path: ../../service/transport}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/azblob, path: ../../sync/azblob}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/builder, path: ../../sync/builder}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/file, path: ../../sync/file}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc, path: ../../sync/flagd-grpc}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/gcs, path: ../../sync/gcs}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/http, path: ../../sync/http}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator, path: ../../sync/openfeature-operator}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/s3, path: ../../sync/s3}
+  - {module: github.com/open-feature-forking/openfeature-relay/telemetry/otel, path: ../../telemetry/otel}
