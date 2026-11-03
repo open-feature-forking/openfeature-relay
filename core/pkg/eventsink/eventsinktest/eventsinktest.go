@@ -30,6 +30,9 @@ const PublishLimit = 200 * time.Millisecond
 // ShutdownLimit is the context a case gives Close while the external system stalls.
 const ShutdownLimit = 200 * time.Millisecond
 
+// SettleTime is how long the contract waits between cases for requests of the previous one to end.
+const SettleTime = 50 * time.Millisecond
+
 // DefaultTimeout is the time limit of a case that has none of its own.
 const DefaultTimeout = 5 * time.Second
 
@@ -151,6 +154,8 @@ func Check(t testing.TB, f eventsink.Factory, in Inputs) Report {
 	for _, c := range cases {
 		expected, observed := guarded(c.run)
 		report.Cases = append(report.Cases, Case{Name: c.name, Passed: observed == "", Expected: expected, Observed: observed})
+		// a request an earlier case cancelled may still reach the external system; it must not count for the next case
+		time.Sleep(SettleTime)
 	}
 	return report
 }
