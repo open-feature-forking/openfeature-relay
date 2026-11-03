@@ -103,7 +103,11 @@ func Check(t testing.TB, factory evaluator.Factory) contracttest.Report {
 			Strict: true,
 		},
 	}
-	suite.Run()
+	status := suite.Run()
+	if len(report.Cases) == 0 {
+		return contracttest.Abort("the testbed's evaluator suite ran no scenario in %s with the tags %q (godog status %d): "+
+			"the path or the tag expression matches no feature, or a feature file cannot be parsed", suiteDir+"/gherkin", tagExpression(), status)
+	}
 	return report
 }
 
