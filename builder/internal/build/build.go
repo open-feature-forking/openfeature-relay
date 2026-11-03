@@ -50,7 +50,12 @@ func (e *NoSourceError) Error() string {
 
 // Run builds the distribution of the manifest.
 func Run(ctx context.Context, m *manifest.Manifest, opts Options) (Result, error) {
-	res := Result{SourceDir: generate.OutputDir(m)}
+	// the Go Toolchain runs in the source directory, so the paths handed to it are absolute
+	sourceDir, err := filepath.Abs(generate.OutputDir(m))
+	if err != nil {
+		return Result{}, err
+	}
+	res := Result{SourceDir: sourceDir}
 	warn := func(messages ...string) {
 		for _, msg := range messages {
 			res.Warnings = append(res.Warnings, msg)

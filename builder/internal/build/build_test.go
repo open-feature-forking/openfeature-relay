@@ -355,3 +355,17 @@ func TestCmdModuleWithoutExecuteNamesTheModule(t *testing.T) {
 	require.Contains(t, err.Error(), "Execute")
 	require.Empty(t, res.Binary)
 }
+
+func TestRelativeManifestPath(t *testing.T) {
+	f := setup(t, "file", "flagdformat", "flagdeval", "ofrep")
+	opts, _ := options(t)
+	t.Chdir(f.dir)
+	m, err := manifest.Load("manifest.yaml")
+	require.NoError(t, err)
+
+	res, err := Run(ctx, m, opts)
+
+	require.NoError(t, err)
+	require.Equal(t, filepath.Join(f.dir, "out", "relay"), res.Binary, "the binary is where the output location says, whatever the working directory")
+	require.FileExists(t, res.Binary)
+}

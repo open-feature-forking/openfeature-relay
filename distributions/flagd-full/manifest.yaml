@@ -44,3 +44,4 @@ replaces:
   - {module: github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator, path: ../../sync/openfeature-operator}
   - {module: github.com/open-feature-forking/openfeature-relay/sync/s3, path: ../../sync/s3}
   - {module: github.com/open-feature-forking/openfeature-relay/telemetry/otel, path: ../../telemetry/otel}
+  - {module: github.com/open-feature/flagd/flagd, path: ../../flagd}
