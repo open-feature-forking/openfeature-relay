@@ -14,10 +14,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/contracttest"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 )
@@ -27,61 +27,6 @@ const DefaultTimeout = 5 * time.Second
 
 // quietPeriod is how long a case waits to conclude that nothing happens.
 const quietPeriod = 300 * time.Millisecond
-
-// Case is the outcome of one contract case.
-type Case struct {
-	Name     string
-	Passed   bool
-	Expected string
-	Observed string
-}
-
-// Report is the outcome of a run.
-type Report struct {
-	// Aborted says why no contract case was exercised: a missing test input, an invalid declaration or a factory
-	// that cannot create the component.
-	Aborted string
-	Cases   []Case
-}
-
-// Failed reports whether the run is a failure: it was aborted or a case failed.
-func (r Report) Failed() bool {
-	if r.Aborted != "" {
-		return true
-	}
-	for _, c := range r.Cases {
-		if !c.Passed {
-			return true
-		}
-	}
-	return false
-}
-
-// FailedCases names the cases that failed.
-func (r Report) FailedCases() []string {
-	var names []string
-	for _, c := range r.Cases {
-		if !c.Passed {
-			names = append(names, c.Name)
-		}
-	}
-	return names
-}
-
-// report shows the outcome in t: one subtest per case, failed with the expected and the observed behaviour.
-func (r Report) report(t *testing.T) {
-	t.Helper()
-	if r.Aborted != "" {
-		t.Fatalf("the contract tests were not run: %s", r.Aborted)
-	}
-	for _, c := range r.Cases {
-		t.Run(c.Name, func(t *testing.T) {
-			if !c.Passed {
-				t.Errorf("expected: %s\nobserved: %s", c.Expected, c.Observed)
-			}
-		})
-	}
-}
 
 // RemoveBehaviour is what a streaming sync provider delivers when its source disappears.
 type RemoveBehaviour int
@@ -138,32 +83,6 @@ func checkSchemes(f sync.SchemeFactory) string {
 	return ""
 }
 
-// missing builds the message for test inputs that are not set, naming each with the cases that need it.
-func missing(inputs ...missingInput) string {
-	var parts []string
-	for _, in := range inputs {
-		if in.set {
-			continue
-		}
-		parts = append(parts, fmt.Sprintf("test input %s is missing, needed by the cases %s", in.name, quoteAll(in.cases)))
-	}
-	return strings.Join(parts, "; ")
-}
-
-type missingInput struct {
-	name  string
-	set   bool
-	cases []string
-}
-
-func quoteAll(names []string) string {
-	quoted := make([]string, len(names))
-	for i, n := range names {
-		quoted[i] = fmt.Sprintf("%q", n)
-	}
-	return strings.Join(quoted, ", ")
-}
-
 // within runs f and reports whether it returned within d.
 func within(d time.Duration, f func()) bool {
 	done := make(chan struct{})
@@ -195,6 +114,6 @@ func timeoutOr(d time.Duration) time.Duration {
 	return DefaultTimeout
 }
 
-func check(name string, ok bool, expected, observed string) Case {
-	return Case{Name: name, Passed: ok, Expected: expected, Observed: observed}
+func check(name string, ok bool, expected, observed string) contracttest.Case {
+	return contracttest.Case{Name: name, Passed: ok, Expected: expected, Observed: observed}
 }

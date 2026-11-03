@@ -106,5 +106,7 @@ func TestRouterPassesTheContract(t *testing.T) {
 				return int(v), ok
 			},
 		},
+		// the router resolves through the evaluators of the formats; none of the samples depends on attributes
+		Without: []evaluatortest.Feature{evaluatortest.FeatureAttribute},
 	})
 }

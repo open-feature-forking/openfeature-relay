@@ -1,6 +1,6 @@
 //go:build unix
 
-package keyvalue_test
+package distribution_test
 
 import (
 	"bytes"

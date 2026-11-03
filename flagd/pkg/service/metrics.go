@@ -87,17 +87,26 @@ func (m *Metrics) RecordEvaluation(
 
 // Impressions counts an evaluation of a flag.
 func (m *Metrics) Impressions(ctx context.Context, reason, variant, key string, metadata model.Metadata) {
-	attrs := append(SemConvFeatureFlagAttributes(key, variant), telemetry.String(FeatureFlagReasonKey, reason))
+	// sized for every attribute, so the slice is allocated once
+	attrs := make([]telemetry.Attribute, 0, 5)
+	attrs = append(attrs,
+		telemetry.String(featureFlagKey, key),
+		telemetry.String(featureFlagVariant, variant),
+		telemetry.String(featureFlagProvider, providerName),
+		telemetry.String(FeatureFlagReasonKey, reason),
+	)
 	attrs = appendFlagSetID(attrs, metadata)
 	m.impressions.Add(ctx, 1, attrs...)
 }
 
 // Reasons counts an evaluation under its reason.
 func (m *Metrics) Reasons(ctx context.Context, key, reason string, metadata model.Metadata, err error) {
-	attrs := []telemetry.Attribute{
+	// sized for every attribute, so the slice is allocated once
+	attrs := make([]telemetry.Attribute, 0, 4)
+	attrs = append(attrs,
 		telemetry.String(featureFlagProvider, providerName),
 		telemetry.String(FeatureFlagReasonKey, reason),
-	}
+	)
 	if err == nil {
 		// record flag key only if evaluation is successful
 		attrs = append(attrs, telemetry.String(featureFlagKey, key))

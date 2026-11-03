@@ -79,6 +79,7 @@ nav:
   - 'Concepts': 'relay/concepts.md'
   - 'Architecture': 'relay/architecture.md'
   - 'Distributions': 'relay/distributions.md'
+  - 'Contract tests': 'reference/contract-tests.md'
   - 'Status and roadmap': 'relay/status.md'
   - 'Try it': 'relay/try-it.md'
   - 'Design':

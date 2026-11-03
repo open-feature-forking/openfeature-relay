@@ -53,3 +53,5 @@ test/eventsink-example:./...:opentelemetry|google.golang.org/grpc|connectrpc|k8s
 # sync provider module, evaluator, configuration format, telemetry provider or SDK, or service endpoint package; the
 # distribution's components package passes them in.
 flagd:./pkg/runtime:go.opentelemetry.io|prometheus|openfeature-relay/(sync/(file|http|flagd-grpc|openfeature-operator|gcs|azblob|s3)|evaluator/|configformat/|telemetry/)|flagd/pkg/service/(flag-evaluation|flag-sync)
+# The Builder (UC-001 Q1) depends on no relay module: it only reads manifests and runs the go binary.
+builder:./...:open-feature/flagd/|openfeature-relay/(core|runtime|sync|evaluator|configformat|telemetry|service|distribution)

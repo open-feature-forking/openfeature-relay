@@ -1,0 +1,45 @@
+== --log-format json
+exit after SIGTERM: 0
+-- stdout
+-- startup log, sorted
+info | Flag IResolver listening at [::]:<port> | caller=<masked> component=service ts=<masked>
+info | flagd version | FIPS 140-3 mode=disabled (binary not built with GOFIPS140) caller=<masked> commit=abc1234 component=start date=2026-01-02T03:04:05Z ts=<masked> variant=standard version=v9.9.9
+info | metrics and probes listening at <management-port> | caller=<masked> component=runtime ts=<masked>
+info | ofrep service listening at <ofrep-port> | caller=<masked> component=OFREPService ts=<masked>
+info | request body limit set to 1000000 bytes | caller=<masked> component=start ts=<masked>
+info | request header limit set to 1000000 bytes | caller=<masked> component=start ts=<masked>
+info | starting flag sync service on port <sync-port> | caller=<masked> component=FlagSyncService ts=<masked>
+info | starting sync from <tmp>/flags.json | caller=<masked> component=sync sync=file ts=<masked>
+-- shutdown log, sorted
+info | Server successfully shutdown. | caller=<masked> component=runtime ts=<masked>
+info | Shutting down server... | caller=<masked> component=runtime ts=<masked>
+info | shutting down flag sync service | caller=<masked> component=FlagSyncService ts=<masked>
+info | shutting down ofrep service | caller=<masked> component=OFREPService ts=<masked>
+info | shutting down ofrep sse service | caller=<masked> component=OFREPService ts=<masked>
+== --log-format console
+exit after SIGTERM: 0
+-- stdout
+
+		 ______   __       ________   _______    ______      
+		/_____/\ /_/\     /_______/\ /______/\  /_____/\     
+		\::::_\/_\:\ \    \::: _  \ \\::::__\/__\:::_ \ \    
+		 \:\/___/\\:\ \    \::(_)  \ \\:\ /____/\\:\ \ \ \   
+		  \:::._\/ \:\ \____\:: __  \ \\:\\_  _\/ \:\ \ \ \  
+		   \:\ \    \:\/___/\\:.\ \  \ \\:\_\ \ \  \:\/.:| | 
+		    \_\/     \_____\/ \__\/\__\/ \_____\/   \____/_/ 
+
+-- startup log, sorted
+<time>	info	<caller>	Flag IResolver listening at [::]:<port>	{"component": "service"}
+<time>	info	<caller>	flagd version	{"version": "v9.9.9", "commit": "abc1234", "date": "2026-01-02T03:04:05Z", "variant": "standard", "FIPS 140-3 mode": "disabled (binary not built with GOFIPS140)", "component": "start"}
+<time>	info	<caller>	metrics and probes listening at <management-port>	{"component": "runtime"}
+<time>	info	<caller>	ofrep service listening at <ofrep-port>	{"component": "OFREPService"}
+<time>	info	<caller>	request body limit set to 1000000 bytes	{"component": "start"}
+<time>	info	<caller>	request header limit set to 1000000 bytes	{"component": "start"}
+<time>	info	<caller>	starting flag sync service on port <sync-port>	{"component": "FlagSyncService"}
+<time>	info	<caller>	starting sync from <tmp>/flags.json	{"component": "sync", "sync": "file"}
+-- shutdown log, sorted
+<time>	info	<caller>	Server successfully shutdown.	{"component": "runtime"}
+<time>	info	<caller>	Shutting down server...	{"component": "runtime"}
+<time>	info	<caller>	shutting down flag sync service	{"component": "FlagSyncService"}
+<time>	info	<caller>	shutting down ofrep service	{"component": "OFREPService"}
+<time>	info	<caller>	shutting down ofrep sse service	{"component": "OFREPService"}

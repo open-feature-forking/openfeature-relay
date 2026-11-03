@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/contracttest"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry/telemetrytest"
 	"github.com/stretchr/testify/require"
@@ -16,7 +17,7 @@ import (
 // provider with a backend and for the noop provider, which has none. A case that is dropped, renamed or loosened
 // changes the golden file, which a commit may change only on purpose. UPDATE_GOLDEN=1 rewrites it.
 
-func inventoryOf(title string, r telemetrytest.Report) string {
+func inventoryOf(title string, r contracttest.Report) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n", title)
 	if r.Aborted != "" {
