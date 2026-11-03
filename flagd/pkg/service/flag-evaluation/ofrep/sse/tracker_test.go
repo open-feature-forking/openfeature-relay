@@ -1,30 +1,20 @@
 package sse
 
 import (
-	"context"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/launchdarkly/eventsource"
 
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func testFlag(flagSetID, key, defaultVariant string) model.Flag {
-	return model.Flag{
-		Key:            key,
-		FlagSetId:      flagSetID,
-		State:          "ENABLED",
-		DefaultVariant: defaultVariant,
-		Variants:       map[string]any{"on": true, "off": false},
-		Source:         "src1",
-	}
-}
+// testFormats are the configuration formats of the tests' distribution: flagd's own and a vendor's.
+var testFormats = []string{"flagd", "vendor"}
 
 func mustSelector(t *testing.T, expr string) store.Selector {
 	t.Helper()
@@ -40,13 +30,26 @@ func newTestStore(t *testing.T) *store.Store {
 	return s
 }
 
+// deliver writes the document of one flag set as a configuration format does once it accepted a delivery, and
+// publishes the configuration change event the runtime publishes for it.
+func deliver(t *testing.T, st *store.Store, bus *events.Bus, format, source, flagSet, version string, keys ...string) {
+	t.Helper()
+	require.NoError(t, st.Apply(store.ApplyRequest{
+		Format: format, Source: source, Incremental: true,
+		Documents: []store.Document{{Format: format, Source: source, FlagSet: flagSet, Version: version, FlagKeys: keys}},
+	}))
+	events.PublishConfigurationChange(bus, events.ConfigurationChange{
+		Time: time.Now(), Source: source, Format: format, FlagSet: flagSet, Version: version, Updated: keys,
+	})
+}
+
 // newTracker builds a Tracker over a real eventsource server, so publishes are exercised.
-func newTracker(t *testing.T, s store.IStore) *Tracker {
+func newTracker(t *testing.T, s *store.Store, bus *events.Bus) *Tracker {
 	t.Helper()
 	es := eventsource.NewServer()
 	t.Cleanup(es.Close)
 
-	tr := NewTracker(logger.NewLogger(nil, false), s, es)
+	tr := NewTracker(logger.NewLogger(nil, false), s, es, bus, testFormats)
 	t.Cleanup(tr.Close)
 	return tr
 }
@@ -59,80 +62,65 @@ func subscribe(t *testing.T, tr *Tracker, expr string) {
 	t.Cleanup(release)
 }
 
-// versionOf polls until the channel has a seeded ETag, since seeding is asynchronous.
-func versionOf(t *testing.T, tr *Tracker, channel string) (string, int64) {
+func etagOf(t *testing.T, tr *Tracker, channel string) (string, int64) {
 	t.Helper()
-	var etag string
-	var lastModified int64
-	require.Eventually(t, func() bool {
-		var ok bool
-		etag, lastModified, ok = tr.Version(channel)
-		return ok
-	}, 3*time.Second, 5*time.Millisecond, "no version seeded for channel %q", channel)
+	etag, lastModified, ok := tr.Version(channel)
+	require.True(t, ok, "no version for channel %q", channel)
 	return etag, lastModified
 }
 
-func TestFingerprint_StableAndSensitive(t *testing.T) {
+func TestEtag_FromDocumentVersions(t *testing.T) {
+	st := newTestStore(t)
+	bus := events.NewBus()
+	tr := newTracker(t, st, bus)
+
 	sel := mustSelector(t, "flagSetId=fs1")
-	a := testFlag("fs1", "a", "on")
-	b := testFlag("fs1", "b", "off")
+	none := tr.etag(&sel)
 
-	// deterministic for identical input
-	assert.Equal(t, fingerprint(&sel, []model.Flag{a, b}), fingerprint(&sel, []model.Flag{a, b}))
-	// order independent
-	assert.Equal(t, fingerprint(&sel, []model.Flag{a, b}), fingerprint(&sel, []model.Flag{b, a}))
+	deliver(t, st, bus, "flagd", "src1", "fs1", "v1", "a", "b")
+	one := tr.etag(&sel)
+	assert.NotEqual(t, none, one, "a document behind the selector")
+	assert.Equal(t, one, tr.etag(&sel), "stable")
 
-	// sensitive to a definition change
-	aModified := testFlag("fs1", "a", "off")
-	assert.NotEqual(t, fingerprint(&sel, []model.Flag{a}), fingerprint(&sel, []model.Flag{aModified}))
+	// the keys of a document are not part of the version; its version is
+	deliver(t, st, bus, "flagd", "src1", "fs1", "v1", "a", "b", "c")
+	assert.Equal(t, one, tr.etag(&sel), "the same version, whatever the keys")
 
-	// duplicates are not collapsed: a flag appearing twice is a different result set
-	assert.NotEqual(t, fingerprint(&sel, []model.Flag{a}), fingerprint(&sel, []model.Flag{a, a}))
+	deliver(t, st, bus, "flagd", "src1", "fs1", "v2", "a", "b")
+	two := tr.etag(&sel)
+	assert.NotEqual(t, one, two, "a new version")
 
-	// the flagSetId carried on a flag is not part of the identity; the selector the watch was
-	// opened with is
-	relabelled := testFlag("some-other-flag-set", "a", "on")
-	assert.Equal(t, fingerprint(&sel, []model.Flag{a}), fingerprint(&sel, []model.Flag{relabelled}))
+	// a document of another flag set or another source is not behind the selector
+	deliver(t, st, bus, "flagd", "src1", "fs2", "v1", "z")
+	assert.Equal(t, two, tr.etag(&sel))
+	deliver(t, st, bus, "vendor", "src2", "fs1", "v1", "z")
+	assert.NotEqual(t, two, tr.etag(&sel), "a vendor-format document of the flag set is")
 
+	// the selector scopes the hash
 	other := mustSelector(t, "source=src1")
-	assert.NotEqual(t, fingerprint(&sel, []model.Flag{a}), fingerprint(&other, []model.Flag{a}))
+	assert.NotEqual(t, tr.etag(&sel), tr.etag(&other))
 }
 
-// TestTracker_PassesSelectorToStore pins that filtering is delegated to the store by handing it
-// the channel's selector, rather than re-implemented by grouping flags in memory.
-func TestTracker_PassesSelectorToStore(t *testing.T) {
-	rec := &recordingStore{}
-	tr := newTracker(t, rec)
-
-	subscribe(t, tr, "flagSetId=fs1")
-
-	selectors := rec.selectors()
-	require.Len(t, selectors, 1)
-	expected := mustSelector(t, "flagSetId=fs1")
-	assert.Equal(t, expected.ToLogString(), selectors[0].ToLogString())
-}
-
-func TestTracker_SharesOneWatchPerChannel(t *testing.T) {
-	rec := &recordingStore{}
-	tr := newTracker(t, rec)
+func TestTracker_SharesOneSubscriptionPerChannel(t *testing.T) {
+	tr := newTracker(t, newTestStore(t), events.NewBus())
 
 	subscribe(t, tr, "flagSetId=fs1")
 	subscribe(t, tr, "flagSetId=fs1")
-	assert.Len(t, rec.selectors(), 1, "subscribers on one channel must share a store watch")
+	assert.Len(t, tr.Channels(), 1, "subscribers on one channel share a subscription")
 
 	subscribe(t, tr, "flagSetId=fs2")
-	assert.Len(t, rec.selectors(), 2, "a distinct channel needs its own watch")
+	assert.Len(t, tr.Channels(), 2, "a distinct channel needs its own")
 }
 
 func TestTracker_Version_NoSubscription(t *testing.T) {
-	tr := newTracker(t, newTestStore(t))
+	tr := newTracker(t, newTestStore(t), events.NewBus())
 
 	_, _, ok := tr.Version("flagSetId=fs1")
 	assert.False(t, ok, "no live stream for the channel means no ETag and no 304")
 }
 
 func TestTracker_ReleaseTearsDownLastSubscriberOnly(t *testing.T) {
-	tr := newTracker(t, newTestStore(t))
+	tr := newTracker(t, newTestStore(t), events.NewBus())
 
 	releaseA, err := tr.Subscribe("flagSetId=fs1", mustSelector(t, "flagSetId=fs1"))
 	require.NoError(t, err)
@@ -148,117 +136,80 @@ func TestTracker_ReleaseTearsDownLastSubscriberOnly(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestTracker_IdenticalUpdateIsSuppressed(t *testing.T) {
-	s := newTestStore(t)
-	flags := []model.Flag{testFlag("fs1", "a", "on")}
-	s.Update("src1", flags, model.Metadata{"flagSetId": "fs1"}, false)
+func TestTracker_IdenticalDeliveryIsSuppressed(t *testing.T) {
+	st := newTestStore(t)
+	bus := events.NewBus()
+	deliver(t, st, bus, "flagd", "src1", "fs1", "v1", "a")
 
-	tr := newTracker(t, s)
+	tr := newTracker(t, st, bus)
 	subscribe(t, tr, "flagSetId=fs1")
+	_, firstModified := etagOf(t, tr, "flagSetId=fs1")
 
-	_, firstModified := versionOf(t, tr, "flagSetId=fs1")
-
-	// Update re-inserts unconditionally, so an identical re-sync still wakes the watch
-	s.Update("src1", flags, model.Metadata{"flagSetId": "fs1"}, false)
+	// the same version again, announced: nothing changed behind the selector
+	deliver(t, st, bus, "flagd", "src1", "fs1", "v1", "a")
 	time.Sleep(200 * time.Millisecond)
 
-	_, stillModified := versionOf(t, tr, "flagSetId=fs1")
+	_, stillModified := etagOf(t, tr, "flagSetId=fs1")
 	assert.Equal(t, firstModified, stillModified, "lastModified must not move when nothing changed")
 }
 
 func TestTracker_VersionTracksChanges(t *testing.T) {
-	s := newTestStore(t)
-	s.Update("src1", []model.Flag{testFlag("fs1", "a", "on")}, model.Metadata{"flagSetId": "fs1"}, false)
+	st := newTestStore(t)
+	bus := events.NewBus()
+	deliver(t, st, bus, "flagd", "src1", "fs1", "v1", "a")
 
-	tr := newTracker(t, s)
+	tr := newTracker(t, st, bus)
 	subscribe(t, tr, "flagSetId=fs1")
+	before, _ := etagOf(t, tr, "flagSetId=fs1")
 
-	before, _ := versionOf(t, tr, "flagSetId=fs1")
-
-	s.Update("src1", []model.Flag{testFlag("fs1", "a", "off")}, model.Metadata{"flagSetId": "fs1"}, false)
+	deliver(t, st, bus, "flagd", "src1", "fs1", "v2", "a")
 	require.Eventually(t, func() bool {
 		etag, _, _ := tr.Version("flagSetId=fs1")
 		return etag != before
-	}, 3*time.Second, 5*time.Millisecond, "the ETag must move when the config changes")
+	}, 3*time.Second, 5*time.Millisecond, "the ETag must move when the document version does")
 }
 
-// closingStore closes the watcher without emitting, simulating store.Watch's error-close path.
-type closingStore struct{}
+// TestTracker_MissedRecomputesEveryChannel pins that an event that reports missed events concerns every channel,
+// whatever it says, because the tracker cannot tell what it missed.
+func TestTracker_MissedRecomputesEveryChannel(t *testing.T) {
+	st := newTestStore(t)
+	bus := events.NewBus()
+	deliver(t, st, bus, "flagd", "src1", "fs1", "v1", "a")
 
-func (closingStore) Get(context.Context, string, *store.Selector) (model.Flag, model.Metadata, error) {
-	return model.Flag{}, nil, nil
-}
-
-func (closingStore) GetAll(context.Context, *store.Selector) ([]model.Flag, model.Metadata, error) {
-	return nil, nil, nil
-}
-
-func (closingStore) Watch(_ context.Context, _ *store.Selector, watcher chan<- store.FlagQueryResult) {
-	close(watcher)
-}
-
-func (closingStore) Update(string, []model.Flag, model.Metadata, bool) {}
-
-func TestTracker_StoreErrorInvalidatesVersion(t *testing.T) {
-	tr := newTracker(t, closingStore{})
-
+	tr := newTracker(t, st, bus)
 	subscribe(t, tr, "flagSetId=fs1")
+	before, _ := etagOf(t, tr, "flagSetId=fs1")
 
-	assert.Eventually(t, func() bool {
-		_, _, ok := tr.Version("flagSetId=fs1")
-		return !ok
-	}, 3*time.Second, 5*time.Millisecond,
-		"a dead watch must stop serving its ETag, or 304s would be stale forever")
+	// the document changes unannounced; the next event is for another flag set but reports missed events
+	require.NoError(t, st.Apply(store.ApplyRequest{
+		Format: "flagd", Source: "src1", Incremental: true,
+		Documents: []store.Document{{Format: "flagd", Source: "src1", FlagSet: "fs1", Version: "v2", FlagKeys: []string{"a"}}},
+	}))
+	events.PublishConfigurationChange(bus, events.ConfigurationChange{Source: "src2", Format: "flagd", FlagSet: "fs9", Version: "v1", Missed: 2})
+
+	require.Eventually(t, func() bool {
+		etag, _, _ := tr.Version("flagSetId=fs1")
+		return etag != before
+	}, 3*time.Second, 5*time.Millisecond)
 }
 
 func TestTracker_CloseRejectsNewSubscribers(t *testing.T) {
+	tr := newTracker(t, newTestStore(t), events.NewBus())
+	tr.Close()
+
+	_, err := tr.Subscribe("flagSetId=fs1", mustSelector(t, "flagSetId=fs1"))
+	assert.Error(t, err)
+}
+
+func TestTracker_ReleaseAfterCloseIsANoOp(t *testing.T) {
 	es := eventsource.NewServer()
 	defer es.Close()
-	tr := NewTracker(logger.NewLogger(nil, false), newTestStore(t), es)
+	tr := NewTracker(logger.NewLogger(nil, false), newTestStore(t), es, events.NewBus(), testFormats)
 
 	release, err := tr.Subscribe("flagSetId=fs1", mustSelector(t, "flagSetId=fs1"))
 	require.NoError(t, err)
 
 	require.NotPanics(t, tr.Close)
 	assert.Empty(t, tr.Channels())
-
-	_, err = tr.Subscribe("flagSetId=fs2", mustSelector(t, "flagSetId=fs2"))
-	assert.Error(t, err)
-
-	assert.NotPanics(t, release) // releasing after Close is a no-op
+	assert.NotPanics(t, release)
 }
-
-// recordingStore records the selector handed to each Watch call, mimicking the real store's
-// contract: an immediate initial snapshot on a buffered channel, closed on ctx cancellation.
-type recordingStore struct {
-	mu   sync.Mutex
-	sels []store.Selector
-}
-
-func (r *recordingStore) selectors() []store.Selector {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return append([]store.Selector(nil), r.sels...)
-}
-
-func (r *recordingStore) Get(context.Context, string, *store.Selector) (model.Flag, model.Metadata, error) {
-	return model.Flag{}, nil, nil
-}
-
-func (r *recordingStore) GetAll(context.Context, *store.Selector) ([]model.Flag, model.Metadata, error) {
-	return nil, nil, nil
-}
-
-func (r *recordingStore) Watch(ctx context.Context, selector *store.Selector, watcher chan<- store.FlagQueryResult) {
-	r.mu.Lock()
-	r.sels = append(r.sels, *selector)
-	r.mu.Unlock()
-
-	go func() {
-		watcher <- store.FlagQueryResult{}
-		<-ctx.Done()
-		close(watcher)
-	}()
-}
-
-func (r *recordingStore) Update(string, []model.Flag, model.Metadata, bool) {}

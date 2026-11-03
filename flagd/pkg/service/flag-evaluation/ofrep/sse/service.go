@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/launchdarkly/eventsource"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 )
@@ -18,6 +19,10 @@ const defaultHeartbeatInterval = 30 * time.Second
 type Config struct {
 	Logger            *logger.Logger
 	HeartbeatInterval time.Duration
+	// Bus carries the configuration change events the stream announces. Without it no change is announced.
+	Bus *events.Bus
+	// Formats are the configuration formats whose documents the versions are taken from.
+	Formats []string
 }
 
 // Service serves the OFREP SSE stream. It owns an eventsource server, the change Tracker that
@@ -30,7 +35,7 @@ type Service struct {
 }
 
 // New builds an SSE Service backed by the shared flag store.
-func New(s store.IStore, cfg Config) *Service {
+func New(s *store.Store, cfg Config) *Service {
 	es := eventsource.NewServer()
 	// CORS is handled by the OFREP server's middleware; avoid emitting duplicate headers.
 	es.AllowCORS = false
@@ -44,7 +49,7 @@ func New(s store.IStore, cfg Config) *Service {
 	return &Service{
 		logger:            cfg.Logger,
 		es:                es,
-		tracker:           NewTracker(cfg.Logger, s, es),
+		tracker:           NewTracker(cfg.Logger, s, es, cfg.Bus, cfg.Formats),
 		heartbeatInterval: heartbeat,
 	}
 }
@@ -80,7 +85,7 @@ func (svc *Service) Start(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			// Order matters: the tracker's watch goroutines are the only publishers, and
+			// Order matters: the tracker's event loop is the only publisher, and
 			// eventsource.Server.Publish blocks forever once the server is closed.
 			svc.tracker.Close()
 			svc.es.Close()
