@@ -49,6 +49,7 @@ func NewManagementServer(port uint16, ready func() bool, metrics http.Handler) *
 		// slowloris/slow-client DoS protection; safe for server streams
 		ReadTimeout: 5 * time.Second,
 		// h2c carries plaintext HTTP/2 for the gRPC health service
+		//nolint:staticcheck // the deprecated package still works; setting Protocols on the server would need more refactoring
 		Handler: h2c.NewHandler(handler, &http2.Server{}),
 	}
 }
