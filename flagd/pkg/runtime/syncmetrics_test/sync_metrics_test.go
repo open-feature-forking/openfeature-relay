@@ -9,10 +9,13 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -108,13 +111,27 @@ func TestSyncMetricsCharacterization(t *testing.T) {
 	dir := t.TempDir()
 	filePath := filepath.Join(dir, "flags.json")
 	require.NoError(t, os.WriteFile(filePath, []byte(flagData), 0o600))
+	// an empty file is delivered as an empty flag configuration, which is not counted as received
+	emptyPath := filepath.Join(t.TempDir(), "empty.json")
+	require.NoError(t, os.WriteFile(emptyPath, nil, 0o600))
+
+	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(flagData))
+	}))
+	defer httpServer.Close()
+	httpURI = httpServer.URL + "/flags"
 
 	rt, err := runtime.FromConfig(logger.NewLogger(nil, false), "test", runtime.Config{
 		KeepAliveMinTime:             runtime.KeepAliveMinTimeDefault,
 		KeepAlivePermitWithoutStream: runtime.KeepAlivePermitWithoutStreamDefault,
 		SyncProviders: []coresync.SourceConfig{
 			{URI: filePath, Provider: "file"},
+			{URI: emptyPath, Provider: "file"},
+			// the longest interval, so that no second poll job runs within the test
+			{URI: httpURI, Provider: "http", Interval: 86400},
 			{URI: addr, Provider: "grpc"},
+			{URI: addr, Provider: "grpc", Selector: "source=a"},
 		},
 	})
 	require.NoError(t, err)
@@ -122,10 +139,15 @@ func TestSyncMetricsCharacterization(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	payloads := make(chan coresync.DataSync, 100)
+	emptyDelivered := make(chan struct{})
 	go func() {
+		var once sync.Once
 		for {
 			select {
-			case <-payloads:
+			case p := <-payloads:
+				if p.Source == emptyPath && p.FlagData == "{}" {
+					once.Do(func() { close(emptyDelivered) })
+				}
 			case <-ctx.Done():
 				return
 			}
@@ -136,21 +158,24 @@ func TestSyncMetricsCharacterization(t *testing.T) {
 		go func() { _ = s.Sync(ctx, payloads) }()
 	}
 
-	// every payload is on its way through the channel once these counters are in place
-	require.Eventually(t, func() bool { return strings.Contains(render(pick(gather(t)), filePath), "stream_active GAUGE") }, 10*time.Second, 100*time.Millisecond)
-	require.Eventually(t, func() bool {
-		return strings.Count(render(pick(gather(t)), filePath), "flag_config_received_total COUNTER") == 2
-	}, 10*time.Second, 100*time.Millisecond)
-	require.Equal(t, strings.Join(wantBefore, "\n"), render(pick(gather(t)), filePath))
+	// every payload is on its way through the channel once the empty one has been delivered and the
+	// counters of the other four sources are in place
+	select {
+	case <-emptyDelivered:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the empty file was not delivered")
+	}
+	want := strings.Join(wantBefore, "\n")
+	require.Eventually(t, func() bool { return render(pick(gather(t)), filePath) == want }, 10*time.Second, 100*time.Millisecond)
+	require.Equal(t, want, render(pick(gather(t)), filePath))
 
 	// force a reconnect: stop the server and bring it back on the same address, within the first
 	// backoff step (backOffBase^1 seconds)
 	server.Stop()
 	server, _ = serve(t, addr)
-	require.Eventually(t, func() bool {
-		return strings.Contains(render(pick(gather(t)), filePath), "stream_reconnects_total COUNTER")
-	}, 20*time.Second, 200*time.Millisecond, "the stream reconnects")
-	require.Equal(t, strings.Join(wantAfter, "\n"), render(pick(gather(t)), filePath))
+	want = strings.Join(wantAfter, "\n")
+	require.Eventually(t, func() bool { return render(pick(gather(t)), filePath) == want }, 20*time.Second, 200*time.Millisecond, "the streams reconnect")
+	require.Equal(t, want, render(pick(gather(t)), filePath))
 }
 
 const (
@@ -170,14 +195,29 @@ const (
 
 // The sync client URI of a gRPC source is recorded sanitized, so it is empty for a host:port target.
 // Values of timestamps and of the rpc_client_* series vary and are not rendered.
+//
+// The sources are a file, an empty file, an HTTP source and two gRPC sources, one with a selector. The
+// empty file is delivered as an empty flag configuration, which is not counted as received, so it has
+// no series. The gRPC selector is an attribute of every series of its source, in the legacy and the new
+// name.
+const (
+	httpLabels    = "feature_flag_flagd_sync_type=http,feature_flag_flagd_sync_uri=<http>,flagd_sync_provider=http,flagd_sync_uri=<http>"
+	selGrpcLabels = "feature_flag_flagd_sync_selector=source=a,feature_flag_flagd_sync_type=grpc,feature_flag_flagd_sync_uri=,flagd_sync_provider=grpc,flagd_sync_selector=source=a,flagd_sync_uri="
+)
+
 var wantBefore = []string{
 	helpTimestamp,
 	helpReceived,
 	helpActive,
+	"feature_flag_flagd_sync_client_flag_config_last_received_timestamp_seconds GAUGE {" + selGrpcLabels + "," + syncScope + "} -",
 	"feature_flag_flagd_sync_client_flag_config_last_received_timestamp_seconds GAUGE {" + fileLabels + "," + syncScope + "} -",
 	"feature_flag_flagd_sync_client_flag_config_last_received_timestamp_seconds GAUGE {" + grpcLabels + "," + syncScope + "} -",
+	"feature_flag_flagd_sync_client_flag_config_last_received_timestamp_seconds GAUGE {" + httpLabels + "," + syncScope + "} -",
+	"feature_flag_flagd_sync_client_flag_config_received_total COUNTER {" + selGrpcLabels + "," + syncScope + "} 1",
 	"feature_flag_flagd_sync_client_flag_config_received_total COUNTER {" + fileLabels + "," + syncScope + "} 1",
 	"feature_flag_flagd_sync_client_flag_config_received_total COUNTER {" + grpcLabels + "," + syncScope + "} 1",
+	"feature_flag_flagd_sync_client_flag_config_received_total COUNTER {" + httpLabels + "," + syncScope + "} 1",
+	"feature_flag_flagd_sync_client_stream_active GAUGE {" + selGrpcLabels + "," + streamScope + "} 1",
 	"feature_flag_flagd_sync_client_stream_active GAUGE {" + grpcLabels + "," + streamScope + "} 1",
 }
 
@@ -186,11 +226,17 @@ var wantAfter = []string{
 	helpReceived,
 	helpActive,
 	helpReconnects,
+	"feature_flag_flagd_sync_client_flag_config_last_received_timestamp_seconds GAUGE {" + selGrpcLabels + "," + syncScope + "} -",
 	"feature_flag_flagd_sync_client_flag_config_last_received_timestamp_seconds GAUGE {" + fileLabels + "," + syncScope + "} -",
 	"feature_flag_flagd_sync_client_flag_config_last_received_timestamp_seconds GAUGE {" + grpcLabels + "," + syncScope + "} -",
+	"feature_flag_flagd_sync_client_flag_config_last_received_timestamp_seconds GAUGE {" + httpLabels + "," + syncScope + "} -",
+	"feature_flag_flagd_sync_client_flag_config_received_total COUNTER {" + selGrpcLabels + "," + syncScope + "} 2",
 	"feature_flag_flagd_sync_client_flag_config_received_total COUNTER {" + fileLabels + "," + syncScope + "} 1",
 	"feature_flag_flagd_sync_client_flag_config_received_total COUNTER {" + grpcLabels + "," + syncScope + "} 2",
+	"feature_flag_flagd_sync_client_flag_config_received_total COUNTER {" + httpLabels + "," + syncScope + "} 1",
+	"feature_flag_flagd_sync_client_stream_active GAUGE {" + selGrpcLabels + "," + streamScope + "} 1",
 	"feature_flag_flagd_sync_client_stream_active GAUGE {" + grpcLabels + "," + streamScope + "} 1",
+	"feature_flag_flagd_sync_client_stream_reconnects_total COUNTER {" + selGrpcLabels + "," + streamScope + "} 1",
 	"feature_flag_flagd_sync_client_stream_reconnects_total COUNTER {" + grpcLabels + "," + streamScope + "} 1",
 	"rpc_client_call_duration_seconds HISTOGRAM {" + rpcLabels + "} -",
 }
@@ -239,7 +285,7 @@ func render(all []series, filePath string) string {
 		if strings.HasSuffix(s.name, "_timestamp_seconds") {
 			value = "-"
 		}
-		lines[strings.ReplaceAll(fmt.Sprintf("%s %s {%s} %s", s.name, s.typ, strings.Join(ls, ","), value), filePath, "<file>")] = true
+		lines[strings.ReplaceAll(strings.ReplaceAll(fmt.Sprintf("%s %s {%s} %s", s.name, s.typ, strings.Join(ls, ","), value), filePath, "<file>"), httpURI, "<http>")] = true
 	}
 	out := make([]string, 0, len(lines))
 	for l := range lines {
@@ -248,3 +294,6 @@ func render(all []series, filePath string) string {
 	sort.Strings(out)
 	return strings.Join(out, "\n")
 }
+
+// httpURI is the address of the test's HTTP source, which varies by run.
+var httpURI string
