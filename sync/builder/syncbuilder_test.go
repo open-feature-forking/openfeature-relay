@@ -90,7 +90,6 @@ func TestSyncBuilder_SyncFromURI(t *testing.T) {
 	}
 }
 
-
 func Test_SyncsFromFromConfig(t *testing.T) {
 	lg := logger.NewLogger(nil, false)
 
