@@ -8,7 +8,7 @@
 **Secondary Actors:** flagd Test Harness  
 **Goal:** An in-process provider validates and evaluates flags locally with the same configuration format and evaluator its remote evaluation uses (flagd's, or a vendor's engine module), pulling in only those, the core module and the sync providers it supports, and leaving observability to hooks  
 **Trigger:** Provider Author decides to add in-process evaluation to a provider  
-**Status:** Draft  
+**Status:** Implemented  
 
 **Requirements:** [FR-040, FR-041, FR-042, FR-044, FR-048, NFR-005, C-010](../requirements.md)
 
@@ -155,3 +155,18 @@ The evaluator returns untyped results; type checks and numeric conversion happen
 ### BR-009: Vendor Engine Takes flagd's Place
 
 For a vendor's in-process provider, BR-002, BR-005 and BR-006 apply to the vendor's engine module, the vendor's remote evaluation and the vendor's acceptance suite in place of flagd's. The provider's flag sync request names the vendor's configuration format (BR-007).
+
+## Delivered by Later Use Cases
+
+This use case is `Implemented` for the embeddable side: the configuration format, the evaluator, the core module and each sync provider are modules of their own, free of telemetry, transport and platform clients where the business rules require it, with the testbed's evaluator suite passing and two in-process example modules that assert on their own module graphs. These parts are delivered by the use cases named here, and are accepted gaps of this one:
+
+- Steps 7–8, BR-008 and the type-checking half of A6 (the typed adapter in the core module that every service endpoint shares): UC-007. The examples resolve through the evaluator's typed methods and cover the unknown and disabled flag cases of A6.
+- A2 and BR-009 (a vendor's engine module in place of flagd's configuration format and evaluator, with the vendor's acceptance suite): UC-007 and UC-019.
+- FR-044, BR-007 for a configuration format other than flagd's, and A5 (a flag sync request names the configuration format, and the source reports that it does not serve it): UC-017.
+- Steps 10–11, BR-005 and A8 at provider level (the flagd Test Harness in-process suite run against an in-process provider): UC-015 migrates the Go provider to these modules. At evaluator level the testbed's evaluator suite passes here, through the same evaluator flagd-full uses.
+- The fractional scenarios of the testbed's evaluator suite: the suite passes only with them excluded. With the `@fractional-v1` and `@fractional-v2` examples included, 21 of its 143 scenarios fail, because flagd's fractional operator assigns different buckets from both of the suite's algorithms; flagd's own test-harness run excludes the same two tags. Closing the gap (aligning the operator with one algorithm, or the suite with the operator) belongs to issue #47 of this repository. Until then BR-002 and BR-005 hold for every scenario except these.
+- Step 9, BR-003 and A7 in provider documentation (registering the OpenFeature hooks for traces and metrics): the migration guide of UC-015. The embedded modules emit no traces or metrics.
+- Per-cloud module graphs and the `azblob` package graph: the blob providers are split per cloud, but all three share gocloud.dev, so each blob module still carries all three cloud SDKs in its module graph, and `sync/azblob` carries a few Google authentication packages in its package graph through gocloud's own driver. Native SDK clients per cloud remove both: UC-003.
+- The sync factory and the shared poller, cron in the core module (a core dependency kept for the poller, NFR-006), and the full design of sync metrics (the recorders become dependencies of the sync factory): UC-003 and UC-006.
+- Releases, release-please packages and tags for the new modules, which the plan fixes at `core` v0.20.0 and v0.1.0 for the others: UC-012. The check that every change keeps BR-001 (UC-013) runs the same boundary tables as `make check-module-boundary`.
+- Moving providers to the new import paths, retiring `store.NewFlags`, the migration guide, and its note on the double migration if the library modules later move back to upstream paths: UC-015.
