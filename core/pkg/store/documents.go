@@ -79,7 +79,10 @@ func stringArgs(args []any, n int) ([]string, error) {
 
 // Documents returns the documents a format holds for a source, ordered by flag set.
 func (s *Store) Documents(format, source string) []Document {
-	txn := s.db.Txn(false)
+	return s.documents(s.db.Txn(false), format, source)
+}
+
+func (s *Store) documents(txn *memdb.Txn, format, source string) []Document {
 	it, err := txn.Get(documentsTable, idIndex+"_prefix", format, source)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("unable to query documents of format %s and source %s: %v", format, source, err))
