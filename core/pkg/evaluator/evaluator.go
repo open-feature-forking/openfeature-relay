@@ -42,6 +42,10 @@ type Request struct {
 // Result is the resolution of one flag.
 type Result struct {
 	FlagKey string
+	// FlagSet is the flag set the entry was listed under, "" for the unnamed flag set. An evaluator sets it on
+	// every result it returns for a flag, so that the router can tell the entries of one key in several flag sets
+	// apart; Metadata keeps whatever the evaluator's format reports.
+	FlagSet string
 	// Value is meaningful when HasValue is set. In bulk results an evaluator may set it without HasValue to
 	// keep the typed zero value of a flag it could not resolve.
 	Value    any

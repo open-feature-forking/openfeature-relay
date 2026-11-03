@@ -18,6 +18,7 @@ type fake struct {
 	flags map[string][]string // key -> flag sets
 	calls []evaluator.Request
 	err   error
+	meta  model.Metadata
 }
 
 func (f *fake) Evaluate(_ context.Context, req evaluator.Request, dst []evaluator.Result) ([]evaluator.Result, model.Metadata, error) {
@@ -41,7 +42,7 @@ func (f *fake) Evaluate(_ context.Context, req evaluator.Request, dst []evaluato
 				continue
 			}
 			dst = append(dst, evaluator.Result{
-				FlagKey: key, Value: f.name, HasValue: true, Reason: model.StaticReason,
+				FlagKey: key, FlagSet: set, Value: f.name, HasValue: true, Reason: model.StaticReason,
 				Metadata: model.Metadata{"flagSetId": set},
 			})
 			if !req.Bulk {
@@ -49,7 +50,7 @@ func (f *fake) Evaluate(_ context.Context, req evaluator.Request, dst []evaluato
 			}
 		}
 	}
-	return dst, nil, nil
+	return dst, f.meta, nil
 }
 
 // delivery is what one format holds for one source: flag set -> keys.
@@ -76,8 +77,8 @@ func values(results []evaluator.Result) map[string]any {
 	out := map[string]any{}
 	for _, r := range results {
 		key := r.FlagKey
-		if set, _ := r.Metadata["flagSetId"].(string); set != "" {
-			key += "@" + set
+		if r.FlagSet != "" {
+			key += "@" + r.FlagSet
 		}
 		if r.HasValue {
 			out[key] = r.Value
@@ -104,6 +105,7 @@ func TestRouterSourcePrecedence(t *testing.T) {
 
 	bulk, _, err := r.Evaluate(context.Background(), evaluator.Request{Bulk: true}, nil)
 	require.NoError(t, err)
+	require.Len(t, bulk, 3)
 	require.Equal(t, map[string]any{"shared": "b", "only-a": "a", "only-b": "b"}, values(bulk))
 
 	// the lower-priority source wins when it is the only one the selector names
@@ -127,6 +129,7 @@ func TestRouterSelectorScopesDocuments(t *testing.T) {
 	// without a selector, a bulk request has one entry for each flag set holding the key
 	bulk, _, err := r.Evaluate(context.Background(), evaluator.Request{Bulk: true}, nil)
 	require.NoError(t, err)
+	require.Len(t, bulk, 2)
 	require.Equal(t, map[string]any{"k@x": "b", "k@y": "a"}, values(bulk))
 
 	for selector, want := range map[string]map[string]any{
@@ -137,6 +140,7 @@ func TestRouterSelectorScopesDocuments(t *testing.T) {
 		require.NoError(t, err)
 		got, _, err := r.Evaluate(context.Background(), evaluator.Request{Bulk: true, Selector: sel}, nil)
 		require.NoError(t, err)
+		require.Len(t, got, len(want), selector)
 		require.Equal(t, want, values(got), selector)
 	}
 
@@ -176,6 +180,7 @@ func TestRouterSameSourceFlagSetTie(t *testing.T) {
 	require.Len(t, a.calls, 1)
 	require.Equal(t, []string{"k"}, a.calls[0].FlagKeys)
 	require.True(t, a.calls[0].Bulk, "Bulk survives the split")
+	require.Len(t, bulk, 3)
 	require.Equal(t, map[string]any{"k@x": "a", "k@y": "a", "unrelated": "b"}, values(bulk))
 }
 
@@ -248,8 +253,27 @@ func TestNewRejectsBadRoutes(t *testing.T) {
 	require.Error(t, err)
 	_, err = New(nil, Route{"a", nil})
 	require.Error(t, err)
-	_, err = New(nil, Route{"a", a}, Route{"a", a})
-	require.Error(t, err)
+	st := newStore(t, []string{"src"})
+	_, err = New(st, Route{"a", a}, Route{"a", a})
+	require.ErrorContains(t, err, "two evaluators")
 	_, err = New(nil, Route{"a", a}, Route{"b", a})
 	require.Error(t, err, "several evaluators need a store")
+}
+
+func TestRouterMergesTheEvaluatorsMetadata(t *testing.T) {
+	st := newStore(t, []string{"src", "other"},
+		delivery{"a", "src", map[string][]string{"": {"k"}}},
+		delivery{"b", "other", map[string][]string{"": {"b-key"}}},
+	)
+	a := &fake{name: "a", flags: map[string][]string{"k": {""}}, meta: model.Metadata{"scope": "a", "shared": "a"}}
+	b := &fake{name: "b", flags: map[string][]string{"b-key": {""}}, meta: model.Metadata{"extra": "b", "shared": "b"}}
+	r, err := New(st, Route{"a", a}, Route{"b", b})
+	require.NoError(t, err)
+
+	_, meta, err := r.Evaluate(context.Background(), evaluator.Request{Bulk: true, Selector: mustSelector(t, "flagSetId=")}, nil)
+	require.NoError(t, err)
+	require.Equal(t, "a", meta["scope"])
+	require.Equal(t, "b", meta["extra"])
+	require.Equal(t, "a", meta["shared"], "the first route's value stands")
+	require.Contains(t, meta, "flagSetId", "the selector's metadata stays")
 }
