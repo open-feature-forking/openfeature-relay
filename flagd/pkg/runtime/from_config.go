@@ -220,6 +220,13 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		return nil, err
 	}
 	rt.staleLimits = staleLimits
+	sinks, err := startEventSinks(logger, bus, tp, components.EventSinks)
+	if err != nil {
+		return nil, err
+	}
+	if len(sinks) > 0 {
+		rt.onShutdown("event sinks", flushEventSinks(sinks))
+	}
 	if shutdownTelemetry != nil {
 		rt.onShutdown("telemetry", shutdownTelemetry)
 	}
