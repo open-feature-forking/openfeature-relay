@@ -77,7 +77,7 @@ test-modules:
 		go test -race -covermode=atomic -cover -short $$m/... -coverprofile=$$(echo $$m | sed 's#^\./##; s#/#-#g')-coverage.out || rc=1; \
 	done; exit $$rc
 test-flagd:
-	go test -race -covermode=atomic -cover -short ./flagd/pkg/... -coverprofile=flagd-coverage.out
+	go test -race -covermode=atomic -cover -short ./flagd/pkg/... ./flagd/cmd/... -coverprofile=flagd-coverage.out
 test-sync-example:
 	go test -race -short -count=1 ./test/sync-example/...
 test-telemetry-example:
@@ -164,6 +164,14 @@ check-package-coverage:
 	if ! diff -u .go-packages.want .go-packages.tmp; then rm -f .go-packages.tmp .go-packages.want; \
 		echo "the packages of the library modules differ from testdata/go-packages.txt"; exit 1; fi; \
 	rm -f .go-packages.tmp .go-packages.want
+
+# The modules flagd-full links must not change unnoticed (UC-001 pin 1c). A module that moves to another path is the
+# only accepted change: update testdata/flagd-full-modules.txt in the same commit and say so in the commit message.
+.PHONY: check-flagd-full-modules flagd-full-modules
+flagd-full-modules:
+	@go list -deps -f '{{with .Module}}{{.Path}}{{end}}' ./flagd | grep -v '^$$' | LC_ALL=C sort -u
+check-flagd-full-modules:
+	@$(MAKE) --no-print-directory flagd-full-modules > .flagd-full-modules.tmp; 	tr -d '' < testdata/flagd-full-modules.txt > .flagd-full-modules.want; 	if ! diff -u .flagd-full-modules.want .flagd-full-modules.tmp; then rm -f .flagd-full-modules.tmp .flagd-full-modules.want; 		echo "the modules flagd-full links differ from testdata/flagd-full-modules.txt"; exit 1; fi; 	rm -f .flagd-full-modules.tmp .flagd-full-modules.want
 
 # testdata/module-boundaries.txt lists <module dir>:<packages>:<forbidden import path regexp>; no package of
 # <packages>, nor anything it imports, may match.
