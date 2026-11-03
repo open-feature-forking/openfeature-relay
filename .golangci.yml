@@ -61,8 +61,11 @@ linters:
         telemetry-through-provider:
           files:
             - "!$test"
-            - "**/flagd/pkg/service/**"
-            - "**/flagd/pkg/runtime/**"
+            - "**/service/transport/**"
+            - "**/service/flag-evaluation/**"
+            - "**/service/ofrep/**"
+            - "**/service/flag-sync/**"
+            - "**/runtime/**"
           deny:
             - pkg: go.opentelemetry.io
               desc: record spans and metrics through the injected telemetry provider
@@ -77,7 +80,7 @@ linters:
         runtime-holds-no-component:
           files:
             - "!$test"
-            - "**/flagd/pkg/runtime/**"
+            - "**/runtime/**"
           deny:
             - pkg: github.com/open-feature-forking/openfeature-relay/sync/file
               desc: the runtime holds no sync provider; the distribution passes Components.Sync
@@ -99,9 +102,9 @@ linters:
               desc: the runtime holds no evaluator; the distribution passes Components.Evaluators
             - pkg: github.com/open-feature-forking/openfeature-relay/configformat/
               desc: the runtime holds no configuration format; the distribution passes Components.ConfigurationFormats
-            - pkg: github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation
+            - pkg: github.com/open-feature-forking/openfeature-relay/service/flag-evaluation
               desc: the runtime holds no service endpoint; the distribution passes Components.Endpoints
-            - pkg: github.com/open-feature/flagd/flagd/pkg/service/flag-sync
+            - pkg: github.com/open-feature-forking/openfeature-relay/service/flag-sync
               desc: the runtime holds no service endpoint; the distribution passes Components.Endpoints
         stable-dependencies:
           deny:

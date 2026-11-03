@@ -3,14 +3,6 @@ module github.com/open-feature/flagd/test/configformat-example/distribution
 go 1.27
 
 require (
-	github.com/open-feature-forking/openfeature-relay/configformat/flagd v0.1.0
-	github.com/open-feature-forking/openfeature-relay/core v0.20.0
-	github.com/open-feature/flagd/flagd v0.0.0
-	github.com/open-feature/flagd/test/configformat-example v0.0.0
-	github.com/stretchr/testify v1.12.1
-)
-
-require (
 	buf.build/gen/go/open-feature/flagd/connectrpc/go v1.19.1-20260217192757-1388a552fc3c.2 // indirect
 	buf.build/gen/go/open-feature/flagd/grpc/go v1.6.1-20260217192757-1388a552fc3c.1 // indirect
 	buf.build/gen/go/open-feature/flagd/protocolbuffers/go v1.36.11-20260217192757-1388a552fc3c.1 // indirect
@@ -23,7 +15,6 @@ require (
 	cloud.google.com/go/monitoring v1.24.3 // indirect
 	cloud.google.com/go/storage v1.59.2 // indirect
 	connectrpc.com/connect v1.19.1 // indirect
-	connectrpc.com/otelconnect v0.7.2 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.17.1 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.8.2 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.10.0 // indirect
@@ -50,8 +41,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.30.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.33.17 // indirect
 	github.com/aws/smithy-go v1.24.2 // indirect
-	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -88,7 +77,6 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.15 // indirect
 	github.com/googleapis/gax-go/v2 v2.22.0 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
-	github.com/grpc-ecosystem/grpc-gateway/v2 v2.31.0 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
 	github.com/hashicorp/go-memdb v1.3.5 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
@@ -99,7 +87,10 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/open-feature-forking/openfeature-relay/evaluator/flagd v0.1.0 // indirect
+	github.com/open-feature-forking/openfeature-relay/service/flag-evaluation v0.1.0 // indirect
+	github.com/open-feature-forking/openfeature-relay/service/flag-sync v0.1.0 // indirect
+	github.com/open-feature-forking/openfeature-relay/service/ofrep v0.1.0 // indirect
+	github.com/open-feature-forking/openfeature-relay/service/transport v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/azblob v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/builder v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/file v0.1.0 // indirect
@@ -108,17 +99,11 @@ require (
 	github.com/open-feature-forking/openfeature-relay/sync/http v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/s3 v0.1.0 // indirect
-	github.com/open-feature-forking/openfeature-relay/telemetry/otel v0.1.0 // indirect
 	github.com/open-feature/flagd-schemas v0.2.15 // indirect
 	github.com/open-feature/open-feature-operator/api v0.2.47 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
-	github.com/prometheus/client_golang v1.24.1 // indirect
-	github.com/prometheus/client_model v0.6.3 // indirect
-	github.com/prometheus/common v0.72.0 // indirect
-	github.com/prometheus/otlptranslator v1.0.0 // indirect
-	github.com/prometheus/procfs v0.22.0 // indirect
 	github.com/rs/cors v1.11.1 // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
@@ -127,30 +112,15 @@ require (
 	github.com/twmb/murmur3 v1.1.8 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
-	go.opentelemetry.io/contrib/bridges/prometheus v0.72.0 // indirect
 	go.opentelemetry.io/contrib/detectors/gcp v1.44.0 // indirect
-	go.opentelemetry.io/contrib/exporters/autoexport v0.72.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.72.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.72.0 // indirect
 	go.opentelemetry.io/otel v1.47.0 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.23.0 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp v0.23.0 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.47.0 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.47.0 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.47.0 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.47.0 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.47.0 // indirect
-	go.opentelemetry.io/otel/exporters/prometheus v0.69.0 // indirect
-	go.opentelemetry.io/otel/exporters/stdout/stdoutlog v0.23.0 // indirect
-	go.opentelemetry.io/otel/exporters/stdout/stdoutmetric v1.47.0 // indirect
-	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.47.0 // indirect
 	go.opentelemetry.io/otel/log v1.47.0 // indirect
 	go.opentelemetry.io/otel/metric v1.47.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.47.0 // indirect
-	go.opentelemetry.io/otel/sdk/log v1.47.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.47.0 // indirect
 	go.opentelemetry.io/otel/trace v1.47.0 // indirect
-	go.opentelemetry.io/proto/otlp v1.11.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
@@ -203,4 +173,22 @@ replace (
 	github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator => ../../../sync/openfeature-operator
 	github.com/open-feature-forking/openfeature-relay/sync/s3 => ../../../sync/s3
 	github.com/open-feature-forking/openfeature-relay/telemetry/otel => ../../../telemetry/otel
+)
+
+require (
+	github.com/open-feature-forking/openfeature-relay/configformat/flagd v0.1.0
+	github.com/open-feature-forking/openfeature-relay/core v0.20.0
+	github.com/open-feature-forking/openfeature-relay/evaluator/flagd v0.1.0
+	github.com/open-feature-forking/openfeature-relay/runtime v0.1.0
+	github.com/open-feature/flagd/flagd v0.0.0
+	github.com/open-feature/flagd/test/configformat-example v0.0.0
+	github.com/stretchr/testify v1.12.1
+)
+
+replace (
+	github.com/open-feature-forking/openfeature-relay/runtime => ../../../runtime
+	github.com/open-feature-forking/openfeature-relay/service/flag-evaluation => ../../../service/flag-evaluation
+	github.com/open-feature-forking/openfeature-relay/service/flag-sync => ../../../service/flag-sync
+	github.com/open-feature-forking/openfeature-relay/service/ofrep => ../../../service/ofrep
+	github.com/open-feature-forking/openfeature-relay/service/transport => ../../../service/transport
 )

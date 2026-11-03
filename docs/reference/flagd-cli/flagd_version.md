@@ -11,7 +11,8 @@ flagd version [flags]
 ### Options
 
 ```
-  -h, --help   help for version
+  -h, --help      help for version
+      --verbose   also print the distribution and the runtime version
 ```
 
 ### Options inherited from parent commands

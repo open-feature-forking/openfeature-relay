@@ -26,7 +26,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/eventsink"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	"github.com/open-feature/flagd/flagd/pkg/runtime"
+	"github.com/open-feature-forking/openfeature-relay/runtime"
 	eventsinkexample "github.com/open-feature/flagd/test/eventsink-example"
 	"github.com/stretchr/testify/require"
 )

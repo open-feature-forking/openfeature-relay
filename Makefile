@@ -7,6 +7,10 @@ ALL_GO_MOD_DIRS := $(shell find . \( -path ./test/integration -o -path ./.claude
 # these (plus the binaries), and testdata/go-packages.txt pins the packages they contain.
 GO_LIB_MODULE_DIRS := ./core ./sync/file ./sync/flagd-grpc ./sync/http ./sync/openfeature-operator ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel ./evaluator/flagd ./configformat/flagd
 
+# The modules flagd-full is made of besides the library ones: its main module, the runtime and the service endpoints
+# (UC-001 Q7). They are tested, benchmarked and pinned like the library modules.
+FLAGD_MODULE_DIRS := ./flagd ./runtime ./service/transport ./service/flag-evaluation ./service/ofrep ./service/flag-sync
+
 # The FIPS variant builds against the CMVP-certified Go Cryptographic Module
 # v1.0.0 (certificate #5247). The literal version is required; the
 # "certified"/"inprocess" aliases vary by toolchain. The fips140 tag makes the
@@ -77,7 +81,7 @@ test-modules:
 		go test -race -covermode=atomic -cover -short $$m/... -coverprofile=$$(echo $$m | sed 's#^\./##; s#/#-#g')-coverage.out || rc=1; \
 	done; exit $$rc
 test-flagd:
-	go test -race -covermode=atomic -cover -short ./flagd/pkg/... ./flagd/cmd/... -coverprofile=flagd-coverage.out
+	go test -race -covermode=atomic -cover -short $(addsuffix /...,$(FLAGD_MODULE_DIRS)) -coverprofile=flagd-coverage.out
 test-sync-example:
 	go test -race -short -count=1 ./test/sync-example/...
 test-telemetry-example:
@@ -112,7 +116,7 @@ test-flagd-proxy:
 # TLS negotiate X25519 and fail under fips140=only.
 .PHONY: test-fips
 test-fips:
-	$(FIPS_ENV) go test -tags $(FIPS_TAGS) -short -count=1 -exec 'env GODEBUG=fips140=only' $(addsuffix /...,$(GO_LIB_MODULE_DIRS)) ./flagd/... ./flagd-proxy/...
+	$(FIPS_ENV) go test -tags $(FIPS_TAGS) -short -count=1 -exec 'env GODEBUG=fips140=only' $(addsuffix /...,$(GO_LIB_MODULE_DIRS)) $(addsuffix /...,$(FLAGD_MODULE_DIRS)) ./flagd-proxy/...
 
 # Regenerate the crypto dependency closure recorded in the FIPS docs. Pinned to
 # linux/amd64: the closure is platform-dependent, so an unpinned run would
@@ -125,7 +129,7 @@ fips-closure:
 	@echo "wrote docs/reference/fips-crypto-closure.txt"
 
 flagd-benchmark-test:
-	go test -bench=Bench -short -benchtime=5s -benchmem $(addsuffix /...,$(GO_LIB_MODULE_DIRS)) | tee benchmark.txt
+	go test -bench=Bench -short -benchtime=5s -benchmem $(addsuffix /...,$(GO_LIB_MODULE_DIRS) $(FLAGD_MODULE_DIRS)) | tee benchmark.txt
 flagd-integration-test-harness:
 # target used to start a locally built flagd with the e2e flags
 	cd flagd; go run main.go start -f file:../test-harness/flags/testing-flags.json -f file:../test-harness/flags/custom-ops.json -f file:../test-harness/flags/evaluator-refs.json -f file:../test-harness/flags/zero-flags.json -f file:../test-harness/flags/edge-case-flags.json
@@ -156,10 +160,10 @@ lint:
 lint-fix:
 	go install -v github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
 	rc=0; $(foreach module, $(ALL_GO_MOD_DIRS), ${GOPATH}/bin/golangci-lint run --fix $(module)/... || rc=1;) exit $$rc
-# The packages of the library modules must not change unnoticed, so that a move cannot drop a package from the test run.
+# The packages of the library modules and of flagd-full's modules must not change unnoticed, so that a move cannot drop a package from the test run.
 .PHONY: check-package-coverage
 check-package-coverage:
-	@for m in $(GO_LIB_MODULE_DIRS); do (cd $$m && go list ./...) || exit 1; done | sort > .go-packages.tmp; \
+	@for m in $(GO_LIB_MODULE_DIRS) $(FLAGD_MODULE_DIRS); do (cd $$m && go list ./...) || exit 1; done | LC_ALL=C sort > .go-packages.tmp; \
 	tr -d '\r' < testdata/go-packages.txt > .go-packages.want; \
 	if ! diff -u .go-packages.want .go-packages.tmp; then rm -f .go-packages.tmp .go-packages.want; \
 		echo "the packages of the library modules differ from testdata/go-packages.txt"; exit 1; fi; \
@@ -204,8 +208,8 @@ mockgen: install-mockgen
 	cd sync/flagd-grpc; mockgen -source=credentials/builder.go -destination=credentials/mock/builder.go -package=credendialsmock
 	cd core; mockgen -source=pkg/evaluator/ievaluator.go -destination=pkg/evaluator/mock/ievaluator.go -package=evalmock
 	cd sync/builder; mockgen -source=syncbuilder.go -destination=mock/syncbuilder.go -package=middlewaremocksyncbuildermock
-	cd flagd; mockgen -source=pkg/service/middleware/interface.go -destination=pkg/service/middleware/mock/interface.go -package=middlewaremock
-	cd flagd; mockgen -source=pkg/service/flag-evaluation/flag_evaluator_v2.go -destination=pkg/service/flag-evaluation/mock/eventstream.go -package=flagevalmock
+	cd service/transport; mockgen -source=middleware/interface.go -destination=middleware/mock/interface.go -package=middlewaremock
+	cd service/flag-evaluation; mockgen -source=flag_evaluator_v2.go -destination=mock/eventstream.go -package=flagevalmock
 generate-docs:
 	cd flagd; go run ./cmd/doc/main.go
 

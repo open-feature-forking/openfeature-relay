@@ -9,10 +9,10 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	flagdeval "github.com/open-feature-forking/openfeature-relay/evaluator/flagd"
+	flageval "github.com/open-feature-forking/openfeature-relay/service/flag-evaluation"
+	flagsync "github.com/open-feature-forking/openfeature-relay/service/flag-sync"
+	"github.com/open-feature-forking/openfeature-relay/service/ofrep"
 	"github.com/open-feature-forking/openfeature-relay/sync/builder/official"
-	flageval "github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation"
-	"github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation/ofrep"
-	flagsync "github.com/open-feature/flagd/flagd/pkg/service/flag-sync"
 )
 
 // Official returns the components of flagd-full: the official sync components with their fetch triggers, flagd's
