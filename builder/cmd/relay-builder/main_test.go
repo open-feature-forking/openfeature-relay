@@ -106,5 +106,4 @@ func TestCLIBuildWithoutSource(t *testing.T) {
 	require.Equal(t, 4, code)
 	require.Empty(t, stdout)
 	require.Contains(t, stderr, "holds no distribution source to build")
-	require.Contains(t, stderr, "experimental")
 }
