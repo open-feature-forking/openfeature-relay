@@ -68,6 +68,7 @@ TEST_TARGETS += test-inprocess-example
 TEST_TARGETS += test-sync-example
 TEST_TARGETS += test-telemetry-example
 TEST_TARGETS += test-eventsink-example
+TEST_TARGETS += test-contract-external
 TEST_TARGETS += test-middleware-example
 test: $(TEST_TARGETS)
 test-core: test-modules
@@ -81,12 +82,14 @@ test-sync-example:
 	go test -race -short -count=1 ./test/sync-example/...
 test-telemetry-example:
 	go test -race -short -count=1 ./test/telemetry-example/...
+test-contract-external:
+	./test/contract-external.sh
 test-middleware-example:
 	go test -race -short -count=1 ./test/middleware-example/...
 test-eventsink-example:
 	go test -race -short -count=1 ./test/eventsink-example/...
 test-configformat-example:
-	go test -race -short -count=1 ./test/configformat-example/...
+	go test -race -short -count=1 ./test/configformat-example/... ./test/configformat-example/distribution/...
 test-service-example:
 	go test -race -short -count=1 ./test/service-example/...
 # The testbed's evaluator suite lives in the test-harness submodule (git submodule update --init test-harness).
