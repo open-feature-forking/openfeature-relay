@@ -145,7 +145,6 @@ func (sb *SyncBuilder) syncFromConfig(sourceConfig sync.SourceConfig, log *logge
 			return nil, err
 		}
 	}
-	legacy := legacyFor(resolution.Factory)
 	log.Debug(fmt.Sprintf("using %s sync-provider for: %s", sourceConfig.Provider, sourceConfig.URI))
 	return fetching.New(fetching.Options{
 		Fetcher:            resolution.Fetcher,
@@ -157,7 +156,6 @@ func (sb *SyncBuilder) syncFromConfig(sourceConfig sync.SourceConfig, log *logge
 		Interval:           time.Duration(resolution.Interval) * time.Second,
 		Timeout:            time.Duration(sourceConfig.TimeoutS) * time.Second,
 		IncrementalUpdates: sourceConfig.IncrementalUpdates,
-		Legacy:             legacy,
 	}), nil
 }
 
