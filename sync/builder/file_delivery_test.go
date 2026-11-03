@@ -36,7 +36,7 @@ func TestFileDeliveryCharacterization(t *testing.T) {
 				require.ErrorContains(t, p.Init(context.Background()), "no such file or directory")
 			})
 
-			t.Run("every change delivers, even unchanged content", func(t *testing.T) {
+			t.Run("unchanged content delivers nothing", func(t *testing.T) {
 				path := filepath.Join(t.TempDir(), "flags.json")
 				replaceFile(t, path, flagsA, 0o600)
 				src := startSource(t, sync.SourceConfig{URI: path, Provider: provider})
@@ -44,15 +44,19 @@ func TestFileDeliveryCharacterization(t *testing.T) {
 				src.requireDelivery(t, sync.DataSync{FlagData: flagsA, Source: path})
 				src.requireNoDelivery(t)
 
+				// the file is written again with the content it had
 				replaceFile(t, path, flagsA, 0o600)
-				src.requireDelivery(t, sync.DataSync{FlagData: flagsA, Source: path})
+				src.requireNoDeliveryWithin(t, 2*time.Second)
 
 				replaceFile(t, path, flagsB, 0o600)
 				src.requireDelivery(t, sync.DataSync{FlagData: flagsB, Source: path})
+				src.requireNoDelivery(t)
 
-				// an empty file delivers an empty flag configuration
+				// an empty file delivers an empty flag configuration, once
 				replaceFile(t, path, "", 0o600)
 				src.requireDelivery(t, sync.DataSync{FlagData: "{}", Source: path})
+				replaceFile(t, path, "", 0o600)
+				src.requireNoDeliveryWithin(t, 2*time.Second)
 			})
 
 			t.Run("content that cannot be decoded keeps the flags in force", func(t *testing.T) {

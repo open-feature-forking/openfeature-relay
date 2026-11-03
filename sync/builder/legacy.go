@@ -1,7 +1,6 @@
 package builder
 
 import (
-	"context"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/fetching"
@@ -23,7 +22,7 @@ func legacyFor(f sync.Factory) fetching.Legacy {
 		return fetching.Legacy{NoDeadline: true, IgnoreIncremental: true}
 	case file.Provider:
 		return fetching.Legacy{
-			RedeliverUnchanged: true, NoDeadline: true, IgnoreIncremental: true,
+			NoDeadline: true, IgnoreIncremental: true,
 			CountOnlyRead: true, ExitOnTriggerError: true,
 		}
 	}
@@ -40,25 +39,3 @@ func legacyPollerWithoutBackoff(f sync.Factory) bool {
 	return false
 }
 
-// fullFetches is a fetcher that is always asked for the full flag configuration. The file sync provider delivered the
-// file again on every change of it, whatever its content.
-type fullFetches struct{ sync.Fetcher }
-
-func (f fullFetches) Fetch(ctx context.Context, _ string) (sync.FetchResult, error) {
-	return f.Fetcher.Fetch(ctx, "")
-}
-
-func (f fullFetches) Init(ctx context.Context) error {
-	if init, ok := f.Fetcher.(sync.InitializingFetcher); ok {
-		return init.Init(ctx)
-	}
-	return nil
-}
-
-// legacyFetcher wraps the fetcher of an official provider where the legacy mode needs it.
-func legacyFetcher(f sync.Factory, fetcher sync.Fetcher) sync.Fetcher {
-	if f.Type() == file.Provider {
-		return fullFetches{fetcher}
-	}
-	return fetcher
-}

@@ -139,7 +139,9 @@ func NewSyncProvider(
 	}), nil
 }
 
-// fileWatch is the trigger of a file source.
+// fileWatch is the trigger of a file source. It also signals when the file's permissions change, so that a fixed
+// permission is picked up; a replaced file raises that signal as well, which is harmless since unchanged content is
+// not delivered again.
 func fileWatch(name string) sync.TriggerConfig {
-	return sync.TriggerConfig{Type: name}
+	return sync.TriggerConfig{Type: name, Config: map[string]any{SettingSignalOnChmod: true}}
 }
