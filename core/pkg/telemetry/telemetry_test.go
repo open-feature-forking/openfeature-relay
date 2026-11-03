@@ -93,6 +93,17 @@ func TestNoopAllocatesNothing(t *testing.T) {
 	}
 }
 
+func TestIsNoopMeter(t *testing.T) {
+	if !telemetry.IsNoopMeter(telemetry.Noop().Meter("test")) {
+		t.Error("the noop provider's meter is not reported as noop")
+	}
+	if telemetry.IsNoopMeter(countingMeter{}) {
+		t.Error("another meter is reported as noop")
+	}
+}
+
+type countingMeter struct{ telemetry.Meter }
+
 func TestAttributeValues(t *testing.T) {
 	tests := []struct {
 		attr telemetry.Attribute

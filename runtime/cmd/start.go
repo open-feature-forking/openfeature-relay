@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/distribution"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/fips"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
@@ -232,15 +233,7 @@ var startCmd = &cobra.Command{
 		}
 
 		// Build Runtime -----------------------------------------------------------
-		components := Components
-		components.TelemetryConfig = map[string]any{
-			telemetryMetricsExporter: viper.GetString(metricsExporter),
-			telemetryCollectorURI:    viper.GetString(otelCollectorURI),
-			telemetryCertPath:        viper.GetString(otelCertPathFlagName),
-			telemetryKeyPath:         viper.GetString(otelKeyPathFlagName),
-			telemetryCAPath:          viper.GetString(otelCAPathFlagName),
-			telemetryReloadInterval:  viper.GetDuration(otelReloadIntervalFlagName),
-		}
+		components := withTelemetryConfig(Components)
 		rt, err := runtime.FromConfig(logger, Version, runtime.Config{
 			CORS:                   viper.GetStringSlice(corsFlagName),
 			ManagementPort:         viper.GetUint16(managementPortFlagName),
@@ -276,4 +269,18 @@ var startCmd = &cobra.Command{
 			rtLogger.Fatal(err.Error())
 		}
 	},
+}
+
+// withTelemetryConfig returns the components with the settings of the telemetry provider that the telemetry flags
+// name. The distribution's main chooses the provider.
+func withTelemetryConfig(components distribution.Components) distribution.Components {
+	components.TelemetryConfig = map[string]any{
+		telemetryMetricsExporter: viper.GetString(metricsExporter),
+		telemetryCollectorURI:    viper.GetString(otelCollectorURI),
+		telemetryCertPath:        viper.GetString(otelCertPathFlagName),
+		telemetryKeyPath:         viper.GetString(otelKeyPathFlagName),
+		telemetryCAPath:          viper.GetString(otelCAPathFlagName),
+		telemetryReloadInterval:  viper.GetDuration(otelReloadIntervalFlagName),
+	}
+	return components
 }

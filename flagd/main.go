@@ -16,10 +16,15 @@ var (
 	date    = "unknown"
 )
 
-func main() {
+// officialComponents are the components of flagd-full: the official ones with the OpenTelemetry telemetry provider,
+// which the command configures from the telemetry flags.
+func officialComponents() distribution.Components {
 	official := components.Official()
-	// the telemetry provider is the command's choice: flagd-full records through OpenTelemetry
 	official.Telemetry = otelprovider.NewFactory()
+	return official
+}
+
+func main() {
 	cmd.Execute(distribution.Info{Name: distributionName, Version: version, Commit: commit, Date: date},
-		official, components.Inventory())
+		officialComponents(), components.Inventory())
 }
