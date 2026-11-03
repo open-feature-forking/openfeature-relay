@@ -56,7 +56,19 @@ build-flagd-fips:
 	$(FIPS_ENV) go build -tags $(FIPS_TAGS) -ldflags "-X main.version=dev -X main.commit=$$(git rev-parse --short HEAD) -X main.date=$$(date +%FT%TZ)" -o ./bin/flagd-fips ./flagd
 	go version -m ./bin/flagd-fips | grep -E 'GOFIPS140=|-tags='
 .PHONY: test
-test: test-core test-flagd test-flagd-proxy test-configformat-example test-service-example test-evaluator-testkit test-inprocess-example test-sync-example test-telemetry-example test-eventsink-example
+# One target per line, so parallel pull requests that add a test target merge cleanly.
+TEST_TARGETS += test-core
+TEST_TARGETS += test-flagd
+TEST_TARGETS += test-flagd-proxy
+TEST_TARGETS += test-configformat-example
+TEST_TARGETS += test-service-example
+TEST_TARGETS += test-evaluator-testkit
+TEST_TARGETS += test-inprocess-example
+TEST_TARGETS += test-sync-example
+TEST_TARGETS += test-telemetry-example
+TEST_TARGETS += test-eventsink-example
+TEST_TARGETS += test-contract-external
+test: $(TEST_TARGETS)
 test-core: test-modules
 test-modules:
 	@rc=0; for m in $(GO_LIB_MODULE_DIRS); do \
@@ -68,10 +80,12 @@ test-sync-example:
 	go test -race -short -count=1 ./test/sync-example/...
 test-telemetry-example:
 	go test -race -short -count=1 ./test/telemetry-example/...
+test-contract-external:
+	./test/contract-external.sh
 test-eventsink-example:
 	go test -race -short -count=1 ./test/eventsink-example/...
 test-configformat-example:
-	go test -race -short -count=1 ./test/configformat-example/...
+	go test -race -short -count=1 ./test/configformat-example/... ./test/configformat-example/distribution/...
 test-service-example:
 	go test -race -short -count=1 ./test/service-example/...
 # The testbed's evaluator suite lives in the test-harness submodule (git submodule update --init test-harness).
