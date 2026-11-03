@@ -234,3 +234,63 @@ func TestRuntimeStartWaitsForEverySource(t *testing.T) {
 	close(stop)
 	require.Error(t, <-startErr)
 }
+
+// contactSync is a sync provider that reports when it last reached its source.
+type contactSync struct {
+	readySync
+	last time.Time
+}
+
+func (s *contactSync) LastContact() time.Time { return s.last }
+
+func TestReadinessLostWhenStale(t *testing.T) {
+	const source = "file:/flags.json"
+	at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	now := at
+	provider := &contactSync{readySync: readySync{ready: true}, last: at}
+	runtime := Runtime{
+		Logger:      logger.NewLogger(nil, false),
+		Syncs:       []coresync.ISync{provider},
+		staleLimits: []staleLimit{{source: source, provider: provider, after: time.Minute}},
+		now:         func() time.Time { return now },
+	}
+	runtime.initialized.Store(true)
+
+	require.True(t, runtime.isReady())
+	now = at.Add(time.Minute)
+	require.True(t, runtime.isReady(), "exactly staleAfter is not past it")
+	now = at.Add(time.Minute + time.Second)
+	require.False(t, runtime.isReady(), "flagd is not ready once the source is past staleAfter")
+
+	t.Run("readiness is back after a contact", func(t *testing.T) {
+		provider.last = now
+		require.True(t, runtime.isReady())
+	})
+
+	t.Run("a source that was never reached is stale", func(t *testing.T) {
+		provider.last = time.Time{}
+		require.False(t, runtime.isReady())
+	})
+}
+
+func TestReadinessWithoutStaleAfterIgnoresContact(t *testing.T) {
+	provider := &contactSync{readySync: readySync{ready: true}, last: time.Unix(1, 0)}
+	runtime := Runtime{Logger: logger.NewLogger(nil, false), Syncs: []coresync.ISync{provider}}
+	runtime.initialized.Store(true)
+
+	require.True(t, runtime.isReady(), "a source never goes stale without the setting")
+}
+
+func TestStaleLimitsNeedAProviderThatReportsContact(t *testing.T) {
+	sources := []coresync.SourceConfig{{URI: "a", Provider: "file"}, {URI: "b", Provider: "kubernetes", StaleAfter: 30}}
+
+	_, err := staleLimitsOf(sources, []coresync.ISync{&contactSync{}, readySync{}})
+	require.EqualError(t, err, `source "b" sets staleAfter, which the kubernetes sync provider cannot honour: it does not report its last contact`)
+
+	sources[1].Provider = "grpc"
+	limits, err := staleLimitsOf(sources, []coresync.ISync{readySync{}, &contactSync{}})
+	require.NoError(t, err)
+	require.Len(t, limits, 1)
+	require.Equal(t, "b", limits[0].source)
+	require.Equal(t, 30*time.Second, limits[0].after)
+}

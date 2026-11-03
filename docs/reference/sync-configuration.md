@@ -54,6 +54,7 @@ Alternatively, these configurations can be passed to flagd via config file, spec
 | authHeader         | optional `string`  | Used for http sync; set this to include the complete `Authorization` header value for any authentication scheme (e.g., "Bearer token_here", "Basic base64_credentials", etc.).                                                                                                                                                                                                                                                                                                            |
 | interval           | optional `uint32`  | Used for http, gcs, azblob and s3 syncs; requests will be made at this interval. Defaults to 5 seconds. Maximum is 86400 (1 day).                                                                                                                                                                                                                                                                                                                                                         |
 | intervalSeed       | optional `string`  | Used for http, gcs, azblob and s3 syncs; deterministic seed for poll schedule offset. Different seeds cause instances to poll at different wall-clock offsets within the interval, avoiding thundering herd. Instances with the same seed poll at the same offset. If unset, offset defaults to 0. In multi-instance deployments, setting this to a unique value per instance (e.g., the Kubernetes pod name via `fieldRef: metadata.name`) is recommended to avoid synchronized polling. |
+| staleAfter         | optional `uint32`  | Used for fetching sources (`file`, `http`, `gcs`, `azblob`, `s3`) and `grpc` sources: the number of seconds without contact with the source after which flagd is not ready. A fetch that finds nothing changed counts as contact, and so does an open stream. Absent or `0`, the source never goes stale. See [staleness](#staleness). |
 | tls                | optional `boolean` | Enable/Disable secure TLS connectivity. Currently used only by gRPC sync. Default (ex: if unset) is false, which will use an insecure connection                                                                                                                                                                                                                                                                                                                                          |
 | providerID         | optional `string`  | Value binds to grpc connection's providerID field. gRPC server implementations may use this to identify connecting flagd instance                                                                                                                                                                                                                                                                                                                                                         |
 | selector           | optional `string`  | Selector expression to filter flag configurations. Supports `source=<name>` and `flagSetId=<id>` syntax. See [selector syntax](selector-syntax.md) for details.                                                                                                                                                                                                                                                                                                                           |
@@ -169,6 +170,26 @@ sources:
 
 An unknown trigger type stops flagd at start-up and lists the available types. The `grpc` and `kubernetes` providers
 stream their source and take no triggers.
+
+### Staleness
+
+By default, flagd stays ready with the last flag configuration it accepted while a source is unreachable. A source with
+`staleAfter` changes that: once flagd is ready, it is not ready while the last contact with the source is older than
+`staleAfter` seconds, and it is ready again after the next contact. For a fetching source the contact is a successful
+fetch, whether or not the source had changed; for a `grpc` source it is the time an open stream was last in contact,
+which is now while the stream is open. The `kubernetes` provider and sync providers of extensions that do not report
+their last contact cannot set `staleAfter`: flagd stops at start-up and names the source.
+
+Choose a `staleAfter` of several times the `interval` of the source, so that a single failed poll does not take flagd
+out of service.
+
+```yaml
+sources:
+  - uri: https://my-flags.com/flags
+    provider: http
+    interval: 10
+    staleAfter: 120
+```
 
 ### HTTP Configuration
 

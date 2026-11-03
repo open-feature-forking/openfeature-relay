@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"time"
 
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -31,6 +32,13 @@ type StreamingSyncProvider interface {
 // StreamingSyncProvider.
 type ISync = StreamingSyncProvider
 
+// ContactReporter is implemented by a sync provider that can say when it last reached its source. A source with a
+// staleAfter setting needs it. The time of a contact is that of a successful fetch, changed or not, or the current time
+// while a stream is open; it is the zero time before the first contact.
+type ContactReporter interface {
+	LastContact() time.Time
+}
+
 // DataSync is the data contract between Runtime and sync implementations
 type DataSync struct {
 	FlagData    string
@@ -59,8 +67,11 @@ type SourceConfig struct {
 	Selector     string `json:"selector,omitempty"`
 	Interval     uint32 `json:"interval,omitempty"`
 	IntervalSeed string `json:"intervalSeed,omitempty"`
-	MaxMsgSize   int    `json:"maxMsgSize,omitempty"`
-	TimeoutS     int    `json:"timeoutS,omitempty"`
+	// StaleAfter is the number of seconds without contact with the source after which flagd is not ready. Absent or
+	// zero, the source never goes stale. Needs a sync provider that reports its last contact (ContactReporter).
+	StaleAfter uint32 `json:"staleAfter,omitempty"`
+	MaxMsgSize int    `json:"maxMsgSize,omitempty"`
+	TimeoutS   int    `json:"timeoutS,omitempty"`
 
 	// IncrementalUpdates opts this source into per-flagSetId scoped deletion.
 	// When false (default), each update replaces all flags for the source.
