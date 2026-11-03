@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"time"
 
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -30,6 +31,13 @@ type StreamingSyncProvider interface {
 // ISync is the former name of StreamingSyncProvider, kept as an alias so that existing code compiles. New code uses
 // StreamingSyncProvider.
 type ISync = StreamingSyncProvider
+
+// ContactReporter is implemented by a sync provider that can say when it last reached its source. A source with a
+// staleAfter setting needs it. The time of a contact is that of a successful fetch, changed or not, or the current time
+// while a stream is open; it is the zero time before the first contact.
+type ContactReporter interface {
+	LastContact() time.Time
+}
 
 // DataSync is the data contract between Runtime and sync implementations
 type DataSync struct {
