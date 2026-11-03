@@ -67,8 +67,11 @@ type SourceConfig struct {
 	Selector     string `json:"selector,omitempty"`
 	Interval     uint32 `json:"interval,omitempty"`
 	IntervalSeed string `json:"intervalSeed,omitempty"`
-	MaxMsgSize   int    `json:"maxMsgSize,omitempty"`
-	TimeoutS     int    `json:"timeoutS,omitempty"`
+	// StaleAfter is the number of seconds without contact with the source after which flagd is not ready. Absent or
+	// zero, the source never goes stale. Needs a sync provider that reports its last contact (ContactReporter).
+	StaleAfter uint32 `json:"staleAfter,omitempty"`
+	MaxMsgSize int    `json:"maxMsgSize,omitempty"`
+	TimeoutS   int    `json:"timeoutS,omitempty"`
 
 	// IncrementalUpdates opts this source into per-flagSetId scoped deletion.
 	// When false (default), each update replaces all flags for the source.
