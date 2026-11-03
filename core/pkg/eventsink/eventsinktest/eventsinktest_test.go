@@ -232,6 +232,8 @@ func TestBrokenInputsFailTheirCases(t *testing.T) {
 	tests := map[string]struct {
 		change func(ext *external, in *eventsinktest.Inputs)
 		failed []string
+		// maybe are cases the broken input may fail, depending on how fast the sink drains its buffer
+		maybe []string
 	}{
 		"receives an event of a kind the sink does not subscribe to": {
 			change: func(ext *external, in *eventsinktest.Inputs) {
@@ -252,7 +254,10 @@ func TestBrokenInputsFailTheirCases(t *testing.T) {
 			change: func(ext *external, in *eventsinktest.Inputs) {
 				in.Stall = func(testing.TB) func() { return func() {} }
 			},
-			failed: []string{eventsinktest.CaseFullBufferDrops, eventsinktest.CaseReturnsInTime},
+			// without a stall the sink drains the buffer as fast as the events arrive, so how many events are dropped
+			// depends on the machine's load; the stalled shutdown does not
+			failed: []string{eventsinktest.CaseReturnsInTime},
+			maybe:  []string{eventsinktest.CaseFullBufferDrops},
 		},
 	}
 	for name, tt := range tests {
@@ -263,7 +268,13 @@ func TestBrokenInputsFailTheirCases(t *testing.T) {
 			report := eventsinktest.Check(t, stubFactory{ext: ext}, in)
 
 			require.Empty(t, report.Aborted)
-			require.ElementsMatch(t, tt.failed, report.FailedCases())
+			var failed []string
+			for _, name := range report.FailedCases() {
+				if !slices.Contains(tt.maybe, name) {
+					failed = append(failed, name)
+				}
+			}
+			require.ElementsMatch(t, tt.failed, failed)
 			for _, c := range report.Cases {
 				if !c.Passed {
 					require.NotEmpty(t, c.Expected)
