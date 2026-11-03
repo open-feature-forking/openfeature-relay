@@ -174,6 +174,7 @@ func CheckStreaming(t testing.TB, f sync.StreamingFactory, in StreamingInputs) R
 		fmt.Sprintf("after the source was lost and came back, a delivery of the complete flag configuration, %s", latest),
 		fmt.Sprintf("a delivery arrived: %v, delivered %s", got, reconnected.FlagData)))
 
+	next = received.settle(limit)
 	in.Remove(t)
 	removed, _, got := received.awaitMatch(next, func(d sync.DataSync) bool { return in.OnRemove == Keep || sameJSON(d.FlagData, "{}") }, quietPeriodFor(in.OnRemove, limit))
 	switch in.OnRemove {
@@ -241,4 +242,23 @@ func (c *collector) awaitMatch(from int, match func(sync.DataSync) bool, d time.
 			return delivery, index, true
 		}
 	}
+}
+
+// settle waits until the provider has been quiet for the quiet period, and returns the index after its last delivery.
+// A provider may deliver a flag configuration more than once for one event, such as the operator's provider, which
+// delivers a resource at startup and again when its informer reports it.
+func (c *collector) settle(limit time.Duration) int {
+	deadline := time.Now().Add(limit)
+	for {
+		seen := c.count()
+		if _, more := c.await(seen, quietPeriod); !more || time.Now().After(deadline) {
+			return c.count()
+		}
+	}
+}
+
+func (c *collector) count() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.deliveries)
 }
