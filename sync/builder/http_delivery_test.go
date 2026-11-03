@@ -79,10 +79,10 @@ func TestHTTPDeliveryCharacterization(t *testing.T) {
 	t.Run("deliveries across polls", func(t *testing.T) {
 		fs := newFlagServer(t, `"e1"`, flagsA)
 		uri := fs.URL + "/flags"
-		// incrementalUpdates is set to show that deliveries do not carry it
+		// incrementalUpdates is set: every delivery is an incremental update
 		src := startSource(t, sync.SourceConfig{URI: uri, Provider: "http", Interval: 1, IncrementalUpdates: true})
-		wantA := sync.DataSync{FlagData: flagsA, Source: uri}
-		wantB := sync.DataSync{FlagData: flagsB, Source: uri}
+		wantA := sync.DataSync{FlagData: flagsA, Source: uri, IncrementalUpdates: true}
+		wantB := sync.DataSync{FlagData: flagsB, Source: uri, IncrementalUpdates: true}
 
 		// the initial fetch delivers
 		require.Empty(t, fs.nextRequest(t).Get("If-None-Match"))
@@ -122,7 +122,7 @@ func TestHTTPDeliveryCharacterization(t *testing.T) {
 		for range 2 {
 			require.NoError(t, provider.ReSync(context.Background(), deliveries))
 			require.Empty(t, fs.nextRequest(t).Get("If-None-Match"))
-			require.Equal(t, sync.DataSync{FlagData: flagsA, Source: uri}, <-deliveries)
+			require.Equal(t, sync.DataSync{FlagData: flagsA, Source: uri, IncrementalUpdates: true}, <-deliveries)
 		}
 	})
 

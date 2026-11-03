@@ -62,7 +62,7 @@ func newBlobSync(t *testing.T, scheme string, drv *lockedDriver, recorder sync.M
 	mux.RegisterBucket("mock", lockedOpener{drv})
 	s, err := NewSync(
 		scheme, regexp.MustCompile("^mock://.+?/"),
-		// incrementalUpdates is set to show that deliveries do not carry it
+		// incrementalUpdates is set: every delivery is an incremental update
 		sync.SourceConfig{URI: sourceURI, Interval: 1, IncrementalUpdates: true},
 		logger.NewLogger(nil, false), recorder, mux)
 	require.NoError(t, err)
@@ -96,7 +96,7 @@ func TestDeliveryRulesCharacterization(t *testing.T) {
 			t.Helper()
 			select {
 			case got := <-deliveries:
-				require.Equal(t, sync.DataSync{FlagData: want, Source: sourceURI}, got)
+				require.Equal(t, sync.DataSync{FlagData: want, Source: sourceURI, IncrementalUpdates: true}, got)
 			case <-time.After(8 * time.Second):
 				t.Fatalf("no delivery of %q", want)
 			}

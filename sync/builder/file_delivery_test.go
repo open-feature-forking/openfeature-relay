@@ -99,3 +99,12 @@ func TestFileDeliveryCharacterization(t *testing.T) {
 		src.requireNoDeliveryWithin(t, 2*time.Second)
 	})
 }
+
+// TestFileDeliveriesCarryIncrementalUpdates: a source that opted into incremental updates delivers them.
+func TestFileDeliveriesCarryIncrementalUpdates(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "flags.json")
+	replaceFile(t, path, flagsA, 0o600)
+	src := startSource(t, sync.SourceConfig{URI: path, Provider: "file", IncrementalUpdates: true})
+
+	src.requireDelivery(t, sync.DataSync{FlagData: flagsA, Source: path, IncrementalUpdates: true})
+}
