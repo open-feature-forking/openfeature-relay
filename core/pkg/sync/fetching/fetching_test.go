@@ -624,14 +624,17 @@ func TestUnchangedAdoptsTheVersionItCarries(t *testing.T) {
 	r := start(t, Options{Fetcher: fetcher, Triggers: []sync.Trigger{trigger}})
 	r.next(t)
 
-	signal := trigger.signal(t)
-	signal()
-	signal()
-	require.Eventually(t, func() bool {
+	fetches := func() int {
 		mu.Lock()
 		defer mu.Unlock()
-		return len(previous) >= 3
-	}, timeout, time.Millisecond)
+		return len(previous)
+	}
+	// a signal that arrives before the fetch of the one before it has started is coalesced with it, so each waits
+	signal := trigger.signal(t)
+	signal()
+	require.Eventually(t, func() bool { return fetches() >= 2 }, timeout, time.Millisecond)
+	signal()
+	require.Eventually(t, func() bool { return fetches() >= 3 }, timeout, time.Millisecond)
 	mu.Lock()
 	defer mu.Unlock()
 	require.Equal(t, []string{"", "v1", "v1-moved"}, previous[:3])
