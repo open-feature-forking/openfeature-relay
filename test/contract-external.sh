@@ -4,7 +4,9 @@
 # `replace`, with the core module (and so the contract runners) fetched by version. A runner that reaches for a file of
 # the checkout, or an example that needs a module this repository does not publish, fails here and nowhere else.
 #
-# The modules are every test/*-example module whose module graph holds no module of this repository but core. The list
+# The modules are every example module under test/ whose module graph holds core and no other module of this repository, under
+# the relay path or the path the flagd modules still carry. A module that needs another one, such as the engine example
+# (it imports the configuration format example), cannot run outside the checkout and is not in the list. The list
 # in testdata/contract-external.txt must name exactly those: the run fails when a listed module stops qualifying and
 # when a qualifying one is missing from the file.
 #
@@ -18,18 +20,22 @@ root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$root"
 
 relay=github.com/open-feature-forking/openfeature-relay
+legacy=github.com/open-feature/flagd
 marker=testdata/contract-external.txt
 
 echo "== modules that qualify"
 qualifying=()
-for gomod in test/*-example/go.mod; do
+while read -r gomod; do
 	dir=$(dirname "$gomod")
+	self=$(sed -n 's/^module[[:space:]]\{1,\}//p' "$gomod" | tr -d '\r')
 	graph=$(cd "$dir" && GOWORK=off GOPROXY=off go list -m all) || { echo "cannot list the module graph of $dir" >&2; exit 1; }
-	others=$(echo "$graph" | awk '{print $1}' | grep -E "^$relay/" | grep -vxE "$relay/core" || true)
-	if [ -z "$others" ]; then
+	paths=$(echo "$graph" | awk '{print $1}')
+	# a module of this repository is one under the relay path or under the path its flagd modules still carry
+	others=$(echo "$paths" | grep -E "^($relay|$legacy)/" | grep -vxE "$relay/core|$self" || true)
+	if [ -n "$(echo "$paths" | grep -x "$relay/core" || true)" ] && [ -z "$others" ]; then
 		qualifying+=("$dir")
 	fi
-done
+done < <(find test -name go.mod -path '*-example/*' | sort)
 derived=$(printf '%s\n' "${qualifying[@]}" | sort)
 listed=$(grep -vE '^\s*(#|$)' "$marker" | tr -d '\r' | sort)
 if [ "$derived" != "$listed" ]; then
