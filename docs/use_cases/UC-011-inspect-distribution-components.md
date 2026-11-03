@@ -86,4 +86,4 @@ Standard and custom distributions list their components in the same text and JSO
 
 ### BR-004: Same Identity as Version
 
-The distribution name and version in the listing are the ones `flagd version` reports (FR-034).
+The distribution name and version in the listing are the ones `flagd version` reports with `--verbose` (FR-034); the plain output stays as it is.

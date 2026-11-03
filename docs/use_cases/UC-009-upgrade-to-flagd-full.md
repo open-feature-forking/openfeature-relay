@@ -25,7 +25,7 @@
 5. System merges the flag configurations of all sources so that a later source overrides flag keys of an earlier one.
 6. System starts the flag evaluation, OFREP and flag sync service endpoints and the management port on the configured ports.
 7. System reports readiness on the management port once every source has delivered a flag configuration that its configuration format accepted, as before; no staleness limit applies unless the Operator configures one.
-8. Operator checks with `flagd version` that the running binary names flagd-full, its manifest version and the target release.
+8. Operator checks with `flagd version --verbose` that the running binary names flagd-full, its manifest version and the target release.
 9. Operator sends evaluation requests that the previous deployment answered and receives the same results.
 10. Operator retires the previous flagd; the deployment now runs flagd-full with no change to its configuration.
 
