@@ -24,8 +24,10 @@ type Settings struct {
 // TriggerConfig names a fetch trigger and its settings in the configuration of a source. In JSON it is an object
 // whose "type" is the trigger type and whose other members are the settings.
 type TriggerConfig struct {
-	Type   string
-	Config map[string]any
+	Type string
+	// Config holds the other members of the trigger's entry; a configuration file read with mapstructure collects
+	// them there.
+	Config map[string]any `mapstructure:",remain"`
 }
 
 // UnmarshalJSON reads {"type": "<trigger type>", ...settings}.
