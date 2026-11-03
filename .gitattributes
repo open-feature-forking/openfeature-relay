@@ -1,2 +1,3 @@
 testdata/*.txt text eol=lf
 builder/internal/generate/testdata/golden/** -text
+builder/internal/generate/testdata/golden-cmd/** -text
