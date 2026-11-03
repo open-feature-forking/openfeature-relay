@@ -14,6 +14,7 @@ github.com/open-feature-forking/openfeature-relay/core/pkg/eventsink/eventsinkte
 github.com/open-feature-forking/openfeature-relay/core/pkg/fips
 github.com/open-feature-forking/openfeature-relay/core/pkg/logger
 github.com/open-feature-forking/openfeature-relay/core/pkg/middleware
+github.com/open-feature-forking/openfeature-relay/core/pkg/middleware/middlewaretest
 github.com/open-feature-forking/openfeature-relay/core/pkg/model
 github.com/open-feature-forking/openfeature-relay/core/pkg/notifications
 github.com/open-feature-forking/openfeature-relay/core/pkg/service
