@@ -71,7 +71,8 @@ type Samples struct {
 	Attribute     *AttributeSample
 	Paired        *PairedSample
 	// BulkOnly names keys whose bulk result may differ from their single result, because the evaluator
-	// documents a bulk-only rule for them.
+	// documents a bulk-only rule for them. A bulk result without a value may carry the typed zero value of the
+	// flag, which needs no entry here.
 	BulkOnly []string
 }
 
@@ -255,8 +256,10 @@ func (r run) unknownKey() {
 	}
 }
 
+// same compares two results. Value counts only where HasValue is set: a bulk result may carry the typed zero value
+// of a flag that resolves to none, and a single result of that flag carries nothing.
 func same(a, b evaluator.Result) bool {
-	return a.HasValue == b.HasValue && reflect.DeepEqual(a.Value, b.Value) &&
+	return a.HasValue == b.HasValue && (!a.HasValue || reflect.DeepEqual(a.Value, b.Value)) &&
 		a.Variant == b.Variant && a.Reason == b.Reason && a.ErrorCode == b.ErrorCode
 }
 
