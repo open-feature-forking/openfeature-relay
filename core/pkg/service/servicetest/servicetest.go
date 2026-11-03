@@ -234,6 +234,9 @@ type env struct {
 	bus   *events.Bus
 	rec   *recordingEvaluator
 	log   *logger.Logger
+	// tcpReady makes start wait for the port instead of a client connection, for a case in which every request
+	// fails by design
+	tcpReady bool
 }
 
 func newEnv(f service.Factory, in Inputs) *env {
@@ -369,10 +372,20 @@ func (e *env) start(mutate func(*service.Settings)) (*running, error) {
 
 	deadline := time.Now().Add(Budget)
 	for {
-		ended, err := e.in.Connect(context.Background(), addr)
-		if err == nil {
-			r.ended = ended
-			return r, nil
+		var err error
+		if e.tcpReady && addr != "" {
+			// every request fails by design, Connect included: the port accepting a connection is all there is to wait for
+			var conn net.Conn
+			if conn, err = net.DialTimeout("tcp", addr, time.Second); err == nil {
+				conn.Close()
+				return r, nil
+			}
+		} else {
+			var ended <-chan struct{}
+			if ended, err = e.in.Connect(context.Background(), addr); err == nil {
+				r.ended = ended
+				return r, nil
+			}
 		}
 		select {
 		case serveErr := <-r.done:
@@ -712,6 +725,7 @@ func caseEffectiveSelector(e *env) error {
 	for _, row := range rows {
 		e.rec.reset()
 		bound := row.bound
+		e.tcpReady = row.invalid
 		r, err := e.start(func(s *service.Settings) {
 			s.HTTPMiddleware = func(next http.Handler) http.Handler { return bindingMiddlewareFor(bound, next) }
 		})
