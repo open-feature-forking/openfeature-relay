@@ -28,11 +28,15 @@ func TestContractInventory(t *testing.T) {
 	}
 	var got strings.Builder
 	for _, k := range kinds {
-		results := Check(k.factory, k.inputs)
+		results := Check(t, k.factory, k.inputs)
 		require.Empty(t, failed(results), "%+v", results)
 		fmt.Fprintf(&got, "%s\n", k.name)
-		for i, name := range names(results) {
-			fmt.Fprintf(&got, "  %d. %s\n", i+1, name)
+		for i, c := range results.Cases {
+			fmt.Fprintf(&got, "  %d. %s", i+1, c.Name)
+			if c.NotApplicable != "" {
+				fmt.Fprintf(&got, " (not applicable: %s)", c.NotApplicable)
+			}
+			got.WriteString("\n")
 		}
 	}
 

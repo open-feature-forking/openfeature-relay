@@ -42,6 +42,9 @@ func (Factory) Create(s service.Settings) (service.Endpoint, error) {
 		return nil, fmt.Errorf("the %s endpoint needs a resolver", Type)
 	}
 	cfg, _ := s.Config[ConfigKey].(EndpointConfig)
+	if port, ok := s.Config["port"].(int); ok {
+		cfg.Service.Port = uint16(port)
+	}
 	cfg.Service.Logger = s.Logger.WithFields(zap.String("component", "OFREPService"))
 	cfg.Service.HTTPMiddleware = s.HTTPMiddleware
 	cfg.Service.Bus = s.Bus
