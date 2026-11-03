@@ -7,7 +7,7 @@
 **Primary Actor:** Extension Author  
 **Goal:** Publish an event sink in the Extension Author's own component module, verified against the event sink contract, so that a distribution delivers configuration change, evaluation or tracking events to an external system flagd does not support, such as a vendor's analytics API, GO Feature Flag's exporters or a change notification channel.  
 **Trigger:** Extension Author needs flagd's events delivered to a system no official event sink supports  
-**Status:** Draft  
+**Status:** Implemented  
 
 **Requirements:** [FR-036, FR-015, FR-037, FR-038, FR-039, FR-003, FR-008, NFR-013](../requirements.md)
 
@@ -118,7 +118,7 @@ An event sink carries product data that must be delivered, such as experiment ex
 
 ### BR-008: All Events of the Subscribed Kinds
 
-An event sink receives every event of the kinds it subscribes to, across all flag sets. An event sink that serves only some flag sets selects them itself from the flag set each event names.
+An event sink receives every event of the kinds it subscribes to, across all flag sets, that its buffer accepted; the others are counted as dropped (BR-003). An event sink that serves only some flag sets selects them itself from the flag set each event names.
 
 ### BR-009: Invalid Configuration Stops the Distribution
 
@@ -127,3 +127,13 @@ When the factory rejects the event sink's configuration, the distribution does n
 ### BR-010: Same Selection as Official Components
 
 An extension is referenced in a manifest by Go module path and version in the same way as an official event sink; no registration with the Maintainers is needed.
+
+## Delivered by Later Use Cases
+
+This use case is `Implemented` for the event sink side: the event sink factory interface and the pipeline in the core module that buffers, batches, retries and flushes on shutdown, the event sink contract tests, the runtime that subscribes the selected event sinks to the event bus and stops on an invalid event sink configuration, and `test/eventsink-example`, a webhook that receives the evaluation and configuration change events of a flagd-full distribution. These parts are delivered by the use cases named here, and are accepted gaps of this one:
+
+| Gap | Delivered by |
+|-----|--------------|
+| Main scenario steps 7–8, A4, BR-010, FR-003, FR-008 | UC-001 |
+| Tracking events and the evaluation events of in-process providers, from an official collector endpoint (BR-006, FR-039) | UC-021 |
+| Operator settings for event sinks in flagd-full | UC-021 |

@@ -5,14 +5,18 @@
 #
 # The benchmarks run on the library modules the Makefile of <dir> names (GO_LIB_MODULE_DIRS) and on the packages of
 # the flagd and flagd-proxy modules, whose service endpoints have benchmarks of their own (NFR-001, NFR-013). Each runs
-# a fixed number of iterations, several times, so that the run stays short and the spread of a benchmark shows;
+# a fixed number of iterations, several times, so that the spread of a benchmark shows. 1000 iterations amortize the
+# one-time allocations of a run to under one per operation (at 100 the benchmarks of 200 to 400 allocs/op moved by up
+# to 6). SetState, which allocates 368,000 times per operation and takes 70 s for 1000 iterations, runs 100; a run of
+# the whole set takes about 1.5 minutes. See NOISY in compare-allocs.py;
 # compare-allocs.py reads allocs/op, which does not depend on the machine, and ignores ns/op. The tests themselves
 # are skipped.
 set -euo pipefail
 
 dir=${1:?usage: run-benchmarks.sh <dir> <out>}
 out=$(realpath -m "${2:?usage: run-benchmarks.sh <dir> <out>}")
-benchtime=${BENCHTIME:-100x}
+benchtime=${BENCHTIME:-1000x}
+setstatetime=${SETSTATETIME:-100x}
 count=${BENCHCOUNT:-3}
 
 cd "$dir"
@@ -27,4 +31,5 @@ for lib in $libs ./flagd ./flagd-proxy; do
   if [ -d "$lib" ]; then patterns+=("$lib/..."); fi
 done
 
-go test -run '^$' -bench=Bench -short -benchtime="$benchtime" -count="$count" -benchmem "${patterns[@]}" | tee "$out"
+go test -run '^$' -bench=Bench -skip '^BenchmarkSetState$' -short -benchtime="$benchtime" -count="$count" -benchmem "${patterns[@]}" | tee "$out"
+go test -run '^$' -bench='^BenchmarkSetState$' -short -benchtime="$setstatetime" -count="$count" -benchmem "${patterns[@]}" | tee -a "$out"

@@ -24,6 +24,7 @@ type fetchErrorKind int
 
 const (
 	fetchSelectorMalformed fetchErrorKind = iota
+	fetchBoundSelectorInvalid
 	fetchStoreRead
 	fetchMarshal
 )
@@ -39,12 +40,15 @@ func (e fetchError) Error() string { return e.cause.Error() }
 func (e fetchError) Unwrap() error { return e.cause }
 
 // newSelector validates shape before keys, since the two failures map to different statuses.
-func newSelector(expression string) (store.Selector, error) {
+func newSelector(ctx context.Context, expression string) (store.Selector, error) {
 	if !wellFormedSelector(expression) {
 		return store.Selector{}, fetchError{kind: fetchSelectorMalformed, cause: errors.New("malformed selector")}
 	}
 
-	selector, err := store.NewSelector(expression)
+	selector, err := flagdService.RequestSelector(ctx, expression)
+	if errors.Is(err, flagdService.ErrInvalidBoundSelector) {
+		return store.Selector{}, fetchError{kind: fetchBoundSelectorInvalid, cause: err}
+	}
 	if err != nil {
 		return store.Selector{}, fetchError{kind: fetchSelectorMalformed, cause: err}
 	}
@@ -54,7 +58,7 @@ func newSelector(expression string) (store.Selector, error) {
 
 // fetchAllFlags is the transport-agnostic body of FetchAllFlags.
 func fetchAllFlags(ctx context.Context, s store.IStore, expression string) ([]byte, error) {
-	selector, err := newSelector(expression)
+	selector, err := newSelector(ctx, expression)
 	if err != nil {
 		return nil, err
 	}

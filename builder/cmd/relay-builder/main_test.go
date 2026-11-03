@@ -42,7 +42,7 @@ func exec(args ...string) (code int, stdout, stderr string) {
 func TestCLIValidateOnly(t *testing.T) {
 	t.Run("a valid manifest", func(t *testing.T) {
 		path := write(t, validManifest)
-		code, stdout, stderr := exec("--manifest", path)
+		code, stdout, stderr := exec("--manifest", path, "--validate-only")
 		require.Equal(t, 0, code, stderr)
 		require.Contains(t, stdout, "is valid: flagd-custom 1.2.0, 3 component(s)")
 		require.Empty(t, stderr)
@@ -53,7 +53,7 @@ func TestCLIValidateOnly(t *testing.T) {
 
 	t.Run("an invalid manifest names every problem with its position", func(t *testing.T) {
 		path := write(t, strings.Replace(strings.Replace(validManifest, "version: v0.1.0", "version: latest", 1), "version: 1.2.0", "version: soon", 1))
-		code, stdout, stderr := exec("--manifest", path)
+		code, stdout, stderr := exec("--manifest", path, "--validate-only")
 		require.Equal(t, 1, code)
 		require.Empty(t, stdout)
 		require.Contains(t, stderr, path+":3:12: dist: version \"soon\"")
@@ -63,7 +63,7 @@ func TestCLIValidateOnly(t *testing.T) {
 
 	t.Run("the other flags are accepted", func(t *testing.T) {
 		path := write(t, validManifest)
-		code, _, stderr := exec("--manifest", path, "--skip-generate", "--skip-get-modules", "--skip-compile",
+		code, _, stderr := exec("--manifest", path, "--validate-only", "--skip-generate", "--skip-get-modules", "--skip-compile",
 			"--skip-strict-versioning", "--go", "/usr/local/go/bin/go", "--verbose")
 		require.Equal(t, 0, code, stderr)
 	})
@@ -96,4 +96,15 @@ func TestCLIValidateOnly(t *testing.T) {
 		require.Contains(t, stderr, "Usage: relay-builder --manifest <file>")
 		require.Contains(t, stderr, "-skip-strict-versioning")
 	})
+}
+
+// TestCLIBuildWithoutSource: with the generate step skipped and no source in the output location, the command
+// builds nothing and says so (A4).
+func TestCLIBuildWithoutSource(t *testing.T) {
+	path := write(t, validManifest)
+	code, stdout, stderr := exec("--manifest", path, "--skip-generate")
+	require.Equal(t, 4, code)
+	require.Empty(t, stdout)
+	require.Contains(t, stderr, "holds no distribution source to build")
+	require.Contains(t, stderr, "experimental")
 }

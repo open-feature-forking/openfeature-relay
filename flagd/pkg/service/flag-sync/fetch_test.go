@@ -47,7 +47,7 @@ func TestNewSelector_ErrorKinds(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := newSelector(test.expression)
+			_, err := newSelector(context.Background(), test.expression)
 
 			var fetchErr fetchError
 			require.ErrorAs(t, err, &fetchErr)
@@ -56,7 +56,7 @@ func TestNewSelector_ErrorKinds(t *testing.T) {
 	}
 
 	t.Run("empty selector is valid", func(t *testing.T) {
-		_, err := newSelector("")
+		_, err := newSelector(context.Background(), "")
 		require.NoError(t, err)
 	})
 }

@@ -76,6 +76,9 @@ func (h httpHandler) writeError(w http.ResponseWriter, err error) {
 	switch fetchErr.kind {
 	case fetchSelectorMalformed:
 		http.Error(w, "malformed selector", http.StatusBadRequest)
+	case fetchBoundSelectorInvalid:
+		h.log.Error("invalid bound selector", zap.Error(fetchErr.cause))
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 	case fetchMarshal:
 		h.log.Error("error marshalling flags", zap.Error(fetchErr.cause))
 		http.Error(w, "error marshalling flags", http.StatusInternalServerError)

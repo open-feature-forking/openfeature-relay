@@ -18,9 +18,10 @@ import (
 func TestFlagSyncContract(t *testing.T) {
 	servicetest.Run(t, Factory{}, servicetest.Inputs{
 		PortKey: "port",
+		HTTP:    true,
 		Without: []servicetest.Feature{
 			servicetest.FeatureDocuments, servicetest.FeatureValidator, servicetest.FeatureListen,
-			servicetest.FeatureSendEvents, servicetest.FeatureHTTP,
+			servicetest.FeatureSendEvents,
 		},
 		Connect: func(_ context.Context, addr string) (<-chan struct{}, error) {
 			client := syncv1connect.NewFlagSyncServiceClient(http.DefaultClient, "http://"+addr)

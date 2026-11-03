@@ -14,6 +14,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/middleware"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
@@ -177,6 +178,10 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		return nil, err
 	}
 	rt.Evaluator = inputs.evaluator()
+	wrapHTTP, err := httpMiddleware(logger, tp, components.Middleware)
+	if err != nil {
+		return nil, err
+	}
 	for _, factory := range components.Endpoints {
 		if err := service.ValidateDeclarations(factory); err != nil {
 			return nil, fmt.Errorf("the service endpoint %q declares: %w", factory.Type(), err)
@@ -187,6 +192,7 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		settings.Config = endpointSettings(config, factory.Type())
 		settings.Formats = append([]string{configformat.DefaultType}, formatTypes...)
 		settings.Sources = sources
+		settings.HTTPMiddleware = wrapHTTP
 		endpoint, err := factory.Create(settings)
 		if err != nil {
 			return nil, fmt.Errorf("error creating the service endpoint %q: %w", factory.Type(), err)
@@ -208,6 +214,13 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		return nil, err
 	}
 	rt.staleLimits = staleLimits
+	sinks, err := startEventSinks(logger, bus, tp, components.EventSinks)
+	if err != nil {
+		return nil, err
+	}
+	if len(sinks) > 0 {
+		rt.onShutdown("event sinks", flushEventSinks(sinks))
+	}
 	if shutdownTelemetry != nil {
 		rt.onShutdown("telemetry", shutdownTelemetry)
 	}
@@ -379,4 +392,30 @@ func metricsHandler(tp telemetry.Provider, components Components) http.Handler {
 		return p.MetricsHandler()
 	}
 	return nil
+}
+
+// httpMiddleware creates the middleware of the components and returns what the service endpoints wrap their HTTP
+// handler with: the chain in list order, or nil without middleware.
+func httpMiddleware(
+	logger *logger.Logger, tp telemetry.Provider, configured []middleware.Configured,
+) (func(http.Handler) http.Handler, error) {
+	if len(configured) == 0 {
+		return nil, nil
+	}
+	created := make([]middleware.Middleware, 0, len(configured))
+	for i, c := range configured {
+		if err := middleware.ValidateDeclarations(c.Factory); err != nil {
+			return nil, fmt.Errorf("the middleware factory at position %d declares: %w", i, err)
+		}
+		mw, err := c.Factory.Create(middleware.Settings{
+			Logger:    logger.WithFields(zap.String("component", "middleware"), zap.String("middleware", c.Factory.Type())),
+			Telemetry: tp,
+			Config:    c.Config,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("error creating the middleware %q: %w", c.Factory.Type(), err)
+		}
+		created = append(created, mw)
+	}
+	return func(next http.Handler) http.Handler { return middleware.Chain(created, next) }, nil
 }

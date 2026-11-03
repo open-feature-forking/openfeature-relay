@@ -67,7 +67,7 @@ func (s *FlagEvaluationService) ResolveAll(
 		Flags: make(map[string]*evalV1.AnyFlag),
 	}
 
-	selector, err := selectorFromHeader(req.Header())
+	selector, err := selectorFromHeader(ctx, s.logger, req.Header())
 	if err != nil {
 		return nil, recordSpanError(span, err)
 	}
@@ -162,7 +162,7 @@ func (s *FlagEvaluationService) EventStream(
 
 	s.logger.Debug("starting event stream for request")
 	requestNotificationChan := make(chan service.Notification, 1)
-	selector, err := selectorFromHeader(req.Header())
+	selector, err := selectorFromHeader(ctx, s.logger, req.Header())
 	if err != nil {
 		return err
 	}
@@ -224,7 +224,7 @@ func (s *FlagEvaluationService) ResolveBoolean(
 	ctx, span := s.flagEvalTracer.Start(ctx, "resolveBoolean", telemetry.WithSpanKind(telemetry.SpanKindServer))
 	defer span.End()
 
-	selector, err := selectorFromHeader(req.Header())
+	selector, err := selectorFromHeader(ctx, s.logger, req.Header())
 	if err != nil {
 		return nil, recordSpanError(span, err)
 	}
@@ -260,7 +260,7 @@ func (s *FlagEvaluationService) ResolveString(
 	ctx, span := s.flagEvalTracer.Start(ctx, "resolveString", telemetry.WithSpanKind(telemetry.SpanKindServer))
 	defer span.End()
 
-	selector, err := selectorFromHeader(req.Header())
+	selector, err := selectorFromHeader(ctx, s.logger, req.Header())
 	if err != nil {
 		return nil, recordSpanError(span, err)
 	}
@@ -296,7 +296,7 @@ func (s *FlagEvaluationService) ResolveInt(
 	ctx, span := s.flagEvalTracer.Start(ctx, "resolveInt", telemetry.WithSpanKind(telemetry.SpanKindServer))
 	defer span.End()
 
-	selector, err := selectorFromHeader(req.Header())
+	selector, err := selectorFromHeader(ctx, s.logger, req.Header())
 	if err != nil {
 		return nil, recordSpanError(span, err)
 	}
@@ -332,7 +332,7 @@ func (s *FlagEvaluationService) ResolveFloat(
 	ctx, span := s.flagEvalTracer.Start(ctx, "resolveFloat", telemetry.WithSpanKind(telemetry.SpanKindServer))
 	defer span.End()
 
-	selector, err := selectorFromHeader(req.Header())
+	selector, err := selectorFromHeader(ctx, s.logger, req.Header())
 	if err != nil {
 		return nil, recordSpanError(span, err)
 	}
@@ -368,7 +368,7 @@ func (s *FlagEvaluationService) ResolveObject(
 	ctx, span := s.flagEvalTracer.Start(ctx, "resolveObject", telemetry.WithSpanKind(telemetry.SpanKindServer))
 	defer span.End()
 
-	selector, err := selectorFromHeader(req.Header())
+	selector, err := selectorFromHeader(ctx, s.logger, req.Header())
 	if err != nil {
 		return nil, recordSpanError(span, err)
 	}
