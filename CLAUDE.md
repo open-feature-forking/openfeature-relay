@@ -23,6 +23,7 @@ Each phase runs plan → oppose → implement → review, one role per agent in 
 - On `ready` with green CI, the orchestrating session merges with a merge commit (keeping the signed-off commits) and deletes the branch. In a stack, retarget the next PR to `main` before merging the one below it: deleting a PR's base branch closes the PR instead of retargeting it. Confirm the new base with `gh pr view` before merging (the edit can fail silently), and close and reopen the retargeted PR so its build CI runs against `main`. `ready after fixes` goes back to the implementer as new commits on the same branch, never an amend.
 - The project lead approves each plan before implementation, and can stop or veto any PR; they are not a required approver for merges inside this repository.
 - The release-please and benchmark-pages workflows are disabled in this repository; do not enable them.
+- During the proof of concept, CI runs `test`, `lint` (with the boundary and coverage checks), `integration-test`, `docs-check` and markdown linting. FIPS 140-3, `docker-local`, the PR title check and the Pages deploy are gated: set the repository variable `FULL_CI=true` (or run `build` manually) for a full run, and `PAGES=true` once GitHub Pages is enabled. The reviewer still builds the images locally.
 
 ## Phases
 
