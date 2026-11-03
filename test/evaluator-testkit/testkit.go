@@ -6,17 +6,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/cucumber/godog"
 	"github.com/open-feature-forking/openfeature-relay/configformat/flagd"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/contracttest"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator/typed"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
@@ -53,30 +56,55 @@ func tagExpression() string {
 	return strings.Join(parts, " && ")
 }
 
-// Run evaluates the suite with the evaluator the factory creates, resolved through the typed adapter as endpoints
-// and in-process providers do.
+// Run evaluates the suite with the evaluator the factory creates, resolved through the typed adapter as endpoints and
+// in-process providers do: one subtest per scenario.
 func Run(t *testing.T, factory evaluator.Factory) {
 	t.Helper()
+	Check(t, factory).Run(t)
+}
+
+// Check evaluates the suite and returns the report, one case per scenario, without failing a test. A suite that is
+// missing aborts the run: it is part of the repository's test setup, so never a skip.
+func Check(t testing.TB, factory evaluator.Factory) contracttest.Report {
+	t.Helper()
+	if err := evaluator.ValidateDeclarations(factory); err != nil {
+		return contracttest.Abort("invalid declarations: %v", err)
+	}
 	for _, p := range []string{suiteDir + "/gherkin", flagsFile} {
 		if _, err := os.Stat(p); err != nil {
-			t.Fatalf("the testbed's evaluator suite is missing (%v): run `git submodule update --init test-harness`", err)
+			return contracttest.Abort("the testbed's evaluator suite is missing (%v): run `git submodule update --init test-harness`", err)
 		}
 	}
 
+	var (
+		mu     sync.Mutex
+		report contracttest.Report
+	)
 	suite := godog.TestSuite{
-		Name:                "evaluator",
-		ScenarioInitializer: func(sc *godog.ScenarioContext) { initializeScenario(sc, factory) },
+		Name: "evaluator",
+		ScenarioInitializer: func(sc *godog.ScenarioContext) {
+			initializeScenario(sc, factory)
+			sc.After(func(ctx context.Context, scenario *godog.Scenario, err error) (context.Context, error) {
+				c := contracttest.Pass(scenario.Name, "the scenario passes")
+				if err != nil {
+					c = contracttest.Check(scenario.Name, "the scenario passes", err.Error())
+				}
+				mu.Lock()
+				report.Cases = append(report.Cases, c)
+				mu.Unlock()
+				return ctx, nil
+			})
+		},
 		Options: &godog.Options{
-			Format:   "pretty",
-			Paths:    []string{filepath.Join(suiteDir, "gherkin")},
-			Tags:     tagExpression(),
-			TestingT: t,
-			Strict:   true,
+			Format: "progress",
+			Output: io.Discard,
+			Paths:  []string{filepath.Join(suiteDir, "gherkin")},
+			Tags:   tagExpression(),
+			Strict: true,
 		},
 	}
-	if suite.Run() != 0 {
-		t.Fatal("scenarios of the evaluator suite failed")
-	}
+	suite.Run()
+	return report
 }
 
 // world is the state of one scenario: the evaluator under test and the evaluation being described.
