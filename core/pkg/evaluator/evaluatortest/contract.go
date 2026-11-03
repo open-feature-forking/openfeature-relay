@@ -305,7 +305,7 @@ func (r run) attributes() {
 	}
 	without, ok := r.single(ev, a.Key, evaluator.TypeAny, nil)
 	if ok {
-		r.expect("attributes", !(without.HasValue && reflect.DeepEqual(without.Value, a.With)), a.Key+" without attributes",
+		r.expect("attributes", !without.HasValue || !reflect.DeepEqual(without.Value, a.With), a.Key+" without attributes",
 			"a different resolution", fmt.Sprintf("HasValue=%v Value=%#v", without.HasValue, without.Value))
 	}
 }
