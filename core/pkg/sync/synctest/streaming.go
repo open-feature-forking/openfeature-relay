@@ -26,22 +26,27 @@ type StreamingInputs struct {
 	// force; Empty delivers an empty flag configuration.
 	Remove   Input
 	OnRemove RemoveBehaviour
+	// Unavailable makes the source unreachable before the provider starts, and Available brings it back: a provider
+	// has to stay up and deliver once the source answers (BR-008).
+	Unavailable Input
+	Available   Input
 	// Timeout is the time limit of a case; zero means DefaultTimeout. Reconnecting may take a multiple.
 	Timeout time.Duration
 }
 
 // Names of the contract cases of a streaming sync provider (UC-008 BR-002).
 const (
-	CaseDeliversFirst       = "delivers the source's complete flag configuration first"
-	CaseDeliversUnchanged   = "delivers the flag configuration unchanged"
-	CaseNamesSource         = "names its source"
-	CaseReportsReadiness    = "reports readiness"
-	CaseDeliversChange      = "delivers each change the source pushes"
-	CaseDeliversOnRequest   = "delivers the complete flag configuration again on request"
-	CaseReconnectsToSource  = "reconnects after losing the source"
-	CaseSourceRemoved       = "delivers what its source's removal calls for"
-	CaseStopsOnShutdown     = "stops on shutdown"
-	reconnectTimeoutFactors = 3
+	CaseDeliversFirst        = "delivers the source's complete flag configuration first"
+	CaseDeliversUnchanged    = "delivers the flag configuration unchanged"
+	CaseNamesSource          = "names its source"
+	CaseReportsReadiness     = "reports readiness"
+	CaseDeliversChange       = "delivers each change the source pushes"
+	CaseDeliversOnRequest    = "delivers the complete flag configuration again on request"
+	CaseReconnectsToSource   = "reconnects after losing the source"
+	CaseSourceRemoved        = "delivers what its source's removal calls for"
+	CaseStopsOnShutdown      = "stops on shutdown"
+	CaseSurvivesFirstFailure = "stays up when the source is unavailable at startup and delivers once it answers"
+	reconnectTimeoutFactors  = 3
 )
 
 // RunStreaming runs the contract tests of a streaming sync provider: one subtest per contract case.
@@ -106,6 +111,8 @@ func CheckStreaming(t testing.TB, f sync.StreamingFactory, in StreamingInputs) R
 		missingInput{"StreamingInputs.Break", in.Break != nil, []string{CaseReconnectsToSource}},
 		missingInput{"StreamingInputs.Restore", in.Restore != nil, []string{CaseReconnectsToSource}},
 		missingInput{"StreamingInputs.Remove", in.Remove != nil, []string{CaseSourceRemoved}},
+		missingInput{"StreamingInputs.Unavailable", in.Unavailable != nil, []string{CaseSurvivesFirstFailure}},
+		missingInput{"StreamingInputs.Available", in.Available != nil, []string{CaseSurvivesFirstFailure}},
 		missingInput{"StreamingInputs.OnRemove", in.OnRemove == Keep || in.OnRemove == Empty, []string{CaseSourceRemoved}},
 	); msg != "" {
 		return Report{Aborted: msg}
@@ -113,11 +120,19 @@ func CheckStreaming(t testing.TB, f sync.StreamingFactory, in StreamingInputs) R
 	if msg := checkSchemes(f); msg != "" {
 		return Report{Aborted: msg}
 	}
+	probe, err := f.CreateStreaming(newSettings(in.Source, f.Type(), nil))
+	if err != nil || probe == nil {
+		return Report{Aborted: fmt.Sprintf("the factory cannot create the streaming sync provider (provider %v, error %v)", probe, err)}
+	}
+
+	limit := timeoutOr(in.Timeout)
+	var cases []Case
+	cases = append(cases, firstConnectCase(t, f, in, limit))
+
 	provider, err := f.CreateStreaming(newSettings(in.Source, f.Type(), nil))
 	if err != nil || provider == nil {
 		return Report{Aborted: fmt.Sprintf("the factory cannot create the streaming sync provider (provider %v, error %v)", provider, err)}
 	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	if err := provider.Init(ctx); err != nil {
@@ -130,8 +145,6 @@ func CheckStreaming(t testing.TB, f sync.StreamingFactory, in StreamingInputs) R
 	syncResult := make(chan error, 1)
 	go func() { syncResult <- provider.Sync(ctx, deliveries) }()
 
-	limit := timeoutOr(in.Timeout)
-	var cases []Case
 	next := 0 // the index of the next delivery a case waits for
 
 	first, got := received.await(next, limit)
@@ -261,4 +274,73 @@ func (c *collector) count() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return len(c.deliveries)
+}
+
+// firstConnectCase starts a provider while the source is unavailable. It has to stay up and, once the source is
+// available, deliver and report ready. The source is available again afterwards.
+func firstConnectCase(t testing.TB, f sync.StreamingFactory, in StreamingInputs, limit time.Duration) Case {
+	in.Unavailable(t)
+	provider, err := f.CreateStreaming(newSettings(in.Source, f.Type(), nil))
+	if err != nil || provider == nil {
+		in.Available(t)
+		return check(CaseSurvivesFirstFailure, false,
+			"the factory creates the provider while the source is unavailable",
+			fmt.Sprintf("provider %v, error %v", provider, err))
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	deliveries := make(chan sync.DataSync, 64)
+	result := make(chan error, 1)
+	if err := provider.Init(ctx); err != nil {
+		cancel()
+		in.Available(t)
+		return check(CaseSurvivesFirstFailure, false, "Init succeeds while the source is unavailable", fmt.Sprintf("Init: %v", err))
+	}
+	go func() { result <- provider.Sync(ctx, deliveries) }()
+
+	var observed string
+	passed := true
+	select {
+	case err := <-result:
+		passed, observed = false, fmt.Sprintf("Sync returned %v while the source was unavailable", err)
+	case <-deliveries:
+		passed, observed = false, "a delivery arrived while the source was unavailable"
+	case <-time.After(quietPeriod):
+	}
+	if passed && provider.IsReady() {
+		passed, observed = false, "the provider reported ready while the source was unavailable"
+	}
+
+	in.Available(t)
+	if passed {
+		select {
+		case d := <-deliveries:
+			if d.Source != in.Source.URI {
+				passed, observed = false, fmt.Sprintf("the delivery names %q", d.Source)
+			}
+		case err := <-result:
+			passed, observed = false, fmt.Sprintf("Sync returned %v", err)
+		case <-time.After(limit * reconnectTimeoutFactors):
+			passed, observed = false, "no delivery once the source was available"
+		}
+	}
+	if passed {
+		deadline := time.Now().Add(limit)
+		for !provider.IsReady() && time.Now().Before(deadline) {
+			time.Sleep(5 * time.Millisecond)
+		}
+		if !provider.IsReady() {
+			passed, observed = false, "the provider is not ready after it delivered"
+		}
+	}
+
+	cancel()
+	select {
+	case <-result:
+	case <-time.After(limit):
+		if passed {
+			passed, observed = false, "Sync did not return when its context was done"
+		}
+	}
+	return check(CaseSurvivesFirstFailure, passed,
+		"the provider stays up and not ready while the source is unavailable, then delivers and is ready", observed)
 }

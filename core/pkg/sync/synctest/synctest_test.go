@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	gosync "sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -351,6 +352,7 @@ const (
 	streamIgnoresDone   streamBug = "does not return when its context is done"
 	streamDeliversOnDel streamBug = "delivers when its source is removed although it declares Keep"
 	streamNoReSync      streamBug = "does not deliver on ReSync"
+	streamExitsWhenDown streamBug = "returns an error when the source is unavailable at startup"
 )
 
 type stubStream struct {
@@ -359,6 +361,7 @@ type stubStream struct {
 	events  chan string
 	release chan struct{}
 	ready   chan struct{}
+	down    *atomic.Bool
 
 	mu      gosync.Mutex
 	current string
@@ -374,6 +377,9 @@ func (s *stubStream) source() string {
 func (s *stubStream) Init(context.Context) error { return nil }
 
 func (s *stubStream) IsReady() bool {
+	if s.down.Load() {
+		return false
+	}
 	if s.bug == streamNeverReady {
 		return false
 	}
@@ -406,6 +412,16 @@ func (s *stubStream) ReSync(_ context.Context, ch chan<- sync.DataSync) error {
 }
 
 func (s *stubStream) Sync(ctx context.Context, ch chan<- sync.DataSync) error {
+	for s.down.Load() {
+		if s.bug == streamExitsWhenDown {
+			return errors.New("the source is unavailable")
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
 	s.set(flagsOne)
 	ch <- sync.DataSync{FlagData: s.snapshot(), Source: s.source()}
 	close(s.ready)
@@ -437,8 +453,9 @@ func (s *stubStream) Sync(ctx context.Context, ch chan<- sync.DataSync) error {
 type stubStreamFactory struct {
 	typ     string
 	schemes []string
-	s       *stubStream
-	err     error
+	// the world every provider the factory creates shares: its events, its availability and what releases a hung Sync
+	proto *stubStream
+	err   error
 }
 
 func (f stubStreamFactory) Type() string      { return f.typ }
@@ -454,23 +471,26 @@ func (f stubStreamFactory) CreateStreaming(sync.Settings) (sync.StreamingSyncPro
 	if f.err != nil {
 		return nil, f.err
 	}
-	return f.s, nil
+	p := f.proto
+	return &stubStream{uri: p.uri, bug: p.bug, events: p.events, release: p.release, down: p.down, ready: make(chan struct{})}, nil
 }
 
 func streamSetup(t *testing.T, bug streamBug) (stubStreamFactory, synctest.StreamingInputs) {
 	t.Helper()
-	s := &stubStream{uri: stubURI, bug: bug, events: make(chan string, 8), release: make(chan struct{}), ready: make(chan struct{})}
-	t.Cleanup(func() { close(s.release) })
-	send := func(ev string) synctest.Input { return func(testing.TB) { s.events <- ev } }
-	return stubStreamFactory{typ: "stub", schemes: []string{stubScheme}, s: s}, synctest.StreamingInputs{
-		Source:   sync.SourceConfig{URI: stubURI},
-		Expect:   flagsOne,
-		Change:   send("change"),
-		Break:    send("break"),
-		Restore:  send("restore"),
-		Remove:   send("remove"),
-		OnRemove: synctest.Keep,
-		Timeout:  shortLimit,
+	proto := &stubStream{uri: stubURI, bug: bug, events: make(chan string, 8), release: make(chan struct{}), down: new(atomic.Bool)}
+	t.Cleanup(func() { close(proto.release) })
+	send := func(ev string) synctest.Input { return func(testing.TB) { proto.events <- ev } }
+	return stubStreamFactory{typ: "stub", schemes: []string{stubScheme}, proto: proto}, synctest.StreamingInputs{
+		Source:      sync.SourceConfig{URI: stubURI},
+		Expect:      flagsOne,
+		Change:      send("change"),
+		Break:       send("break"),
+		Restore:     send("restore"),
+		Remove:      send("remove"),
+		OnRemove:    synctest.Keep,
+		Unavailable: func(testing.TB) { proto.down.Store(true) },
+		Available:   func(testing.TB) { proto.down.Store(false) },
+		Timeout:     shortLimit,
 	}
 }
 
@@ -481,27 +501,29 @@ func TestStreamingContract(t *testing.T) {
 
 		require.Empty(t, report.Aborted)
 		require.Empty(t, report.FailedCases())
-		require.Len(t, report.Cases, 9)
+		require.Len(t, report.Cases, 10)
 	})
 
+	// the startup case delivers, reports ready and shuts down too, so a provider that breaks one of those fails it as well
 	tests := []struct {
 		bug  streamBug
-		fail string
+		fail []string
 	}{
-		{streamWrongSource, synctest.CaseNamesSource},
-		{streamNoReconnect, synctest.CaseReconnectsToSource},
-		{streamNeverReady, synctest.CaseReportsReadiness},
-		{streamIgnoresDone, synctest.CaseStopsOnShutdown},
-		{streamDeliversOnDel, synctest.CaseSourceRemoved},
-		{streamNoReSync, synctest.CaseDeliversOnRequest},
+		{streamWrongSource, []string{synctest.CaseNamesSource, synctest.CaseSurvivesFirstFailure}},
+		{streamNoReconnect, []string{synctest.CaseReconnectsToSource}},
+		{streamNeverReady, []string{synctest.CaseReportsReadiness, synctest.CaseSurvivesFirstFailure}},
+		{streamIgnoresDone, []string{synctest.CaseStopsOnShutdown, synctest.CaseSurvivesFirstFailure}},
+		{streamDeliversOnDel, []string{synctest.CaseSourceRemoved}},
+		{streamNoReSync, []string{synctest.CaseDeliversOnRequest}},
+		{streamExitsWhenDown, []string{synctest.CaseSurvivesFirstFailure}},
 	}
 	for _, tt := range tests {
-		t.Run("a provider that "+string(tt.bug)+" fails that case only", func(t *testing.T) {
+		t.Run("a provider that "+string(tt.bug)+" fails its cases", func(t *testing.T) {
 			f, in := streamSetup(t, tt.bug)
 			report := synctest.CheckStreaming(t, f, in)
 
 			require.Empty(t, report.Aborted)
-			require.Equal(t, []string{tt.fail}, report.FailedCases())
+			require.ElementsMatch(t, tt.fail, report.FailedCases())
 		})
 	}
 

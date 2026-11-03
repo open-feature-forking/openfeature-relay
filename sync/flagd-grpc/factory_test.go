@@ -87,9 +87,11 @@ func TestStreamingContract(t *testing.T) {
 		Break:   func(testing.TB) { server.stop() },
 		Restore: func(testing.TB) { server.start() },
 		// the flagd sync protocol has no way to remove a source's flag configuration
-		Remove:   func(testing.TB) {},
-		OnRemove: synctest.Keep,
-		Timeout:  6 * time.Second,
+		Remove:      func(testing.TB) {},
+		Unavailable: func(testing.TB) { server.stop() },
+		Available:   func(testing.TB) { server.start() },
+		OnRemove:    synctest.Keep,
+		Timeout:     6 * time.Second,
 	})
 }
 

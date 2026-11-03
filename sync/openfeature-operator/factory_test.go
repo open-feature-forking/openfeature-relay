@@ -1,6 +1,7 @@
 package ofoperator
 
 import (
+	"context"
 	"errors"
 	gosync "sync"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/synctest"
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/fake"
@@ -66,15 +68,47 @@ func (w *watches) latest(t testing.TB, n int) *watch.FakeWatcher {
 	return w.started[len(w.started)-1]
 }
 
+// switchingClient gives the client the test has set, so that a provider started while the resource is missing reads
+// another fake cluster than the ones started afterwards.
+type switchingClient struct {
+	mu      gosync.Mutex
+	current dynamic.Interface
+}
+
+func (c *switchingClient) set(client dynamic.Interface) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.current = client
+}
+
+func (c *switchingClient) GetK8sClient() (dynamic.Interface, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.current, nil
+}
+
 func TestStreamingContract(t *testing.T) {
+	defer func(previous time.Duration) { retryInterval = previous }(retryInterval)
+	retryInterval = 50 * time.Millisecond
+
+	// the resource is missing from the first cluster until the source is made available
+	startup := fake.NewSimpleDynamicClient(scheme.Scheme)
 	fc := fake.NewSimpleDynamicClient(scheme.Scheme, featureFlag("1", simpleFlags("on")))
 	watches := newWatches(fc)
+	client := &switchingClient{current: fc}
 	version := 1
 	bump := func() string { version++; return string(rune('0' + version)) }
 
-	synctest.RunStreaming(t, Factory{Client: fixedClient{client: fc}}, synctest.StreamingInputs{
-		Source: sync.SourceConfig{URI: opURI, Provider: Provider},
-		Expect: `{"flags":{"f":{"state":"ENABLED","variants":{"on":true},"defaultVariant":"on"}}}`,
+	synctest.RunStreaming(t, Factory{Client: client}, synctest.StreamingInputs{
+		Source:      sync.SourceConfig{URI: opURI, Provider: Provider},
+		Expect:      `{"flags":{"f":{"state":"ENABLED","variants":{"on":true},"defaultVariant":"on"}}}`,
+		Unavailable: func(testing.TB) { client.set(startup) },
+		Available: func(t testing.TB) {
+			_, err := startup.Resource(featureFlagResource).Namespace(opNS).Create(
+				context.Background(), featureFlag("1", simpleFlags("on")), metav1.CreateOptions{})
+			require.NoError(t, err)
+			client.set(fc)
+		},
 		Change: func(t testing.TB) {
 			watches.latest(t, 1).Modify(featureFlag(bump(), simpleFlags("changed")))
 		},
