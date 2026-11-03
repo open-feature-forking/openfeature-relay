@@ -352,3 +352,60 @@ func TestMissingReplaceHintForAnUnreadableGoMod(t *testing.T) {
 		t.Fatalf("the module without a release is named with the hint: %+v", resolve)
 	}
 }
+
+// go mod tidy resolves the imports of the components' tests too. A module only a component's tests import, which the
+// Go Toolchain cannot fetch, is named with the component and the missing-replaces hint.
+func TestTestImportNamesTheComponent(t *testing.T) {
+	tested := proxyModule{path: "example.test/tested", version: "v1.0.0", files: map[string]string{
+		"go.mod":       goMod("example.test/tested", map[string]string{"example.test/unpublished": "v0.0.0"}, nil),
+		"comp.go":      "package tested\n\nfunc NewFactory() string { return \"\" }\n",
+		"comp_test.go": "package tested\n\nimport (\n\t\"testing\"\n\n\t_ \"example.test/unpublished/pkg\"\n)\n\nfunc TestX(t *testing.T) {}\n",
+	}}
+	tool := testTool(t, writeProxy(t, tested))
+	dir := distribution(t, map[string]string{"example.test/tested": "v1.0.0"}, nil, importMain(`tested "example.test/tested"`))
+	components := []Component{{Group: "engines", Module: "example.test/tested", Version: "v1.0.0", Import: "example.test/tested", Alias: "tested"}}
+
+	err := tool.Tidy(ctx, dir, components)
+
+	var resolve *ResolveError
+	if !errors.As(err, &resolve) {
+		t.Fatalf("want a ResolveError, got %v", err)
+	}
+	if resolve.Module != "example.test/unpublished" || resolve.TestedBy != "example.test/tested" || resolve.Version != "" {
+		t.Fatalf("the module and the component whose tests import it are named: %+v", resolve)
+	}
+	for _, want := range []string{"the tests of the component module example.test/tested", "replaces", "{module: example.test/unpublished,"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("the report says %q: %v", want, err)
+		}
+	}
+}
+
+// A fetch from version control reports "reading <module>/go.mod at revision <version>", with no module@version. This is
+// the report for test/configformat-example, whose tests import the flagd module, in a manifest of this repository.
+func TestTestImportAtRevisionNamesTheComponent(t *testing.T) {
+	stderr := `go: finding module for package github.com/open-feature/flagd/flagd/pkg/evaluation
+go: example.test/dist/components imports
+	github.com/open-feature/flagd/test/configformat-example tested by
+	github.com/open-feature/flagd/test/configformat-example.test imports
+	github.com/open-feature/flagd/flagd/pkg/evaluation: reading github.com/open-feature/flagd/flagd/go.mod at revision flagd/v0.0.0: unknown revision flagd/v0.0.0
+`
+	components := []Component{{
+		Group: "engines", Module: "github.com/open-feature/flagd/test/configformat-example", Version: "v0.0.0",
+		Import: "github.com/open-feature/flagd/test/configformat-example", Replaced: true,
+	}}
+
+	err := mapResolve(stderr, components, errors.New("exit status 1"))
+
+	var resolve *ResolveError
+	if !errors.As(err, &resolve) {
+		t.Fatalf("want a ResolveError, got %v", err)
+	}
+	if resolve.Module != "github.com/open-feature/flagd/flagd" || resolve.TestedBy != components[0].Module {
+		t.Fatalf("the module and the component whose tests import it are named: %+v", resolve)
+	}
+	if !strings.Contains(resolve.Reason, "unknown revision flagd/v0.0.0") ||
+		!strings.Contains(resolve.Hint, "{module: github.com/open-feature/flagd/flagd,") {
+		t.Fatalf("the toolchain's line and the replaces hint are kept: %+v", resolve)
+	}
+}

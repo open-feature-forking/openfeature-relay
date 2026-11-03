@@ -100,15 +100,21 @@ type ResolveError struct {
 	Version string
 	// Reason is what the Go Toolchain reported.
 	Reason string
+	// TestedBy names the component whose tests import the module, when only they need it: go mod tidy resolves the
+	// imports of the components' tests too.
+	TestedBy string
 	// Hint says what to change, when the Builder knows.
 	Hint string
 }
 
 func (e *ResolveError) Error() string {
 	var b strings.Builder
-	if e.Version != "" {
+	switch {
+	case e.Version != "":
 		fmt.Fprintf(&b, "cannot resolve the component module %s %s: %s", e.Module, e.Version, e.Reason)
-	} else {
+	case e.TestedBy != "":
+		fmt.Fprintf(&b, "cannot resolve the module %s, which the tests of the component module %s import: %s", e.Module, e.TestedBy, e.Reason)
+	default:
 		fmt.Fprintf(&b, "cannot resolve the module %s, which a component module requires: %s", e.Module, e.Reason)
 	}
 	if e.Hint != "" {
@@ -149,18 +155,37 @@ func mapResolve(stderr string, components []Component, runErr error) error {
 			return &ResolveError{Module: c.Module, Version: c.Version, Reason: line}
 		}
 	}
-	return &ResolveError{
-		Module: module, Reason: line,
-		Hint: fmt.Sprintf("a component module requires %s, which the Go Toolchain cannot fetch. A manifest in a repository "+
-			"replaces every relay module of its build list by a local path, not only the components: add "+
-			"`- {module: %s, path: <path to the module>}` to `replaces`.", module, module),
+	e := &ResolveError{Module: module, Reason: line}
+	who := "a component module requires " + module
+	if c, ok := testedBy(reason, components); ok {
+		e.TestedBy = c.Module
+		who = fmt.Sprintf("the tests of the component module %s import %s (go mod tidy resolves the imports of the components' tests too)", c.Module, module)
 	}
+	e.Hint = fmt.Sprintf("%s, which the Go Toolchain cannot fetch. A manifest in a repository replaces every relay module of its "+
+		"build list by a local path, not only the components: add `- {module: %s, path: <path to the module>}` to `replaces`.",
+		who, module)
+	return e
 }
 
 var (
 	failing    = regexp.MustCompile(`(?m)(\S+?)@(v[^\s:]+): .*$`)
 	unreadable = regexp.MustCompile(`(?m)^.*: reading (\S+?)/go\.mod at revision .*$`)
+	// "pkg tested by" in the import chain: the package whose test binary needs what follows
+	testedByLine = regexp.MustCompile(`(?m)^\s*(\S+) tested by$`)
 )
+
+// testedBy returns the component whose package's tests the import chain in reason names.
+func testedBy(reason string, components []Component) (Component, bool) {
+	for _, m := range testedByLine.FindAllStringSubmatch(reason, -1) {
+		pkg := m[1]
+		for _, c := range components {
+			if pkg == c.Import || pkg == c.Module || strings.HasPrefix(pkg, c.Module+"/") {
+				return c, true
+			}
+		}
+	}
+	return Component{}, false
+}
 
 // Module is one entry of the build list.
 type Module struct {
