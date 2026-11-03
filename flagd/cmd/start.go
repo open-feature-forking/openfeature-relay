@@ -9,7 +9,6 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/fips"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	flagdeval "github.com/open-feature-forking/openfeature-relay/evaluator/flagd"
 	syncbuilder "github.com/open-feature-forking/openfeature-relay/sync/builder"
 	"github.com/open-feature/flagd/flagd/pkg/runtime"
 	"github.com/spf13/cobra"
@@ -245,7 +244,6 @@ var startCmd = &cobra.Command{
 			StreamDeadline:         viper.GetDuration(streamDeadlineFlagName),
 			DisableSyncMetadata:    viper.GetBool(disableSyncMetadata),
 			StrictNumericRange:     viper.GetBool(strictNumericRangeFlagName),
-			EvaluatorSettings:      evaluatorSettings(viper.GetBool(strictNumericRangeFlagName)),
 			//nolint:staticcheck // SA1019 no-ops, read so FromConfig can warn when they are set
 			KeepAliveMinTime: viper.GetDuration(keepAliveMinTimeFlagName),
 			//nolint:staticcheck // SA1019 see above
@@ -264,12 +262,4 @@ var startCmd = &cobra.Command{
 			rtLogger.Fatal(err.Error())
 		}
 	},
-}
-
-// evaluatorSettings maps the flags that belong to flagd's evaluator to its settings.
-func evaluatorSettings(strictNumericRange bool) map[string]map[string]any {
-	if !strictNumericRange {
-		return nil
-	}
-	return map[string]map[string]any{flagdeval.FactoryType: {"strictNumericRange": true}}
 }
