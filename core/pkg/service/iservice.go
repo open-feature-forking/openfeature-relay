@@ -42,20 +42,18 @@ type Configuration struct {
 	KeepAlivePermitWithoutStream bool
 }
 
-/*
-IFlagEvaluationService implementations define handlers for a particular transport,
-which call the IEvaluator implementation.
-*/
+// IFlagEvaluationService is the service the runtime started and notified by its type.
+//
+// Deprecated: implement Endpoint and Factory; the runtime serves endpoints without knowing their types.
 type IFlagEvaluationService interface {
 	Serve(ctx context.Context, svcConf Configuration) error
 	Notify(n Notification)
 	Shutdown()
 }
 
-/*
-IFlagEvaluationService implementations define handlers for a particular transport,
-which call the IEvaluator implementation.
-*/
+// IKubeSyncService is the Kubernetes sync service the runtime started by its type.
+//
+// Deprecated: implement Endpoint and Factory.
 type IKubeSyncService interface {
 	Serve(ctx context.Context, svcConf Configuration) error
 }
