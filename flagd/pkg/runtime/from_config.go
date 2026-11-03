@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	flagdformat "github.com/open-feature-forking/openfeature-relay/configformat/flagd"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
@@ -21,9 +20,6 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	syncbuilder "github.com/open-feature-forking/openfeature-relay/sync/builder"
 	flagdgrpc "github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc"
-	flageval "github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation"
-	"github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation/ofrep"
-	flagsync "github.com/open-feature/flagd/flagd/pkg/service/flag-sync"
 	"go.uber.org/zap"
 	googlegrpc "google.golang.org/grpc"
 )
@@ -183,9 +179,6 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		return nil, err
 	}
 	rt.Evaluator = inputs.evaluator()
-	endpointConfigs := endpointConfigs{
-		formats: append([]string{flagdformat.Type}, formatTypes...), config: config, serviceConfig: rt.ServiceConfig, sources: sources,
-	}
 	for _, factory := range components.Endpoints {
 		if err := service.ValidateDeclarations(factory); err != nil {
 			return nil, fmt.Errorf("the service endpoint %q declares: %w", factory.Type(), err)
@@ -193,7 +186,9 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		settings := inputs.settings(factory)
 		settings.Initialized = rt.Initialized()
 		settings.Telemetry = tp
-		settings.Config = endpointConfigs.forEndpoint(factory.Type())
+		settings.Config = endpointSettings(config, factory.Type())
+		settings.Formats = append([]string{configformat.DefaultType}, formatTypes...)
+		settings.Sources = sources
 		endpoint, err := factory.Create(settings)
 		if err != nil {
 			return nil, fmt.Errorf("error creating the service endpoint %q: %w", factory.Type(), err)
@@ -242,62 +237,6 @@ func telemetryProvider(
 		return nil, nil, fmt.Errorf("error creating the telemetry provider %q: %w", components.Telemetry.Type(), err)
 	}
 	return tp, tp.Shutdown, nil
-}
-
-// endpointConfigs derives the settings of the official endpoints from the operator's configuration.
-type endpointConfigs struct {
-	formats       []string // the configuration formats of the distribution, flagd's first
-	config        Config
-	serviceConfig service.Configuration
-	sources       []string
-}
-
-// forEndpoint returns Settings.Config for the endpoint type; an extension's endpoint has no settings of the
-// operator's yet.
-func (c endpointConfigs) forEndpoint(endpointType string) map[string]any {
-	switch endpointType {
-	case flageval.Type:
-		return map[string]any{flageval.ConfigKey: flageval.EndpointConfig{
-			Configuration: c.serviceConfig,
-		}}
-	case ofrep.Type:
-		return map[string]any{ofrep.ConfigKey: ofrep.EndpointConfig{
-			Formats: c.formats,
-			Service: ofrep.SvcConfiguration{
-				Port:                  c.config.OfrepServicePort,
-				ServiceName:           svcName,
-				MaxRequestBodyBytes:   c.config.MaxRequestBodyBytes,
-				MaxRequestHeaderBytes: c.config.MaxRequestHeaderBytes,
-				SSEEnabled:            c.config.OfrepSSEEnabled,
-				SSEInactivityDelaySec: c.config.OfrepSSEInactivityDel,
-				SSEPublicURL:          c.config.OfrepSSEPublicURL,
-			},
-			CORS:                       c.config.CORS,
-			ContextValues:              c.config.ContextValues,
-			HeaderToContextKeyMappings: c.config.HeaderToContextKeyMappings,
-		}}
-	case flagsync.Type:
-		return map[string]any{flagsync.ConfigKey: flagsync.SvcConfigurations{
-			Port:                  c.config.SyncServicePort,
-			Sources:               c.sources,
-			ContextValues:         c.config.ContextValues,
-			KeyPath:               c.config.ServiceKeyPath,
-			CertPath:              c.config.ServiceCertPath,
-			SocketPath:            c.config.SyncServiceSocketPath,
-			HTTPEnabled:           c.config.SyncServiceHTTPEnabled,
-			ServiceName:           svcName,
-			CORS:                  c.config.CORS,
-			StreamDeadline:        c.config.StreamDeadline,
-			DisableSyncMetadata:   c.config.DisableSyncMetadata,
-			MaxRequestHeaderBytes: c.config.MaxRequestHeaderBytes,
-			MaxRequestBodyBytes:   c.config.MaxRequestBodyBytes,
-		}}
-	}
-	settings := maps.Clone(c.config.EndpointSettings[endpointType])
-	if settings == nil {
-		settings = map[string]any{}
-	}
-	return settings
 }
 
 // staleLimitsOf pairs the sources that set staleAfter with their sync providers, which must report their last contact.

@@ -117,3 +117,15 @@ func TestStrictNumericRangeReachesTheAdapter(t *testing.T) {
 		})
 	}
 }
+
+// TestAbsentComponentSettingsIgnored pins that a distribution without an endpoint ignores flagd-full's flags that
+// belong to it: its Config holds the ports of all three endpoints, and a runtime of one starts without a word about
+// the others.
+func TestAbsentComponentSettingsIgnored(t *testing.T) {
+	cfg := Config{ServicePort: 1, OfrepServicePort: 2, SyncServicePort: 3, EndpointSettings: map[string]map[string]any{"absent": {"port": 4}}}
+
+	require.Equal(t, 1, int(endpointSettings(cfg, flagEvaluationType)["port"].(uint16)))
+	require.Equal(t, 2, int(endpointSettings(cfg, ofrepType)["port"].(uint16)))
+	require.Equal(t, map[string]any{"port": 4}, endpointSettings(cfg, "absent"), "an extension's entry is handed over as it is")
+	require.Empty(t, endpointSettings(cfg, "unknown"), "an endpoint nobody maps gets no settings")
+}
