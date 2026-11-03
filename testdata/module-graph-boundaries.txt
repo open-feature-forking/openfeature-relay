@@ -1,20 +1,21 @@
 # <module dir>:<forbidden module path regexp>
 # The module graph of core carries no telemetry, transport, platform client, JsonLogic engine, schema library or other library module.
-core:opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|cloud.google.com|github.com/Azure|github.com/aws|jsonlogic|jsonschema|openfeature-relay/(sync|telemetry|evaluator|configformat)/
+core:robfig|opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|cloud.google.com|github.com/Azure|github.com/aws|jsonlogic|jsonschema|openfeature-relay/(sync|telemetry|evaluator|configformat)/
 # NFR-005: the embeddable modules are free of telemetry, transport and platform clients down to their module graphs.
 evaluator/flagd:opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|cloud.google.com|github.com/Azure|github.com/aws|openfeature-relay/(sync|telemetry)/
 configformat/flagd:opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|cloud.google.com|github.com/Azure|github.com/aws|jsonlogic|openfeature-relay/(sync|telemetry|evaluator)/
 # The file sync provider carries none of the other sync providers, telemetry, transport or platform clients.
-sync/file:opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|openfeature-relay/(telemetry|sync/(flagd-grpc|http|openfeature-operator|blob|gcs|azblob|s3|builder))
+sync/file:opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|openfeature-relay/(telemetry|sync/(flagd-grpc|http|openfeature-operator|gcs|azblob|s3|builder))
 # gRPC is the transport of sync/flagd-grpc; it carries no other sync provider.
-sync/flagd-grpc:openfeature-relay/(telemetry|sync/(file|http|openfeature-operator|blob|gcs|azblob|s3|builder))
-# The remaining sync providers carry no other sync provider and no telemetry module. The cloud providers share
-# gocloud.dev, so all three cloud SDKs stay in their module graphs (a named gap: native clients per cloud).
-sync/http:openfeature-relay/(telemetry|sync/(file|flagd-grpc|openfeature-operator|blob|gcs|azblob|s3|builder))
-sync/openfeature-operator:openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|blob|gcs|azblob|s3|builder))
-sync/blob:openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|openfeature-operator|gcs|azblob|s3|builder))
-sync/gcs:openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|openfeature-operator|azblob|s3|builder))
-sync/azblob:openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|openfeature-operator|gcs|s3|builder))
-sync/s3:openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|openfeature-operator|gcs|azblob|builder))
+sync/flagd-grpc:openfeature-relay/(telemetry|sync/(file|http|openfeature-operator|gcs|azblob|s3|builder))
+# The remaining sync providers carry no other sync provider and no telemetry module. Each cloud provider is on its own
+# cloud SDK, so the module graph of one carries none of the other clouds, and none carries gocloud.dev.
+sync/http:openfeature-relay/(telemetry|sync/(file|flagd-grpc|openfeature-operator|gcs|azblob|s3|builder))
+sync/openfeature-operator:openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|gcs|azblob|s3|builder))
+sync/gcs:github.com/Azure|github.com/aws|gocloud.dev|openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|openfeature-operator|azblob|s3|builder))
+sync/azblob:cloud.google.com/go/storage|github.com/aws|gocloud.dev|google.golang.org/(api|grpc)|googleapis/gax-go|openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|openfeature-operator|gcs|s3|builder))
+sync/s3:cloud.google.com|github.com/Azure|gocloud.dev|openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|openfeature-operator|gcs|azblob|builder))
 # The telemetry module carries no sync provider and no Kubernetes or gocloud client (OpenTelemetry brings a few Google auth modules).
 telemetry/otel:openfeature-relay/sync/|k8s.io|gocloud.dev|github.com/Azure|github.com/aws
+# BR-001 of UC-003: the module graph of the example sync extension is that of core.
+test/sync-example:robfig|opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|cloud.google.com|github.com/Azure|github.com/aws|open-feature/flagd/flagd|openfeature-relay/(sync|telemetry|evaluator|configformat)/

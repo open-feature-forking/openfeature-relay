@@ -141,7 +141,11 @@ func TestFileSyncFeedsFormat(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "flags.json")
 	writeFlags(t, path, flagsV1)
 	log := logger.NewLogger(nil, false)
-	p, o := newProvider(t, path, syncfile.NewFileSync(path, syncfile.FSNOTIFY, 0, log))
+	syncer, err := syncfile.NewSyncProvider(path, syncfile.FSNOTIFY, log, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, o := newProvider(t, path, syncer)
 
 	first := o.nextChange(t)
 	if len(first.Documents) != 1 || strings.Join(first.Documents[0].Added, ",") != "off-flag,on-flag" {

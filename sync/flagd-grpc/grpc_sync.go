@@ -151,25 +151,27 @@ func (g *Sync) IsReady() bool {
 func (g *Sync) Sync(ctx context.Context, dataSync chan<- sync.DataSync) error {
 	g.Logger.Info(fmt.Sprintf("starting sync from %s", g.URI))
 
-	// Initialize SyncFlags client. This fails if server connection establishment fails (ex:- grpc server offline)
+	// Initialize SyncFlags client. A failure to open the stream, such as an unreachable server, is retried with a
+	// backoff like the loss of a stream that was open
 	g.Logger.Debug(fmt.Sprintf("initial stream connection to %s", g.URI))
 	syncClient, err := g.client.SyncFlags(g.contextWithHeaders(ctx), &v1.SyncFlagsRequest{ProviderId: g.ProviderID, Selector: g.Selector}) //nolint:staticcheck // deprecated selector kept for backwards compat
 	if err != nil {
-		return fmt.Errorf("unable to sync flags: %w", err)
+		g.Logger.Warn(fmt.Sprintf("unable to sync flags: %s", err.Error()))
+	} else {
+		g.streamOpened(ctx)
+
+		g.Logger.Debug(fmt.Sprintf("watching %s for changes", g.URI))
+
+		// Initial stream listening. Error will be logged and continue and retry connection establishment
+		err = g.handleFlagSync(ctx, syncClient, dataSync, false)
+		g.streamClosed(ctx)
+		if err == nil {
+			// This should not happen as handleFlagSync expects to return with an error
+			return nil
+		}
+
+		g.Logger.Warn(fmt.Sprintf("error with stream listener: %s", err.Error()))
 	}
-	g.streamOpened(ctx)
-
-	g.Logger.Debug(fmt.Sprintf("watching %s for changes", g.URI))
-
-	// Initial stream listening. Error will be logged and continue and retry connection establishment
-	err = g.handleFlagSync(ctx, syncClient, dataSync, false)
-	g.streamClosed(ctx)
-	if err == nil {
-		// This should not happen as handleFlagSync expects to return with an error
-		return nil
-	}
-
-	g.Logger.Warn(fmt.Sprintf("error with stream listener: %s", err.Error()))
 
 	// retry connection establishment
 	for {

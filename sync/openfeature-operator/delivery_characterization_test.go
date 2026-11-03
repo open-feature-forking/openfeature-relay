@@ -9,6 +9,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic/fake"
@@ -106,17 +107,37 @@ func TestDeliveryCharacterization(t *testing.T) {
 		return NewK8sSync(logger.NewLogger(nil, false), opURI, fc)
 	}
 
-	t.Run("a failed initial fetch stops the provider", func(t *testing.T) {
-		s := newSync(fake.NewSimpleDynamicClient(scheme.Scheme))
-		require.NoError(t, s.Init(context.Background()))
+	t.Run("a failed initial fetch is repeated until the resource exists", func(t *testing.T) {
+		defer func(previous time.Duration) { retryInterval = previous }(retryInterval)
+		retryInterval = 10 * time.Millisecond
 
-		err := s.Sync(context.Background(), make(chan sync.DataSync, 1))
-		require.ErrorContains(t, err, "error with the initial fetch")
-		require.ErrorContains(t, err, "not found")
+		fc := fake.NewSimpleDynamicClient(scheme.Scheme)
+		s := newSync(fc)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		deliveries := make(chan sync.DataSync, 4)
+		stopped := make(chan error, 1)
+		require.NoError(t, s.Init(ctx))
+		go func() { stopped <- s.Sync(ctx, deliveries) }()
+
+		select {
+		case err := <-stopped:
+			t.Fatalf("the provider stopped with %v", err)
+		case <-deliveries:
+			t.Fatal("unexpected delivery")
+		case <-time.After(300 * time.Millisecond):
+		}
 		require.False(t, s.IsReady())
+
+		_, err := fc.Resource(featureFlagResource).Namespace(opNS).Create(ctx, featureFlag("1", simpleFlags("on")), metav1.CreateOptions{})
+		require.NoError(t, err)
+		requireOperatorDelivery(t, deliveries, `{"flags":{"f":{"state":"ENABLED","variants":{"on":true},"defaultVariant":"on"}}}`)
+
+		cancel()
+		require.NoError(t, <-stopped)
 	})
 
-	t.Run("the delivered JSON is the operator's typed flag specification", func(t *testing.T) {
+	t.Run("the delivered JSON is the flag specification as written in the resource", func(t *testing.T) {
 		ff := featureFlag("1", map[string]interface{}{
 			"$schema": "https://flagd.dev/schema/v0/flags.json",
 			"flags": map[string]interface{}{
@@ -124,15 +145,16 @@ func TestDeliveryCharacterization(t *testing.T) {
 					"state":          "ENABLED",
 					"variants":       map[string]interface{}{"on": true, "off": false},
 					"defaultVariant": "on",
-					"unknownKey":     "dropped",
+					"unknownKey":     "kept",
 				},
 			},
 		})
 		s := newSync(fake.NewSimpleDynamicClient(scheme.Scheme, ff))
 		deliveries, _ := startOperatorSync(t, s)
 
-		// `$schema` and the flag-level key the operator's type does not define are not delivered
-		requireOperatorDelivery(t, deliveries, `{"flags":{"f":{"state":"ENABLED","variants":{"on":true,"off":false},"defaultVariant":"on"}}}`)
+		// `$schema` and the flag-level key the operator's type does not define are delivered too
+		requireOperatorDelivery(t, deliveries, `{"$schema":"https://flagd.dev/schema/v0/flags.json","flags":{"f":{"state":"ENABLED",`+
+			`"variants":{"on":true,"off":false},"defaultVariant":"on","unknownKey":"kept"}}}`)
 	})
 
 	t.Run("readiness, changes and deletion", func(t *testing.T) {

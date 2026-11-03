@@ -65,7 +65,9 @@ type Config struct {
 	// Evaluators are the evaluators, besides flagd's own, that resolve the flags of a configuration format.
 	// Each one's format must be flagd's own or one of ConfigurationFormats.
 	Evaluators []evaluator.Factory
-	CORS                 []string
+	// SyncFactories are the sync components, besides the official ones, that sources may select.
+	SyncFactories []sync.Factory
+	CORS          []string
 
 	ContextValues              map[string]any
 	HeaderToContextKeyMappings map[string]string
@@ -228,7 +230,8 @@ func FromConfig(logger *logger.Logger, version string, config Config) (*Runtime,
 	// metrics into the same reader as the rest of flagd's telemetry.
 	syncLogger := logger.WithFields(zap.String("component", "sync"))
 	syncMetricsRecorder := telemetry.NewSyncRecorder(nil)
-	iSyncs, err := syncProvidersFromConfig(syncLogger, syncProviders, syncMetricsRecorder, telemetry.NewStreamRecorder(nil))
+	iSyncs, err := syncProvidersFromConfig(
+		syncLogger, syncProviders, syncMetricsRecorder, telemetry.NewStreamRecorder(nil), config.SyncFactories)
 	if err != nil {
 		return nil, err
 	}
@@ -267,11 +270,14 @@ func syncProvidersFromConfig(
 	sources []sync.SourceConfig,
 	syncMetricsRecorder sync.MetricsRecorder,
 	streamMetricsRecorder flagdgrpc.StreamMetricsRecorder,
+	extra []sync.Factory,
 ) ([]sync.ISync, error) {
-	builder := syncbuilder.NewSyncBuilder()
+	factories := syncbuilder.OfficialWith(syncbuilder.OfficialOptions{
+		StreamMetrics:   streamMetricsRecorder,
+		GRPCDialOptions: []googlegrpc.DialOption{telemetry.GRPCClientDialOption()},
+	})
+	builder := syncbuilder.NewSyncBuilder(append(factories, extra...)...)
 	builder.SyncMetricsRecorder = syncMetricsRecorder
-	builder.StreamMetricsRecorder = streamMetricsRecorder
-	builder.GRPCDialOptions = []googlegrpc.DialOption{telemetry.GRPCClientDialOption()}
 	syncs, err := builder.SyncsFromConfig(sources, logger)
 	if err != nil {
 		return nil, fmt.Errorf("could not create sync sources from config: %w", err)

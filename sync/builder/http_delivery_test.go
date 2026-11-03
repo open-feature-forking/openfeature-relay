@@ -77,17 +77,12 @@ func (fs *flagServer) nextRequest(t *testing.T) http.Header {
 // TestHTTPDeliveryCharacterization pins what an HTTP source delivers, and when.
 func TestHTTPDeliveryCharacterization(t *testing.T) {
 	t.Run("deliveries across polls", func(t *testing.T) {
-		if raceEnabled {
-			// every poll is a cron job in its own goroutine, and consecutive jobs read and write the provider's ETag and
-			// body hash without synchronization: the race detector reports it although the jobs are a second apart
-			t.Skip("the http provider races between poll jobs; run without -race")
-		}
 		fs := newFlagServer(t, `"e1"`, flagsA)
 		uri := fs.URL + "/flags"
-		// incrementalUpdates is set to show that deliveries do not carry it
+		// incrementalUpdates is set: every delivery is an incremental update
 		src := startSource(t, sync.SourceConfig{URI: uri, Provider: "http", Interval: 1, IncrementalUpdates: true})
-		wantA := sync.DataSync{FlagData: flagsA, Source: uri}
-		wantB := sync.DataSync{FlagData: flagsB, Source: uri}
+		wantA := sync.DataSync{FlagData: flagsA, Source: uri, IncrementalUpdates: true}
+		wantB := sync.DataSync{FlagData: flagsB, Source: uri, IncrementalUpdates: true}
 
 		// the initial fetch delivers
 		require.Empty(t, fs.nextRequest(t).Get("If-None-Match"))
@@ -127,31 +122,47 @@ func TestHTTPDeliveryCharacterization(t *testing.T) {
 		for range 2 {
 			require.NoError(t, provider.ReSync(context.Background(), deliveries))
 			require.Empty(t, fs.nextRequest(t).Get("If-None-Match"))
-			require.Equal(t, sync.DataSync{FlagData: flagsA, Source: uri}, <-deliveries)
+			require.Equal(t, sync.DataSync{FlagData: flagsA, Source: uri, IncrementalUpdates: true}, <-deliveries)
 		}
 	})
 
-	t.Run("a failed initial fetch stops the provider", func(t *testing.T) {
-		fs := newFlagServer(t, "", "")
+	t.Run("a failed initial fetch keeps the provider up and not ready until the source answers", func(t *testing.T) {
+		fs := newFlagServer(t, "", flagsA)
 		fs.mu.Lock()
 		fs.status = http.StatusInternalServerError
 		fs.mu.Unlock()
 		uri := fs.URL + "/flags"
 
-		provider, _ := buildSource(t, sync.SourceConfig{URI: uri, Provider: "http", Interval: 1})
-		require.NoError(t, provider.Init(context.Background()))
-		err := provider.Sync(context.Background(), make(chan sync.DataSync, 1))
-		require.ErrorContains(t, err, "500")
-		require.False(t, provider.IsReady())
+		src := startSource(t, sync.SourceConfig{URI: uri, Provider: "http", Interval: 1})
+		fs.nextRequest(t)
+		fs.nextRequest(t) // it fetches again by itself
+		src.requireNoDelivery(t)
+		require.False(t, src.provider.IsReady())
+		select {
+		case err := <-src.syncErr:
+			t.Fatalf("the provider stopped with %v", err)
+		default:
+		}
+
+		fs.mu.Lock()
+		fs.status = http.StatusOK
+		fs.mu.Unlock()
+		src.requireDelivery(t, sync.DataSync{FlagData: flagsA, Source: uri})
+		require.Eventually(t, src.provider.IsReady, deliveryTimeout, 10*time.Millisecond)
 	})
 
-	t.Run("a source that is down fails the initial fetch", func(t *testing.T) {
+	t.Run("a source that is down does not stop the provider", func(t *testing.T) {
 		fs := newFlagServer(t, "", "")
 		uri := fs.URL + "/flags"
 		fs.Close()
 
-		provider, _ := buildSource(t, sync.SourceConfig{URI: uri, Provider: "http", Interval: 1})
-		require.NoError(t, provider.Init(context.Background()))
-		require.Error(t, provider.Sync(context.Background(), make(chan sync.DataSync, 1)))
+		src := startSource(t, sync.SourceConfig{URI: uri, Provider: "http", Interval: 1})
+		src.requireNoDelivery(t)
+		require.False(t, src.provider.IsReady())
+		select {
+		case err := <-src.syncErr:
+			t.Fatalf("the provider stopped with %v", err)
+		default:
+		}
 	})
 }

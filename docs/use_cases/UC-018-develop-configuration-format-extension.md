@@ -134,7 +134,7 @@ A document is the flags of one flag set from one source. A source whose flag con
 
 ### BR-009: Decoding Belongs to the Core
 
-The core decodes JSON, YAML and TOML flag configurations before the configuration format sees them (FR-049). A configuration format handles only its schema, and the same configuration format reads a flag configuration in any encoding the core decodes.
+The core decodes JSON and YAML flag configurations before the configuration format sees them (FR-049). A configuration format handles only its schema, and the same configuration format reads a flag configuration in any encoding the core decodes.
 
 ### BR-010: flagd's Configuration Format Rejects What flagd Rejects Today
 
@@ -155,7 +155,6 @@ This use case is `Implemented` for the configuration format side: the interface,
 
 - Main scenario steps 8–9 and BR-007 (tag and publish the module, select it in a manifest by module path and version): UC-001 Build Custom Distribution and UC-012.
 - BR-002, flag sync half (the flag sync endpoint sends documents only to a request that names the format, FR-044): UC-017.
-- BR-009 and FR-049 beyond JSON (the core decodes YAML and TOML before the format sees them): a later slice of the core, not yet assigned to a use case; YAML is converted where it is today.
 - BR-008, consumers of the reported facts: the OFREP endpoint derives ETags and event stream events from document versions and the runtime publishes configuration change events (UC-004).
 
 - BR-003 for the Kubernetes sync provider, which shapes the flag configuration from the FeatureFlag CRD instead of delivering it unchanged: UC-003.

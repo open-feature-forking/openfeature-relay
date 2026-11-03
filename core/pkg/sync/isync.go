@@ -7,10 +7,11 @@ import (
 )
 
 /*
-ISync implementations watch for changes in the flag sources (HTTP backend, local file, K8s CRDs ...),fetch the latest
-value and communicate to the Runtime with DataSync channel
+StreamingSyncProvider implementations watch for changes in the flag sources (a gRPC stream, K8s CRDs ...), fetch the
+latest value and communicate to the Runtime with DataSync channel. A source that is only read on request is a Fetcher
+that the core's fetching sync provider drives.
 */
-type ISync interface {
+type StreamingSyncProvider interface {
 	// Init is used by the sync provider to initialize its data structures and external dependencies.
 	Init(ctx context.Context) error
 
@@ -25,6 +26,10 @@ type ISync interface {
 	// IsReady shall return true if the provider is ready to communicate with the Runtime
 	IsReady() bool
 }
+
+// ISync is the former name of StreamingSyncProvider, kept as an alias so that existing code compiles. New code uses
+// StreamingSyncProvider.
+type ISync = StreamingSyncProvider
 
 // DataSync is the data contract between Runtime and sync implementations
 type DataSync struct {
@@ -69,6 +74,10 @@ type SourceConfig struct {
 	Headers            map[string]string `json:"headers,omitempty"`
 
 	OAuth *OAuthCredentialHandler `json:"oauth,omitempty"`
+
+	// Triggers are the fetch triggers of a fetcher source. Without them the source gets the default triggers of its
+	// factory, or the core's poller when the factory declares none.
+	Triggers []TriggerConfig `json:"triggers,omitempty"`
 }
 
 // OAuthCredentialHandler is a helper to manager OAuth 2.0 tokens, including re-loading of tokens.

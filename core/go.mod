@@ -5,7 +5,6 @@ go 1.26.0
 require (
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-memdb v1.3.5
-	github.com/robfig/cron/v3 v3.0.1
 	github.com/stretchr/testify v1.12.1
 	go.uber.org/mock v0.5.2
 	go.uber.org/zap v1.27.0

@@ -6,9 +6,6 @@ import (
 	"fmt"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	"github.com/open-feature-forking/openfeature-relay/sync/azblob"
-	"github.com/open-feature-forking/openfeature-relay/sync/gcs"
-	"github.com/open-feature-forking/openfeature-relay/sync/s3"
 )
 
 // ParseSources parse a json formatted SourceConfig array string and performs validations on the content
@@ -30,62 +27,32 @@ func ParseSources(sourcesFlag string) ([]sync.SourceConfig, error) {
 }
 
 // ParseSyncProviderURIs uri flag based sync sources to SourceConfig array. Replaces uri prefixes where necessary to
-// derive SourceConfig
-func ParseSyncProviderURIs(uris []string) ([]sync.SourceConfig, error) {
+// derive SourceConfig. Each URI is claimed by the first factory whose scheme it starts with; without factories, the
+// official ones.
+func ParseSyncProviderURIs(uris []string, factories ...sync.Factory) ([]sync.SourceConfig, error) {
+	if len(factories) == 0 {
+		factories = Official()
+	}
 	syncProvidersParsed := []sync.SourceConfig{}
 
 	for _, uri := range uris {
-		switch uriB := []byte(uri); {
-		case regFile.Match(uriB):
-			syncProvidersParsed = append(syncProvidersParsed, sync.SourceConfig{
-				URI:      regFile.ReplaceAllString(uri, ""),
-				Provider: syncProviderFile,
-			})
-		case regCrd.Match(uriB):
-			syncProvidersParsed = append(syncProvidersParsed, sync.SourceConfig{
-				URI:      regCrd.ReplaceAllString(uri, ""),
-				Provider: syncProviderKubernetes,
-			})
-		case regURL.Match(uriB):
-			syncProvidersParsed = append(syncProvidersParsed, sync.SourceConfig{
-				URI:      uri,
-				Provider: syncProviderHTTP,
-			})
-		case regGRPC.Match(uriB):
-			syncProvidersParsed = append(syncProvidersParsed, sync.SourceConfig{
-				URI:      regGRPC.ReplaceAllString(uri, ""),
-				Provider: syncProviderGrpc,
-			})
-		case regGRPCSecure.Match(uriB):
-			syncProvidersParsed = append(syncProvidersParsed, sync.SourceConfig{
-				URI:      regGRPCSecure.ReplaceAllString(uri, ""),
-				Provider: syncProviderGrpc,
-				TLS:      true,
-			})
-		case regGRPCCustomResolver.Match(uriB):
-			syncProvidersParsed = append(syncProvidersParsed, sync.SourceConfig{
-				URI:      uri,
-				Provider: syncProviderGrpc,
-			})
-		case gcs.Matches(uri):
-			syncProvidersParsed = append(syncProvidersParsed, sync.SourceConfig{
-				URI:      uri,
-				Provider: syncProviderGcs,
-			})
-		case azblob.Matches(uri):
-			syncProvidersParsed = append(syncProvidersParsed, sync.SourceConfig{
-				URI:      uri,
-				Provider: syncProviderAzblob,
-			})
-		case s3.Matches(uri):
-			syncProvidersParsed = append(syncProvidersParsed, sync.SourceConfig{
-				URI:      uri,
-				Provider: syncProviderS3,
-			})
-		default:
+		source, claimed := parseURI(uri, factories)
+		if !claimed {
 			return syncProvidersParsed, fmt.Errorf("invalid sync uri argument: %s, must start with 'file:', "+
 				"'http(s)://', 'grpc(s)://', 'gs://', 'azblob://', 's3://' or 'core.openfeature.dev'", uri)
 		}
+		syncProvidersParsed = append(syncProvidersParsed, source)
 	}
 	return syncProvidersParsed, nil
+}
+
+func parseURI(uri string, factories []sync.Factory) (sync.SourceConfig, bool) {
+	for _, f := range factories {
+		if sf, ok := f.(sync.SchemeFactory); ok {
+			if source, claimed := sf.ParseURI(uri); claimed {
+				return source, true
+			}
+		}
+	}
+	return sync.SourceConfig{}, false
 }
