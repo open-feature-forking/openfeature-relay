@@ -165,7 +165,8 @@ func TestRoutedSingleEvaluatorAllocs(t *testing.T) {
 	ctx := context.Background()
 	viaRouter := testing.AllocsPerRun(200, func() { _, _, _, _, _ = routed.ResolveBooleanValue(ctx, "id", "flagd-only", nil) })
 	alone := testing.AllocsPerRun(200, func() { _, _, _, _, _ = direct.ResolveBooleanValue(ctx, "id", "flagd-only", nil) })
-	require.LessOrEqual(t, viaRouter, alone)
+	// under -race a sync.Pool drops some of the buffers it is given, which adds an allocation to a run now and then
+	require.LessOrEqual(t, viaRouter, alone+1)
 }
 
 func TestNewEvaluatorOverAnotherStoreServesWithoutRouter(t *testing.T) {
