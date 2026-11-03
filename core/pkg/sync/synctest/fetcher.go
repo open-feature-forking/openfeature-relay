@@ -25,7 +25,7 @@ type FetcherInputs struct {
 // Names of the contract cases of a fetcher (UC-008 BR-002).
 const (
 	CaseFetchesOnce        = "fetches the flag configuration once per request with its source version"
-	CaseReportsUnchanged   = "reports not changed when given the current source version"
+	CaseReportsUnchanged   = "reports not changed when given the current source version, and never without one"
 	CaseNewVersion         = "returns a new source version after the source changed"
 	CaseAbandonsOnDone     = "abandons a running fetch when its context is done"
 	CaseReportsFailedFetch = "reports a failed fetch without returning a flag configuration"
@@ -82,10 +82,12 @@ func CheckFetcher(t testing.TB, f sync.FetcherFactory, in FetcherInputs) Report 
 		describe(res, err, returned)))
 
 	res2, err2, returned2 := fetch(context.Background(), res.Version)
+	// a fetch without a previous version is how a forced fetch asks for the full flag configuration
+	res2b, err2b, returned2b := fetch(context.Background(), "")
 	cases = append(cases, check(CaseReportsUnchanged,
-		returned2 && err2 == nil && res2.Unchanged,
-		"a fetch given the current source version reports Unchanged",
-		describe(res2, err2, returned2)))
+		returned2 && err2 == nil && res2.Unchanged && returned2b && err2b == nil && !res2b.Unchanged,
+		"a fetch given the current source version reports Unchanged, and a fetch without a previous version never does",
+		describe(res2, err2, returned2)+"; without a previous version: "+describe(res2b, err2b, returned2b)))
 
 	in.Change(t)
 	res3, err3, returned3 := fetch(context.Background(), res.Version)

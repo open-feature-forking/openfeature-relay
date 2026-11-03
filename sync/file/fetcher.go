@@ -51,12 +51,11 @@ func (f *Fetcher) Init(context.Context) error {
 	return nil
 }
 
-// Fetch reads the file. A file that has vanished since startup returns no data. Any other failure to read it is an
-// error that wraps sync.ErrRead.
+// Fetch reads the file. A file that has vanished since startup returns no data. Any other failure to read it is an error.
 func (f *Fetcher) Fetch(_ context.Context, previous string) (sync.FetchResult, error) {
 	data, err := os.ReadFile(f.path)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return sync.FetchResult{}, fmt.Errorf("error reading file %s: %w", f.path, errors.Join(sync.ErrRead, err))
+		return sync.FetchResult{}, fmt.Errorf("error reading file %s: %w", f.path, err)
 	}
 	// a file that does not exist holds no data, like an empty one
 	version := utils.GenerateSha(data)
