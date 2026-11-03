@@ -12,7 +12,6 @@ import (
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	"github.com/open-feature-forking/openfeature-relay/sync/blob"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/bloburi"
 	buildermock "github.com/open-feature-forking/openfeature-relay/sync/builder/mock"
 	"github.com/stretchr/testify/require"
@@ -29,12 +28,18 @@ func providerKind(res Resolution) string {
 	}
 }
 
+// bucketObject is what a blob fetcher tells about its source.
+type bucketObject interface {
+	Bucket() string
+	Object() string
+}
+
 // blobSourceName returns the source name a blob source delivers with.
 func blobSourceName(t *testing.T, res Resolution) string {
 	t.Helper()
 
-	f, ok := res.Fetcher.(*blob.Fetcher)
-	require.True(t, ok)
+	f, ok := res.Fetcher.(bucketObject)
+	require.True(t, ok, "want a blob fetcher, got %T", res.Fetcher)
 	return bloburi.Join(f.Bucket(), f.Object())
 }
 
