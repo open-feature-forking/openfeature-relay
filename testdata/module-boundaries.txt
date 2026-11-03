@@ -27,3 +27,6 @@ sync/s3:./...:cloud.google.com|github.com/Azure|openfeature-relay/(telemetry|syn
 sync/builder:./...:openfeature-relay/telemetry/
 # The telemetry module imports core only: no sync module and no platform client.
 telemetry/otel:./...:openfeature-relay/sync/|k8s.io|gocloud|cloud.google.com|github.com/Azure|github.com/aws
+# BR-009 and FR-048: an engine module's format and evaluator import core only, no telemetry, transport, platform client,
+# JsonLogic engine or other library module (the module's tests run a distribution and carry flagd's runtime).
+test/configformat-example:. ./evaluator:opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud|jsonlogic|jsonschema|openfeature-relay/(sync|telemetry|evaluator|configformat)/
