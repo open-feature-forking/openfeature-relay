@@ -21,7 +21,7 @@
 ## Main Success Scenario
 
 1. Distribution Builder writes a manifest that names the distribution, its version and the output location.
-2. Distribution Builder lists in the manifest the components to compile in, grouped by component type (sync providers, configuration formats, evaluators, engines, service endpoints, and optionally a telemetry provider, middleware and event sinks), each as a component module path with a version.
+2. Distribution Builder lists in the manifest the components to compile in, grouped by component type (sync providers, configuration formats, evaluators, engines, service endpoints, and optionally a telemetry provider, middleware and event sinks), each as a component module path with a version. The manifest can also name the module that provides the distribution's command line, with a version; without it the distribution has the command line of the runtime.
 3. Distribution Builder runs the Builder on the manifest.
 4. Builder validates the manifest.
 5. Builder generates the distribution source into the output location: an entry point that registers the factory of every listed component, and a module definition that requires every listed component module at its declared version.
