@@ -64,7 +64,12 @@ type entry struct {
 // names through one view and, for each (flag set, key), picks the evaluator of the document from the
 // highest-priority source. A bulk request gets one result for each pick; a single key goes to the evaluator of
 // the highest-priority source, which decides between the flag sets of that source as it does without a router.
-// A key no document holds is FLAG_NOT_FOUND.
+// A key no document holds is FLAG_NOT_FOUND. The metadata returned is the selector's, extended by what the
+// evaluators return.
+//
+// The router routes from its own view and each evaluator then reads its own, so a request across several
+// formats is not one snapshot: a delivery between the two reads can move a key. Consistency (BR-011) holds
+// for each evaluator.
 func (r *Router) Evaluate(ctx context.Context, req evaluator.Request, dst []evaluator.Result) ([]evaluator.Result, model.Metadata, error) {
 	if len(r.routes) == 1 {
 		return r.routes[0].Evaluator.Evaluate(ctx, req, dst)
@@ -96,6 +101,10 @@ func (r *Router) Evaluate(ctx context.Context, req evaluator.Request, dst []eval
 	}
 
 	var results []evaluator.Result
+	merged := model.Metadata{}
+	for k, v := range meta {
+		merged[k] = v
+	}
 	for i, route := range r.routes {
 		if len(keysOf[i]) == 0 {
 			continue
@@ -103,7 +112,7 @@ func (r *Router) Evaluate(ctx context.Context, req evaluator.Request, dst []eval
 		sort.Strings(keysOf[i])
 		sub := req
 		sub.FlagKeys, sub.FlagKey = keysOf[i], ""
-		out, _, err := route.Evaluator.Evaluate(ctx, sub, nil)
+		out, routeMeta, err := route.Evaluator.Evaluate(ctx, sub, nil)
 		if err != nil {
 			for _, key := range keysOf[i] {
 				results = append(results, evaluator.Result{
@@ -113,10 +122,14 @@ func (r *Router) Evaluate(ctx context.Context, req evaluator.Request, dst []eval
 			}
 			continue
 		}
+		for k, v := range routeMeta {
+			if _, ok := merged[k]; !ok {
+				merged[k] = v
+			}
+		}
 		for _, res := range out {
 			// an evaluator answers for every flag set holding a key, including those another format won
-			flagSet, _ := res.Metadata["flagSetId"].(string)
-			if w, ok := winners[pair{flagSet, res.FlagKey}]; ok && w.route != i {
+			if w, ok := winners[pair{res.FlagSet, res.FlagKey}]; ok && w.route != i {
 				continue
 			}
 			results = append(results, res)
@@ -136,14 +149,12 @@ func (r *Router) Evaluate(ctx context.Context, req evaluator.Request, dst []eval
 		if !req.Bulk {
 			return slices.Index(req.FlagKeys, results[a].FlagKey) < slices.Index(req.FlagKeys, results[b].FlagKey)
 		}
-		fa, _ := results[a].Metadata["flagSetId"].(string)
-		fb, _ := results[b].Metadata["flagSetId"].(string)
-		if fa != fb {
-			return fa < fb
+		if results[a].FlagSet != results[b].FlagSet {
+			return results[a].FlagSet < results[b].FlagSet
 		}
 		return results[a].FlagKey < results[b].FlagKey
 	})
-	return append(dst, results...), meta, nil
+	return append(dst, results...), merged, nil
 }
 
 func (r *Router) single(
