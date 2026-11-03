@@ -20,3 +20,5 @@ sync/s3:openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|openfeature-oper
 telemetry/otel:openfeature-relay/sync/|k8s.io|gocloud.dev|github.com/Azure|github.com/aws
 # BR-001 of UC-003: the module graph of the example sync extension is that of core.
 test/sync-example:robfig|opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|cloud.google.com|github.com/Azure|github.com/aws|open-feature/flagd/flagd|openfeature-relay/(sync|telemetry|evaluator|configformat)/
+# The example telemetry provider requires the core only: no telemetry SDK, transport or flagd module.
+test/telemetry-example:robfig|opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|cloud.google.com|github.com/Azure|github.com/aws|prometheus|open-feature/flagd/flagd|openfeature-relay/(sync|telemetry|evaluator|configformat)/
