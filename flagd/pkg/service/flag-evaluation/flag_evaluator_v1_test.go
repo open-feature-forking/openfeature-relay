@@ -272,7 +272,7 @@ func BenchmarkFlag_EvaluationV2_ResolveBoolean(b *testing.B) {
 			tt.evalFields.metadata,
 			tt.wantErr,
 		).AnyTimes()
-		metrics, exp := getMetricReader()
+		metrics, exp := getBenchmarkMetricReader()
 		s := NewFlagEvaluationService(
 			logger.NewLogger(nil, false),
 			eval,
@@ -431,7 +431,7 @@ func BenchmarkFlag_EvaluationV2_ResolveString(b *testing.B) {
 			tt.evalFields.metadata,
 			tt.wantErr,
 		).AnyTimes()
-		metrics, exp := getMetricReader()
+		metrics, exp := getBenchmarkMetricReader()
 		s := NewFlagEvaluationService(
 			logger.NewLogger(nil, false),
 			eval,
@@ -589,7 +589,7 @@ func BenchmarkFlag_EvaluationV2_ResolveFloat(b *testing.B) {
 			tt.evalFields.metadata,
 			tt.wantErr,
 		).AnyTimes()
-		metrics, exp := getMetricReader()
+		metrics, exp := getBenchmarkMetricReader()
 		s := NewFlagEvaluationService(
 			logger.NewLogger(nil, false),
 			eval,
@@ -747,7 +747,7 @@ func BenchmarkFlag_EvaluationV2_ResolveInt(b *testing.B) {
 			tt.evalFields.metadata,
 			tt.wantErr,
 		).AnyTimes()
-		metrics, exp := getMetricReader()
+		metrics, exp := getBenchmarkMetricReader()
 		s := NewFlagEvaluationService(
 			logger.NewLogger(nil, false),
 			eval,
@@ -916,7 +916,7 @@ func BenchmarkFlag_EvaluationV2_ResolveObject(b *testing.B) {
 			tt.evalFields.metadata,
 			tt.wantErr,
 		).AnyTimes()
-		metrics, exp := getMetricReader()
+		metrics, exp := getBenchmarkMetricReader()
 		s := NewFlagEvaluationService(
 			logger.NewLogger(nil, false),
 			eval,
