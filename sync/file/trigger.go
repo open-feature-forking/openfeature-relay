@@ -118,6 +118,8 @@ func (w *watchTrigger) Run(ctx context.Context, signal func()) error {
 		if watcher, err = w.openWatcher(ctx); err != nil {
 			return err
 		}
+		// the file may have changed since the watcher before this one was lost, which this watcher does not report
+		signal()
 	}
 	defer watcher.Close()
 

@@ -93,7 +93,6 @@ func TestFetcher(t *testing.T) {
 		path := filepath.Join(dir, "locked.json")
 		require.NoError(t, os.WriteFile(path, []byte(flagsA), 0o000))
 		_, err := NewFetcher(path).Fetch(context.Background(), "")
-		require.ErrorIs(t, err, sync.ErrRead)
 		require.ErrorIs(t, err, os.ErrPermission)
 	})
 }

@@ -305,22 +305,29 @@ func TestUnchangedDeliversNothing(t *testing.T) {
 		r.none(t)
 	})
 
-	t.Run("the fetcher reports unchanged", func(t *testing.T) {
-		var calls atomic.Int32
-		fetcher := fetcherFunc(func(_ context.Context, previous string) (sync.FetchResult, error) {
-			if calls.Add(1) > 1 {
-				return sync.FetchResult{Unchanged: true, Data: []byte(flagsV2)}, nil
-			}
-			return result("v1", flagsV1), nil
-		})
-		trigger := newManualTrigger()
-		r := start(t, Options{Fetcher: fetcher, Triggers: []sync.Trigger{trigger}})
-		r.next(t)
+	// A result that is unchanged would deliver if the check were missing: the first carries data the core can decode,
+	// the second none, which would be delivered as an empty flag configuration.
+	for name, unchanged := range map[string]sync.FetchResult{
+		"the fetcher reports unchanged with data":    {Unchanged: true, Data: []byte(flagsV2), Extension: ".json"},
+		"the fetcher reports unchanged without data": {Unchanged: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var calls atomic.Int32
+			fetcher := fetcherFunc(func(_ context.Context, previous string) (sync.FetchResult, error) {
+				if calls.Add(1) > 1 {
+					return unchanged, nil
+				}
+				return result("v1", flagsV1), nil
+			})
+			trigger := newManualTrigger()
+			r := start(t, Options{Fetcher: fetcher, Triggers: []sync.Trigger{trigger}})
+			r.next(t)
 
-		trigger.signal(t)()
-		require.Eventually(t, func() bool { return calls.Load() == 2 }, timeout, time.Millisecond)
-		r.none(t)
-	})
+			trigger.signal(t)()
+			require.Eventually(t, func() bool { return calls.Load() == 2 }, timeout, time.Millisecond)
+			r.none(t)
+		})
+	}
 }
 
 func TestFailedFetchDeliversNothing(t *testing.T) {
@@ -567,7 +574,7 @@ func TestReadErrorKeepsTheFlags(t *testing.T) {
 		if calls.Add(1) == 1 {
 			return result("v1", flagsV1), nil
 		}
-		return sync.FetchResult{}, fmt.Errorf("%w: permission denied", sync.ErrRead)
+		return sync.FetchResult{}, errors.New("permission denied")
 	})
 	trigger := newManualTrigger()
 	r := start(t, Options{Fetcher: fetcher, Triggers: []sync.Trigger{trigger}})
@@ -660,4 +667,27 @@ func TestInitInitializesTriggers(t *testing.T) {
 	err := provider.Init(context.Background())
 	require.ErrorContains(t, err, "no such path")
 	require.Equal(t, int32(1), trigger.inited.Load())
+}
+
+// TestRestartedTriggerQueuesAFetch: what a trigger would have signalled while it was not running is lost, so the
+// provider fetches once when it runs the trigger again.
+func TestRestartedTriggerQueuesAFetch(t *testing.T) {
+	var fetches, runs atomic.Int32
+	fetcher := fetcherFunc(func(context.Context, string) (sync.FetchResult, error) {
+		if fetches.Add(1) == 1 {
+			return result("v1", flagsV1), nil
+		}
+		return result("v2", flagsV2), nil
+	})
+	trigger := funcTrigger(func(ctx context.Context, _ func()) error {
+		if runs.Add(1) == 1 {
+			return errors.New("the watch closed")
+		}
+		<-ctx.Done()
+		return nil
+	})
+	r := start(t, Options{Fetcher: fetcher, Triggers: []sync.Trigger{trigger}, Interval: 5 * time.Millisecond})
+
+	require.Equal(t, flagsV1, r.next(t).FlagData)
+	require.Equal(t, flagsV2, r.next(t).FlagData, "the change made while the trigger was not running is fetched")
 }

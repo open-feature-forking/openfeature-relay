@@ -2,7 +2,6 @@ package sync
 
 import (
 	"context"
-	"errors"
 )
 
 // Fetcher reads one source on request. It knows nothing about when to fetch: the core's fetching sync provider
@@ -41,10 +40,6 @@ type FetchResult struct {
 	// did not.
 	Unchanged bool
 }
-
-// ErrRead marks a failed fetch that could not read the source's content, as opposed to reaching the source. A fetcher
-// wraps its error with it (fmt.Errorf("...: %w", ...) joined with ErrRead).
-var ErrRead = errors.New("unable to read the source")
 
 // Trigger tells the fetcher of a source to fetch. It never fetches and never delivers a flag configuration itself.
 type Trigger interface {

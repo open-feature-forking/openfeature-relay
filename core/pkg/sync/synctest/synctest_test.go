@@ -29,11 +29,12 @@ const (
 type fetcherBug string
 
 const (
-	fetcherOK            fetcherBug = ""
-	fetcherAlwaysChanged fetcherBug = "never reports unchanged"
-	fetcherSameVersion   fetcherBug = "returns the same version after a change"
-	fetcherDataOnFailure fetcherBug = "returns a flag configuration when the fetch fails"
-	fetcherHangs         fetcherBug = "does not return when its context is done"
+	fetcherOK             fetcherBug = ""
+	fetcherAlwaysChanged  fetcherBug = "never reports unchanged"
+	fetcherSameVersion    fetcherBug = "returns the same version after a change"
+	fetcherDataOnFailure  fetcherBug = "returns a flag configuration when the fetch fails"
+	fetcherHangs          fetcherBug = "does not return when its context is done"
+	fetcherEmptyUnchanged fetcherBug = "reports unchanged for an empty previous version after the first fetch"
 )
 
 type memSource struct {
@@ -59,6 +60,7 @@ type stubFetcher struct {
 	src     *memSource
 	bug     fetcherBug
 	release chan struct{}
+	calls   int
 }
 
 func (f *stubFetcher) Fetch(ctx context.Context, previous string) (sync.FetchResult, error) {
@@ -77,6 +79,10 @@ func (f *stubFetcher) Fetch(ctx context.Context, previous string) (sync.FetchRes
 			return sync.FetchResult{Data: []byte(f.src.data), Version: version}, nil
 		}
 		return sync.FetchResult{}, errors.New("the source is down")
+	}
+	f.calls++
+	if f.bug == fetcherEmptyUnchanged && previous == "" && f.calls > 1 {
+		return sync.FetchResult{Unchanged: true}, nil
 	}
 	if previous == version && f.bug != fetcherAlwaysChanged {
 		return sync.FetchResult{Unchanged: true}, nil
@@ -140,6 +146,7 @@ func TestFetcherContract(t *testing.T) {
 		fail string
 	}{
 		{fetcherAlwaysChanged, synctest.CaseReportsUnchanged},
+		{fetcherEmptyUnchanged, synctest.CaseReportsUnchanged},
 		{fetcherSameVersion, synctest.CaseNewVersion},
 		{fetcherDataOnFailure, synctest.CaseReportsFailedFetch},
 		{fetcherHangs, synctest.CaseAbandonsOnDone},
