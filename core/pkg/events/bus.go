@@ -124,7 +124,7 @@ func (b *Bus) Publish(e Event) {
 		if change, ok := e.(ConfigurationChange); ok {
 			// the drops so far travel with this event; they are counted again if it is dropped too
 			missed = s.missed.Swap(0)
-			change.Missed = int(missed)
+			change.Missed += int(missed)
 			out = change
 		}
 		select {

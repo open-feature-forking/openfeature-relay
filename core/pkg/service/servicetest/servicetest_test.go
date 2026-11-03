@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -101,6 +102,9 @@ func (e *stubEndpoint) resolve(w http.ResponseWriter, r *http.Request) {
 		selector, err = store.NewSelector(clientSelector)
 	} else {
 		selector, err = middleware.EffectiveSelector(ctx, clientSelector)
+		if err != nil && !errors.Is(err, middleware.ErrNoFlags) && e.broken == "fails open on an invalid bound selector" {
+			selector, err = store.NewSelector(clientSelector)
+		}
 	}
 	if err != nil {
 		code := "INVALID"
@@ -178,7 +182,8 @@ func (e *stubEndpoint) watch(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			change := ev.(events.ConfigurationChange)
-			if e.broken != "announces every change" && change.FlagSet != selector.FlagSetId() {
+			seesMissed := change.Missed > 0 && e.broken != "ignores missed events"
+			if e.broken != "announces every change" && !seesMissed && change.FlagSet != selector.FlagSetId() {
 				continue
 			}
 			_, _ = fmt.Fprintln(w, "change")
@@ -494,6 +499,20 @@ func TestBrokenStubsFailExactlyTheirCases(t *testing.T) {
 			inputs:   inputsFor(serverFeatures, false),
 			wantFail: []string{nameReacts},
 			wantText: "expected no announcement for a change that does not concern the client's selector",
+		},
+		{
+			broken:   "ignores missed events",
+			factory:  stub{typeName: "x", features: serverFeatures, broken: "ignores missed events"},
+			inputs:   inputsFor(serverFeatures, false),
+			wantFail: []string{nameReacts},
+			wantText: "the endpoint did not reread the store",
+		},
+		{
+			broken:   "fails open on an invalid bound selector",
+			factory:  stub{typeName: "x", needs: service.Needs{Router: true}, features: resolverFeatures, broken: "fails open on an invalid bound selector"},
+			inputs:   inputsFor(resolverFeatures, true),
+			wantFail: []string{nameSelector},
+			wantText: `selector row "invalid bound selector"`,
 		},
 		{
 			broken:   "keeps the origin",

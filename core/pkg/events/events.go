@@ -36,7 +36,8 @@ type ConfigurationChange struct {
 	// Added, Updated and Removed name the flag keys the document gained, changed and lost.
 	Added, Updated, Removed []string
 	// Missed is the number of configuration change events dropped for the subscription since the one it
-	// received last. A subscriber that sees it above zero rereads the store.
+	// received last, plus the number the publisher reports as lost before it published. A subscriber that sees
+	// it above zero rereads the store.
 	Missed int
 }
 
