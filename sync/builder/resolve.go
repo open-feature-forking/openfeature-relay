@@ -40,7 +40,7 @@ func (sb *SyncBuilder) Resolve(source sync.SourceConfig, log *logger.Logger) (Re
 				return Resolution{}, fmt.Errorf("the %s sync provider streams its source and takes no fetch triggers", source.Provider)
 			}
 			provider, err := streamingFactory.CreateStreaming(sync.Settings{
-				Source: source, Logger: log, Metrics: sb.SyncMetricsRecorder,
+				Source: source, Logger: log, Metrics: sb.SyncMetricsRecorder, Telemetry: sb.Telemetry,
 			})
 			if err != nil {
 				return Resolution{}, err
@@ -85,7 +85,7 @@ func (sb *SyncBuilder) resolveFetcher(
 	if parsed, claimed := f.ParseURI(source.URI); claimed {
 		source.URI = parsed.URI
 	}
-	fetcher, err := f.CreateFetcher(sync.Settings{Source: source, Logger: log, Metrics: sb.SyncMetricsRecorder})
+	fetcher, err := f.CreateFetcher(sync.Settings{Source: source, Logger: log, Metrics: sb.SyncMetricsRecorder, Telemetry: sb.Telemetry})
 	if err != nil {
 		return Resolution{}, err
 	}

@@ -12,21 +12,18 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
-	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
+	flagdService "github.com/open-feature-forking/openfeature-relay/service/transport"
 	"github.com/rs/xid"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type FlagEvaluationService struct {
 	logger                     *logger.Logger
 	eval                       evaluator.IResolver
-	metrics                    telemetry.IMetricsRecorder
+	metrics                    *flagdService.Metrics
 	eventingConfiguration      IEvents
-	flagEvalTracer             trace.Tracer
+	flagEvalTracer             telemetry.Tracer
 	contextValues              map[string]any
 	headerToContextKeyMappings map[string]string
 	deadline                   time.Duration
@@ -36,7 +33,7 @@ type FlagEvaluationService struct {
 func NewFlagEvaluationService(log *logger.Logger,
 	eval evaluator.IResolver,
 	eventingCfg IEvents,
-	metricsRecorder telemetry.IMetricsRecorder,
+	tp telemetry.Provider,
 	contextValues map[string]any,
 	headerToContextKeyMappings map[string]string,
 	streamDeadline time.Duration,
@@ -44,16 +41,12 @@ func NewFlagEvaluationService(log *logger.Logger,
 	svc := &FlagEvaluationService{
 		logger:                     log,
 		eval:                       eval,
-		metrics:                    &telemetry.NoopMetricsRecorder{},
+		metrics:                    flagdService.NewMetrics(telemetry.OrNoop(tp).Meter(flagdService.MetricsScope)),
 		eventingConfiguration:      eventingCfg,
-		flagEvalTracer:             otel.Tracer("flagd.evaluation.v1"),
+		flagEvalTracer:             telemetry.OrNoop(tp).Tracer("flagd.evaluation.v1"),
 		contextValues:              contextValues,
 		headerToContextKeyMappings: headerToContextKeyMappings,
 		deadline:                   streamDeadline,
-	}
-
-	if metricsRecorder != nil {
-		svc.metrics = metricsRecorder
 	}
 
 	return svc
@@ -67,7 +60,7 @@ func (s *FlagEvaluationService) ResolveAll(
 	reqID := xid.New().String()
 	defer s.logger.ClearFields(reqID)
 
-	ctx, span := s.flagEvalTracer.Start(ctx, "resolveAll", trace.WithSpanKind(trace.SpanKindServer))
+	ctx, span := s.flagEvalTracer.Start(ctx, "resolveAll", telemetry.WithSpanKind(telemetry.SpanKindServer))
 	defer span.End()
 
 	res := &evalV1.ResolveAllResponse{
@@ -88,7 +81,7 @@ func (s *FlagEvaluationService) ResolveAll(
 		return nil, fmt.Errorf("error resolving flags. Tracking ID: %s", reqID)
 	}
 
-	span.SetAttributes(attribute.Int("feature_flag.count", len(resolutions)))
+	span.SetAttributes(telemetry.Int("feature_flag.count", len(resolutions)))
 	for _, resolved := range resolutions {
 		// register the impression and reason for each flag evaluated
 		s.metrics.RecordEvaluation(
@@ -228,7 +221,7 @@ func (s *FlagEvaluationService) ResolveBoolean(
 	ctx context.Context,
 	req *connect.Request[evalV1.ResolveBooleanRequest],
 ) (*connect.Response[evalV1.ResolveBooleanResponse], error) {
-	ctx, span := s.flagEvalTracer.Start(ctx, "resolveBoolean", trace.WithSpanKind(trace.SpanKindServer))
+	ctx, span := s.flagEvalTracer.Start(ctx, "resolveBoolean", telemetry.WithSpanKind(telemetry.SpanKindServer))
 	defer span.End()
 
 	selector, err := selectorFromHeader(req.Header())
@@ -241,6 +234,7 @@ func (s *FlagEvaluationService) ResolveBoolean(
 	res := connect.NewResponse(&evalV1.ResolveBooleanResponse{})
 	err = resolve(
 		ctx,
+		span,
 		s.logger,
 		s.eval.ResolveBooleanValue,
 		req.Header(),
@@ -253,7 +247,7 @@ func (s *FlagEvaluationService) ResolveBoolean(
 	)
 	if err != nil {
 		span.RecordError(err)
-		span.SetStatus(codes.Error, fmt.Sprintf("error evaluating flag with key %s", req.Msg.GetFlagKey()))
+		span.SetError(fmt.Sprintf("error evaluating flag with key %s", req.Msg.GetFlagKey()))
 	}
 
 	return res, err
@@ -263,7 +257,7 @@ func (s *FlagEvaluationService) ResolveString(
 	ctx context.Context,
 	req *connect.Request[evalV1.ResolveStringRequest],
 ) (*connect.Response[evalV1.ResolveStringResponse], error) {
-	ctx, span := s.flagEvalTracer.Start(ctx, "resolveString", trace.WithSpanKind(trace.SpanKindServer))
+	ctx, span := s.flagEvalTracer.Start(ctx, "resolveString", telemetry.WithSpanKind(telemetry.SpanKindServer))
 	defer span.End()
 
 	selector, err := selectorFromHeader(req.Header())
@@ -276,6 +270,7 @@ func (s *FlagEvaluationService) ResolveString(
 	res := connect.NewResponse(&evalV1.ResolveStringResponse{})
 	err = resolve(
 		ctx,
+		span,
 		s.logger,
 		s.eval.ResolveStringValue,
 		req.Header(),
@@ -288,7 +283,7 @@ func (s *FlagEvaluationService) ResolveString(
 	)
 	if err != nil {
 		span.RecordError(err)
-		span.SetStatus(codes.Error, fmt.Sprintf("error evaluating flag with key %s", req.Msg.GetFlagKey()))
+		span.SetError(fmt.Sprintf("error evaluating flag with key %s", req.Msg.GetFlagKey()))
 	}
 
 	return res, err
@@ -298,7 +293,7 @@ func (s *FlagEvaluationService) ResolveInt(
 	ctx context.Context,
 	req *connect.Request[evalV1.ResolveIntRequest],
 ) (*connect.Response[evalV1.ResolveIntResponse], error) {
-	ctx, span := s.flagEvalTracer.Start(ctx, "resolveInt", trace.WithSpanKind(trace.SpanKindServer))
+	ctx, span := s.flagEvalTracer.Start(ctx, "resolveInt", telemetry.WithSpanKind(telemetry.SpanKindServer))
 	defer span.End()
 
 	selector, err := selectorFromHeader(req.Header())
@@ -311,6 +306,7 @@ func (s *FlagEvaluationService) ResolveInt(
 	res := connect.NewResponse(&evalV1.ResolveIntResponse{})
 	err = resolve(
 		ctx,
+		span,
 		s.logger,
 		s.eval.ResolveIntValue,
 		req.Header(),
@@ -323,7 +319,7 @@ func (s *FlagEvaluationService) ResolveInt(
 	)
 	if err != nil {
 		span.RecordError(err)
-		span.SetStatus(codes.Error, fmt.Sprintf("error evaluating flag with key %s", req.Msg.GetFlagKey()))
+		span.SetError(fmt.Sprintf("error evaluating flag with key %s", req.Msg.GetFlagKey()))
 	}
 
 	return res, err
@@ -333,7 +329,7 @@ func (s *FlagEvaluationService) ResolveFloat(
 	ctx context.Context,
 	req *connect.Request[evalV1.ResolveFloatRequest],
 ) (*connect.Response[evalV1.ResolveFloatResponse], error) {
-	ctx, span := s.flagEvalTracer.Start(ctx, "resolveFloat", trace.WithSpanKind(trace.SpanKindServer))
+	ctx, span := s.flagEvalTracer.Start(ctx, "resolveFloat", telemetry.WithSpanKind(telemetry.SpanKindServer))
 	defer span.End()
 
 	selector, err := selectorFromHeader(req.Header())
@@ -346,6 +342,7 @@ func (s *FlagEvaluationService) ResolveFloat(
 	res := connect.NewResponse(&evalV1.ResolveFloatResponse{})
 	err = resolve(
 		ctx,
+		span,
 		s.logger,
 		s.eval.ResolveFloatValue,
 		req.Header(),
@@ -358,7 +355,7 @@ func (s *FlagEvaluationService) ResolveFloat(
 	)
 	if err != nil {
 		span.RecordError(err)
-		span.SetStatus(codes.Error, fmt.Sprintf("error evaluating flag with key %s", req.Msg.GetFlagKey()))
+		span.SetError(fmt.Sprintf("error evaluating flag with key %s", req.Msg.GetFlagKey()))
 	}
 
 	return res, err
@@ -368,7 +365,7 @@ func (s *FlagEvaluationService) ResolveObject(
 	ctx context.Context,
 	req *connect.Request[evalV1.ResolveObjectRequest],
 ) (*connect.Response[evalV1.ResolveObjectResponse], error) {
-	ctx, span := s.flagEvalTracer.Start(ctx, "resolveObject", trace.WithSpanKind(trace.SpanKindServer))
+	ctx, span := s.flagEvalTracer.Start(ctx, "resolveObject", telemetry.WithSpanKind(telemetry.SpanKindServer))
 	defer span.End()
 
 	selector, err := selectorFromHeader(req.Header())
@@ -381,6 +378,7 @@ func (s *FlagEvaluationService) ResolveObject(
 	res := connect.NewResponse(&evalV1.ResolveObjectResponse{})
 	err = resolve(
 		ctx,
+		span,
 		s.logger,
 		s.eval.ResolveObjectValue,
 		req.Header(),
@@ -393,7 +391,7 @@ func (s *FlagEvaluationService) ResolveObject(
 	)
 	if err != nil {
 		span.RecordError(err)
-		span.SetStatus(codes.Error, fmt.Sprintf("error evaluating flag with key %s", req.Msg.GetFlagKey()))
+		span.SetError(fmt.Sprintf("error evaluating flag with key %s", req.Msg.GetFlagKey()))
 	}
 
 	return res, err

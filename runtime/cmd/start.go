@@ -9,7 +9,6 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/fips"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	flagdeval "github.com/open-feature-forking/openfeature-relay/evaluator/flagd"
 	"github.com/open-feature-forking/openfeature-relay/runtime"
 	syncbuilder "github.com/open-feature-forking/openfeature-relay/sync/builder"
 	"github.com/spf13/cobra"
@@ -17,6 +16,17 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+)
+
+// The settings of the telemetry provider of flagd-full, as its documentation names them: the table that maps the flags
+// onto the component they belong to (UC-001 Q15).
+const (
+	telemetryMetricsExporter = "metricsExporter"
+	telemetryCollectorURI    = "collectorURI"
+	telemetryCertPath        = "certPath"
+	telemetryKeyPath         = "keyPath"
+	telemetryCAPath          = "caPath"
+	telemetryReloadInterval  = "reloadInterval"
 )
 
 const (
@@ -182,7 +192,7 @@ var startCmd = &cobra.Command{
 			rtLogger.Fatal("refusing to start", zap.Error(err))
 		}
 
-		syncProviders, err := syncbuilder.ParseSyncProviderURIs(viper.GetStringSlice(uriFlagName), syncbuilder.Official()...)
+		syncProviders, err := syncbuilder.ParseSyncProviderURIs(viper.GetStringSlice(uriFlagName), Components.Sync...)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -222,19 +232,22 @@ var startCmd = &cobra.Command{
 		}
 
 		// Build Runtime -----------------------------------------------------------
+		components := Components
+		components.TelemetryConfig = map[string]any{
+			telemetryMetricsExporter: viper.GetString(metricsExporter),
+			telemetryCollectorURI:    viper.GetString(otelCollectorURI),
+			telemetryCertPath:        viper.GetString(otelCertPathFlagName),
+			telemetryKeyPath:         viper.GetString(otelKeyPathFlagName),
+			telemetryCAPath:          viper.GetString(otelCAPathFlagName),
+			telemetryReloadInterval:  viper.GetDuration(otelReloadIntervalFlagName),
+		}
 		rt, err := runtime.FromConfig(logger, Version, runtime.Config{
 			CORS:                   viper.GetStringSlice(corsFlagName),
-			MetricExporter:         viper.GetString(metricsExporter),
 			ManagementPort:         viper.GetUint16(managementPortFlagName),
 			OfrepServicePort:       viper.GetUint16(ofrepPortFlagName),
 			OfrepSSEEnabled:        viper.GetBool(ofrepSSEEnabledFlagName),
 			OfrepSSEInactivityDel:  viper.GetInt(ofrepSSEInactivityFlagName),
 			OfrepSSEPublicURL:      viper.GetString(ofrepSSEPublicURLFlagName),
-			OtelCollectorURI:       viper.GetString(otelCollectorURI),
-			OtelCertPath:           viper.GetString(otelCertPathFlagName),
-			OtelKeyPath:            viper.GetString(otelKeyPathFlagName),
-			OtelReloadInterval:     viper.GetDuration(otelReloadIntervalFlagName),
-			OtelCAPath:             viper.GetString(otelCAPathFlagName),
 			ServiceCertPath:        viper.GetString(serverCertPathFlagName),
 			ServiceKeyPath:         viper.GetString(serverKeyPathFlagName),
 			ServicePort:            viper.GetUint16(portFlagName),
@@ -245,7 +258,6 @@ var startCmd = &cobra.Command{
 			StreamDeadline:         viper.GetDuration(streamDeadlineFlagName),
 			DisableSyncMetadata:    viper.GetBool(disableSyncMetadata),
 			StrictNumericRange:     viper.GetBool(strictNumericRangeFlagName),
-			EvaluatorSettings:      evaluatorSettings(viper.GetBool(strictNumericRangeFlagName)),
 			//nolint:staticcheck // SA1019 no-ops, read so FromConfig can warn when they are set
 			KeepAliveMinTime: viper.GetDuration(keepAliveMinTimeFlagName),
 			//nolint:staticcheck // SA1019 see above
@@ -255,7 +267,7 @@ var startCmd = &cobra.Command{
 			HeaderToContextKeyMappings:   headerToContextKeyMappings,
 			MaxRequestBodyBytes:          maxRequestBodyBytes,
 			MaxRequestHeaderBytes:        maxRequestHeaderBytes,
-		}, runtime.Official())
+		}, components)
 		if err != nil {
 			rtLogger.Fatal(err.Error())
 		}
@@ -264,12 +276,4 @@ var startCmd = &cobra.Command{
 			rtLogger.Fatal(err.Error())
 		}
 	},
-}
-
-// evaluatorSettings maps the flags that belong to flagd's evaluator to its settings.
-func evaluatorSettings(strictNumericRange bool) map[string]map[string]any {
-	if !strictNumericRange {
-		return nil
-	}
-	return map[string]map[string]any{flagdeval.FactoryType: {"strictNumericRange": true}}
 }

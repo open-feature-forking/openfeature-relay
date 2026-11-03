@@ -17,23 +17,35 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
-	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	compressmw "github.com/open-feature-forking/openfeature-relay/service/transport/middleware/compress"
+	"github.com/open-feature-forking/openfeature-relay/telemetry/otel/oteltest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.uber.org/mock/gomock"
 )
 
-// sizeRecordingMetricsRecorder captures what the metrics middleware reports as the response size,
-// which is the figure operators read as bytes served.
-type sizeRecordingMetricsRecorder struct {
-	telemetry.NoopMetricsRecorder
-	sizes []int64
-}
+// recordedResponseSizes returns what the HTTP server metrics report as the response size of each request, which is
+// the figure operators read as bytes served.
+func recordedResponseSizes(t *testing.T, tel *telemetrytest.Recorder) []int64 {
+	t.Helper()
 
-func (r *sizeRecordingMetricsRecorder) HTTPResponseSize(_ context.Context, sizeBytes int64, _ []attribute.KeyValue) {
-	r.sizes = append(r.sizes, sizeBytes)
+	data, err := tel.Collect(context.Background())
+	require.NoError(t, err)
+	var sizes []int64
+	for _, sm := range data.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			if m.Name != "http.server.response.body.size" {
+				continue
+			}
+			for _, point := range m.Data.(metricdata.Histogram[float64]).DataPoints {
+				require.Equal(t, uint64(1), point.Count, "one request per data point")
+				sizes = append(sizes, int64(point.Sum))
+			}
+		}
+	}
+	return sizes
 }
 
 // evaluations builds a bulk evaluation result of n flags.
@@ -52,7 +64,7 @@ func evaluations(n int) []evaluator.AnyValue {
 }
 
 // compressingHandler builds the production route chain with compression enabled.
-func compressingHandler(t *testing.T, metrics telemetry.IMetricsRecorder, evaluations []evaluator.AnyValue) http.Handler {
+func compressingHandler(t *testing.T, tp telemetry.Provider, evaluations []evaluator.AnyValue) http.Handler {
 	t.Helper()
 
 	eval := mock.NewMockIEvaluator(gomock.NewController(t))
@@ -62,7 +74,7 @@ func compressingHandler(t *testing.T, metrics telemetry.IMetricsRecorder, evalua
 	compression, err := compressmw.New()
 	require.NoError(t, err)
 
-	return NewOfrepHandler(logger.NewLogger(nil, false), eval, nil, nil, metrics, "flagd", SSEConfig{}, compression)
+	return NewOfrepHandler(logger.NewLogger(nil, false), eval, nil, nil, tp, "flagd", SSEConfig{}, compression)
 }
 
 func serveCompressedBulk(handler http.Handler, acceptEncoding, ifNoneMatch string) *httptest.ResponseRecorder {
@@ -79,7 +91,7 @@ func serveCompressedBulk(handler http.Handler, acceptEncoding, ifNoneMatch strin
 }
 
 func TestBulkEvaluationIsCompressed(t *testing.T) {
-	handler := compressingHandler(t, &telemetry.NoopMetricsRecorder{}, evaluations(3))
+	handler := compressingHandler(t, nil, evaluations(3))
 
 	recorder := serveCompressedBulk(handler, "gzip", "")
 
@@ -101,7 +113,7 @@ func TestBulkEvaluationIsCompressed(t *testing.T) {
 // The validator is weak, so it covers the compressed and uncompressed forms of one body alike and
 // a client revalidates successfully whether or not its Accept-Encoding has changed since.
 func TestBulkEvaluationETagIsEncodingAgnostic(t *testing.T) {
-	handler := compressingHandler(t, &telemetry.NoopMetricsRecorder{}, evaluations(3))
+	handler := compressingHandler(t, nil, evaluations(3))
 
 	gzipETag := serveCompressedBulk(handler, "gzip", "").Header().Get("ETag")
 	identityETag := serveCompressedBulk(handler, "identity", "").Header().Get("ETag")
@@ -127,13 +139,14 @@ func TestBulkEvaluationETagIsEncodingAgnostic(t *testing.T) {
 // The metrics middleware sits outside compression, so the size it reports is what actually goes on
 // the wire rather than the body the evaluator produced.
 func TestRecordedResponseSizeIsTheCompressedSize(t *testing.T) {
-	metrics := &sizeRecordingMetricsRecorder{}
-	handler := compressingHandler(t, metrics, evaluations(3))
+	tel := telemetrytest.New()
+	handler := compressingHandler(t, tel, evaluations(3))
 
 	recorder := serveCompressedBulk(handler, "gzip", "")
 
-	require.Len(t, metrics.sizes, 1)
-	assert.Equal(t, int64(recorder.Body.Len()), metrics.sizes[0])
+	sizes := recordedResponseSizes(t, tel)
+	require.Len(t, sizes, 1)
+	assert.Equal(t, int64(recorder.Body.Len()), sizes[0])
 }
 
 // The SSE stream must stay uncompressed so each event reaches subscribers as it is flushed, which
@@ -144,11 +157,10 @@ func TestSSEStreamIsNotCompressed(t *testing.T) {
 	require.NoError(t, err)
 
 	service, err := NewOfrepService(eval, flagStore, []string{"*"}, SvcConfiguration{
-		Logger:          logger.NewLogger(nil, false),
-		Port:            18286,
-		ServiceName:     testServiceName,
-		MetricsRecorder: &telemetry.NoopMetricsRecorder{},
-		SSEEnabled:      true,
+		Logger:      logger.NewLogger(nil, false),
+		Port:        18286,
+		ServiceName: testServiceName,
+		SSEEnabled:  true,
 	}, nil, nil)
 	require.NoError(t, err)
 

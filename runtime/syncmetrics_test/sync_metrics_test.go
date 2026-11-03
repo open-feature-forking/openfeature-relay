@@ -8,6 +8,7 @@ package syncmetrics_test
 import (
 	"context"
 	"fmt"
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -24,6 +25,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature-forking/openfeature-relay/runtime"
+	otelprovider "github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/require"
@@ -134,7 +136,7 @@ func TestSyncMetricsCharacterization(t *testing.T) {
 			{URI: addr, Provider: "grpc"},
 			{URI: addr, Provider: "grpc", Selector: "source=a"},
 		},
-	}, runtime.Official())
+	}, withOpenTelemetry(flagdcomponents.Official()))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -303,3 +305,10 @@ func render(all []series, filePath string) string {
 
 // httpURI is the address of the test's HTTP source, which varies by run.
 var httpURI, emptyURI string
+
+// withOpenTelemetry is the components of flagd-full with the OpenTelemetry telemetry provider, as flagd's command
+// line selects it.
+func withOpenTelemetry(components runtime.Components) runtime.Components {
+	components.Telemetry = otelprovider.NewFactory()
+	return components
+}

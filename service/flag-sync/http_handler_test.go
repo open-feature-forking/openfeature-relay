@@ -12,7 +12,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
-	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
+	flagdService "github.com/open-feature-forking/openfeature-relay/service/transport"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -49,7 +49,7 @@ func TestHTTPHandler_MatchesFetchAllFlags(t *testing.T) {
 	grpcHandler := syncHandler{
 		store:           flagStore,
 		log:             logger.NewLogger(nil, false),
-		metricsRecorder: &telemetry.NoopMetricsRecorder{},
+		metricsRecorder: flagdService.NoopMetrics(),
 	}
 
 	for _, selector := range []string{"", "source=" + testSource1, "source=" + testSource2} {

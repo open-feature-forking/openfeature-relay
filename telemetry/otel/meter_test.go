@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	coretel "github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
+	coretel "github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
@@ -153,4 +153,24 @@ func BenchmarkAttributeConversion(b *testing.B) {
 			r.HTTPRequestDuration(ctx, 100*time.Millisecond, kvs)
 		}
 	})
+}
+
+// TestMeterGauge records through the optional gauge of the core Meter: the SDK keeps the latest value.
+func TestMeterGauge(t *testing.T) {
+	reader := metric.NewManualReader()
+	p := newProvider(t, nil, reader)
+	gauges, ok := p.Meter("scope").(coretel.GaugeMeter)
+	require.True(t, ok, "the OpenTelemetry meter has gauges")
+
+	g := gauges.Int64Gauge("last", coretel.WithDescription("d"), coretel.WithUnit("s"))
+	g.Record(context.Background(), 3, coretel.String("k", "v"))
+	g.Record(context.Background(), 7, coretel.String("k", "v"))
+
+	m := collectByName(t, reader)["last"]
+	require.Equal(t, "s", m.Unit)
+	points := m.Data.(metricdata.Gauge[int64]).DataPoints
+	require.Len(t, points, 1)
+	require.EqualValues(t, 7, points[0].Value)
+	v, _ := points[0].Attributes.Value("k")
+	require.Equal(t, "v", v.AsString())
 }

@@ -23,13 +23,12 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	iservice "github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
-	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	middlewaremock "github.com/open-feature-forking/openfeature-relay/service/transport/middleware/mock"
+	"github.com/open-feature-forking/openfeature-relay/telemetry/otel/oteltest"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
-	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.34.0"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc"
@@ -42,7 +41,7 @@ const resolveAllURLFmt = "http://localhost:%d/flagd.evaluation.v1.Service/Resolv
 // Verifies bounded (route, method) labels on HTTP server metrics.
 func TestConnectServiceHTTPMetricLabels(t *testing.T) {
 	reader := metric.NewManualReader()
-	recorder := telemetry.NewOTelRecorder(reader, resource.NewWithAttributes("testSchema"), "testSvc")
+	recorder := telemetrytest.ProviderFor(reader)
 	svc := NewConnectService(logger.NewLogger(nil, false), nil, nil, recorder)
 	svc.setupHandler(iservice.Configuration{ServiceName: "testSvc"})
 
@@ -182,8 +181,7 @@ func TestConnectServiceUnixConnection(t *testing.T) {
 			).AnyTimes()
 			// configure OTel Metrics
 			exp := metric.NewManualReader()
-			rs := resource.NewWithAttributes("testSchema")
-			metricRecorder := telemetry.NewOTelRecorder(exp, rs, tt.name)
+			metricRecorder := telemetrytest.ProviderFor(exp)
 			svc := NewConnectService(logger.NewLogger(nil, false), eval, nil, metricRecorder)
 			serveConf := iservice.Configuration{
 				ReadinessProbe: func() bool {
@@ -236,8 +234,7 @@ func TestAddMiddleware(t *testing.T) {
 		}))
 
 	exp := metric.NewManualReader()
-	rs := resource.NewWithAttributes("testSchema")
-	metricRecorder := telemetry.NewOTelRecorder(exp, rs, "my-exporter")
+	metricRecorder := telemetrytest.ProviderFor(exp)
 
 	svc := NewConnectService(logger.NewLogger(nil, false), nil, nil, metricRecorder)
 
@@ -288,8 +285,7 @@ func TestConnectServiceNotify(t *testing.T) {
 	}
 
 	exp := metric.NewManualReader()
-	rs := resource.NewWithAttributes("testSchema")
-	metricRecorder := telemetry.NewOTelRecorder(exp, rs, "my-exporter")
+	metricRecorder := telemetrytest.ProviderFor(exp)
 
 	service := NewConnectService(logger.NewLogger(nil, false), eval, s, metricRecorder)
 
@@ -379,8 +375,7 @@ func TestConnectServiceShutdown(t *testing.T) {
 	}
 
 	exp := metric.NewManualReader()
-	rs := resource.NewWithAttributes("testSchema")
-	metricRecorder := telemetry.NewOTelRecorder(exp, rs, "my-exporter")
+	metricRecorder := telemetrytest.ProviderFor(exp)
 
 	service := NewConnectService(logger.NewLogger(nil, false), eval, s, metricRecorder)
 
@@ -423,8 +418,7 @@ func startConnectService(t *testing.T, port uint16, conf iservice.Configuration)
 	eval := mock.NewMockIEvaluator(ctrl)
 
 	exp := metric.NewManualReader()
-	rs := resource.NewWithAttributes("testSchema")
-	metricRecorder := telemetry.NewOTelRecorder(exp, rs, "limit-test")
+	metricRecorder := telemetrytest.ProviderFor(exp)
 
 	svc := NewConnectService(logger.NewLogger(nil, false), eval, nil, metricRecorder)
 

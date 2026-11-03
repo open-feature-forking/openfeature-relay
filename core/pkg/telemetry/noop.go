@@ -11,6 +11,14 @@ const NoopType = "noop"
 // Noop returns the noop telemetry provider: it records nothing and leaves handlers unchanged.
 func Noop() Provider { return noopProvider{} }
 
+// OrNoop returns p, or the noop telemetry provider when p is nil.
+func OrNoop(p Provider) Provider {
+	if p == nil {
+		return Noop()
+	}
+	return p
+}
+
 // NoopFactory returns the factory of the noop telemetry provider. It accepts any configuration.
 func NoopFactory() Factory { return noopFactory{} }
 
@@ -56,7 +64,15 @@ func (noopMeter) Int64UpDownCounter(string, ...InstrumentOption) Int64UpDownCoun
 	return noopInstrument{}
 }
 
-func (noopMeter) Float64Histogram(string, ...InstrumentOption) Float64Histogram { return noopInstrument{} }
+func (noopMeter) Float64Histogram(string, ...InstrumentOption) Float64Histogram {
+	return noopInstrument{}
+}
+
+func (noopMeter) Int64Gauge(string, ...InstrumentOption) Int64Gauge { return noopGauge{} }
+
+type noopGauge struct{}
+
+func (noopGauge) Record(context.Context, int64, ...Attribute) {}
 
 type noopInstrument struct{}
 

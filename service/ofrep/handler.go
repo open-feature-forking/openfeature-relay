@@ -14,16 +14,11 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service/ofrep"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
-	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
-	"github.com/open-feature-forking/openfeature-relay/service/transport"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	"github.com/open-feature-forking/openfeature-relay/service/ofrep/sse"
+	"github.com/open-feature-forking/openfeature-relay/service/transport"
 	"github.com/open-feature-forking/openfeature-relay/service/transport/middleware"
-	metricsmw "github.com/open-feature-forking/openfeature-relay/service/transport/middleware/metrics"
 	"github.com/rs/xid"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/metric/noop"
-	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -44,8 +39,7 @@ type handler struct {
 	evaluator                  evaluator.IResolver
 	contextValues              map[string]any
 	headerToContextKeyMappings map[string]string
-	metricsRecorder            telemetry.IMetricsRecorder
-	tracer                     trace.Tracer
+	metricsRecorder            *service.Metrics
 
 	versioner             configVersioner
 	sseEnabled            bool
@@ -67,18 +61,18 @@ func NewOfrepHandler(
 	evaluator evaluator.IResolver,
 	contextValues map[string]any,
 	headerToContextKeyMappings map[string]string,
-	metricsRecorder telemetry.IMetricsRecorder,
+	tp telemetry.Provider,
 	serviceName string,
 	sseCfg SSEConfig,
 	compression middleware.IMiddleware,
 ) http.Handler {
+	tp = telemetry.OrNoop(tp)
 	h := handler{
 		Logger:                     logger,
-		evaluator:                  service.TraceEvaluations(evaluator),
+		evaluator:                  service.TraceEvaluations(evaluator, tp.Tracer(service.EvaluatorTracerName)),
 		contextValues:              contextValues,
 		headerToContextKeyMappings: headerToContextKeyMappings,
-		metricsRecorder:            metricsRecorder,
-		tracer:                     otel.Tracer("flagd.ofrep.v1"),
+		metricsRecorder:            service.NewMetrics(tp.Meter(service.MetricsScope)),
 		versioner:                  sseCfg.Versioner,
 		sseEnabled:                 sseCfg.Enabled,
 		sseInactivityDelaySec:      sseCfg.InactivityDelaySec,
@@ -91,12 +85,7 @@ func NewOfrepHandler(
 	compress := compression.Handler
 
 	withMetrics := func(handlerID string, next http.Handler) http.Handler {
-		return metricsmw.NewHTTPMetric(metricsmw.Config{
-			Service:        serviceName,
-			MetricRecorder: metricsRecorder,
-			Logger:         logger,
-			HandlerID:      handlerID,
-		}).Handler(next)
+		return tp.HTTPServerMetrics(next, telemetry.HTTPMetricsOptions{Service: serviceName, Route: handlerID})
 	}
 
 	router := mux.NewRouter()
@@ -116,7 +105,7 @@ func NewOfrepHandler(
 	}))
 
 	// tracing only; metrics are recorded by metricsmw above
-	return otelhttp.NewHandler(router, "flagd.ofrep", otelhttp.WithMeterProvider(noop.NewMeterProvider()))
+	return tp.HTTPServerSpans(router, "flagd.ofrep")
 }
 
 func (h *handler) HandleFlagEvaluation(w http.ResponseWriter, r *http.Request) {

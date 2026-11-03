@@ -47,14 +47,22 @@ var rootCmd = &cobra.Command{
 	// Run: func(cmd *cobra.Command, args []string) { },
 }
 
+// Components are the components of the distribution; Execute sets them.
+var Components distribution.Components
+
+// Inventory lists the components of the distribution; Execute sets it.
+var Inventory distribution.Inventory
+
 // Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main() with what the build of the distribution stamped. It only needs to happen once to
-// the rootCmd.
-func Execute(info distribution.Info) {
+// This is called by main.main() with what the build of the distribution stamped, the components it contains and the
+// inventory of them. It only needs to happen once to the rootCmd.
+func Execute(info distribution.Info, components distribution.Components, inventory distribution.Inventory) {
 	Distribution = info.Name
 	Version = info.Version
 	Commit = info.Commit
 	Date = info.Date
+	Components = components
+	Inventory = inventory
 	err := rootCmd.Execute()
 	if err != nil {
 		log.Fatal(err)

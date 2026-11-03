@@ -5,9 +5,8 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	flagdService "github.com/open-feature-forking/openfeature-relay/service/transport"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
 )
 
 func selectorFromHeader(header http.Header) (store.Selector, error) {
@@ -20,8 +19,8 @@ func selectorFromHeader(header http.Header) (store.Selector, error) {
 }
 
 // recordSpanError marks the span as errored and returns the error for convenient inline returns.
-func recordSpanError(span trace.Span, err error) error {
+func recordSpanError(span telemetry.Span, err error) error {
 	span.RecordError(err)
-	span.SetStatus(codes.Error, err.Error())
+	span.SetError(err.Error())
 	return err
 }

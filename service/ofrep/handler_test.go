@@ -2,7 +2,6 @@ package ofrep
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -19,10 +18,9 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service/ofrep"
-	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"github.com/open-feature-forking/openfeature-relay/service/transport/middleware"
 	compressmw "github.com/open-feature-forking/openfeature-relay/service/transport/middleware/compress"
-	"github.com/open-feature-forking/openfeature-relay/service/transport/middleware/metrics/metricstest"
+	"github.com/open-feature-forking/openfeature-relay/telemetry/otel/oteltest"
 	"github.com/stretchr/testify/require"
 	semconv "go.opentelemetry.io/otel/semconv/v1.34.0"
 	"go.uber.org/mock/gomock"
@@ -49,36 +47,6 @@ var genericErrorValue = evaluator.AnyValue{
 	Reason:  model.ErrorReason,
 	FlagKey: flagKey,
 	Error:   errors.New(model.GeneralErrorCode),
-}
-
-type recordedEvaluation struct {
-	errorText string
-	reason    string
-	variant   string
-	flagKey   string
-	flagSetID string
-}
-
-type recordingMetricsRecorder struct {
-	telemetry.NoopMetricsRecorder
-	evaluations []recordedEvaluation
-}
-
-func (r *recordingMetricsRecorder) RecordEvaluation(
-	_ context.Context, err error, reason, variant, flagKey string, metadata model.Metadata,
-) {
-	flagSetID, _ := metadata["flagSetId"].(string)
-	errorText := ""
-	if err != nil {
-		errorText = err.Error()
-	}
-	r.evaluations = append(r.evaluations, recordedEvaluation{
-		errorText: errorText,
-		reason:    reason,
-		variant:   variant,
-		flagKey:   flagKey,
-		flagSetID: flagSetID,
-	})
 }
 
 func Test_handler_HandleFlagEvaluation(t *testing.T) {
@@ -453,7 +421,7 @@ func TestHandlerRecordsSingleEvaluationMetrics(t *testing.T) {
 	tests := []struct {
 		name       string
 		evaluation evaluator.AnyValue
-		expected   recordedEvaluation
+		expected   telemetrytest.Evaluation
 	}{
 		{
 			name: "successful evaluation",
@@ -464,11 +432,11 @@ func TestHandlerRecordsSingleEvaluationMetrics(t *testing.T) {
 				FlagKey:  successValue.FlagKey,
 				Metadata: model.Metadata{"flagSetId": "payments"},
 			},
-			expected: recordedEvaluation{
-				reason:    successValue.Reason,
-				variant:   successValue.Variant,
-				flagKey:   successValue.FlagKey,
-				flagSetID: "payments",
+			expected: telemetrytest.Evaluation{
+				Reason:    successValue.Reason,
+				Variant:   successValue.Variant,
+				FlagKey:   successValue.FlagKey,
+				FlagSetID: "payments",
 			},
 		},
 		{
@@ -479,37 +447,34 @@ func TestHandlerRecordsSingleEvaluationMetrics(t *testing.T) {
 				Metadata: model.Metadata{"flagSetId": "selected-set"},
 				Error:    genericErrorValue.Error,
 			},
-			expected: recordedEvaluation{
-				errorText: genericErrorValue.Error.Error(),
-				reason:    genericErrorValue.Reason,
-				variant:   genericErrorValue.Variant,
-				flagKey:   genericErrorValue.FlagKey,
-				flagSetID: "selected-set",
+			expected: telemetrytest.Evaluation{
+				ErrorText: genericErrorValue.Error.Error(),
+				Reason:    genericErrorValue.Reason,
+				FlagSetID: "selected-set",
 			},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			metrics := &recordingMetricsRecorder{}
+			tel := telemetrytest.New()
 			eval := mock.NewMockIEvaluator(gomock.NewController(t))
 			eval.EXPECT().
 				ResolveAsAnyValue(gomock.Any(), gomock.Any(), flagKey, gomock.Any()).
 				Return(test.evaluation)
-			handler := NewOfrepHandler(logger.NewLogger(nil, false), eval, nil, nil, metrics, "flagd", SSEConfig{}, newCompression(t))
+			handler := NewOfrepHandler(logger.NewLogger(nil, false), eval, nil, nil, tel, "flagd", SSEConfig{}, newCompression(t))
 
 			request := httptest.NewRequest(http.MethodPost, "/ofrep/v1/evaluate/flags/"+flagKey, nil)
 			response := httptest.NewRecorder()
 			handler.ServeHTTP(response, request)
 
-			require.Len(t, metrics.evaluations, 1)
-			require.Equal(t, test.expected, metrics.evaluations[0])
+			require.Equal(t, []telemetrytest.Evaluation{test.expected}, telemetrytest.Evaluations(t, tel.Metrics))
 		})
 	}
 }
 
 func TestHandlerRecordsEachBulkEvaluationMetric(t *testing.T) {
-	metrics := &recordingMetricsRecorder{}
+	tel := telemetrytest.New()
 	evaluations := []evaluator.AnyValue{
 		{
 			Value:    successValue.Value,
@@ -534,33 +499,29 @@ func TestHandlerRecordsEachBulkEvaluationMetric(t *testing.T) {
 	eval := mock.NewMockIEvaluator(gomock.NewController(t))
 	eval.EXPECT().ResolveAllValues(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(evaluations, model.Metadata{}, nil)
-	handler := NewOfrepHandler(logger.NewLogger(nil, false), eval, nil, nil, metrics, "flagd", SSEConfig{}, newCompression(t))
+	handler := NewOfrepHandler(logger.NewLogger(nil, false), eval, nil, nil, tel, "flagd", SSEConfig{}, newCompression(t))
 
 	request := httptest.NewRequest(http.MethodPost, "/ofrep/v1/evaluate/flags", nil)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 
-	require.Equal(t, []recordedEvaluation{
+	require.ElementsMatch(t, []telemetrytest.Evaluation{
 		{
-			reason:    successValue.Reason,
-			variant:   successValue.Variant,
-			flagKey:   "flag-a",
-			flagSetID: "set-a",
+			Reason:    successValue.Reason,
+			Variant:   successValue.Variant,
+			FlagKey:   "flag-a",
+			FlagSetID: "set-a",
 		},
 		{
-			errorText: genericErrorValue.Error.Error(),
-			reason:    genericErrorValue.Reason,
-			variant:   genericErrorValue.Variant,
-			flagKey:   "flag-b",
-			flagSetID: "set-b",
+			ErrorText: genericErrorValue.Error.Error(),
+			Reason:    genericErrorValue.Reason,
+			FlagSetID: "set-b",
 		},
 		{
-			errorText: flagNotFoundValue.Error.Error(),
-			reason:    flagNotFoundValue.Reason,
-			variant:   flagNotFoundValue.Variant,
-			flagKey:   "flag-c",
+			ErrorText: flagNotFoundValue.Error.Error(),
+			Reason:    flagNotFoundValue.Reason,
 		},
-	}, metrics.evaluations)
+	}, telemetrytest.Evaluations(t, tel.Metrics))
 }
 
 // newCompression builds the gzip middleware the production handler always carries. These tests do
@@ -599,8 +560,8 @@ func TestOfrepHTTPMetrics(t *testing.T) {
 				eval.EXPECT().ResolveAsAnyValue(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(*test.response)
 			}
 
-			recorder, reader := metricstest.NewRecorder(t, "flagd")
-			h := NewOfrepHandler(logger.NewLogger(nil, false), eval, nil, nil, recorder, "flagd", SSEConfig{}, newCompression(t))
+			tel := telemetrytest.New()
+			h := NewOfrepHandler(logger.NewLogger(nil, false), eval, nil, nil, tel, "flagd", SSEConfig{}, newCompression(t))
 			method := test.method
 			if method == "" {
 				method = http.MethodPost
@@ -609,7 +570,7 @@ func TestOfrepHTTPMetrics(t *testing.T) {
 			h.ServeHTTP(response, httptest.NewRequest(method, test.path, strings.NewReader(test.body)))
 			require.Equal(t, test.expectedCode, strconv.Itoa(response.Code), "response status code")
 
-			scopes, points := metricstest.RequestDurationPoints(t, reader)
+			scopes, points := telemetrytest.RequestDurationPoints(t, tel.Metrics)
 			require.Equal(t, map[string]bool{"flagd": true}, scopes, "request should be recorded once, by flagd only")
 			require.Len(t, points, 1)
 			require.Equal(t, uint64(1), points[0].Count, "request should be recorded once")

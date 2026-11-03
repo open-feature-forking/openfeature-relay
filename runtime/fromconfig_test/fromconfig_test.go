@@ -10,6 +10,7 @@ package fromconfig_test
 import (
 	"context"
 	"fmt"
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"net"
 	"net/http"
 	"os"
@@ -20,9 +21,11 @@ import (
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature-forking/openfeature-relay/runtime"
+	otelprovider "github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 )
@@ -75,9 +78,13 @@ func start(
 	t *testing.T, providers []coresync.SourceConfig, factory *fakeFactory, extra ...coresync.Factory,
 ) (*runtime.Runtime, func()) {
 	t.Helper()
-	managementPort := freePort(t)
-	rt, err := runtime.FromConfig(logger.NewLogger(nil, false), "test", runtime.Config{
-		ManagementPort:               managementPort,
+	return startConfig(t, baseConfig(t, providers, factory, extra...))
+}
+
+func baseConfig(t *testing.T, providers []coresync.SourceConfig, factory *fakeFactory, extra ...coresync.Factory) runtime.Config {
+	t.Helper()
+	return runtime.Config{
+		ManagementPort:               freePort(t),
 		ServicePort:                  freePort(t),
 		OfrepServicePort:             freePort(t),
 		SyncServicePort:              freePort(t),
@@ -87,7 +94,14 @@ func start(
 		SyncProviders:                providers,
 		ConfigurationFormats:         []configformat.Factory{factory},
 		SyncFactories:                extra,
-	}, runtime.Official())
+	}
+}
+
+// startConfig builds a runtime from config, runs it, and returns once it reports ready.
+func startConfig(t *testing.T, config runtime.Config) (*runtime.Runtime, func()) {
+	t.Helper()
+	managementPort := config.ManagementPort
+	rt, err := runtime.FromConfig(logger.NewLogger(nil, false), "test", config, withOpenTelemetry(flagdcomponents.Official()))
 	require.NoError(t, err)
 
 	done := make(chan error, 1)
@@ -251,4 +265,33 @@ func TestConfigFileSourcesListTheirTriggers(t *testing.T) {
 	require.Equal(t, []coresync.TriggerConfig{
 		{Type: "signal", Config: map[string]any{"name": "reload", "count": 2}},
 	}, sources[0].Triggers)
+}
+
+// TestStrictNumericRangeReachesTheRuntime pins that Config.StrictNumericRange, which --strict-numeric-range sets,
+// makes the runtime's resolution refuse an integer outside the range a double holds exactly.
+func TestStrictNumericRangeReachesTheRuntime(t *testing.T) {
+	const flags = `{"flags":{"big":{"state":"ENABLED","defaultVariant":"on","variants":{"on":10000000000000000}}}}`
+	for _, strict := range []bool{false, true} {
+		t.Run(fmt.Sprintf("strict=%v", strict), func(t *testing.T) {
+			config := baseConfig(t, []coresync.SourceConfig{{URI: writeFile(t, "flags.json", flags), Provider: "file"}}, &fakeFactory{})
+			config.StrictNumericRange = strict
+			rt, stop := startConfig(t, config)
+			defer stop()
+
+			value, _, _, _, err := rt.Evaluator.ResolveIntValue(context.Background(), "", "big", nil)
+			if strict {
+				require.EqualError(t, err, model.TypeMismatchErrorCode)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, int64(10000000000000000), value)
+		})
+	}
+}
+
+// withOpenTelemetry is the components of flagd-full with the OpenTelemetry telemetry provider, as flagd's command
+// line selects it.
+func withOpenTelemetry(components runtime.Components) runtime.Components {
+	components.Telemetry = otelprovider.NewFactory()
+	return components
 }

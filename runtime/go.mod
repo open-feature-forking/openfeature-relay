@@ -17,8 +17,8 @@ require (
 	github.com/open-feature-forking/openfeature-relay/service/ofrep v0.1.0
 	github.com/open-feature-forking/openfeature-relay/service/transport v0.1.0
 	github.com/open-feature-forking/openfeature-relay/sync/builder v0.1.0
-	github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc v0.1.0
 	github.com/open-feature-forking/openfeature-relay/telemetry/otel v0.1.0
+	github.com/open-feature/flagd/flagd v0.0.0
 	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/client_model v0.6.3
 	github.com/spf13/cobra v1.9.1
@@ -32,6 +32,7 @@ require (
 	go.uber.org/zap v1.27.0
 	golang.org/x/net v0.61.0
 	golang.org/x/sync v0.24.0
+	golang.org/x/sys v0.49.0
 	google.golang.org/grpc v1.84.0
 )
 
@@ -127,6 +128,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/azblob v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/file v0.1.0 // indirect
+	github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/gcs v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/http v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator v0.1.0 // indirect
@@ -179,7 +181,6 @@ require (
 	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/oauth2 v0.37.0 // indirect
-	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/term v0.47.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
@@ -222,4 +223,5 @@ replace (
 	github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator => ../sync/openfeature-operator
 	github.com/open-feature-forking/openfeature-relay/sync/s3 => ../sync/s3
 	github.com/open-feature-forking/openfeature-relay/telemetry/otel => ../telemetry/otel
+	github.com/open-feature/flagd/flagd => ../flagd
 )

@@ -193,3 +193,12 @@ func TestNoopLeavesHandlersUnchanged(t *testing.T) {
 		t.Errorf("shutdown: %v", err)
 	}
 }
+
+// TestNoopMeterHasGauges pins that the noop telemetry provider offers gauges, and records nothing in them.
+func TestNoopMeterHasGauges(t *testing.T) {
+	gauges, ok := telemetry.Noop().Meter("scope").(telemetry.GaugeMeter)
+	if !ok {
+		t.Fatal("the noop meter has no gauges")
+	}
+	gauges.Int64Gauge("last", telemetry.WithUnit("s")).Record(context.Background(), 1, telemetry.String("k", "v"))
+}

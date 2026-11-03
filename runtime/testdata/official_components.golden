@@ -35,4 +35,4 @@ service endpoints
     needs: router=true format=""
   flag-sync
     needs: router=false format=""
-metrics handler: true
+metrics handler: false

@@ -27,6 +27,7 @@ func TestVersionVerboseNamesDistribution(t *testing.T) {
 
 func TestRuntimeVersion(t *testing.T) {
 	released := &debug.Module{Path: runtimeModule, Version: "v0.3.1"}
+	replaced := &debug.Module{Path: runtimeModule, Version: "v0.0.0", Replace: &debug.Module{Path: "../runtime"}}
 	tests := map[string]struct {
 		info *debug.BuildInfo
 		want string
@@ -34,11 +35,9 @@ func TestRuntimeVersion(t *testing.T) {
 		"no build information":            {nil, "dev"},
 		"the runtime is not a dependency": {&debug.BuildInfo{Deps: []*debug.Module{{Path: "example.com/other", Version: "v1.0.0"}}}, "dev"},
 		"a released runtime":              {&debug.BuildInfo{Deps: []*debug.Module{released}}, "v0.3.1"},
-		"a replaced runtime shows dev": {
-			&debug.BuildInfo{Deps: []*debug.Module{{Path: runtimeModule, Version: "v0.0.0", Replace: &debug.Module{Path: "../runtime"}}}}, "dev",
-		},
-		"a development version":        {&debug.BuildInfo{Deps: []*debug.Module{{Path: runtimeModule, Version: "(devel)"}}}, "dev"},
-		"a dependency without version": {&debug.BuildInfo{Deps: []*debug.Module{{Path: runtimeModule}}}, "dev"},
+		"a replaced runtime shows dev":    {&debug.BuildInfo{Deps: []*debug.Module{replaced}}, "dev"},
+		"a development version":           {&debug.BuildInfo{Deps: []*debug.Module{{Path: runtimeModule, Version: "(devel)"}}}, "dev"},
+		"a dependency without version":    {&debug.BuildInfo{Deps: []*debug.Module{{Path: runtimeModule}}}, "dev"},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {

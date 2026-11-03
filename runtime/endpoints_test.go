@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
@@ -91,20 +92,40 @@ func TestSourceWithoutFormatNeedsFlagdFormat(t *testing.T) {
 	require.ErrorContains(t, err, "available formats")
 }
 
-// TestStrictNumericRangeReachesEvaluatorAndAdapter pins that the operator's strict numeric range reaches both the
-// evaluator, through its factory settings, and the typed adapter of the endpoint.
-func TestStrictNumericRangeReachesEvaluatorAndAdapter(t *testing.T) {
-	st := inputsStore(t)
-	st.Update("s", []model.Flag{{
-		Key: "half", State: "ENABLED", DefaultVariant: "on",
-		Variants: map[string]any{"on": 0.5},
-	}}, nil, false)
-	factory := needyFactory{name: "rest", needs: service.Needs{Router: true}}
-	settings := func(string) map[string]any { return map[string]any{"strictNumericRange": true} }
-	in, err := newEndpointInputs(logger.NewLogger(nil, false), st, events.NewBus(), []service.Factory{factory},
-		[]string{"flagd"}, []evaluator.Factory{flagdeval.NewFactory()}, settings, true)
-	require.NoError(t, err)
+// TestStrictNumericRangeReachesTheAdapter pins that the runtime's typed adapter of an endpoint refuses an integer
+// outside the range a double holds exactly when the range is strict, and resolves it when it is not.
+func TestStrictNumericRangeReachesTheAdapter(t *testing.T) {
+	for _, strict := range []bool{false, true} {
+		t.Run(fmt.Sprintf("strict=%v", strict), func(t *testing.T) {
+			st := inputsStore(t)
+			st.Update("s", []model.Flag{{
+				Key: "big", State: "ENABLED", DefaultVariant: "on",
+				Variants: map[string]any{"on": float64(1e16)},
+			}}, nil, false)
+			factory := needyFactory{name: "rest", needs: service.Needs{Router: true}}
+			in, err := newEndpointInputs(logger.NewLogger(nil, false), st, events.NewBus(), []service.Factory{factory},
+				[]string{"flagd"}, []evaluator.Factory{flagdeval.NewFactory()}, nil, strict)
+			require.NoError(t, err)
 
-	_, _, _, _, err = in.settings(factory).Resolver.ResolveIntValue(context.Background(), "", "half", nil)
-	require.Error(t, err)
+			value, _, _, _, err := in.settings(factory).Resolver.ResolveIntValue(context.Background(), "", "big", nil)
+			if strict {
+				require.EqualError(t, err, model.TypeMismatchErrorCode)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, int64(1e16), value)
+		})
+	}
+}
+
+// TestAbsentComponentSettingsIgnored pins that a distribution without an endpoint ignores flagd-full's flags that
+// belong to it: its Config holds the ports of all three endpoints, and a runtime of one starts without a word about
+// the others.
+func TestAbsentComponentSettingsIgnored(t *testing.T) {
+	cfg := Config{ServicePort: 1, OfrepServicePort: 2, SyncServicePort: 3, EndpointSettings: map[string]map[string]any{"absent": {"port": 4}}}
+
+	require.Equal(t, 1, int(endpointSettings(cfg, flagEvaluationType)["port"].(uint16)))
+	require.Equal(t, 2, int(endpointSettings(cfg, ofrepType)["port"].(uint16)))
+	require.Equal(t, map[string]any{"port": 4}, endpointSettings(cfg, "absent"), "an extension's entry is handed over as it is")
+	require.Empty(t, endpointSettings(cfg, "unknown"), "an endpoint nobody maps gets no settings")
 }

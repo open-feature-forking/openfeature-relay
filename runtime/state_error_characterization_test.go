@@ -5,6 +5,7 @@ package runtime
 import (
 	"context"
 	"errors"
+	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"os"
 	"path/filepath"
 	"testing"
@@ -53,7 +54,7 @@ func TestRejectedDeliveryLogText(t *testing.T) {
 	cfg.ConfigurationFormats = append(cfg.ConfigurationFormats, rejectingFactory{})
 
 	core, logs := observer.New(zap.DebugLevel)
-	rt, err := FromConfig(logger.NewLogger(zap.New(core), false), "test", cfg, Official())
+	rt, err := FromConfig(logger.NewLogger(zap.New(core), false), "test", cfg, flagdcomponents.Official())
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())

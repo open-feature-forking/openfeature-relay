@@ -24,13 +24,11 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
-	"github.com/open-feature-forking/openfeature-relay/telemetry/otel"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	flagdService "github.com/open-feature-forking/openfeature-relay/service/transport"
 	"github.com/open-feature-forking/openfeature-relay/service/transport/middleware"
 	corsmw "github.com/open-feature-forking/openfeature-relay/service/transport/middleware/cors"
 	h2cmw "github.com/open-feature-forking/openfeature-relay/service/transport/middleware/h2c"
-	metricsmw "github.com/open-feature-forking/openfeature-relay/service/transport/middleware/metrics"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -96,7 +94,7 @@ func evaluationMetricRoute(request *http.Request) string {
 type ConnectService struct {
 	logger                *logger.Logger
 	eval                  evaluator.IResolver
-	metrics               telemetry.IMetricsRecorder
+	telemetry             telemetry.Provider
 	eventingConfiguration IEvents
 	handlerOptions        []connect.HandlerOption
 
@@ -114,16 +112,17 @@ type ConnectService struct {
 // the evaluation endpoint only.
 func (s *ConnectService) DisableManagement() { s.withoutManagement = true }
 
-// NewConnectService creates a ConnectService with provided parameters
-// NewConnectService creates the connect service; handlerOptions are applied to each of its handlers.
+// NewConnectService creates the connect service; handlerOptions are applied to each of its handlers. A nil telemetry
+// provider means the noop telemetry provider.
 func NewConnectService(
-	logger *logger.Logger, evaluator evaluator.IResolver, store store.IStore, mRecorder telemetry.IMetricsRecorder,
+	logger *logger.Logger, evaluator evaluator.IResolver, store store.IStore, tp telemetry.Provider,
 	handlerOptions ...connect.HandlerOption,
 ) *ConnectService {
+	tp = telemetry.OrNoop(tp)
 	cs := &ConnectService{
 		logger:         logger,
-		eval:           flagdService.TraceEvaluations(evaluator),
-		metrics:        &telemetry.NoopMetricsRecorder{},
+		eval:           flagdService.TraceEvaluations(evaluator, tp.Tracer(flagdService.EvaluatorTracerName)),
+		telemetry:      tp,
 		handlerOptions: handlerOptions,
 		eventingConfiguration: &eventingConfiguration{
 			subs:   make(map[interface{}]*subscription),
@@ -131,9 +130,6 @@ func NewConnectService(
 			store:  store,
 			logger: logger,
 		},
-	}
-	if mRecorder != nil {
-		cs.metrics = mRecorder
 	}
 	return cs
 }
@@ -189,7 +185,7 @@ func (s *ConnectService) setupHandler(svcConf service.Configuration) {
 		s.logger.WithFields(zap.String("component", "flagservice")),
 		s.eval,
 		s.eventingConfiguration,
-		s.metrics,
+		s.telemetry,
 		svcConf.ContextValues,
 	)
 
@@ -206,7 +202,7 @@ func (s *ConnectService) setupHandler(svcConf service.Configuration) {
 	v1Fes := NewFlagEvaluationService(s.logger.WithFields(zap.String("component", "flagd.evaluation.v1")),
 		s.eval,
 		s.eventingConfiguration,
-		s.metrics,
+		s.telemetry,
 		svcConf.ContextValues,
 		svcConf.HeaderToContextKeyMappings,
 		svcConf.StreamDeadline,
@@ -219,7 +215,7 @@ func (s *ConnectService) setupHandler(svcConf service.Configuration) {
 	v2Fes := NewFlagEvaluationServiceV2(s.logger.WithFields(zap.String("component", "flagd.evaluation.v2")),
 		s.eval,
 		s.eventingConfiguration,
-		s.metrics,
+		s.telemetry,
 		svcConf.ContextValues,
 		svcConf.HeaderToContextKeyMappings,
 		svcConf.StreamDeadline,
@@ -249,14 +245,10 @@ func (s *ConnectService) setupHandler(svcConf service.Configuration) {
 	}
 
 	// Add middlewares
-	metricsMiddleware := metricsmw.NewHTTPMetric(metricsmw.Config{
-		Service:              svcConf.ServiceName,
-		MetricRecorder:       s.metrics,
-		Logger:               s.logger,
-		HandlerIDFromRequest: evaluationMetricRoute,
+	s.server.Handler = s.telemetry.HTTPServerMetrics(s.server.Handler, telemetry.HTTPMetricsOptions{
+		Service:          svcConf.ServiceName,
+		RouteFromRequest: evaluationMetricRoute,
 	})
-
-	s.AddMiddleware(metricsMiddleware)
 	if s.httpMiddleware != nil {
 		s.server.Handler = s.httpMiddleware(s.server.Handler)
 	}
@@ -325,9 +317,14 @@ func (s *ConnectService) startServer(ctx context.Context, svcConf service.Config
 func (s *ConnectService) startMetricsServer(ctx context.Context, svcConf service.Configuration) error {
 	s.logger.Info(fmt.Sprintf("metrics and probes listening at %d", svcConf.ManagementPort))
 
+	// without a metrics handler of the telemetry provider, /metrics answers 404
+	var metrics http.Handler
+	if p, ok := s.telemetry.(interface{ MetricsHandler() http.Handler }); ok {
+		metrics = p.MetricsHandler()
+	}
 	s.metricsServer = flagdService.NewManagementServer(svcConf.ManagementPort, func() bool {
 		return s.readinessEnabled && svcConf.ReadinessProbe()
-	}, promhttp.Handler())
+	}, metrics)
 
 	return serveWithShutdown(ctx, s.metricsServer, s.metricsServer.ListenAndServe)
 }
