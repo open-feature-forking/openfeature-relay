@@ -224,16 +224,7 @@ var startCmd = &cobra.Command{
 		}
 
 		// Build Runtime -----------------------------------------------------------
-		components := flagdcomponents.Official()
-		components.Telemetry = otelprovider.NewFactory()
-		components.TelemetryConfig = map[string]any{
-			otelprovider.SettingMetricsExporter: viper.GetString(metricsExporter),
-			otelprovider.SettingCollectorURI:    viper.GetString(otelCollectorURI),
-			otelprovider.SettingCertPath:        viper.GetString(otelCertPathFlagName),
-			otelprovider.SettingKeyPath:         viper.GetString(otelKeyPathFlagName),
-			otelprovider.SettingCAPath:          viper.GetString(otelCAPathFlagName),
-			otelprovider.SettingReloadInterval:  viper.GetDuration(otelReloadIntervalFlagName),
-		}
+		components := officialComponents()
 		rt, err := runtime.FromConfig(logger, Version, runtime.Config{
 			CORS:                   viper.GetStringSlice(corsFlagName),
 			ManagementPort:         viper.GetUint16(managementPortFlagName),
@@ -269,4 +260,20 @@ var startCmd = &cobra.Command{
 			rtLogger.Fatal(err.Error())
 		}
 	},
+}
+
+// officialComponents are the components of flagd-full: the official ones with the OpenTelemetry telemetry
+// provider, configured from the telemetry flags.
+func officialComponents() runtime.Components {
+	components := flagdcomponents.Official()
+	components.Telemetry = otelprovider.NewFactory()
+	components.TelemetryConfig = map[string]any{
+		otelprovider.SettingMetricsExporter: viper.GetString(metricsExporter),
+		otelprovider.SettingCollectorURI:    viper.GetString(otelCollectorURI),
+		otelprovider.SettingCertPath:        viper.GetString(otelCertPathFlagName),
+		otelprovider.SettingKeyPath:         viper.GetString(otelKeyPathFlagName),
+		otelprovider.SettingCAPath:          viper.GetString(otelCAPathFlagName),
+		otelprovider.SettingReloadInterval:  viper.GetDuration(otelReloadIntervalFlagName),
+	}
+	return components
 }
