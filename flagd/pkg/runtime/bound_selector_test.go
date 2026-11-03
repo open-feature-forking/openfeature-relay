@@ -3,11 +3,13 @@
 package runtime
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 	"testing"
@@ -17,6 +19,9 @@ import (
 	syncv1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/sync/v1"
 	"connectrpc.com/connect"
 	flagdformat "github.com/open-feature-forking/openfeature-relay/configformat/flagd"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/configformat"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/middleware"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	flageval "github.com/open-feature/flagd/flagd/pkg/service/flag-evaluation"
@@ -203,6 +208,74 @@ func TestBoundSelectorNarrowing(t *testing.T) {
 				5*time.Second, 25*time.Millisecond, "a stream bound the same way dates the response")
 			require.False(t, dated("source=src1", "flagSetId=set2"), "a request bound another way has no stream of its own")
 			require.False(t, dated("source=src1", ""), "an unbound request has no stream of its own")
+		})
+
+		// A bound bulk request compares its flagConfigEtag with the version of the bound channel: a stale token is
+		// evaluated, the current one keeps the 304 (ADR-0008 §9).
+		t.Run("flagConfigEtag", func(t *testing.T) {
+			const client, bound = "source=src1", "flagSetId=set1"
+			ctx, cancel := context.WithCancel(context.Background())
+			t.Cleanup(cancel)
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"sse/"+client, nil)
+			require.NoError(t, err)
+			req.Header.Set(boundHeader, bound)
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			t.Cleanup(func() { resp.Body.Close() })
+			require.Equal(t, http.StatusOK, resp.StatusCode)
+			tokens := make(chan string, 4)
+			go func() {
+				scanner := bufio.NewScanner(resp.Body)
+				for scanner.Scan() {
+					data, ok := strings.CutPrefix(scanner.Text(), "data:")
+					var event struct {
+						Etag string `json:"etag"`
+					}
+					if ok && json.Unmarshal([]byte(strings.TrimSpace(data)), &event) == nil && event.Etag != "" {
+						tokens <- event.Etag
+					}
+				}
+			}()
+
+			// the change a refetch event announces, with the token the client then sends
+			_, err = flagdformat.NewFormat(settings.Store, logger.NewLogger(nil, false)).Accept(context.Background(), configformat.Input{
+				Source: "src1",
+				Data: `{"metadata":{"flagSetId":"set1"},"flags":{"a":{"state":"ENABLED","defaultVariant":"off",` +
+					`"variants":{"on":true,"off":false}}}}`,
+			})
+			require.NoError(t, err)
+			var current string
+			require.Eventually(t, func() bool {
+				settings.Bus.Publish(events.ConfigurationChange{
+					Source: "src1", Format: flagdformat.Type, FlagSet: "set1", Updated: []string{"a"},
+				})
+				select {
+				case current = <-tokens:
+					return true
+				case <-time.After(50 * time.Millisecond):
+					return false
+				}
+			}, 5*time.Second, 10*time.Millisecond, "the bound stream announces the change")
+
+			status, header, body := exchangeBound(t, http.MethodPost, base+"evaluate/flags", client, bound, `{}`)
+			require.Equal(t, http.StatusOK, status, string(body))
+			etag := header.Get("ETag")
+			require.NotEmpty(t, etag)
+			conditional := func(token string) int {
+				req, err := http.NewRequest(http.MethodPost,
+					base+"evaluate/flags?flagConfigEtag="+url.QueryEscape(token), strings.NewReader(`{}`))
+				require.NoError(t, err)
+				req.Header.Set("Content-Type", "application/json")
+				req.Header.Set("Flagd-Selector", client)
+				req.Header.Set(boundHeader, bound)
+				req.Header.Set("If-None-Match", etag)
+				resp, err := http.DefaultClient.Do(req)
+				require.NoError(t, err)
+				resp.Body.Close()
+				return resp.StatusCode
+			}
+			require.Equal(t, http.StatusNotModified, conditional(current), "the current token keeps the 304")
+			require.Equal(t, http.StatusOK, conditional("stale"), "a stale token is evaluated")
 		})
 	})
 
