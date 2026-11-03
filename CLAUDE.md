@@ -39,6 +39,8 @@ Each phase runs plan → oppose → implement → review, one role per agent in 
 
 Every use case has an issue titled `UC-0XX: <name>` (label `use-case`); the pinned roadmap issue lists them in PoC order. Every PR starts its description with `Part of #<issue>`. The orchestrating session keeps the use case issue's PR list and definition-of-done checkboxes current, adds the `in progress` label when planning starts, and closes the issue when the use case is done. Work outside the use cases (docs, public readiness) has its own issue.
 
+The board [OpenFeature Relay PoC](https://github.com/orgs/open-feature-forking/projects/1) shows every use case issue, other work issue and open PR in a `Stage` column: Backlog, Planning, Needs your decision, Implementing, In review, Done. The orchestrating session moves the cards whenever the state changes, adds each new PR to the board, and puts anything waiting for the project lead under **Needs your decision**.
+
 ## PoC: one use case after the other
 
 After phase 1 (C1, C2, D), work proceeds one use case at a time, in this order. Each runs the same loop and lands as one or more PRs against `main`; phases 2–7 above are covered by the use cases that need them.

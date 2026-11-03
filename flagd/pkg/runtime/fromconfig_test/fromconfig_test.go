@@ -71,7 +71,9 @@ func freePort(t *testing.T) uint16 {
 
 // start builds a runtime from config, runs it, and returns once it reports ready. The returned
 // function stops it.
-func start(t *testing.T, providers []coresync.SourceConfig, factory *fakeFactory) (*runtime.Runtime, func()) {
+func start(
+	t *testing.T, providers []coresync.SourceConfig, factory *fakeFactory, extra ...coresync.Factory,
+) (*runtime.Runtime, func()) {
 	t.Helper()
 	managementPort := freePort(t)
 	rt, err := runtime.FromConfig(logger.NewLogger(nil, false), "test", runtime.Config{
@@ -84,6 +86,7 @@ func start(t *testing.T, providers []coresync.SourceConfig, factory *fakeFactory
 		KeepAlivePermitWithoutStream: runtime.KeepAlivePermitWithoutStreamDefault,
 		SyncProviders:                providers,
 		ConfigurationFormats:         []configformat.Factory{factory},
+		SyncFactories:                extra,
 	})
 	require.NoError(t, err)
 
@@ -177,4 +180,75 @@ func TestConfigFileSourcesNameTheirFormat(t *testing.T) {
 	require.Len(t, sources, 2)
 	require.Equal(t, "", sources[0].Format)
 	require.Equal(t, formatType, sources[1].Format)
+}
+
+// signalTriggerFactory is a fetch trigger of an extension that signals when its channel receives.
+type signalTriggerFactory struct{ signals chan struct{} }
+
+func (signalTriggerFactory) Type() string { return "signal" }
+
+func (f signalTriggerFactory) CreateTrigger(coresync.Settings) (coresync.Trigger, error) {
+	return signalTrigger(f), nil
+}
+
+type signalTrigger struct{ signals chan struct{} }
+
+func (t signalTrigger) Run(ctx context.Context, signal func()) error {
+	for {
+		select {
+		case <-t.signals:
+			signal()
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+// TestExtensionTriggerAttached: the `triggers` of a source replace the file watch, so the source is fetched again
+// when the extension's trigger signals and not when the file changes.
+func TestExtensionTriggerAttached(t *testing.T) {
+	path := writeFile(t, "flags.json", flagdFlags)
+	signals := make(chan struct{}, 1)
+
+	rt, stop := start(t, []coresync.SourceConfig{{
+		URI: path, Provider: "file", Triggers: []coresync.TriggerConfig{{Type: "signal"}},
+	}}, &fakeFactory{}, signalTriggerFactory{signals})
+	defer stop()
+
+	resolves := func(key string) bool {
+		_, _, _, _, err := rt.Evaluator.ResolveBooleanValue(context.Background(), "req", key, nil)
+		return err == nil
+	}
+	require.True(t, resolves("f1"))
+
+	require.NoError(t, os.WriteFile(path, []byte(`{"flags":{"f2":{"state":"ENABLED","defaultVariant":"on","variants":{"on":true}}}}`), 0o600))
+	require.Never(t, func() bool { return resolves("f2") }, 2*time.Second, 100*time.Millisecond,
+		"a file change does not fetch the source: its file watch was replaced")
+
+	signals <- struct{}{}
+	require.Eventually(t, func() bool { return resolves("f2") }, 10*time.Second, 50*time.Millisecond,
+		"the signal fetches the changed file")
+	require.False(t, resolves("f1"))
+}
+
+// The config file lists the triggers of a source with their settings; viper keeps the settings besides the type.
+func TestConfigFileSourcesListTheirTriggers(t *testing.T) {
+	path := writeFile(t, "flagd.yaml", `sources:
+  - uri: file:/flags.json
+    provider: file
+    triggers:
+      - type: signal
+        name: reload
+        count: 2
+`)
+	v := viper.New()
+	v.SetConfigFile(path)
+	require.NoError(t, v.ReadInConfig())
+
+	var sources []coresync.SourceConfig
+	require.NoError(t, v.UnmarshalKey("sources", &sources))
+
+	require.Equal(t, []coresync.TriggerConfig{
+		{Type: "signal", Config: map[string]any{"name": "reload", "count": 2}},
+	}, sources[0].Triggers)
 }
