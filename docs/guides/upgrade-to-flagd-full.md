@@ -51,6 +51,15 @@ Before, flagd started and never became ready.
 The `s3://` source uses AWS SDK v2 only.
 Remove `awssdk=v1` from the URL.
 
+#### `event-sinks`, `middleware` and `endpoint-settings` in the configuration file are no longer ignored
+
+The keys `event-sinks`, `middleware` and `endpoint-settings` of flagd's configuration file used to be ignored, like any key flagd does not know.
+They now configure the components a distribution contains besides its official ones: event sinks, middleware and the service endpoints of extensions.
+An entry names its component with `type`, and the other keys are that component's settings.
+flagd-full contains none of these components, so an entry in these keys makes it stop at startup with an error that names the type and lists what the distribution has.
+A file that holds the keys with no entries, as `event-sinks: []`, starts as before.
+If your configuration file has these keys for another purpose, remove them before you upgrade.
+
 ### Visible to clients, unlikely to break them
 
 #### Flag sync's `Last-Modified` moves only on a configuration change

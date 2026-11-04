@@ -72,7 +72,7 @@ func TestAcceptedMatchesIssue(t *testing.T) {
 	a, err := LoadAccepted("accepted.yaml")
 	require.NoError(t, err)
 	items := issueItems(t)
-	require.Len(t, items, 15, "the items of #78")
+	require.Len(t, items, 17, "the items of #78")
 	require.Empty(t, check(a, items))
 
 	t.Run("an entry without an item fails", func(t *testing.T) {

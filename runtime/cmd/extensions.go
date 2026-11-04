@@ -146,6 +146,9 @@ func parseEndpointSettings(raw any, c distribution.Components) (map[string]map[s
 	for _, e := range c.Endpoints {
 		present[e.Type()] = true
 	}
+	if len(byType) == 0 {
+		return nil, nil
+	}
 	settings := make(map[string]map[string]any, len(byType))
 	for typ, v := range byType {
 		if officialEndpoints[typ] {
