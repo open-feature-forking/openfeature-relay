@@ -5,6 +5,7 @@ flagd built from this repository is a drop-in replacement for today's flagd: int
 - [ ] An unbuildable telemetry configuration stops startup instead of being logged (step 6 Q6, T4).
 - [ ] Invalid blob URL options or Azure variables stop startup, where flagd used to start and never become ready (#57).
 - [ ] `awssdk=v1` on an `s3://` source stops startup; the native client is AWS SDK v2 only (#57).
+- [ ] `event-sinks`, `middleware` and `endpoint-settings` in the configuration file are no longer ignored: they configure event sinks, middleware and extension service endpoints, and an entry whose type the distribution lacks stops startup (UC-021 Q12, E1). A configuration file that used them for nothing must drop them.
 
 **Visible to clients, unlikely to break them**
 - [ ] Flag sync's `Last-Modified` moves only on a configuration change (UC-004 Q10, #71).
