@@ -241,8 +241,14 @@ var startCmd = &cobra.Command{
 		}
 
 		// Build Runtime -----------------------------------------------------------
-		components := withTelemetryConfig(Components)
+		extensions, err := loadExtensionSettings(Components, viper.ConfigFileUsed())
+		if err != nil {
+			rtLogger.Fatal(err.Error())
+		}
+		components := withTelemetryConfig(extensions.components)
 		rt, err := fromConfig(logger, Version, runtime.Config{
+			EndpointSettings:       extensions.endpointSettings,
+			EventSinksNeedMetrics:  extensions.eventSinks,
 			CORS:                   viper.GetStringSlice(corsFlagName),
 			ManagementPort:         viper.GetUint16(managementPortFlagName),
 			OfrepServicePort:       viper.GetUint16(ofrepPortFlagName),

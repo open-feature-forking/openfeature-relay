@@ -1,6 +1,10 @@
 // Package secret resolves a value that a configuration names instead of holding: a credential in an environment
 // variable or in a file, so that it appears neither in a manifest nor on a command line. Components that take
 // credentials share the Ref form, `{"env": "NAME"}` or `{"file": "PATH"}`.
+//
+// In the settings of an event sink or a middleware (ResolveSettings), a map whose only key is "env" or "file" with a
+// string value is always a reference, wherever it is in the settings, so a component cannot take a setting of that
+// shape for another purpose. No string is a reference.
 package secret
 
 import (
@@ -53,4 +57,75 @@ func (r Ref) String() string {
 		return fmt.Sprintf("environment variable %q", r.Env)
 	}
 	return fmt.Sprintf("file %q", r.File)
+}
+
+// IsRef reports whether value is a reference: a map whose only key is "env" or "file", with a string value. No string
+// is a reference, so a literal setting cannot be mistaken for one.
+func IsRef(value any) (Ref, bool) {
+	m, ok := value.(map[string]any)
+	if !ok || len(m) != 1 {
+		return Ref{}, false
+	}
+	if name, ok := m["env"].(string); ok {
+		return Ref{Env: name}, true
+	}
+	if path, ok := m["file"].(string); ok {
+		return Ref{File: path}, true
+	}
+	return Ref{}, false
+}
+
+// ResolveSettings returns a copy of settings in which every reference has been replaced by the secret it names. It
+// looks into nested maps and lists. A reference that cannot be resolved is an error that names the setting by its path
+// (for example "headers.Authorization") and where the secret was to come from; it never holds a value. The result
+// holds secrets, so it must not be logged.
+func ResolveSettings(settings map[string]any) (map[string]any, error) {
+	if settings == nil {
+		return nil, nil
+	}
+	resolved, err := resolveValue("", settings)
+	if err != nil {
+		return nil, err
+	}
+	return resolved.(map[string]any), nil
+}
+
+func resolveValue(path string, value any) (any, error) {
+	if ref, ok := IsRef(value); ok {
+		secret, err := ref.Resolve()
+		if err != nil {
+			return nil, fmt.Errorf("setting %q: %w", path, err)
+		}
+		return secret, nil
+	}
+	switch v := value.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(v))
+		for key, item := range v {
+			resolved, err := resolveValue(join(path, key), item)
+			if err != nil {
+				return nil, err
+			}
+			out[key] = resolved
+		}
+		return out, nil
+	case []any:
+		out := make([]any, len(v))
+		for i, item := range v {
+			resolved, err := resolveValue(fmt.Sprintf("%s[%d]", path, i), item)
+			if err != nil {
+				return nil, err
+			}
+			out[i] = resolved
+		}
+		return out, nil
+	}
+	return value, nil
+}
+
+func join(path, key string) string {
+	if path == "" {
+		return key
+	}
+	return path + "." + key
 }

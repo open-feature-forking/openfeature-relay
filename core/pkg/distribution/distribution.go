@@ -38,6 +38,12 @@ type Components struct {
 	// EventSinks are the event sinks the runtime delivers events to. Each one subscribes to the event bus for the kinds
 	// its factory declares. flagd-full lists none, and then nothing subscribes.
 	EventSinks []eventsink.Configured
+	// MiddlewareFactories and EventSinkFactories are the middleware and the event sinks the distribution contains. The
+	// generated main lists them here; they are inert until the operator's configuration names one (the middleware and
+	// event-sinks keys of flagd's configuration file), and then the command adds it to Middleware or EventSinks. A main
+	// that configures its own components fills those lists instead.
+	MiddlewareFactories []middleware.Factory
+	EventSinkFactories  []eventsink.Factory
 	// MetricsHandler serves /metrics on the management port. Nil leaves it to the telemetry provider, and answers
 	// 404 if the provider serves none.
 	MetricsHandler http.Handler

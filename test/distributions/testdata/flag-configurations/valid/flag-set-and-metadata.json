@@ -1,0 +1,19 @@
+{
+ "metadata": {
+  "flagSetId": "prod",
+  "owner": "team-a"
+ },
+ "flags": {
+  "checkout": {
+   "state": "ENABLED",
+   "variants": {
+    "on": true,
+    "off": false
+   },
+   "defaultVariant": "off",
+   "metadata": {
+    "purpose": "checkout"
+   }
+  }
+ }
+}
