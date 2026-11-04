@@ -164,6 +164,7 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		Bus:            bus,
 		Telemetry:      tp,
 		MetricsHandler: metricsHandler(tp, components),
+		Listen:         components.Listen,
 		ServiceConfig: service.Configuration{
 			Port:                       config.ServicePort,
 			ManagementPort:             config.ManagementPort,
@@ -205,6 +206,7 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		settings.Formats = append([]string{configformat.DefaultType}, formatTypes...)
 		settings.Sources = sources
 		settings.HTTPMiddleware = wrapHTTP
+		settings.Listen = components.Listen
 		endpoint, err := factory.Create(settings)
 		if err != nil {
 			return nil, fmt.Errorf("error creating the service endpoint %q: %w", factory.Type(), err)

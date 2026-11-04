@@ -82,6 +82,7 @@ func (Factory) Create(s service.Settings) (service.Endpoint, error) {
 	}
 	svc := NewConnectService(s.Logger.WithFields(zap.String("component", "service")), s.Resolver, s.Store, s.Telemetry, options...)
 	svc.httpMiddleware = s.HTTPMiddleware
+	svc.listen = s.Listen
 	return &endpoint{svc: svc, cfg: cfg.Configuration}, nil
 }
 

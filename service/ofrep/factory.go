@@ -78,6 +78,7 @@ func (Factory) Create(s service.Settings) (service.Endpoint, error) {
 	}
 	cfg.Service.Logger = s.Logger.WithFields(zap.String("component", "OFREPService"))
 	cfg.Service.HTTPMiddleware = s.HTTPMiddleware
+	cfg.Service.Listen = s.Listen
 	cfg.Service.Telemetry = s.Telemetry
 	cfg.Service.Bus = s.Bus
 	cfg.Service.Formats = cfg.Formats

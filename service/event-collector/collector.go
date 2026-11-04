@@ -122,7 +122,7 @@ func (Factory) Create(s service.Settings) (service.Endpoint, error) {
 	if err != nil {
 		return nil, fmt.Errorf("the %s endpoint: %w", Type, err)
 	}
-	e := &endpoint{port: cfg.port}
+	e := &endpoint{port: cfg.port, listen: s.Listen}
 	if cfg.port == 0 {
 		return e, nil
 	}
@@ -162,6 +162,7 @@ type endpoint struct {
 	port   uint16
 	server *http.Server
 	log    *logger.Logger
+	listen service.ListenFunc
 }
 
 // Serve implements service.Endpoint. Without a port it opens nothing and blocks until ctx ends. With one it listens
@@ -172,7 +173,14 @@ func (e *endpoint) Serve(ctx context.Context) error {
 		return nil
 	}
 	errc := make(chan error, 1)
-	go func() { errc <- e.server.ListenAndServe() }()
+	go func() {
+		listener, err := e.listen.Or()("tcp", e.server.Addr)
+		if err != nil {
+			errc <- err
+			return
+		}
+		errc <- e.server.Serve(listener)
+	}()
 	e.log.Info(fmt.Sprintf("event collector listening at %d", e.port))
 
 	select {

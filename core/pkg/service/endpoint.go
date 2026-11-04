@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"net"
 	"net/http"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
@@ -10,6 +11,18 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 )
+
+// ListenFunc opens the listener of a network and address, as net.Listen does. A distribution's embedder supplies one to
+// decide how every listener of the runtime is opened (Components.Listen); nil means net.Listen.
+type ListenFunc func(network, address string) (net.Listener, error)
+
+// Or returns f, or net.Listen when f is nil.
+func (f ListenFunc) Or() ListenFunc {
+	if f == nil {
+		return net.Listen
+	}
+	return f
+}
 
 // Endpoint is a service endpoint: it serves clients from when the distribution starts until it shuts down.
 type Endpoint interface {
@@ -54,6 +67,8 @@ type Settings struct {
 	Sources []string
 	// Config holds the endpoint's own settings.
 	Config map[string]any
+	// Listen opens the endpoint's listeners; see ListenFunc. Nil means net.Listen.
+	Listen ListenFunc
 }
 
 // TelemetryProvider returns Telemetry, or the noop telemetry provider when none is set.

@@ -22,7 +22,14 @@ func (r *Runtime) serveManagement(ctx context.Context) error {
 	}, r.MetricsHandler)
 
 	errs := make(chan error, 1)
-	go func() { errs <- server.ListenAndServe() }()
+	go func() {
+		listener, err := r.Listen.Or()("tcp", server.Addr)
+		if err != nil {
+			errs <- err
+			return
+		}
+		errs <- server.Serve(listener)
+	}()
 
 	select {
 	case err := <-errs:
