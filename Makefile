@@ -16,6 +16,10 @@ FLAGD_MODULE_DIRS := ./flagd ./runtime ./service/transport ./service/flag-evalua
 # test-fips.
 CONTRIB_MODULE_DIRS := ./contrib/flagsmith/engine ./contrib/flagsmith/middleware ./contrib/flagsmith/sync
 
+# The testbed modules (UC-022): libraries for the test suites of providers, which no distribution links. They are tested
+# and pinned like the library modules.
+TESTBED_MODULE_DIRS := ./testbed/control
+
 # The FIPS variant builds against the CMVP-certified Go Cryptographic Module
 # v1.0.0 (certificate #5247). The literal version is required; the
 # "certified"/"inprocess" aliases vary by toolchain. The fips140 tag makes the
@@ -99,6 +103,7 @@ TEST_TARGETS += test-eventsink-example
 TEST_TARGETS += test-contract-external
 TEST_TARGETS += test-middleware-example
 TEST_TARGETS += test-release
+TEST_TARGETS += test-testbed-control
 test: $(TEST_TARGETS)
 test-core: test-modules
 test-modules:
@@ -120,6 +125,8 @@ test-middleware-example:
 # The release tests read the module paths of the repository, not a binary.
 test-release:
 	go test -race -short -count=1 ./test/release/...
+test-testbed-control:
+	go test -race -short -count=1 ./testbed/control/...
 test-eventsink-example:
 	go test -race -short -count=1 ./test/eventsink-example/... ./test/eventsink-example/distribution/...
 test-configformat-example:
@@ -222,7 +229,7 @@ lint-fix:
 # The packages of the library modules and of flagd-full's modules must not change unnoticed, so that a move cannot drop a package from the test run.
 .PHONY: check-package-coverage
 check-package-coverage:
-	@for m in $(GO_LIB_MODULE_DIRS) $(FLAGD_MODULE_DIRS) $(CONTRIB_MODULE_DIRS); do (cd $$m && go list ./...) || exit 1; done | LC_ALL=C sort > .go-packages.tmp; \
+	@for m in $(GO_LIB_MODULE_DIRS) $(FLAGD_MODULE_DIRS) $(CONTRIB_MODULE_DIRS) $(TESTBED_MODULE_DIRS); do (cd $$m && go list ./...) || exit 1; done | LC_ALL=C sort > .go-packages.tmp; \
 	tr -d '\r' < testdata/go-packages.txt > .go-packages.want; \
 	if ! diff -u .go-packages.want .go-packages.tmp; then rm -f .go-packages.tmp .go-packages.want; \
 		echo "the packages of the library modules differ from testdata/go-packages.txt"; exit 1; fi; \

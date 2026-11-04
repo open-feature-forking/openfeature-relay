@@ -45,3 +45,5 @@ test/configformat-example:robfig|opentelemetry|google.golang.org/grpc|connectrpc
 builder:open-feature/flagd/|openfeature-relay/(core|runtime|sync|evaluator|configformat|telemetry|service|distribution)
 # The webhook event sink's module graph holds core and no other module of this repository, and no telemetry, transport or platform client.
 eventsink/webhook:robfig|opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|cloud.google.com|github.com/Azure|github.com/aws|prometheus|open-feature/flagd/flagd|openfeature-relay/((sync|telemetry|evaluator|configformat|service)/|runtime)
+# UC-022: the control module of the testbed has no relay module in its module graph (BR-008).
+testbed/control:openfeature-relay/(runtime|core|service|sync|evaluator|configformat|telemetry|eventsink|contrib)|open-feature/flagd
