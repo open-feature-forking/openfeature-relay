@@ -42,6 +42,8 @@ RUN openssl req -new -key server-key.pem -out server.csr -subj "/CN=localhost" \
 
 FROM busybox:1.38@sha256:dc2d74b28e4cf8984fa52af1f39bc7c3d9c73760b41a74d629f5d11b1ab28616 AS testbed
 
+WORKDIR /
+
 COPY --from=builder /bin/flagd /flagd
 COPY test-harness/flags/* ./rawflags/
 COPY test-harness/launchpad/configs /configs
