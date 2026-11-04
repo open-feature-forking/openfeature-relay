@@ -57,6 +57,8 @@ The keys `event-sinks`, `middleware` and `endpoint-settings` of flagd's configur
 They now configure the components a distribution contains besides its official ones: event sinks, middleware and the service endpoints of extensions.
 An entry names its component with `type`, and the other keys are that component's settings.
 flagd-full contains none of these components, so an entry in these keys makes it stop at startup with an error that names the type and lists what the distribution has.
+`endpoint-settings` also stops startup when it holds `flag-evaluation`, `flag-sync` or `ofrep`: the settings of those endpoints are the flags of `flagd start`.
+The keys are matched as written, in lower case; `Event-Sinks` is still ignored, as every unknown key is.
 A file that holds the keys with no entries, as `event-sinks: []`, starts as before.
 If your configuration file has these keys for another purpose, remove them before you upgrade.
 

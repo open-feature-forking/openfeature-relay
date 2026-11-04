@@ -1,6 +1,10 @@
 // Package secret resolves a value that a configuration names instead of holding: a credential in an environment
 // variable or in a file, so that it appears neither in a manifest nor on a command line. Components that take
 // credentials share the Ref form, `{"env": "NAME"}` or `{"file": "PATH"}`.
+//
+// In the settings of an event sink or a middleware (ResolveSettings), a map whose only key is "env" or "file" with a
+// string value is always a reference, wherever it is in the settings, so a component cannot take a setting of that
+// shape for another purpose. No string is a reference.
 package secret
 
 import (

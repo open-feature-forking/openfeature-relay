@@ -33,6 +33,9 @@ func TestResolveSettingsReplacesReferencesAtAnyDepth(t *testing.T) {
 func TestResolveSettingsLeavesWhatIsNotAReference(t *testing.T) {
 	in := map[string]any{
 		"a string":           "env",
+		"env prefix":         "env:X",
+		"shell form":         "${X}",
+		"file prefix":        "file:/etc/x",
 		"two keys":           map[string]any{"env": "X", "other": "y"},
 		"not a string value": map[string]any{"env": 5},
 		"empty":              map[string]any{},

@@ -96,7 +96,7 @@ func TestNoEventSinksConfiguredNothingSubscribes(t *testing.T) {
 }
 
 // TestCredentialNeverLogged pins UC-021 BR-006: the value of a credential reference reaches the factory and nothing
-// the runtime logs, at any level, while the event sinks and the middleware are created and started.
+// the runtime logs, at any level, while the event sinks and the middleware are created.
 func TestCredentialNeverLogged(t *testing.T) {
 	const secret = "s3cr3t-credential-value"
 	t.Setenv("RELAY_TEST_CREDENTIAL", secret)
