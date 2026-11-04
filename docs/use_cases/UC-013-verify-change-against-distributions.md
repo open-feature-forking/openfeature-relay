@@ -27,7 +27,7 @@
 4. GitHub Actions checks that the binary of flagd-minimal links no module listed in NFR-004 and its packages import none, that the binary of flagd-sync links no evaluator module and no JsonLogic module and its packages import none, and that neither the evaluator module nor the flagd configuration format module depends on a package listed in NFR-005.
 5. GitHub Actions builds the flagd-full image of the change and runs the flagd Test Harness RPC and in-process suites against it with the tag selection of today's flagd.
 6. GitHub Actions gives flagd-sync and flagd-full each flag configuration of the set and checks that flagd-sync rejects every flag configuration flagd-full rejects and accepts every one flagd-full accepts.
-7. GitHub Actions runs the evaluator benchmarks on the change and on its merge base and compares allocations and time per operation of each benchmark.
+7. GitHub Actions runs the evaluator benchmarks on the change and on the pull request's base commit and compares allocations and time per operation of each benchmark.
 8. GitHub Actions reports the result of each check on the pull request.
 9. Maintainer sees that all checks passed and knows the change keeps every standard distribution building, flagd-full compatible and flagd-sync consistent with flagd-full.
 
@@ -106,7 +106,7 @@
 
 ### A9: Allocation Regression
 
-**Trigger:** A benchmark allocates more per operation than on the merge base (step 7)  
+**Trigger:** A benchmark allocates more per operation than on the pull request's base commit (step 7)  
 **Flow:**
 
 1. GitHub Actions reports each benchmark that regressed, with both measurements.
@@ -115,7 +115,7 @@
 
 ### A10: Time Deviation Beyond 5%
 
-**Trigger:** A benchmark's time per operation differs from the merge base by more than 5% while its allocations do not increase (step 7)  
+**Trigger:** A benchmark's time per operation differs from the pull request's base commit by more than 5% while its allocations do not increase (step 7)  
 **Flow:**
 
 1. GitHub Actions reports the benchmark with both measurements as a finding that does not fail the check.
@@ -130,7 +130,7 @@
 - Every standard distribution builds from the change, as standard and FIPS build.
 - flagd-full built from the change passes the RPC and in-process suites with today's tag selection, or with a selection the Maintainer accepted in review.
 - flagd-sync rejects and accepts exactly the flag configurations of the set that flagd-full rejects and accepts.
-- No evaluator benchmark allocates more per operation than on the merge base, and every time deviation beyond 5% is reported on the pull request.
+- No evaluator benchmark allocates more per operation than on the pull request's base commit, and every time deviation beyond 5% is reported on the pull request.
 - flagd-minimal, flagd-sync, the evaluator module and the flagd configuration format module stay inside their dependency boundaries.
 
 ### Failure Postconditions
@@ -182,4 +182,4 @@ This use case is `Implemented`: the build of every standard distribution from it
 | Precondition, "required for merging": branch protection is a repository setting the project lead makes; no workflow enforces it | the project lead, after the proof of concept |
 | BR-001, step 3: the FIPS compile and crypto closure check of each standard distribution run in the gated FIPS job (`FULL_CI` or a manual run), not on every pull request | the project lead, after the proof of concept |
 | BR-005, NFR-001: the allocs/op of the evaluator benchmarks against the upstream commit the work branched from. Every benchmark's package path moved, so `compare-allocs.py` finds no common benchmark without a mapping of old paths to new ones | after the incubator |
-| A6: a setup failure of the Test Harness or the flagd-full image fails the integration test with `failed to build flagd image` before any scenario; no test pins it | none |
+| A6: a setup failure of the Test Harness or the flagd-full image fails the integration test with `failed to build flagd image` before any scenario; no test pins it | the project lead, after the proof of concept |

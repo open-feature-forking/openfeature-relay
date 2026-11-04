@@ -30,7 +30,7 @@ What runs today is flagd-full, which is flagd built from this repository.
 | allocs/op against the pull request's base commit; time deviations beyond 5% are reported, never failing | `benchmark` | NFR-001 |
 | FIPS compile and crypto closure of every standard distribution | `fips`, gated by `FULL_CI` or a manual run | C-009 |
 
-Branch protection is not set: the project lead decides which of these checks are required for merging. NFR-001 against the upstream commit the work branched from is not compared yet (`compare-allocs.py` would need a mapping of the old package paths to the new ones), so NFR-001 stays `Open`.
+Branch protection is not set: the project lead decides which of these checks are required for merging. NFR-001 against the upstream commit the work branched from is not compared yet (`compare-allocs.py` would need a mapping of the old package paths to the new ones), so NFR-001 stays `In Progress`.
 
 ## Next
 
