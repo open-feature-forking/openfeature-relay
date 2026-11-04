@@ -171,13 +171,16 @@ func (s *Server) handleStart(w http.ResponseWriter, r *http.Request) {
 	if config == "" {
 		config = s.current
 	}
-	if err := s.start(context.WithoutCancel(r.Context()), config); err != nil {
-		// A start that did not happen, or did not get ready, leaves a pending restart as it was: an unknown name must
-		// not end the outage that the restart is going to end.
+	err := s.start(context.WithoutCancel(r.Context()), config)
+	// A start cancels a pending restart, as the launchpad's does, whether or not it gets ready. An unknown
+	// configuration is the exception: it changes nothing, so the outage that the restart is going to end goes on.
+	if !errors.Is(err, ErrUnknownConfiguration) {
+		s.cancelRestartLocked()
+	}
+	if err != nil {
 		respond(w, http.StatusInternalServerError, "error", fmt.Sprintf("Failed to start flagd: %v", err))
 		return
 	}
-	s.cancelRestartLocked()
 	respond(w, http.StatusOK, "success", "flagd started successfully")
 }
 
