@@ -40,6 +40,8 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=bind,source=./sync/builder/go.sum,target=./sync/builder/go.sum \
     --mount=type=bind,source=./telemetry/otel/go.mod,target=./telemetry/otel/go.mod \
     --mount=type=bind,source=./telemetry/otel/go.sum,target=./telemetry/otel/go.sum \
+    --mount=type=bind,source=./eventsink/webhook/go.mod,target=./eventsink/webhook/go.mod \
+    --mount=type=bind,source=./eventsink/webhook/go.sum,target=./eventsink/webhook/go.sum \
     --mount=type=bind,source=./evaluator/flagd/go.mod,target=./evaluator/flagd/go.mod \
     --mount=type=bind,source=./evaluator/flagd/go.sum,target=./evaluator/flagd/go.sum \
     --mount=type=bind,source=./configformat/flagd/go.mod,target=./configformat/flagd/go.mod \
@@ -56,6 +58,8 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=bind,source=./service/ofrep/go.sum,target=./service/ofrep/go.sum \
     --mount=type=bind,source=./service/flag-sync/go.mod,target=./service/flag-sync/go.mod \
     --mount=type=bind,source=./service/flag-sync/go.sum,target=./service/flag-sync/go.sum \
+    --mount=type=bind,source=./service/event-collector/go.mod,target=./service/event-collector/go.mod \
+    --mount=type=bind,source=./service/event-collector/go.sum,target=./service/event-collector/go.sum \
     go work init ./core ./sync/file ./sync/flagd-grpc ./sync/http ./sync/openfeature-operator ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel ./eventsink/webhook ./evaluator/flagd ./configformat/flagd ./runtime ./service/transport ./service/flag-evaluation ./service/ofrep ./service/flag-sync ./service/event-collector ./flagd && go mod download
 
 # Build the application.
