@@ -4,6 +4,7 @@ package fetching
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	gosync "sync"
@@ -139,7 +140,11 @@ func (p *Provider) Sync(ctx context.Context, dataSync chan<- sync.DataSync) erro
 		running.Wait()
 	}
 
-	p.firstFetch(ctx, dataSync)
+	if err := p.firstFetch(ctx, dataSync); err != nil {
+		stopTriggers()
+		p.closeFetcher()
+		return err
+	}
 	if ctx.Err() != nil {
 		stopTriggers()
 		p.closeFetcher()
@@ -172,18 +177,22 @@ func (p *Provider) closeFetcher() {
 	}
 }
 
-// firstFetch fetches until it succeeds, waiting with a backoff in between, unless ctx is done.
-func (p *Provider) firstFetch(ctx context.Context, dataSync chan<- sync.DataSync) {
+// firstFetch fetches until it succeeds, waiting with a backoff in between, unless ctx is done. A source that refuses
+// the credentials (sync.ErrSourceRefused) ends it with that error: retrying cannot make the credentials valid.
+func (p *Provider) firstFetch(ctx context.Context, dataSync chan<- sync.DataSync) error {
 	p.opts.Logger.Debug(fmt.Sprintf("initial fetch from %s", p.opts.Source))
 	for failures := 1; ; failures++ {
 		err := p.fetch(ctx, dataSync, false)
 		if err == nil || ctx.Err() != nil {
-			return
+			return nil
+		}
+		if errors.Is(err, sync.ErrSourceRefused) {
+			return err
 		}
 		wait := p.backoff.Retry(failures)
 		p.opts.Logger.Warn(fmt.Sprintf("the initial fetch from %s failed, retrying in %s: %v", p.opts.Source, wait, err))
 		if !sleep(ctx, wait) {
-			return
+			return nil
 		}
 	}
 }

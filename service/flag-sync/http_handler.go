@@ -46,11 +46,22 @@ type httpHandler struct {
 	store   store.IStore
 	log     *logger.Logger
 	modTime *modTime
+	formats []string
 }
 
 func (h httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Sampled before the read: a later stamp would strand the client on stale flags.
 	lastModified := h.modTime.get()
+
+	format, err := requestedFormat(r.Header, h.formats)
+	if err != nil {
+		h.writeError(w, err)
+		return
+	}
+	if format != "" {
+		h.serveFormat(w, r, format, lastModified)
+		return
+	}
 
 	body, err := fetchAllFlags(r.Context(), h.store, resolveSelector(r.Header, ""))
 	if err != nil {
@@ -62,6 +73,20 @@ func (h httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Vary", flagdService.FLAGD_SELECTOR_HEADER)
 
 	// ServeContent applies RFC 9110 precedence: If-None-Match wins when both validators are sent.
+	http.ServeContent(w, r, contentName, lastModified, bytes.NewReader(body))
+}
+
+// serveFormat serves the one document of a configuration format other than flagd's, unchanged.
+func (h httpHandler) serveFormat(w http.ResponseWriter, r *http.Request, format string, lastModified time.Time) {
+	_, text, err := fetchFormatDocument(r.Context(), h.store, format, resolveSelector(r.Header, ""))
+	if err != nil {
+		h.writeError(w, err)
+		return
+	}
+	body := []byte(text)
+
+	w.Header().Set("ETag", etagOf(body))
+	w.Header().Set("Vary", flagdService.FLAGD_SELECTOR_HEADER+", "+FormatHeader)
 	http.ServeContent(w, r, contentName, lastModified, bytes.NewReader(body))
 }
 
@@ -82,6 +107,13 @@ func (h httpHandler) writeError(w http.ResponseWriter, err error) {
 	case fetchMarshal:
 		h.log.Error("error marshalling flags", zap.Error(fetchErr.cause))
 		http.Error(w, "error marshalling flags", http.StatusInternalServerError)
+	case fetchFormatUnknown, fetchDocumentAmbiguous:
+		http.Error(w, fetchErr.cause.Error(), http.StatusBadRequest)
+	case fetchDocumentMissing:
+		http.Error(w, fetchErr.cause.Error(), http.StatusNotFound)
+	case fetchDocumentNoText:
+		h.log.Error("document without a text", zap.Error(fetchErr.cause))
+		http.Error(w, fetchErr.cause.Error(), http.StatusInternalServerError)
 	default:
 		h.log.Error("error retrieving flags from store", zap.Error(fetchErr.cause))
 		http.Error(w, "error retrieving flags from store", http.StatusInternalServerError)

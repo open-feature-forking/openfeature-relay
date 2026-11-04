@@ -1,0 +1,12 @@
+{
+  "id": 2,
+  "name": "Staging",
+  "api_key": "ENVKEY2",
+  "updated_at": "2026-01-02T03:04:05Z",
+  "project": {"id": 1, "name": "Project", "hide_disabled_flags": false, "segments": []},
+  "feature_states": [
+    {"feature": {"id": 2, "name": "welcome", "type": "STANDARD"}, "enabled": true, "feature_state_value": "hello from staging", "django_id": 12},
+    {"feature": {"id": 1, "name": "dark-mode", "type": "STANDARD"}, "enabled": false, "feature_state_value": null, "django_id": 11}
+  ],
+  "identity_overrides": []
+}

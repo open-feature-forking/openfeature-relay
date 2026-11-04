@@ -141,6 +141,7 @@ nav:
         - 'Overview': 'reference/flagd-cli/flagd.md'
         - 'Start': 'reference/flagd-cli/flagd_start.md'
         - 'Version': 'reference/flagd-cli/flagd_version.md'
+        - 'Components': 'reference/flagd-components.md'
       - 'Sync Configuration': 'reference/sync-configuration.md'
       - 'Selector Syntax': 'reference/selector-syntax.md'
       - 'gRPC sync service': 'reference/grpc-sync-service.md'

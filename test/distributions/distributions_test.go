@@ -352,3 +352,44 @@ func TestFlagdFullServesMetrics(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode, "/metrics is served by the telemetry provider")
 	require.Contains(t, string(body), "# HELP", "in the Prometheus exposition format")
 }
+
+// TestComponentsMatchesManifest (UC-011) pins that the components a built distribution lists are the components its
+// manifest selects: the module of every selected component is listed, and no module is listed that the manifest does
+// not select. A distribution with a command line of its own has no components command.
+func TestComponentsMatchesManifest(t *testing.T) {
+	for _, path := range manifests(t) {
+		m := readManifest(t, path)
+		name := filepath.Base(filepath.Dir(path))
+		if m.Cmd != nil || name == "missing-replace" {
+			continue
+		}
+		t.Run(name, func(t *testing.T) {
+			b := build(t, path)
+			require.NoError(t, b.err, b.out)
+
+			want := map[string]bool{}
+			for _, module := range m.selected() {
+				want[module] = true
+			}
+			if m.Runtime != nil {
+				delete(want, m.Runtime.Module)
+			}
+
+			out, err := exec.Command(binary(t, path), "components", "--output", "json").Output()
+			require.NoError(t, err)
+			var listing struct {
+				Components map[string][]struct {
+					Module string `json:"module"`
+				} `json:"components"`
+			}
+			require.NoError(t, json.Unmarshal(out, &listing))
+			got := map[string]bool{}
+			for _, group := range listing.Components {
+				for _, c := range group {
+					got[c.Module] = true
+				}
+			}
+			require.Equal(t, want, got)
+		})
+	}
+}
