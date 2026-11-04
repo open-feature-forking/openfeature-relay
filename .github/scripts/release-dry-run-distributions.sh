@@ -2,7 +2,7 @@
 # The release dry run of the standard distributions (UC-012, Q8). Nothing is pushed, signed or tagged.
 #
 # flagd-minimal takes the full path: the 11 archives of a release, standard and FIPS images for linux/amd64 and
-# linux/arm64 as OCI layouts with attestations, the FIPS refusal and `version --verbose`. flagd-cloud, flagd-kubernetes
+# linux/arm64 as OCI layouts with attestations, the FIPS refusal and `version --verbose`. flagd-minimal-otel, flagd-cloud, flagd-kubernetes
 # and flagd-sync are checked on what differs: the archive and image names of BR-012, one linux/amd64 archive with its
 # contents, and `version --verbose`. flagd-full is released under flagd's names by the flagd checks of release-dry-run.sh.
 #
@@ -20,7 +20,7 @@ summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
 registry=ghcr.io/open-feature
 
 full_path=flagd-minimal
-others="flagd-cloud flagd-kubernetes flagd-sync"
+others="flagd-minimal-otel flagd-cloud flagd-kubernetes flagd-sync"
 
 failures=0
 note() { echo "$*" | tee -a "${summary}"; }
@@ -150,7 +150,7 @@ expect_equal "${local_tag}: version" "flagd: v${version} (${commit}), built at: 
 expect_equal "${local_tag}: distribution" "distribution: ${name} v${version}" "$(grep '^distribution:' <<<"${printed}")"
 docker rmi --force "${local_tag}" >/dev/null 2>&1 || true
 
-# the other three: only what differs from flagd-minimal
+# the other four: only what differs from flagd-minimal
 for d in ${others}; do
   name="$(published_name "${d}")"
   dir="${out}/${d}"

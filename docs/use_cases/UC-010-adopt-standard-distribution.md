@@ -19,7 +19,7 @@
 ## Main Success Scenario
 
 1. Operator determines the schemes and configuration formats of the deployment's sources, the service endpoints its clients use, whether flagd evaluates flags or only forwards flag configurations to in-process providers, and whether it exports telemetry.
-2. Operator compares these needs with the published manifests of flagd-minimal, flagd-cloud, flagd-kubernetes, flagd-sync and flagd-full, or with the text or JSON listing of `flagd components` of each (UC-011).
+2. Operator compares these needs with the published manifests of flagd-minimal, flagd-minimal-otel, flagd-cloud, flagd-kubernetes, flagd-sync and flagd-full, or with the text or JSON listing of `flagd components` of each (UC-011).
 3. Operator selects the smallest standard distribution that covers every need, as a binary or as the image `ghcr.io/open-feature/flagd-<distribution>`.
 4. Operator starts the selected distribution with the unchanged start command, configuration file and environment variables.
 5. System checks every setting and the scheme of every source against the components compiled into the distribution.
@@ -128,7 +128,7 @@ flagd-sync contains sync providers, a configuration format and the flag sync end
 
 ## Delivered by Later Use Cases
 
-This use case is `Implemented`: the manifests of flagd-minimal, flagd-cloud, flagd-kubernetes and flagd-sync, built by the Builder in CI; the bounds of flagd-minimal and flagd-sync, measured on the binaries and the packages they import (`test/distributions`); the stop at startup for a setting of an absent component and for a scheme the distribution cannot read, both naming what is missing and, with `dist.components_hint` on, pointing to `flagd components`; and the evaluation parity with flagd-full, byte for byte for flagd-sync's flag configurations. These parts are delivered by the use cases named here, and are accepted gaps of this one:
+This use case is `Implemented`: the manifests of flagd-minimal, flagd-minimal-otel, flagd-cloud, flagd-kubernetes and flagd-sync, built by the Builder in CI; the bounds of flagd-minimal and flagd-sync, measured on the binaries and the packages they import (`test/distributions`); the stop at startup for a setting of an absent component and for a scheme the distribution cannot read, both naming what is missing and, with `dist.components_hint` on, pointing to `flagd components`; and the evaluation parity with flagd-full, byte for byte for flagd-sync's flag configurations. These parts are delivered by the use cases named here, and are accepted gaps of this one:
 
 | Gap | Delivered by |
 |-----|--------------|
