@@ -112,8 +112,8 @@ func TestUnknownConfigurationKeepsPendingRestart(t *testing.T) {
 		"the restart still happens, and opens the target: %v", target.log())
 }
 
-// A start that fails to get ready does not cancel a pending restart either.
-func TestFailedStartKeepsPendingRestart(t *testing.T) {
+// As the launchpad's does, a start of a known configuration cancels a pending restart, whether or not it gets ready.
+func TestFailedStartCancelsPendingRestart(t *testing.T) {
 	target := &fakeTarget{startFn: func(_ context.Context, config string) error {
 		if config == "broken" {
 			return errors.New("boom")
@@ -127,8 +127,8 @@ func TestFailedStartKeepsPendingRestart(t *testing.T) {
 	code, _ := ts.get(t, "/start?config=broken")
 	require.Equal(t, 500, code)
 
-	require.Eventually(t, func() bool { return target.count("start-end:default") == starts+1 }, 5*time.Second, 10*time.Millisecond,
-		"the restart still happens: %v", target.log())
+	time.Sleep(1500 * time.Millisecond)
+	require.Equal(t, starts, target.count("start-end:default"), "the restart was cancelled, so the outage goes on: %v", target.log())
 }
 
 // Quirk 1 is fixed: a start that fails does not replace the configuration in use.
@@ -395,7 +395,6 @@ func TestChangeWithoutTheChangingFlagFails(t *testing.T) {
 func TestChangeDuringStartIsSerialized(t *testing.T) {
 	release := make(chan struct{})
 	releaseOnce := sync.OnceFunc(func() { close(release) })
-	t.Cleanup(releaseOnce) // a failed assertion must not leave the start blocked
 	target := &fakeTarget{}
 	target.startFn = func(_ context.Context, config string) error {
 		if config == "ssl" {
@@ -404,6 +403,9 @@ func TestChangeDuringStartIsSerialized(t *testing.T) {
 		return nil
 	}
 	ts := newTestServer(t, target, nil)
+	// Registered after the server's own cleanup, so that it runs first: that cleanup waits for the lock which the
+	// blocked start holds, and a failed assertion must not leave the test waiting for its timeout.
+	t.Cleanup(releaseOnce)
 
 	started := make(chan int, 1)
 	go func() {
@@ -430,9 +432,9 @@ func TestChangeDuringStartIsSerialized(t *testing.T) {
 func TestChangeDuringTheDelayedStartIsSerialized(t *testing.T) {
 	release := make(chan struct{})
 	releaseOnce := sync.OnceFunc(func() { close(release) })
-	t.Cleanup(releaseOnce)
 	target := &fakeTarget{}
 	ts := newTestServer(t, target, nil)
+	t.Cleanup(releaseOnce) // after the server's cleanup, so that it runs first
 	target.setStart(func(context.Context, string) error {
 		<-release
 		return nil

@@ -16,4 +16,8 @@
 //   - an unknown configuration no longer takes the target down: the launchpad kills flagd before it looks at the
 //     name, so the target and a pending restart stay as they were;
 //   - /change toggles the flag in memory and rewrites no file of the raw flags.
+//
+// A pending /restart is cancelled by every later /stop, /restart and /start, as the launchpad's is, a /start that
+// does not get ready included. The one exception is a /start of an unknown configuration, which changes nothing and
+// so leaves the pending restart in place.
 package control
