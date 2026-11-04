@@ -54,6 +54,7 @@ github.com/open-feature-forking/openfeature-relay/service/flag-sync
 github.com/open-feature-forking/openfeature-relay/service/ofrep
 github.com/open-feature-forking/openfeature-relay/service/ofrep/sse
 github.com/open-feature-forking/openfeature-relay/service/transport
+github.com/open-feature-forking/openfeature-relay/service/transport/gate
 github.com/open-feature-forking/openfeature-relay/service/transport/middleware
 github.com/open-feature-forking/openfeature-relay/service/transport/middleware/compress
 github.com/open-feature-forking/openfeature-relay/service/transport/middleware/cors
