@@ -25,6 +25,9 @@ accepted:
     item: "`event-sinks`, `middleware` and `endpoint-settings` in the configuration file are no longer ignored"
     covered_by: ["runtime/cmd TestInvalidExtensionSettingsStopStartup", "runtime/cmd TestUnknownConfigKeysIgnored"]
   - kind: "#78"
+    item: "flagd-full links two more modules and the `event-collector` key is no longer ignored"
+    covered_by: ["test/distributions TestFlagdFullLinkedModules", "test/distributions TestFlagdFullOpensTodaysPorts", "test/distributions TestExportToWebhook", "runtime/cmd TestEventCollectorKeyIsTheCollectorsEndpointSettings"]
+  - kind: "#78"
     item: "Flag sync's `Last-Modified` moves only on a configuration change"
     covered_by: ["service/flag-sync contract_test.go"]
   - kind: "#78"

@@ -68,6 +68,14 @@ If your configuration file has these keys for another purpose, remove them befor
 
 The `Last-Modified` of the flag sync service endpoint changes when the flag configuration changes, and not on every reload.
 
+#### flagd-full links two more modules and the `event-collector` key is no longer ignored
+
+flagd-full now contains the webhook event sink, `eventsink/webhook`, and the event collector, `service/event-collector`, so `go version -m` and the SBOM list two more modules.
+Neither does anything until you configure it: the sink subscribes to nothing without an `event-sinks` entry, and the collector opens no port.
+The `event-collector` key of the configuration file used to be ignored. Now `event-collector: {port: 8017}` opens the collector's port, and an unknown setting under it stops startup with an error that names it.
+The collector takes `--cors-origin`, `--max-request-body` and `--max-request-header` as OFREP does; a setting under `event-collector` or `endpoint-settings` wins over a flag.
+If your configuration file has an `event-collector` key for another purpose, remove it before you upgrade.
+
 #### OFREP `flagConfigEtag` values change
 
 The values are opaque, so clients that only send them back are not affected.
