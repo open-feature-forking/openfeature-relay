@@ -19,12 +19,15 @@ const (
 	eventSinksKey       = "event-sinks"
 	middlewareKey       = "middleware"
 	endpointSettingsKey = "endpoint-settings"
+	// eventCollectorKey holds the settings of the event collector endpoint, whose port the operator sets there. It is
+	// endpoint-settings for that one endpoint, under a key of its own; endpoint-settings wins where both say the same.
+	eventCollectorKey = "event-collector"
 
 	// entryTypeKey names the component type in a list entry; the other keys of the entry are the component's settings.
 	entryTypeKey = "type"
 )
 
-var extensionKeys = []string{eventSinksKey, middlewareKey, endpointSettingsKey}
+var extensionKeys = []string{eventSinksKey, middlewareKey, endpointSettingsKey, eventCollectorKey}
 
 // officialEndpoints are the endpoints whose settings are flagd's flags.
 var officialEndpoints = map[string]bool{componentFlagEvaluation: true, componentFlagSync: true, componentOFREP: true}
@@ -91,6 +94,14 @@ func loadExtensionSettings(c distribution.Components, path string) (extensionSet
 
 	if raw, ok := values[endpointSettingsKey]; ok {
 		settings, err := parseEndpointSettings(raw, c)
+		if err != nil {
+			return result, err
+		}
+		result.endpointSettings = settings
+	}
+
+	if raw, ok := values[eventCollectorKey]; ok {
+		settings, err := withEventCollector(result.endpointSettings, raw, c)
 		if err != nil {
 			return result, err
 		}
@@ -165,6 +176,42 @@ func parseEndpointSettings(raw any, c distribution.Components) (map[string]map[s
 		settings[typ] = m
 	}
 	return settings, nil
+}
+
+// withEventCollector adds the settings under the event-collector key to the endpoint settings. The entry of the
+// endpoint-settings key for the same endpoint wins. Settings for an endpoint the distribution lacks are an error.
+func withEventCollector(settings map[string]map[string]any, raw any, c distribution.Components) (map[string]map[string]any, error) {
+	if raw == nil {
+		return settings, nil
+	}
+	collector, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("%s: expected the endpoint's settings, observed %T", eventCollectorKey, raw)
+	}
+	if len(collector) == 0 {
+		return settings, nil
+	}
+	present := map[string]bool{}
+	for _, e := range c.Endpoints {
+		present[e.Type()] = true
+	}
+	if !present[eventCollectorKey] {
+		return nil, withComponentsHint(fmt.Errorf("%s: the distribution %s has no service endpoint of this type; it has: %s",
+			eventCollectorKey, Distribution, listOrNone(keysOf(present))))
+	}
+	merged := make(map[string]map[string]any, len(settings)+1)
+	for typ, m := range settings {
+		merged[typ] = m
+	}
+	combined := make(map[string]any, len(collector))
+	for k, v := range collector {
+		combined[k] = v
+	}
+	for k, v := range merged[eventCollectorKey] {
+		combined[k] = v
+	}
+	merged[eventCollectorKey] = combined
+	return merged, nil
 }
 
 func unknownType(key string, i int, typ string, available []string) error {

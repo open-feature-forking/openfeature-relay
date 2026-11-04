@@ -31,5 +31,15 @@ func TestInventoryListsEveryComponent(t *testing.T) {
 	require.Equal(t, []string{"flagd"}, types[distribution.GroupConfigurationFormat])
 	require.Equal(t, []string{"jsonlogic"}, types[distribution.GroupEvaluator])
 	require.Equal(t, []string{"otel"}, types[distribution.GroupTelemetry])
-	require.Equal(t, []string{"flag-evaluation", "ofrep", "flag-sync"}, endpointTypes)
+	require.Equal(t, []string{"flag-evaluation", "ofrep", "flag-sync", "event-collector"}, endpointTypes)
+
+	// the event sinks of flagd-full are available and inert: no sink is configured until the operator names one
+	var sinkTypes []string
+	for _, f := range components.EventSinkFactories {
+		sinkTypes = append(sinkTypes, f.Type())
+	}
+	require.Equal(t, []string{"webhook"}, sinkTypes)
+	require.Equal(t, sinkTypes, types[distribution.GroupEventSink])
+	require.Empty(t, components.EventSinks, "flagd-full configures no event sink itself")
+	require.Empty(t, components.Middleware)
 }

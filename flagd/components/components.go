@@ -7,6 +7,8 @@ import (
 	format0 "github.com/open-feature-forking/openfeature-relay/configformat/flagd"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/distribution"
 	evaluator0 "github.com/open-feature-forking/openfeature-relay/evaluator/flagd"
+	eventsink0 "github.com/open-feature-forking/openfeature-relay/eventsink/webhook"
+	endpoint3 "github.com/open-feature-forking/openfeature-relay/service/event-collector"
 	endpoint0 "github.com/open-feature-forking/openfeature-relay/service/flag-evaluation"
 	endpoint2 "github.com/open-feature-forking/openfeature-relay/service/flag-sync"
 	endpoint1 "github.com/open-feature-forking/openfeature-relay/service/ofrep"
@@ -35,7 +37,9 @@ func Components() distribution.Components {
 	c.Endpoints = append(c.Endpoints, endpoint0.NewFactory())
 	c.Endpoints = append(c.Endpoints, endpoint1.NewFactory())
 	c.Endpoints = append(c.Endpoints, endpoint2.NewFactory())
+	c.Endpoints = append(c.Endpoints, endpoint3.NewFactory())
 	c.Telemetry = telemetry0.NewFactory()
+	c.EventSinkFactories = append(c.EventSinkFactories, eventsink0.NewFactory())
 	return c
 }
 
@@ -71,6 +75,8 @@ func Inventory() distribution.Inventory {
 	add(distribution.GroupServiceEndpoint, endpoint0.NewFactory().Type(), "github.com/open-feature-forking/openfeature-relay/service/flag-evaluation")
 	add(distribution.GroupServiceEndpoint, endpoint1.NewFactory().Type(), "github.com/open-feature-forking/openfeature-relay/service/ofrep")
 	add(distribution.GroupServiceEndpoint, endpoint2.NewFactory().Type(), "github.com/open-feature-forking/openfeature-relay/service/flag-sync")
+	add(distribution.GroupServiceEndpoint, endpoint3.NewFactory().Type(), "github.com/open-feature-forking/openfeature-relay/service/event-collector")
 	add(distribution.GroupTelemetry, telemetry0.NewFactory().Type(), "github.com/open-feature-forking/openfeature-relay/telemetry/otel")
+	add(distribution.GroupEventSink, eventsink0.NewFactory().Type(), "github.com/open-feature-forking/openfeature-relay/eventsink/webhook")
 	return inv
 }

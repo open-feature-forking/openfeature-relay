@@ -8,6 +8,11 @@
 //
 // it serves POST /events/v1 on that port. Without one, Serve opens no port and blocks until its context ends.
 //
+// In flagd-full the operator sets the port with the event-collector key of the configuration file, or the same
+// settings under endpoint-settings, which wins where both set a key. flagd's own flags reach the collector as they
+// reach OFREP: --cors-origin gives it its CORS origins, --max-request-body and --max-request-header its size limits,
+// and the service name is flagd's. A setting of the operator wins over a flag.
+//
 // The protocol is provisional and specific to this project: no OpenFeature specification defines how an in-process
 // provider reports its events. The body is a JSON object with an "events" array, whose items are objects with a "kind":
 //
