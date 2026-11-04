@@ -72,6 +72,7 @@ TEST_TARGETS += test-service-example
 TEST_TARGETS += test-evaluator-testkit
 TEST_TARGETS += test-inprocess-example
 TEST_TARGETS += test-sync-example
+TEST_TARGETS += test-contrib-flagsmith-sync
 TEST_TARGETS += test-telemetry-example
 TEST_TARGETS += test-eventsink-example
 TEST_TARGETS += test-contract-external
@@ -86,6 +87,9 @@ test-flagd:
 	go test -race -covermode=atomic -cover -short $(addsuffix /...,$(FLAGD_MODULE_DIRS)) -coverprofile=flagd-coverage.out
 test-sync-example:
 	go test -race -short -count=1 ./test/sync-example/...
+# The Flagsmith sync provider is a vendor module (UC-019 BR-009): outside GO_LIB_MODULE_DIRS and test-fips, with its own target.
+test-contrib-flagsmith-sync:
+	go test -race -short -count=1 ./contrib/flagsmith/sync/...
 test-telemetry-example:
 	go test -race -short -count=1 ./test/telemetry-example/... ./test/telemetry-example/distribution/...
 test-contract-external:
