@@ -57,13 +57,14 @@ func post(t *testing.T, url, body string) map[string]any {
 func TestEngineServesBothFormats(t *testing.T) {
 	flagdSource := writeFile(t, "flagd.json", flagdFlags)
 	vendorSource := writeFile(t, "vendor.json", `{"environment":"prod","flags":{"a":1,"b":"two","server.secret":"hush"}}`)
-	managementPort, servicePort, ofrepPort := freePort(t), freePort(t), freePort(t)
+	ports := freePorts(t, 4)
+	managementPort, servicePort, ofrepPort := ports[0], ports[1], ports[2]
 
 	rt, err := runtime.FromConfig(logger.NewLogger(nil, false), "test", runtime.Config{
 		ManagementPort:               managementPort,
 		ServicePort:                  servicePort,
 		OfrepServicePort:             ofrepPort,
-		SyncServicePort:              freePort(t),
+		SyncServicePort:              ports[3],
 		StreamDeadline:               5 * time.Second,
 		KeepAliveMinTime:             runtime.KeepAliveMinTimeDefault,
 		KeepAlivePermitWithoutStream: runtime.KeepAlivePermitWithoutStreamDefault,
@@ -79,15 +80,7 @@ func TestEngineServesBothFormats(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- rt.Start() }()
 
-	ready := fmt.Sprintf("http://127.0.0.1:%d/readyz", managementPort)
-	require.Eventually(t, func() bool {
-		resp, err := http.Get(ready) //nolint:gosec,noctx // local test endpoint
-		if err != nil {
-			return false
-		}
-		defer resp.Body.Close()
-		return resp.StatusCode == http.StatusOK
-	}, 20*time.Second, 100*time.Millisecond, "readiness covers both sources")
+	waitReady(t, fmt.Sprintf("http://127.0.0.1:%d/readyz", managementPort), done)
 
 	connect := fmt.Sprintf("http://127.0.0.1:%d/flagd.evaluation.v1.Service/", servicePort)
 	ofrep := fmt.Sprintf("http://127.0.0.1:%d/ofrep/v1/evaluate/flags", ofrepPort)
