@@ -30,3 +30,4 @@ benchmark.txt
 .worktrees/
 /.flagd-generated/
 /.flagd-full-build/
+/.flagsmith-build/
