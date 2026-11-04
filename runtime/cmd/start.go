@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -196,9 +197,13 @@ var startCmd = &cobra.Command{
 			rtLogger.Fatal("refusing to start", zap.Error(err))
 		}
 
+		if err := absentSettingsError(Components, explicitSettings(cmd.Flags(), os.LookupEnv, configFileKeys())); err != nil {
+			rtLogger.Fatal(err.Error())
+		}
+
 		syncProviders, err := syncbuilder.ParseSyncProviderURIs(viper.GetStringSlice(uriFlagName), Components.Sync...)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal(withComponentsHint(err))
 		}
 
 		syncProvidersFromConfig := []sync.SourceConfig{}

@@ -17,9 +17,9 @@ import (
 )
 
 const (
-	flagEvaluation = "flag-evaluation"
-	ofrep          = "ofrep"
-	flagSync       = "flag-sync"
+	flagEvaluation = componentFlagEvaluation
+	ofrep          = componentOFREP
+	flagSync       = componentFlagSync
 )
 
 // setting is the component set of one setting of flagd-full (UC-010 Q9). A setting has a name on the command line, in
@@ -32,8 +32,6 @@ type setting struct {
 	// own names the setting's owner when no endpoint is the whole of it: the runtime, or the telemetry provider.
 	own string
 }
-
-var allEndpoints = []string{flagEvaluation, flagSync, ofrep}
 
 // flagdFullSettings is every flag of flagd start with the components it belongs to. A new flag has no entry here and
 // fails TestEveryFlagdFullSettingHasAComponent, so that whoever adds it decides which components it belongs to.
@@ -150,6 +148,8 @@ func TestEveryFlagdFullSettingHasAComponent(t *testing.T) {
 	sort.Strings(known)
 	require.Equal(t, known, flags, "every flag needs an entry in flagdFullSettings, and every entry a flag")
 
+	require.Len(t, settingComponents, len(flagdFullSettings), "settingComponents holds the same flags")
+
 	base := endpointSettingsOf(t, runtime.Config{})
 	for _, name := range known {
 		s := flagdFullSettings[name]
@@ -170,6 +170,18 @@ func TestEveryFlagdFullSettingHasAComponent(t *testing.T) {
 			sort.Strings(want)
 			require.Equal(t, want, derived, "the endpoint types that receive %s", name)
 			require.True(t, len(want) > 0 || s.own != "", fmt.Sprintf("%s belongs to no component and to no owner", name))
+
+			// the table that stops startup holds the same set: the endpoints, or the telemetry provider, and none for the
+			// runtime's own settings
+			var components []string
+			if s.own == "" {
+				components = want
+			} else if s.own == "telemetry" {
+				components = []string{componentTelemetry}
+			}
+			production := append([]string(nil), settingComponents[name]...)
+			sort.Strings(production)
+			require.Equal(t, components, production, "the components of %s in settingComponents", name)
 		})
 	}
 }

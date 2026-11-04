@@ -20,6 +20,8 @@ var (
 	Debug   bool
 	// Distribution is the name of the distribution, which `flagd version --verbose` shows.
 	Distribution string
+	// ComponentsHint makes the startup errors that name a missing component point to the components command.
+	ComponentsHint bool
 )
 
 var rootCmd = &cobra.Command{
@@ -61,6 +63,7 @@ func Execute(info distribution.Info, components distribution.Components, invento
 	Version = info.Version
 	Commit = info.Commit
 	Date = info.Date
+	ComponentsHint = info.ComponentsHint
 	Components = components
 	Inventory = inventory
 	err := rootCmd.Execute()
