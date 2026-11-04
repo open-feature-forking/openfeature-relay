@@ -173,7 +173,7 @@ This use case is `Implemented` as a dry run: `.github/scripts/release-dry-run.sh
 
 | Gap | Owner |
 |-----|-------|
-| The full platform matrix and both variants for flagd-cloud, flagd-kubernetes, flagd-sync and flagd-full (steps 7, 9, 10) | after the incubator |
+| The full platform matrix and both variants for flagd-minimal-otel, flagd-cloud, flagd-kubernetes, flagd-sync and flagd-full (steps 7, 9, 10) | after the incubator |
 | Wiring the standard distributions into the release workflow, creating tags and pushing images (steps 5, 10, A3, A5, A6, BR-008 in the workflow) | after the incubator |
 | Registering component modules with release-please, and the release pull request: proposed versions, changelogs, wrong-version corrections (steps 1-4, A1, BR-002, BR-010, BR-011) | after the incubator |
 | Building against real released component versions (steps 6-7, BR-005); the dry run renders manifests at the placeholder `v0.0.0-dryrun` and builds from the tree | after the incubator |
