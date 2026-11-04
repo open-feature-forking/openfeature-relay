@@ -5,11 +5,16 @@ ALL_GO_MOD_DIRS := $(shell find . \( -path ./test/integration -o -path ./.claude
 
 # The library modules: what embedders import. Tests, the FIPS tests and the benchmarks run on exactly
 # these (plus the binaries), and testdata/go-packages.txt pins the packages they contain.
-GO_LIB_MODULE_DIRS := ./core ./sync/file ./sync/flagd-grpc ./sync/http ./sync/openfeature-operator ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel ./evaluator/flagd ./configformat/flagd ./contrib/flagsmith/middleware
+GO_LIB_MODULE_DIRS := ./core ./sync/file ./sync/flagd-grpc ./sync/http ./sync/openfeature-operator ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel ./evaluator/flagd ./configformat/flagd
 
 # The modules flagd-full is made of besides the library ones: its main module, the runtime and the service endpoints
 # (UC-001 Q7). They are tested, benchmarked and pinned like the library modules.
 FLAGD_MODULE_DIRS := ./flagd ./runtime ./service/transport ./service/flag-evaluation ./service/ofrep ./service/flag-sync
+
+# The contrib component modules (vendor integrations). They are tested and pinned like the library modules, but stay
+# out of GO_LIB_MODULE_DIRS: they are not what embedders import, and an engine that hashes with MD5 cannot run under
+# test-fips.
+CONTRIB_MODULE_DIRS := ./contrib/flagsmith/middleware
 
 # The FIPS variant builds against the CMVP-certified Go Cryptographic Module
 # v1.0.0 (certificate #5247). The literal version is required; the
@@ -64,6 +69,7 @@ build-flagd-fips:
 TEST_TARGETS += test-core
 TEST_TARGETS += test-flagd
 TEST_TARGETS += test-flagd-proxy
+TEST_TARGETS += test-contrib
 TEST_TARGETS += test-builder
 TEST_TARGETS += test-distributions
 TEST_TARGETS += test-upgrade-accepted
@@ -82,6 +88,8 @@ test-modules:
 	@rc=0; for m in $(GO_LIB_MODULE_DIRS); do \
 		go test -race -covermode=atomic -cover -short $$m/... -coverprofile=$$(echo $$m | sed 's#^\./##; s#/#-#g')-coverage.out || rc=1; \
 	done; exit $$rc
+test-contrib:
+	go test -race -covermode=atomic -cover -short $(addsuffix /...,$(CONTRIB_MODULE_DIRS))
 test-flagd:
 	go test -race -covermode=atomic -cover -short $(addsuffix /...,$(FLAGD_MODULE_DIRS)) -coverprofile=flagd-coverage.out
 test-sync-example:
@@ -168,7 +176,7 @@ lint-fix:
 # The packages of the library modules and of flagd-full's modules must not change unnoticed, so that a move cannot drop a package from the test run.
 .PHONY: check-package-coverage
 check-package-coverage:
-	@for m in $(GO_LIB_MODULE_DIRS) $(FLAGD_MODULE_DIRS); do (cd $$m && go list ./...) || exit 1; done | LC_ALL=C sort > .go-packages.tmp; \
+	@for m in $(GO_LIB_MODULE_DIRS) $(FLAGD_MODULE_DIRS) $(CONTRIB_MODULE_DIRS); do (cd $$m && go list ./...) || exit 1; done | LC_ALL=C sort > .go-packages.tmp; \
 	tr -d '\r' < testdata/go-packages.txt > .go-packages.want; \
 	if ! diff -u .go-packages.want .go-packages.tmp; then rm -f .go-packages.tmp .go-packages.want; \
 		echo "the packages of the library modules differ from testdata/go-packages.txt"; exit 1; fi; \
