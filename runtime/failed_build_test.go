@@ -81,7 +81,7 @@ func (f failingEndpoint) Create(service.Settings) (service.Endpoint, error) {
 }
 
 // A FromConfig that fails releases what it created: flag sync binds its listener when its endpoint is created, and a
-// build that fails must not leave it behind, or the next build on the same addresses is refused (step 13 R3-5).
+// build that fails must not leave it behind, or the next build on the same addresses is refused.
 func TestFailedFromConfigReleasesItsListeners(t *testing.T) {
 	failures := map[string]func(t *testing.T, cfg *Config, components *Components, reg *registry, sawSync *[]string){
 		"a sync provider that cannot be created": func(_ *testing.T, cfg *Config, _ *Components, _ *registry, _ *[]string) {
@@ -130,7 +130,7 @@ func TestFailedFromConfigReleasesItsListeners(t *testing.T) {
 }
 
 // Builds that fail and builds that work, one after the other on one gate, leave nothing behind and each one listens:
-// the testbed switches configurations this way, and an invalid one is among them (step 13 Q22).
+// the testbed switches configurations this way, and an invalid one is among them.
 func TestFailedAndValidBuildsAlternate(t *testing.T) {
 	p := newPorts(t)
 	reg := &registry{}

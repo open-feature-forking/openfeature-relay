@@ -81,9 +81,13 @@ type Runtime struct {
 	resetDone chan struct{}
 	// resetMu serializes Reset calls.
 	resetMu msync.Mutex
-	// accepted holds, per source, the most recent versions of the deliveries a format accepted; rejected the last one
-	// it rejected. WaitAccepted reads them, and acceptChanged wakes it.
-	accepted      map[string][]string
+	// stopped is closed when the running runtime stops; nil before the first start.
+	stopped chan struct{}
+	// barrier is closed by the delivery loop when it reaches the marker Reset put on deliveries; nil outside a Reset.
+	barrier chan struct{}
+	// accepted holds, per source, the version of the last delivery a format accepted; rejected the last one it
+	// rejected. WaitAccepted reads them, and acceptChanged wakes it.
+	accepted      map[string]string
 	rejected      map[string]rejection
 	acceptChanged chan struct{}
 
@@ -111,8 +115,11 @@ func (r *Runtime) start(ctx context.Context) error {
 	dataSync := make(chan sync.DataSync, len(r.Syncs))
 	r.mu.Lock()
 	r.deliveries = dataSync
+	stopped := make(chan struct{})
+	r.stopped = stopped
 	r.mu.Unlock()
 	defer func() {
+		close(stopped)
 		r.mu.Lock()
 		r.deliveries = nil
 		r.mu.Unlock()
@@ -122,6 +129,10 @@ func (r *Runtime) start(ctx context.Context) error {
 		for {
 			select {
 			case data := <-dataSync:
+				if data.Source == barrierSource {
+					r.passBarrier()
+					continue
+				}
 				r.updateAndEmit(data)
 			case <-gCtx.Done():
 				return nil

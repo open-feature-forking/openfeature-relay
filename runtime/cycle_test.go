@@ -107,7 +107,7 @@ func buildWith(t *testing.T, cfg Config, components Components) (*Runtime, func(
 }
 
 // Building, running and stopping a runtime over and over in one process leaves nothing behind: no goroutine, no file
-// descriptor, no port. The testbed switches configurations this way (step 13 Q22).
+// descriptor, no port. The testbed switches configurations this way.
 func TestFromConfigRepeatedly(t *testing.T) {
 	p := newPorts(t)
 	cfg := twoSourceConfig(t, p)
