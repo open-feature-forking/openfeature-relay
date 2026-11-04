@@ -307,8 +307,8 @@ build-flagd-full:
 .PHONY: check-flagd-full-manifest
 check-flagd-full-manifest:
 	cd builder && go build -o ../bin/relay-builder ./cmd/relay-builder
-	GOWORK=off ./bin/relay-builder --manifest distributions/flagd-full/manifest.yaml --skip-compile
-	cd flagd && FLAGD_FULL_GENERATED=$$(cd ../distributions/flagd-full/build && pwd) go test -count=1 -run TestGeneratedComponentsEqualHandWritten ./components/
+	GOWORK=off ./bin/relay-builder --manifest distributions/flagd-full/manifest.yaml --skip-compile --probe-output distributions/flagd-full/probe.json
+	cd flagd && FLAGD_FULL_PROBE=$$(cd ../distributions/flagd-full && pwd)/probe.json go test -count=1 -run TestGeneratedComponentsEqualHandWritten ./components/
 
 # UC-001: the Builder builds flagd-full from its manifest (7a), and the generated components equal flagd's.
 .PHONY: builder-e2e

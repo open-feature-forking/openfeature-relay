@@ -3,7 +3,6 @@ package components
 import (
 	"encoding/json"
 	"os"
-	"os/exec"
 	"sort"
 	"testing"
 
@@ -29,17 +28,14 @@ type probed struct {
 // TestGeneratedComponentsEqualHandWritten pins that the source the Builder generates from
 // distributions/flagd-full/manifest.yaml holds the same components as this package: the same factories, each in the
 // module the inventory names, with the same schemes, evaluator format and needs. `make check-flagd-full-manifest`
-// generates the source and sets FLAGD_FULL_GENERATED to its directory.
+// generates the source and has the Builder write what its probe printed to the file FLAGD_FULL_PROBE names.
 func TestGeneratedComponentsEqualHandWritten(t *testing.T) {
-	dir := os.Getenv("FLAGD_FULL_GENERATED")
-	if dir == "" {
-		t.Skip("FLAGD_FULL_GENERATED names the directory of the generated source; make check-flagd-full-manifest sets it")
+	file := os.Getenv("FLAGD_FULL_PROBE")
+	if file == "" {
+		t.Skip("FLAGD_FULL_PROBE names the file with the output of the generated probe; make check-flagd-full-manifest sets it")
 	}
-	cmd := exec.Command("go", "run", "./probe")
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GOWORK=off", "CGO_ENABLED=0")
-	out, err := cmd.Output()
-	require.NoError(t, err, "go run ./probe in %s", dir)
+	out, err := os.ReadFile(file)
+	require.NoError(t, err)
 	var got []probed
 	require.NoError(t, json.Unmarshal(out, &got))
 
