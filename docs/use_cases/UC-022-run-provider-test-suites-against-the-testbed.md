@@ -20,7 +20,7 @@
 ## Main Success Scenario
 
 1. GitHub Actions starts the compose stack with the testbed image.
-2. The control module combines the raw flags in memory and builds the runtime from the testbed configuration `default`, with `flags/allFlags.json` read from the testbed source. When the runtime is ready, the control module renders `allFlags.json` from the in-memory state and ports 8013 to 8015 open. The control API on port 8080 is up from the start.
+2. The control module combines the raw flags in memory and builds the runtime from the testbed configuration `default`, with `flags/allFlags.json` read from the testbed source. When the runtime is ready, the control module renders `allFlags.json` from the in-memory state and ports 8013 to 8015 open. Port 8080 of the control API opens only after the `default` configuration has started, as in flagd-testbed, and the suite waits for it.
 3. The suite calls `/start` for the configuration `default` in every scenario. The testbed closes the gate, resets and reloads the store, opens the gate when the runtime is ready again, and answers.
 4. The suite evaluates flags over RPC, in-process sync or the rendered file.
 5. The suite calls `/change`. The testbed toggles `changing-flag` in the in-memory state, loads the new version into the store, renders `allFlags.json` atomically once the store holds it, and answers.
@@ -58,7 +58,7 @@
 
 ### A7: Change Times Out
 
-**Trigger:** The store does not hold the changed version within the change timeout of 5 seconds (step 5)  
+**Trigger:** The store does not hold the changed version within the change timeout of 5 seconds, the store rejects the load, or `/change` follows a switch that failed (step 5)  
 **Flow:**
 
 1. The testbed answers with a plain-text `500`.
@@ -98,11 +98,12 @@
 
 ### BR-001: Compatible API
 
-The control API keeps the Launchpad API of flagd-testbed v3.11.0: endpoints, paths, methods (any), payload shapes (JSON `{"status","message"}` with a trailing newline), messages and status codes, except three quirks that are fixed:
+The control API keeps the Launchpad API of flagd-testbed v3.11.0: endpoints, paths, methods (any), payload shapes (JSON `{"status","message"}` with a trailing newline), messages and status codes, except four quirks that are fixed:
 
 - a failed start no longer replaces the remembered configuration;
 - an unknown configuration is answered at once (A9) and not after the readiness timeout;
-- `/change` rewrites no file; it alters the in-memory state.
+- `/change` rewrites no file; it alters the in-memory state;
+- an unknown configuration takes no port down: flagd-testbed stops flagd before it starts the new configuration, so `/start?config=nope` takes 8013 to 8015 down, and the testbed leaves the gate and the runtime as they were (A9).
 
 `/restart` answers at once and a later call cancels a pending restart; `/stop` cancels a pending restart; the start timeout is 10 seconds and the change timeout 5 seconds.
 
@@ -141,5 +142,5 @@ The control module knows no flagd type; a target supplies the behaviour (start, 
 ## Accepted Test Gaps
 
 - Fault injection and a public fetch call are follow-ups: the testbed has no faults endpoint, no `/fetch` and no evaluation-recording sink.
-- The `ssl` configuration, the `socket` configuration and the other languages' suites run manually in the proof of concept.
+- The suites' `@customCert` and `@unixsocket` scenarios and the other languages' suites run manually in the proof of concept; the `ssl` configuration itself is tested automatically.
 - The scenarios `@fractional-v1` and `@fractional-v2` stay excluded (tracked in #47).
