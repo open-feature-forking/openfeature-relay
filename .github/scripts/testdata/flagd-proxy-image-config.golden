@@ -1,0 +1,7 @@
+Entrypoint: ["/flagd-proxy"]
+Cmd: null
+User: "65532:65532"
+WorkingDir: "/"
+ExposedPorts: null
+Labels: null
+Env: ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin","SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt"]

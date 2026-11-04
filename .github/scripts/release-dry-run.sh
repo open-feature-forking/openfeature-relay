@@ -88,6 +88,37 @@ for tag in "v${version}" latest "v${version}-fips" latest-fips; do
   expect_equal "${image}: entrypoint" "[/flagd-build]" "$(docker image inspect "${image}" --format '{{.Config.Entrypoint}}')"
   expect_equal "${image}: user" "65532:65532" "$(docker image inspect "${image}" --format '{{.Config.User}}')"
 done
+# the image configuration, reduced to the fields an operator observes, equals the recorded one (K1); the image has no shell
+golden="$(cat .github/scripts/testdata/image-config.golden)"
+image_config() { # <image>
+  for field in Entrypoint Cmd User WorkingDir ExposedPorts Labels Env; do
+    echo "${field}: $(docker image inspect "$1" --format "{{json .Config.${field}}}")"
+  done
+}
+for tag in "v${version}" "v${version}-fips"; do
+  image="ghcr.io/open-feature/flagd:${tag}"
+  expect_equal "${image}: image configuration" "${golden}" "$(image_config "${image}")"
+  if docker run --rm --entrypoint /bin/sh "${image}" -c true >/dev/null 2>&1; then fail "${image} holds a shell"; else note "- ok: ${image}: no /bin/sh"; fi
+done
+# both platforms build into one OCI image
+# (the default driver cannot export OCI, so a throwaway container builder does)
+oci="${out}/flagd-oci.tar"
+builder="dry-run-$$"
+docker buildx create --driver docker-container --name "${builder}" >/dev/null
+trap 'docker buildx rm "${builder}" >/dev/null 2>&1 || true' EXIT
+docker buildx build --builder "${builder}" -q -f flagd/build.Dockerfile --platform linux/amd64,linux/arm64 --build-arg "VERSION=v${version}"   --build-arg "COMMIT=${commit}" --build-arg "DATE=${date}" --output "type=oci,dest=${oci}" . >/dev/null
+platforms="$(python3 - "${oci}" <<'PY'
+import json, sys, tarfile
+tar = tarfile.open(sys.argv[1])
+def blob(digest):
+    return json.load(tar.extractfile("blobs/sha256/" + digest.split(":", 1)[1]))
+manifests = json.load(tar.extractfile("index.json"))["manifests"]
+if len(manifests) == 1 and "manifests" in blob(manifests[0]["digest"]):
+    manifests = blob(manifests[0]["digest"])["manifests"]
+print(" ".join(sorted(m["platform"]["os"] + "/" + m["platform"]["architecture"] for m in manifests if m.get("platform", {}).get("os", "unknown") != "unknown")))
+PY
+)"
+expect_equal "image: platforms of the OCI build" "linux/amd64 linux/arm64" "${platforms}"
 expect_equal "image: flagd version" "flagd: v${version} (${commit}), built at: ${date}" \
   "$(docker run --rm "ghcr.io/open-feature/flagd:v${version}" version | grep '^flagd:')"
 note "- image base: $(grep '^FROM gcr.io/distroless' flagd/build.Dockerfile | tail -1)"
