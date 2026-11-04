@@ -1,7 +1,9 @@
 package upgrade
 
 import (
+	"bytes"
 	"encoding/json"
+	"net/http"
 	"regexp"
 	"sort"
 	"strings"
@@ -9,6 +11,13 @@ import (
 
 // Every rule below removes something that differs between two runs of the same flagd: a clock, a port, a random id.
 // A rule that would hide a difference between the two flagds does not belong here; that is accepted.yaml's job.
+//
+// The rules, each with what it masks:
+//   - Text: clocks (a date and time of day) and the host ports the containers are published on.
+//   - JSON: key order, and the value of flagConfigEtag and etag (opaque validators; #78). Numbers keep their literal.
+//   - Headers: the Date header, and the values of ETag and Last-Modified (opaque validators and a clock).
+//   - MetricSeries: the sample values and nothing else of a series.
+//   - the span attributes in otlp_test.go: the keys listed in volatile, by exact name.
 
 var (
 	// timestamps of the console and JSON log encodings, and RFC 3339 times in bodies
@@ -29,7 +38,9 @@ func Text(s string) string {
 // JSON renders a JSON body with its keys sorted and the validators masked; a body that is not JSON is returned as text.
 func JSON(body []byte) string {
 	var v any
-	if err := json.Unmarshal(body, &v); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.UseNumber()
+	if err := dec.Decode(&v); err != nil {
 		return Text(string(body))
 	}
 	out, err := json.Marshal(v) // map keys are sorted by encoding/json
@@ -39,24 +50,68 @@ func JSON(body []byte) string {
 	return etag.ReplaceAllString(Text(string(out)), `"$1":"<etag>"`)
 }
 
-// MetricNames returns the sorted, de-duplicated names of the metrics a Prometheus exposition lists, without their
-// values, labels and help texts.
-func MetricNames(exposition string) []string {
+// MetricSeries returns the sorted, de-duplicated series a Prometheus exposition lists: the # HELP and # TYPE lines, and
+// for each sample its name, its label names and, for a histogram bucket, the le boundary. The values and the other label
+// values are left out.
+func MetricSeries(exposition string) []string {
 	seen := map[string]bool{}
 	for _, line := range strings.Split(exposition, "\n") {
-		if line == "" || strings.HasPrefix(line, "#") {
+		line = strings.TrimSpace(line)
+		if line == "" {
 			continue
 		}
-		name := line
+		if strings.HasPrefix(line, "#") {
+			seen[line] = true
+			continue
+		}
+		name, labels := line, ""
 		if i := strings.IndexAny(line, "{ "); i >= 0 {
 			name = line[:i]
+			if line[i] == '{' {
+				if j := strings.LastIndex(line, "}"); j > i {
+					labels = line[i+1 : j]
+				}
+			}
 		}
-		seen[name] = true
+		seen[name+"{"+strings.Join(labelNames(labels), ",")+"}"] = true
 	}
-	names := make([]string, 0, len(seen))
-	for n := range seen {
-		names = append(names, n)
+	series := make([]string, 0, len(seen))
+	for s := range seen {
+		series = append(series, s)
+	}
+	sort.Strings(series)
+	return series
+}
+
+var label = regexp.MustCompile(`([a-zA-Z_][a-zA-Z0-9_]*)="((?:[^"\\]|\\.)*)"`)
+
+// labelNames returns the sorted label names of a sample, with the value of le.
+func labelNames(labels string) []string {
+	var names []string
+	for _, m := range label.FindAllStringSubmatch(labels, -1) {
+		if m[1] == "le" {
+			names = append(names, "le="+m[2])
+			continue
+		}
+		names = append(names, m[1])
 	}
 	sort.Strings(names)
 	return names
+}
+
+// Headers renders the response headers, one sorted line each, without the Date header and with the values of ETag and
+// Last-Modified reduced to "<set>".
+func Headers(h http.Header) string {
+	var lines []string
+	for name, values := range h {
+		switch http.CanonicalHeaderKey(name) {
+		case "Date":
+			continue
+		case "Etag", "Last-Modified":
+			values = []string{"<set>"}
+		}
+		lines = append(lines, http.CanonicalHeaderKey(name)+": "+strings.Join(values, ", "))
+	}
+	sort.Strings(lines)
+	return strings.Join(lines, "\n")
 }

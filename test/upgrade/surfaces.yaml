@@ -1,0 +1,34 @@
+# The surfaces of today's flagd that UC-009 compares (0a, Q10) and where each is shown. A surface is either run by a
+# scenario of upgrade_test.go (`scenario`) or pinned by tests that run today's flagd's behaviour against the
+# components (`covered_by`) because the black-box differential cannot reach it. TestSurfaces keeps the list honest.
+surfaces:
+  - surface: "file: source, default file watch"
+    scenario: resolve
+  - surface: "file: source, the other file watch (fsnotify), and a change of the file"
+    scenario: source-fsnotify
+  - surface: "http:// source that delivers"
+    scenario: source-http
+  - surface: "https:// source that delivers"
+    covered_by: ["sync/builder TestHTTPDeliveryCharacterization", "sync/http fetcher_test.go"]
+    note: "a trusted certificate cannot be given to both containers without changing their image"
+  - surface: "grpc:// source (flag sync as a source)"
+    scenario: source-grpc
+  - surface: "envoy:// source"
+    covered_by: ["sync/builder TestSourceMappingCharacterization"]
+  - surface: "gs://, azblob://, s3:// and core.openfeature.dev/ sources: option errors and first error line"
+    covered_by: ["sync/builder TestBlobSourcesCharacterization", "sync/builder TestSourceMappingCharacterization"]
+    note: "each needs credentials or a cluster; a source that cannot be reached is the accepted #78 item"
+  - surface: "an unreachable source"
+    scenario: unreachable-source
+  - surface: "ConnectRPC, OFREP and flag sync requests: status, headers and body"
+    scenario: resolve
+  - surface: "the OFREP event stream, the flag sync stream and the ConnectRPC event streams"
+    scenario: streams
+  - surface: "probes and the metric series"
+    scenario: management
+  - surface: "spans"
+    covered_by: ["TestSpans"]
+  - surface: "version, help, unknown scheme and deprecated flags"
+    scenario: version
+  - surface: "shutdown"
+    scenario: sigterm
