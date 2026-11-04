@@ -217,6 +217,10 @@ var startCmd = &cobra.Command{
 			if err != nil {
 				log.Fatal(err)
 			}
+			// the decoder of the configuration file ignores unknown keys; the grpc object of a source is strict
+			if err = decodeGRPCSettings(viper.Get(sourcesFlagName), syncProvidersFromConfig); err != nil {
+				log.Fatal(err)
+			}
 		}
 		syncProviders = append(syncProviders, syncProvidersFromConfig...)
 
@@ -297,4 +301,27 @@ func withTelemetryConfig(components distribution.Components) distribution.Compon
 		telemetryReloadInterval:  viper.GetDuration(otelReloadIntervalFlagName),
 	}
 	return components
+}
+
+// decodeGRPCSettings reads the `grpc` object of each source of the configuration file strictly, over what the
+// configuration file's decoder, which ignores unknown keys, made of it.
+func decodeGRPCSettings(raw any, sources []sync.SourceConfig) error {
+	entries, _ := raw.([]any)
+	for i, entry := range entries {
+		if i >= len(sources) {
+			break
+		}
+		object, _ := entry.(map[string]any)
+		for key, value := range object {
+			if !strings.EqualFold(key, "grpc") {
+				continue
+			}
+			settings, err := sync.DecodeGRPCSettings(value)
+			if err != nil {
+				return fmt.Errorf("source %q: %w", sources[i].URI, err)
+			}
+			sources[i].GRPC = settings
+		}
+	}
+	return nil
 }

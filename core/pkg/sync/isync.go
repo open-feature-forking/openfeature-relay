@@ -88,6 +88,9 @@ type SourceConfig struct {
 	// Headers (ResolveHeaders). Components that send headers read it.
 	HeadersFrom map[string]HeaderSource `json:"headersFrom,omitempty"`
 
+	// GRPC holds the opt-in settings of a gRPC sync source. Only a source of the provider "grpc" may have it.
+	GRPC *GRPCSourceSettings `json:"grpc,omitempty"`
+
 	OAuth *OAuthCredentialHandler `json:"oauth,omitempty"`
 
 	// Triggers are the fetch triggers of a fetcher source. Without them the source gets the default triggers of its
