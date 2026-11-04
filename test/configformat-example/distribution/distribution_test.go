@@ -44,8 +44,6 @@ func writeFile(t *testing.T, name, content string) string {
 	return path
 }
 
-func freePort(t *testing.T) uint16 { return freePorts(t, 1)[0] }
-
 // freePorts returns n different free ports. The listeners stay open until every port is chosen, so that no two of them
 // are the same port.
 func freePorts(t *testing.T, n int) []uint16 {
