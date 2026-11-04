@@ -1,0 +1,23 @@
+{
+ "flags": {
+  "off": {
+   "state": "DISABLED",
+   "variants": {
+    "on": true
+   },
+   "defaultVariant": "on"
+  },
+  "config": {
+   "state": "ENABLED",
+   "variants": {
+    "x": {
+     "k": "v"
+    },
+    "y": {
+     "k": "w"
+    }
+   },
+   "defaultVariant": "x"
+  }
+ }
+}
