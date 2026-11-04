@@ -108,12 +108,19 @@ type run struct {
 // /data), and publishes flagd's four ports on ephemeral host ports.
 func start(t *testing.T, image string, args []string, env map[string]string, files map[string]string) *run {
 	t.Helper()
+	return startWith(t, image, args, env, files, nil)
+}
+
+// startWith is start with more arguments for docker run.
+func startWith(t *testing.T, image string, args []string, env map[string]string, files map[string]string, dockerFlags []string) *run {
+	t.Helper()
 	dir := t.TempDir()
 	for name, content := range files {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644))
 	}
 	require.NoError(t, os.Chmod(dir, 0o755))
 	dockerArgs := []string{"run", "-d", "-v", dir + ":/data:ro"}
+	dockerArgs = append(dockerArgs, dockerFlags...)
 	for _, p := range []string{portEvaluation, portManagement, portSync, portOFREP} {
 		dockerArgs = append(dockerArgs, "-p", "127.0.0.1::"+p)
 	}
