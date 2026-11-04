@@ -76,6 +76,7 @@ TEST_TARGETS += test-telemetry-example
 TEST_TARGETS += test-eventsink-example
 TEST_TARGETS += test-contract-external
 TEST_TARGETS += test-middleware-example
+TEST_TARGETS += test-contrib-flagsmith
 test: $(TEST_TARGETS)
 test-core: test-modules
 test-modules:
@@ -96,6 +97,10 @@ test-eventsink-example:
 	go test -race -short -count=1 ./test/eventsink-example/... ./test/eventsink-example/distribution/...
 test-configformat-example:
 	go test -race -short -count=1 ./test/configformat-example/... ./test/configformat-example/distribution/...
+# The Flagsmith components are vendor modules (UC-019 BR-009). They stay out of GO_LIB_MODULE_DIRS and test-fips: the engine
+# hashes with MD5, so the Flagsmith distribution has no FIPS variant.
+test-contrib-flagsmith:
+	go test -race -short -count=1 ./contrib/flagsmith/engine/...
 test-service-example:
 	go test -race -short -count=1 ./test/service-example/...
 # The testbed's evaluator suite lives in the test-harness submodule (git submodule update --init test-harness).
