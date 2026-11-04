@@ -71,6 +71,7 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=bind,source=./core,target=./core \
     --mount=type=bind,source=./sync,target=./sync \
     --mount=type=bind,source=./telemetry,target=./telemetry \
+    --mount=type=bind,source=./eventsink,target=./eventsink \
     --mount=type=bind,source=./evaluator,target=./evaluator \
     --mount=type=bind,source=./configformat,target=./configformat \
     --mount=type=bind,source=./runtime,target=./runtime \

@@ -74,7 +74,7 @@ class BuildDockerfiles(unittest.TestCase):
     """K3: the Dockerfiles of flagd and flagd-proxy. A new hash for flagd-proxy means re-recording its image configuration."""
 
     PINNED = {
-        "flagd/build.Dockerfile": "052819ba0a4d9a672f188761faf27e9e7d3de7ecd02b7e30a2ce0a331bf2e05b",
+        "flagd/build.Dockerfile": "b95c00f2da32a69b9132c167051b8b435748029c5e732725b14a5b561604f65e",
         "flagd-proxy/build.Dockerfile": "dbdc1298b2474bb454e13e623ae190f4c99d695d688bcdf02d849493f932a837",
     }
 
