@@ -73,3 +73,7 @@
 | Extension Author      | A person who writes an extension in their own Go module.                                                                                   | contributor                   |
 | Provider Author       | A person who maintains an in-process provider that embeds the evaluator.                                                                   |                               |
 | Maintainer            | A person who maintains flagd, its component modules and the standard distributions.                                                       |                               |
+| Testbed | A distribution of the flagd-testbed role: flagd built from `distributions/flagd-testbed` with a control endpoint and a listener gate, against which provider test suites run. | |
+| Launchpad API | The control API of flagd-testbed v3.11.0 on port 8080: `/start`, `/stop`, `/restart` and `/change`, with their texts and codes. | |
+| Listener Gate | The layer through which the runtime opens its listeners; closing it closes every listener and connection with a plain close, opening it binds them again. | |
+| Control Target | The interface through which the control module drives a runtime: start, stop, load a document and report readiness. | |
