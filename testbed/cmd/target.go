@@ -26,17 +26,18 @@ const (
 	// combinedFile is the file source of the testbed configurations that holds the combined flags. The testbed serves
 	// it from memory instead (Q23).
 	combinedFile = "flags/allFlags.json"
-	// combinedSource is the testbed source that replaces it.
-	combinedSource = source.Prefix + "allFlags"
+	// combinedSource is the name of the source of the combined flags. The URI stays as the configuration writes it,
+	// because selectors address a source by its URI; only the provider behind it changes.
+	combinedSource = combinedFile
 	// pollInterval is how often a start looks at the readiness of the runtime it waits for.
 	pollInterval = 10 * time.Millisecond
 )
 
-// rewriteCombined turns the file source of the combined flags into the testbed source, and leaves every other source
-// as written.
+// rewriteCombined serves the file source of the combined flags from the testbed source, keeping its URI, and leaves
+// every other source as written.
 func rewriteCombined(s coresync.SourceConfig) coresync.SourceConfig {
 	if s.Provider == "file" && s.URI == combinedFile {
-		s.URI, s.Provider = combinedSource, source.Provider
+		s.Provider = source.Provider
 	}
 	return s
 }
