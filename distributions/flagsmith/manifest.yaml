@@ -1,0 +1,51 @@
+# flagsmith: a vendor distribution that serves the environment documents of one or several Flagsmith environments behind
+# OFREP, evaluated with Flagsmith's own Go engine (UC-019). Its sources name the format "flagsmith"; flagd's format and
+# evaluator stay in the build, so flagd flags can be served next to them (BR-001). It has no cmd entry, so it keeps flagd's
+# command line and configuration (Q9). The engine hashes with MD5, so there is no FIPS variant of it (G10).
+# Every relay module of the build list is replaced by its directory, as in flagd-full: the placeholder version v0.0.0
+# resolves through the replaces. Flagsmith's own client module resolves from the module proxy.
+dist:
+  name: flagsmith
+  version: 0.0.0
+  output_path: ./build
+  module: github.com/open-feature-forking/openfeature-relay/distributions/flagsmith
+  binary: flagsmith
+sync_providers:
+  - {module: github.com/open-feature-forking/openfeature-relay/contrib/flagsmith/sync, version: v0.0.0}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/sse, version: v0.0.0}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/file, version: v0.0.0}
+configuration_formats:
+  - {module: github.com/open-feature-forking/openfeature-relay/configformat/flagd, version: v0.0.0}
+evaluators:
+  - {module: github.com/open-feature-forking/openfeature-relay/evaluator/flagd, version: v0.0.0}
+engines:
+  - {module: github.com/open-feature-forking/openfeature-relay/contrib/flagsmith/engine, version: v0.0.0}
+service_endpoints:
+  - {module: github.com/open-feature-forking/openfeature-relay/service/ofrep, version: v0.0.0}
+middleware:
+  - {module: github.com/open-feature-forking/openfeature-relay/contrib/flagsmith/middleware, version: v0.0.0}
+telemetry: {module: github.com/open-feature-forking/openfeature-relay/telemetry/otel, version: v0.0.0}
+runtime: {module: github.com/open-feature-forking/openfeature-relay/runtime, version: v0.0.0}
+replaces:
+  - {module: github.com/open-feature-forking/openfeature-relay/configformat/flagd, path: ../../configformat/flagd}
+  - {module: github.com/open-feature-forking/openfeature-relay/contrib/flagsmith/engine, path: ../../contrib/flagsmith/engine}
+  - {module: github.com/open-feature-forking/openfeature-relay/contrib/flagsmith/middleware, path: ../../contrib/flagsmith/middleware}
+  - {module: github.com/open-feature-forking/openfeature-relay/contrib/flagsmith/sync, path: ../../contrib/flagsmith/sync}
+  - {module: github.com/open-feature-forking/openfeature-relay/core, path: ../../core}
+  - {module: github.com/open-feature-forking/openfeature-relay/evaluator/flagd, path: ../../evaluator/flagd}
+  - {module: github.com/open-feature-forking/openfeature-relay/runtime, path: ../../runtime}
+  - {module: github.com/open-feature-forking/openfeature-relay/service/flag-evaluation, path: ../../service/flag-evaluation}
+  - {module: github.com/open-feature-forking/openfeature-relay/service/flag-sync, path: ../../service/flag-sync}
+  - {module: github.com/open-feature-forking/openfeature-relay/service/ofrep, path: ../../service/ofrep}
+  - {module: github.com/open-feature-forking/openfeature-relay/service/transport, path: ../../service/transport}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/azblob, path: ../../sync/azblob}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/builder, path: ../../sync/builder}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/file, path: ../../sync/file}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc, path: ../../sync/flagd-grpc}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/gcs, path: ../../sync/gcs}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/http, path: ../../sync/http}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator, path: ../../sync/openfeature-operator}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/s3, path: ../../sync/s3}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/sse, path: ../../sync/sse}
+  - {module: github.com/open-feature-forking/openfeature-relay/telemetry/otel, path: ../../telemetry/otel}
+  - {module: github.com/open-feature/flagd/flagd, path: ../../flagd}
