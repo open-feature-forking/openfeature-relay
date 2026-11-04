@@ -8,7 +8,7 @@
 **Secondary Actors:** Vendor Flag Service  
 **Goal:** Replace a vendor's edge proxy, such as the Flagsmith Edge Proxy or the GO Feature Flag relay proxy, for the deployment's OpenFeature clients with a vendor distribution that reads the vendor's flag configurations for one or several environments and evaluates them with the vendor's evaluator behind OFREP, so that these clients get the same results from flagd.  
 **Trigger:** Operator decides to replace the vendor's edge proxy of a deployment with flagd  
-**Status:** Draft  
+**Status:** Implemented  
 
 **Requirements:** [FR-027, FR-014, FR-019, FR-017, FR-018, FR-022, FR-028, FR-029, FR-035, FR-046, FR-047, FR-048, FR-052](../requirements.md)
 
@@ -49,7 +49,7 @@
 **Trigger:** The Vendor Flag Service refuses the credential of an environment (step 4)  
 **Flow:**
 
-1. The sync provider ends with an error naming the source, without the credential, because it can never deliver with this credential (UC-003 BR-006).
+1. When no flag configuration of the source has been accepted yet, the sync provider ends with an error naming the source, without the credential, because it can never deliver with this credential (UC-003 BR-008). After a first flag configuration was accepted, a refusal is logged without the credential, and the sync provider keeps serving the last accepted flag configuration and retries as in A3, so that a rotated key or a refusal by a gateway in front of the Vendor Flag Service does not stop every environment; the staleness limit takes the vendor distribution out of readiness, and steps 2 to 4 do not apply.
 2. System stops the vendor distribution.
 3. Operator corrects the credential in the environment variable or file.
 4. Use case continues at step 1.
@@ -175,3 +175,16 @@ A vendor distribution replaces the edge proxy for OpenFeature clients that evalu
 ## Inherited Gaps
 
 - A webhook fetch trigger for a source, alongside server-sent events and vendor change events: it is not a service endpoint, because the event bus has no "fetch now" event and a trigger runs per source (moved here from UC-003 and UC-004).
+
+## Delivered by Later Use Cases
+
+This use case is `Implemented` as a small validation that the relay serves a vendor's flags: the Flagsmith distribution (`distributions/flagsmith`) fetches the environment document of an environment with its key from an environment variable, keeps it as the Flagsmith configuration format's document, resolves it with Flagsmith's own Go engine and serves it through OFREP, as an end-to-end test shows for an environment and for an identity against Flagsmith's engine. It is not a feature-complete replacement of the Flagsmith Edge Proxy. These parts are accepted gaps of this use case:
+
+- The credential middleware in the vendor distribution (main steps 7 and 9, BR-003, BR-004 for client keys, A6, and the part of A7 that hides a flag from the kind of credential): the middleware module exists (`contrib/flagsmith/middleware`), but the command line of flagd has no setting for middleware, so the distribution lists none and a request picks its environment with the `Flagd-Selector` header. Until the operator settings for middleware land, run the distribution only behind something that authenticates its clients: UC-005 and step 10's E1 (#127).
+- The comparison with the Flagsmith Edge Proxy (main step 13, A8, BR-005's Edge Proxy half): a recorded oracle and a live differential against the Edge Proxy image: #94.
+- End-to-end scenarios for paginated environment documents, an unavailable Vendor Flag Service and a stream that is down (A3, and the SSE half of main step 11): the fetcher and the SSE trigger have their own tests, the scenarios in the built distribution are #94.
+- The test case under `docs/test_cases/` that chains UC-001, UC-003, UC-005 and this use case: #94.
+- Flagsmith's own service endpoint for SDKs in local evaluation, and the Edge Proxy's configuration and health endpoints (A5, BR-010): #94.
+- GO Feature Flag (the second vendor named in the goal and in the preconditions): a later slice. FR-027 stays `In Progress` until then.
+- Hiding the features that only a server-side key may see (BR-004): the environment document has no marker for them.
+- A FIPS 140-3 variant of the Flagsmith distribution: the engine places an identity in a percentage split with MD5.
