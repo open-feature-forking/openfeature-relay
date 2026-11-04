@@ -34,8 +34,7 @@ var versionCmd = &cobra.Command{
 		// The distribution is opt-in: flagd version prints today's lines and no more unless asked (UC-001 Q10).
 		if verbose, _ := cmd.Flags().GetBool("verbose"); verbose {
 			details, _ := debug.ReadBuildInfo()
-			fmt.Printf("distribution: %s %s\n", Distribution, Version)
-			fmt.Printf("runtime: %s\n", runtimeVersion(details))
+			fmt.Print(identityLines(distributionIdentity(), details))
 		}
 	},
 }

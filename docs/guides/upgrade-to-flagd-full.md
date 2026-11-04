@@ -72,6 +72,12 @@ If you set a termination grace period, keep it above 10 seconds.
 
 A Kubernetes source (`core.openfeature.dev/`) delivers the `spec.flagSpec` of the resource as written, without rewriting it.
 
+#### `flagd components` lists the components instead of failing
+
+`flagd components` is a new command that lists the components compiled into the binary, as text or with `--output json`.
+It is hidden from `flagd --help`.
+A script that relied on the command failing as an unknown command now sees exit status 0.
+
 ### Fixes for failure cases
 
 #### A file read or decode error keeps the current flags
