@@ -3,8 +3,8 @@
 
 usage: compare-pass-sets.py <launchpad.json> <relay.json>
 
-Fails when the two sets differ, when a run passed nothing, or when either run left a scenario that neither passed or
-failed. A scenario is a test or subtest name; the packages are not part of it.
+Fails when the two sets differ, or when a run passed nothing. A scenario is a test or subtest name; the packages are not
+part of it.
 """
 import json
 import os

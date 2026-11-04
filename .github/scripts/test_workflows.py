@@ -4,6 +4,7 @@ The hashes are of the files with line endings normalised to LF. A change to a pi
 new hash in the same commit.
 """
 import hashlib
+import os
 import pathlib
 import re
 import unittest
@@ -51,6 +52,8 @@ class BuildWorkflow(unittest.TestCase):
         try:
             import yaml
         except ImportError:
+            if os.environ.get("GITHUB_ACTIONS") == "true":
+                self.fail("PyYAML is not installed on the runner, so this test cannot catch a workflow GitHub cannot parse")
             self.skipTest("PyYAML is not installed")
         jobs = yaml.safe_load(self.text)["jobs"]
         self.assertIn("test", jobs)

@@ -39,7 +39,9 @@ jobs:
       - run: make check-package-coverage
       - run: make check-flagd-full-modules
       - name: Test the workflow characterization
-        run: python3 .github/scripts/test_workflows.py
+        run: |
+          python3 -m pip install pyyaml
+          python3 .github/scripts/test_workflows.py
       - name: Test the benchmark comparison
         run: python3 .github/scripts/test_compare_allocs.py
       - name: Test the comparison of the pass sets of the testbed suites
