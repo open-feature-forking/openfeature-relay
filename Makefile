@@ -346,4 +346,4 @@ test-upgrade-accepted:
 
 # Refreshes the list of behaviour changes that accepted.yaml has to cover.
 refresh-issue-78:
-	gh issue view 78 --repo open-feature-forking/openfeature-relay --json body --jq .body > test/upgrade/testdata/issue-78.md
+	gh issue view 78 --repo open-feature-forking/openfeature-relay --json body --jq .body > test/upgrade/testdata/issue-78.txt

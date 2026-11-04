@@ -48,8 +48,15 @@ func (r *receiver) Export(_ context.Context, req *coltrace.ExportTraceServiceReq
 	return &coltrace.ExportTraceServiceResponse{}, nil
 }
 
-// volatile attribute keys carry something that differs between two runs: an address, a port, a size, an id.
-var volatile = []string{"address", "port", "id", "duration", "time", "user_agent", "client", "peer", "bytes", "size", "host", "ip"}
+// volatile attribute keys carry something that differs between two runs of the same flagd: the address and port of the
+// peer and of the published port. They match by exact name.
+var volatile = map[string]bool{
+	"server.address": true, "server.port": true, "client.address": true, "client.port": true,
+	"network.peer.address": true, "network.peer.port": true, "network.local.address": true, "network.local.port": true,
+	"net.peer.name": true, "net.peer.port": true, "net.host.name": true, "net.host.port": true,
+	"net.sock.peer.addr": true, "net.sock.peer.port": true, "net.sock.host.addr": true, "net.sock.host.port": true,
+	"url.full": true, "http.url": true,
+}
 
 func attributes(kvs []*commonpb.KeyValue) []string {
 	var out []string
@@ -58,10 +65,8 @@ func attributes(kvs []*commonpb.KeyValue) []string {
 		if value == "" {
 			value = fmt.Sprint(kv.GetValue())
 		}
-		for _, v := range volatile {
-			if strings.Contains(kv.Key, v) {
-				value = "<varies>"
-			}
+		if volatile[kv.Key] {
+			value = "<varies>"
 		}
 		out = append(out, kv.Key+"="+value)
 	}

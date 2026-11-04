@@ -23,16 +23,27 @@ type Entry struct {
 	Item string `yaml:"item"`
 	// Owner is the use case that removes a known break.
 	Owner string `yaml:"owner,omitempty"`
-	// Observations are the differences of the differential that the entry allows: scenario/key. A key may end in *.
-	Observations []string `yaml:"observations,omitempty"`
+	// Observations are the differences of the differential that the entry allows, each with the values both flagds are
+	// expected to show.
+	Observations []AcceptedDifference `yaml:"observations,omitempty"`
 	// CoveredBy names the tests that pin an item the black-box differential cannot observe.
 	CoveredBy []string `yaml:"covered_by,omitempty"`
 	Note      string   `yaml:"note,omitempty"`
 }
 
+// AcceptedDifference is one difference an entry accepts: the observation of a scenario, and what each flagd shows. A
+// difference with other values is not accepted. An absent observation is "<not observed>".
+type AcceptedDifference struct {
+	Scenario  string `yaml:"scenario"`
+	Key       string `yaml:"key"`
+	Baseline  string `yaml:"baseline"`
+	Candidate string `yaml:"candidate"`
+}
+
 // Accepted is the content of accepted.yaml.
 type Accepted struct {
 	Entries []Entry `yaml:"accepted"`
+	fired   map[AcceptedDifference]bool
 }
 
 // LoadAccepted reads accepted.yaml.
@@ -48,17 +59,35 @@ func LoadAccepted(path string) (*Accepted, error) {
 	return &a, nil
 }
 
-// Allows returns the entry that accepts the difference, if any.
-func (a *Accepted) Allows(scenario, key string) (Entry, bool) {
-	want := scenario + "/" + key
+// Allows returns the entry that accepts the difference, if any. It matches the scenario, the key and both values
+// exactly, and notes that the observation fired.
+func (a *Accepted) Allows(d Difference) (Entry, bool) {
+	got := AcceptedDifference{d.Scenario, d.Key, d.Baseline, d.Candidate}
 	for _, e := range a.Entries {
 		for _, o := range e.Observations {
-			if o == want || (strings.HasSuffix(o, "*") && strings.HasPrefix(want, strings.TrimSuffix(o, "*"))) {
+			if o == got {
+				if a.fired == nil {
+					a.fired = map[AcceptedDifference]bool{}
+				}
+				a.fired[o] = true
 				return e, true
 			}
 		}
 	}
 	return Entry{}, false
+}
+
+// Unfired returns the observations of the entries that no difference matched.
+func (a *Accepted) Unfired() []AcceptedDifference {
+	var out []AcceptedDifference
+	for _, e := range a.Entries {
+		for _, o := range e.Observations {
+			if !a.fired[o] {
+				out = append(out, o)
+			}
+		}
+	}
+	return out
 }
 
 // Issue78Items returns the items of the issue text: the lines that start with a checkbox.
