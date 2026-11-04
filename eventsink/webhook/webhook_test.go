@@ -326,3 +326,22 @@ func TestDeliveryErrorsNeverCarryHeaderValues(t *testing.T) {
 	require.Error(t, err)
 	require.NotContains(t, err.Error(), "s3cret-token")
 }
+
+func TestUnknownSettingIsRefusedNamingItAndTheValidOnes(t *testing.T) {
+	_, err := webhook.Factory{}.Create(eventsink.Settings{Config: map[string]any{
+		webhook.SettingURL: "http://x", "timout": "1s", "hedaers": map[string]any{},
+	}})
+	require.Error(t, err)
+	require.ErrorContains(t, err, `"hedaers", "timout"`)
+	for _, valid := range []string{"url", "timeout", "headers", "bufferSize", "batchSize", "flushInterval", "maxAttempts"} {
+		require.ErrorContains(t, err, valid)
+	}
+}
+
+func TestCoreOwnedSettingsAreAccepted(t *testing.T) {
+	_, err := webhook.Factory{}.Create(eventsink.Settings{Config: map[string]any{
+		webhook.SettingURL: "http://x", eventsink.KeyBufferSize: 10, eventsink.KeyBatchSize: 5,
+		eventsink.KeyFlushInterval: "1s", eventsink.KeyMaxAttempts: 2,
+	}})
+	require.NoError(t, err)
+}

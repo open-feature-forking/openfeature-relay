@@ -23,6 +23,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -65,6 +67,9 @@ func (f Factory) Kinds() []events.Kind {
 
 // Create builds the sink from the settings "url" and, optionally, "timeout". A faulty value is an error that names it.
 func (f Factory) Create(s eventsink.Settings) (eventsink.Sink, error) {
+	if err := checkKnown(s.Config); err != nil {
+		return nil, err
+	}
 	raw, ok := s.Config[SettingURL].(string)
 	if !ok || raw == "" {
 		return nil, fmt.Errorf("setting %q is required and must be a URL", SettingURL)
@@ -99,6 +104,33 @@ func (f Factory) Create(s eventsink.Settings) (eventsink.Sink, error) {
 		return nil, err
 	}
 	return &Webhook{url: u.String(), timeout: timeout, client: client, headers: headers}, nil
+}
+
+// settings are the keys Create reads. The core passes the whole Config to the factory, so the core-owned keys that size
+// the pipeline are valid here too; the core has read them already.
+var settings = []string{
+	SettingURL, SettingTimeout, SettingHeaders,
+	eventsink.KeyBufferSize, eventsink.KeyBatchSize, eventsink.KeyFlushInterval, eventsink.KeyMaxAttempts,
+}
+
+// checkKnown rejects a key that is not a setting, so a misspelt one does not start the sink with a default.
+func checkKnown(config map[string]any) error {
+	var unknown []string
+	for key := range config {
+		if !slices.Contains(settings, key) {
+			unknown = append(unknown, key)
+		}
+	}
+	if len(unknown) == 0 {
+		return nil
+	}
+	slices.Sort(unknown)
+	valid := slices.Clone(settings)
+	slices.Sort(valid)
+	for i, key := range unknown {
+		unknown[i] = strconv.Quote(key)
+	}
+	return fmt.Errorf("unknown setting %s; the settings are: %s", strings.Join(unknown, ", "), strings.Join(valid, ", "))
 }
 
 // parseHeaders reads the mapping of header names to values. An error names the setting and the header, never a value.
