@@ -54,14 +54,6 @@ func kind(t *testing.T) string {
 	}
 }
 
-// launchpadOnly skips a case that pins a quirk of the upstream launchpad.
-func launchpadOnly(t *testing.T) {
-	t.Helper()
-	if kind(t) != kindLaunchpad {
-		t.Skip("launchpad-only: the relay testbed fixes this quirk (UC-022 Q12)")
-	}
-}
-
 // bed is a running testbed container.
 type bed struct {
 	t     *testing.T
@@ -149,6 +141,22 @@ func (b *bed) requireRefused(ports ...int) {
 	b.t.Helper()
 	for _, port := range ports {
 		require.Eventually(b.t, func() bool { return b.refused(port) }, 3*time.Second, 50*time.Millisecond, "port %d refuses connections", port)
+	}
+}
+
+// requireNeverRefused polls the port for the duration and fails the first time a connection is refused.
+func (b *bed) requireNeverRefused(port int, d time.Duration) {
+	b.t.Helper()
+	for deadline := time.Now().Add(d); time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+		require.False(b.t, b.refused(port), "port %d refused a connection, so flagd was stopped by a restart that should have been cancelled", port)
+	}
+}
+
+// requireStaysRefused polls the port for the duration and fails the first time a connection is accepted.
+func (b *bed) requireStaysRefused(port int, d time.Duration) {
+	b.t.Helper()
+	for deadline := time.Now().Add(d); time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+		require.True(b.t, b.refused(port), "port %d accepted a connection, so a pending restart was not cancelled", port)
 	}
 }
 
@@ -343,12 +351,28 @@ func testAPI(t *testing.T) {
 		require.Equal(t, invalid, b.call(http.MethodGet, "/restart?seconds="+seconds), seconds)
 	}
 
-	// a later restart cancels a pending one: flagd is back after the second delay, not the first
-	require.Equal(t, 200, b.call(http.MethodGet, "/restart?seconds=30").code)
-	require.Equal(t, 200, b.call(http.MethodGet, "/restart?seconds=0").code)
-	b.waitReady(20 * time.Second)
-	time.Sleep(2 * time.Second)
-	require.True(t, b.ready())
+	// a later call cancels a pending restart: the restart that is 4 s away never happens, so 8013 is not refused again
+	// for longer than that
+	t.Run("a later restart cancels a pending one", func(t *testing.T) {
+		require.Equal(t, 200, b.call(http.MethodGet, "/restart?seconds=4").code)
+		require.Equal(t, 200, b.call(http.MethodGet, "/restart?seconds=0").code)
+		b.waitReady(20 * time.Second)
+		b.requireNeverRefused(portEvaluation, 6*time.Second)
+	})
+	t.Run("stop cancels a pending restart", func(t *testing.T) {
+		require.Equal(t, 200, b.call(http.MethodGet, "/restart?seconds=4").code)
+		require.Equal(t, 200, b.call(http.MethodGet, "/stop").code)
+		b.requireRefused(portEvaluation)
+		b.requireStaysRefused(portEvaluation, 6*time.Second)
+		require.Equal(t, 200, b.call(http.MethodGet, "/start?config=default").code)
+		b.waitReady(20 * time.Second)
+	})
+	t.Run("start cancels a pending restart", func(t *testing.T) {
+		require.Equal(t, 200, b.call(http.MethodGet, "/restart?seconds=4").code)
+		require.Equal(t, 200, b.call(http.MethodGet, "/start?config=default").code)
+		b.waitReady(20 * time.Second)
+		b.requireNeverRefused(portEvaluation, 6*time.Second)
+	})
 
 	// the three changes toggle the flag, whatever the method
 	for i, step := range []struct{ method, variant string }{{http.MethodGet, "bar"}, {http.MethodPost, "foo"}, {http.MethodGet, "bar"}} {
@@ -356,12 +380,32 @@ func testAPI(t *testing.T) {
 			b.call(step.method, "/change"), "change %d", i+1)
 	}
 
-	t.Run("failed start is remembered (quirk 1) and answers late (quirk 2)", func(t *testing.T) {
-		launchpadOnly(t)
+	t.Run("an unknown configuration (quirks 1, 2 and 4)", func(t *testing.T) {
+		if kind(t) == kindRelay {
+			// quirk 2 fixed: the answer is at once, and names the configuration
+			started := time.Now()
+			failed := b.call(http.MethodGet, "/start?config=nope")
+			require.Equal(t, 500, failed.code)
+			require.Equal(t, typ, failed.ctype)
+			require.Contains(t, failed.body, `Failed to start flagd: unknown configuration "nope"`)
+			require.Less(t, time.Since(started), 100*time.Millisecond, "an unknown configuration answers at once")
+
+			// quirk 4 fixed: the running flagd is not touched
+			_, code := b.resolveString(nil, "changing-flag")
+			require.Equal(t, 200, code, "8013 still serves after the failed start")
+
+			// quirk 1 fixed: the failed name is not remembered
+			require.Equal(t, 200, b.call(http.MethodGet, "/restart?seconds=0").code)
+			b.waitReady(20 * time.Second)
+			require.Equal(t, reply{200, typ, ok("flagd started successfully")}, b.call(http.MethodGet, "/start"))
+			return
+		}
+
 		const timedOut = `{"status":"error","message":"Failed to start flagd: flagd health check timed out"}` + "\n"
 		started := time.Now()
 		require.Equal(t, reply{500, typ, timedOut}, b.call(http.MethodGet, "/start?config=nope"))
-		require.GreaterOrEqual(t, time.Since(started), 9*time.Second, "an unknown configuration answers after the readiness timeout")
+		require.GreaterOrEqual(t, time.Since(started), 10*time.Second, "an unknown configuration answers after the readiness timeout")
+		b.requireRefused(portEvaluation, portManagement, portSync) // quirk 4: the failed start leaves nothing listening
 
 		// the unknown name is remembered, so a restart and a bare start fail too
 		require.Equal(t, 200, b.call(http.MethodGet, "/restart?seconds=0").code)
@@ -387,14 +431,20 @@ func testOutage(t *testing.T) {
 	b.requireRefused(portEvaluation, portManagement, portSync)
 	require.Equal(t, 400, b.call(http.MethodGet, "/restart?seconds=x").code, "the control port answers during the outage")
 
-	for name, s := range map[string]*stream{"EventStream": events, "SyncFlags": syncs} {
-		end, after := s.ended(t, 5*time.Second)
-		t.Logf("%s ended with %s after %d more messages", name, end, len(after))
-		require.Contains(t, []string{endEOF, endUnexpectedEOF, endReset}, end, "%s: a plain close, not an end-of-stream frame", name)
+	// the launchpad's observed end of each stream is recorded, and the relay testbed must end them the same way
+	var ends bytes.Buffer
+	for _, named := range []struct {
+		name string
+		s    *stream
+	}{{"EventStream", events}, {"SyncFlags", syncs}} {
+		end, after := named.s.ended(t, 5*time.Second)
+		t.Logf("%s ended with %s after %d more messages", named.name, end, len(after))
+		fmt.Fprintf(&ends, "%s: %s\n", named.name, end)
 		for _, m := range after {
-			require.NotContains(t, m, "provider_shutdown", "%s: no goodbye before the close", name)
+			require.NotContains(t, m, "provider_shutdown", "%s: no goodbye before the close", named.name)
 		}
 	}
+	golden(t, "outage-stream-ends.golden", ends.Bytes())
 
 	require.Equal(t, 200, b.call(http.MethodGet, "/start?config=default").code)
 	b.waitReady(20 * time.Second)
@@ -437,7 +487,10 @@ func testFiles(t *testing.T) {
 	require.NotEqual(t, string(start), string(one))
 
 	t.Run("source file layout (quirk 3)", func(t *testing.T) {
-		launchpadOnly(t)
+		if kind(t) == kindRelay {
+			require.Equal(t, untouched, b.rawFile(changing), "/change leaves the source file as it was")
+			return
+		}
 		require.NotEqual(t, untouched, b.rawFile(changing))
 		golden(t, "changing-flag.after-one-change.launchpad.json", []byte(b.rawFile(changing)))
 	})
