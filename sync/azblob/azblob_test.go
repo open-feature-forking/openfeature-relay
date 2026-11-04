@@ -21,10 +21,10 @@ const (
 	flagsA = `{"flags":{"a":{}}}`
 	flagsB = `{"flags":{"b":{}}}`
 
-	// accountKey is a base64 key for a made-up account
-	accountKey = "a2V5"
+	// accountKey is a base64 key for a made-up account, long enough for HMAC under FIPS 140-only mode (112 bits)
+	accountKey = "dGVzdC1hY2NvdW50LWtleS0t"
 	// connectionString is a well-formed connection string for a made-up account
-	connectionString = "DefaultEndpointsProtocol=https;AccountName=acct;AccountKey=a2V5;EndpointSuffix=core.windows.net"
+	connectionString = "DefaultEndpointsProtocol=https;AccountName=acct;AccountKey=dGVzdC1hY2NvdW50LWtleS0t;EndpointSuffix=core.windows.net"
 )
 
 // request is what the stub saw of one request.
@@ -310,7 +310,7 @@ func TestEnvironmentAndOptions(t *testing.T) {
 	}{
 		{"no account", map[string]string{"AZURE_STORAGE_ACCOUNT": ""}, "azblob://bucket/o", "environment variable AZURE_STORAGE_ACCOUNT not set or is blank"},
 		{"account only: default credential", map[string]string{}, "azblob://bucket/o", ""},
-		{"shared key", map[string]string{"AZURE_STORAGE_KEY": "a2V5"}, "azblob://bucket/o", ""},
+		{"shared key", map[string]string{"AZURE_STORAGE_KEY": "dGVzdC1hY2NvdW50LWtleS0t"}, "azblob://bucket/o", ""},
 		{
 			"a shared key that is not base64 fails", map[string]string{"AZURE_STORAGE_KEY": "!!"}, "azblob://bucket/o",
 			"failed azblob.NewSharedKeyCredential: decode account key: illegal base64 data at input byte 0",
