@@ -24,7 +24,7 @@ failed=0
 for module in ${modules}; do
   dir="${module#"${repository}"/}"
   if [ "${dir}" = "${module}" ] || [[ "${dir}" =~ ${not_components} ]] \
-    || ! awk -v want="module ${module}" '{sub(/$/, "")} $0 == want {found = 1} END {exit !found}' "${dir}/go.mod" 2>/dev/null; then
+    || ! awk -v want="module ${module}" '{sub(/\r$/, "")} $0 == want {found = 1} END {exit !found}' "${dir}/go.mod" 2>/dev/null; then
     echo "::error::${manifest} names ${module}, which is not a component module of this repository"
     failed=1
   fi

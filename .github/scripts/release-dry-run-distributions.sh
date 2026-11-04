@@ -58,8 +58,7 @@ archive_names() { # <name> <variants: standard fips> [platform labels]
 
 check_archives() { # <name> <directory> <expected names>
   local name="$1" dir="$2" expected="$3" got archive listing
-  got="$(cd "${dir}" && find . -maxdepth 1 \( -name '*.tar.gz' -o -name '*.zip' \) -printf '%f
-')"
+  got="$(cd "${dir}" && find . -maxdepth 1 \( -name '*.tar.gz' -o -name '*.zip' \) -printf '%f\n')"
   expect_equal "${name}: archive names" "$(sort <<<"${expected}")" "$(sort <<<"${got}")"
   [ -s "${dir}/sbom.xml" ] && note "- ok: ${name}: sbom.xml is not empty" || fail "${name}: sbom.xml is empty"
   for archive in ${got}; do
@@ -167,7 +166,11 @@ mkdir -p "${out}/manifests"
 for d in ${full_path} ${others}; do
   rendered="${out}/manifests/${d}.yaml"
   if .github/scripts/render-published-manifest.sh "distributions/${d}/manifest.yaml" "${rendered}"; then
-    ! grep -q '^replaces:' "${rendered}" && ! grep -q 'version: v0\.0\.0}' "${rendered}"       && note "- ok: ${d}: the published manifest pins v0.0.0-dryrun and has no replaces"       || fail "${d}: the published manifest keeps a replace or a version"
+    if ! grep -q '^replaces:' "${rendered}" && ! grep -q 'version: v0\.0\.0}' "${rendered}"; then
+      note "- ok: ${d}: the published manifest pins v0.0.0-dryrun and has no replaces"
+    else
+      fail "${d}: the published manifest keeps a replace or a version"
+    fi
   else
     fail "${d}: the published manifest names a module that is not a component module of this repository"
   fi

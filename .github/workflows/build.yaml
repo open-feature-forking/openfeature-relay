@@ -348,8 +348,9 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD: ${{ github.sha }}
         run: |
-          # the release scripts, the reference Dockerfile, the distributions and every Dockerfile
-          pattern='^\.github/scripts/release-|^\.github/scripts/render-|^builder/reference/|^distributions/|Dockerfile$'
+          # the release scripts and the goldens they compare, the release workflow the dry run reads, the Builder and its reference
+          # Dockerfile, the distributions and every Dockerfile
+          pattern='^\.github/scripts/release-|^\.github/scripts/render-|^\.github/scripts/testdata/|^\.github/workflows/release-please\.yaml$|^builder/|^distributions/|Dockerfile$'
           run=false
           if [ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]; then
             run=true

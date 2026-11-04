@@ -74,7 +74,7 @@ class BuildWorkflow(unittest.TestCase):
         job = self.job("release-dry-run")
         self.assertNotIn("\n    if:", job)
         self.assertIn('[ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]', job)
-        self.assertIn("^builder/reference/|^distributions/|Dockerfile$", job)
+        self.assertIn(r"^\.github/scripts/testdata/|^\.github/workflows/release-please\.yaml$|^builder/|^distributions/|Dockerfile$", job)
         self.assertIn("if: steps.gate.outputs.run == 'true'", job)
 
 
