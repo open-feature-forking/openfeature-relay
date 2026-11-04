@@ -236,7 +236,16 @@ func TestARedirectIsNotFollowed(t *testing.T) {
 	s.redirect.Store(elsewhere.srv.URL + "/events")
 	trigger := create(t, map[string]any{"url": s.URL(), "headers": map[string]any{"X-Environment-Key": "key-value-1234"}})
 
-	err := <-runOnce(context.Background(), trigger, func() {})
+	// A followed redirect lands on a stream that stays open, so Run would not return by itself: the context bounds the
+	// test, and the assertion is on the error of the 302 itself.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	var err error
+	select {
+	case err = <-runOnce(ctx, trigger, func() {}):
+	case <-time.After(wait):
+		t.Fatal("Run did not return")
+	}
 
 	require.ErrorContains(t, err, "302")
 	require.Zero(t, elsewhere.connections.Load(), "the headers, which carry a credential, are not sent to another address")
