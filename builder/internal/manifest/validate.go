@@ -22,6 +22,10 @@ var (
 // DefaultBinary is the name of the binary when the manifest names none: the name of today's flagd.
 const DefaultBinary = "flagd"
 
+// ComponentsHintOn reports whether the distribution's startup errors point to the components command: they do unless
+// the manifest sets components_hint to false.
+func (m *Manifest) ComponentsHintOn() bool { return m.Dist.ComponentsHint != "false" }
+
 // BinaryName returns the name of the binary the manifest asks for.
 func (m *Manifest) BinaryName() string {
 	if m.Dist.Binary != "" {
@@ -127,6 +131,9 @@ func (m *Manifest) validateDist(add adder, anchor func(string) Position) {
 	}
 	if m.Dist.Binary != "" && !binaryName.MatchString(m.Dist.Binary) {
 		add(at("binary"), "dist", "binary %q is not a file name: use letters, digits, dots, hyphens and underscores", m.Dist.Binary)
+	}
+	if h := m.Dist.ComponentsHint; h != "" && h != "true" && h != "false" {
+		add(at("components_hint"), "dist", "components_hint %q must be true or false", h)
 	}
 }
 

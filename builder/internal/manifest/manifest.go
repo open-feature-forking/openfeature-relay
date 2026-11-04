@@ -42,6 +42,9 @@ type Dist struct {
 	Module string
 	// Binary is the name of the binary; it defaults to "flagd" (the drop-in rule).
 	Binary string
+	// ComponentsHint is "true" or "false": whether the startup errors that name a missing component point to the
+	// components command. It defaults to true; flagd-full sets false to keep today's error texts.
+	ComponentsHint string
 	Pos    Position
 
 	fields fields

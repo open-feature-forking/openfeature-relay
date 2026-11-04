@@ -101,7 +101,8 @@ var (
 )
 
 func main() {
-	runtimecmd.Execute(distribution.Info{Name: {{printf "%q" .Name}}, Version: version, Commit: commit, Date: date},
+	runtimecmd.Execute(distribution.Info{Name: {{printf "%q" .Name}}, Version: version, Commit: commit, Date: date,
+		ComponentsHint: {{.ComponentsHint}}},
 		components.Components(), components.Inventory())
 }
 `

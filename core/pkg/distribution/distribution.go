@@ -52,4 +52,7 @@ type Info struct {
 	Version string
 	Commit  string
 	Date    string
+	// ComponentsHint makes the startup errors that name a missing component end with a pointer to the components
+	// command. The manifest's dist.components_hint sets it, true unless it says otherwise.
+	ComponentsHint bool
 }

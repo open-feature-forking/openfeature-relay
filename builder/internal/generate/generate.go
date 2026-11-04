@@ -169,7 +169,7 @@ func prepare(m *manifest.Manifest, opts Options) (templateData, string, error) {
 	}
 	items := Items(m)
 	data := templateData{
-		Module: m.ModulePath(), Name: m.Dist.Name, Items: items,
+		Module: m.ModulePath(), Name: m.Dist.Name, Items: items, ComponentsHint: m.ComponentsHintOn(),
 		CoreModule: CoreModule, RuntimeModule: RuntimeModule, GoVersion: opts.GoVersion,
 		CmdImport: RuntimeModule + "/cmd",
 	}
@@ -291,6 +291,8 @@ func (d templateData) Has(kind string) bool {
 
 type templateData struct {
 	Module, Name, GoVersion   string
+	// ComponentsHint is the manifest's components_hint as a Go boolean.
+	ComponentsHint bool
 	CoreModule, RuntimeModule string
 	// CmdImport is the package whose Execute function is the command line of the distribution.
 	CmdImport          string

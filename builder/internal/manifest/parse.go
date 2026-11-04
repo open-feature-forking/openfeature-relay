@@ -165,8 +165,10 @@ func (m *Manifest) parseDist(n *yaml.Node) {
 			set(&m.Dist.Module)
 		case "binary":
 			set(&m.Dist.Binary)
+		case "components_hint":
+			set(&m.Dist.ComponentsHint)
 		default:
-			m.add(positionOf(kv.key), "dist", fmt.Sprintf("unknown key %q (allowed: name, version, output_path, module, binary)", kv.key.Value))
+			m.add(positionOf(kv.key), "dist", fmt.Sprintf("unknown key %q (allowed: name, version, output_path, module, binary, components_hint)", kv.key.Value))
 		}
 	}
 }
