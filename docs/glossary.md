@@ -6,7 +6,7 @@
 | Builder | The relay builder CLI that turns a manifest into generated source and a compiled distribution. | ocb, generator, flagd-builder |
 | Manifest              | The YAML file that names a distribution and lists the component modules, versions and replacements it is built from.                       | config, builder config        |
 | Distribution          | A flagd binary, and its image, built from one manifest; it contains exactly the components the manifest selects.                          | flavour                       |
-| Standard Distribution | A distribution whose manifest the Maintainers publish with every release: flagd-minimal, flagd-cloud, flagd-kubernetes, flagd-sync or flagd-full. |  |
+| Standard Distribution | A distribution whose manifest the Maintainers publish with every release: flagd-minimal, flagd-minimal-otel, flagd-cloud, flagd-kubernetes, flagd-sync or flagd-full. |  |
 | flagd-full            | The standard distribution with every official component; it behaves exactly like flagd before the builder.                               | monolith                      |
 | Custom Distribution   | A distribution built from a manifest that is not a standard distribution.                                                                   |                               |
 | Component             | A selectable unit compiled into a distribution, exposed by a component module through a factory.                                          |                               |

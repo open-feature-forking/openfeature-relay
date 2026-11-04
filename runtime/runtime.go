@@ -17,6 +17,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	"golang.org/x/sync/errgroup"
@@ -48,6 +49,8 @@ type Runtime struct {
 	hooks     []shutdownHook
 	// MetricsHandler serves /metrics on the management port; nil answers 404.
 	MetricsHandler http.Handler
+	// Listen opens the management port; nil means net.Listen.
+	Listen service.ListenFunc
 	// Telemetry is the telemetry provider the runtime records its flagSync spans through; nil means the noop
 	// telemetry provider.
 	Telemetry telemetry.Provider
@@ -69,6 +72,24 @@ type Runtime struct {
 	staleLimits []staleLimit
 	// now is the clock of the staleness check; nil means time.Now.
 	now func() time.Time
+
+	// store is the store FromConfig built, which Reset empties; nil for a runtime assembled by hand.
+	store *store.Store
+	// deliveries is the channel the sync providers deliver on while the runtime runs; Reset hands it to ReSync.
+	deliveries chan sync.DataSync
+	// resetDone is closed once every source has been accepted again after a Reset; nil outside one.
+	resetDone chan struct{}
+	// resetMu serializes Reset calls.
+	resetMu msync.Mutex
+	// stopped is closed when the running runtime stops; nil before the first start.
+	stopped chan struct{}
+	// barrier is closed by the delivery loop when it reaches the marker Reset put on deliveries; nil outside a Reset.
+	barrier chan struct{}
+	// accepted holds, per source, the version of the last delivery a format accepted; rejected the last one it
+	// rejected. WaitAccepted reads them, and acceptChanged wakes it.
+	accepted      map[string]string
+	rejected      map[string]rejection
+	acceptChanged chan struct{}
 
 	mu msync.Mutex
 }
@@ -92,11 +113,26 @@ func (r *Runtime) start(ctx context.Context) error {
 	}
 	g, gCtx := errgroup.WithContext(ctx)
 	dataSync := make(chan sync.DataSync, len(r.Syncs))
+	r.mu.Lock()
+	r.deliveries = dataSync
+	stopped := make(chan struct{})
+	r.stopped = stopped
+	r.mu.Unlock()
+	defer func() {
+		close(stopped)
+		r.mu.Lock()
+		r.deliveries = nil
+		r.mu.Unlock()
+	}()
 	// Initialize DataSync channel watcher
 	g.Go(func() error {
 		for {
 			select {
 			case data := <-dataSync:
+				if data.Source == barrierSource {
+					r.passBarrier()
+					continue
+				}
 				r.updateAndEmit(data)
 			case <-gCtx.Done():
 				return nil
@@ -193,6 +229,7 @@ func (r *Runtime) updateAndEmit(payload sync.DataSync) {
 		span.RecordError(err)
 	}
 	span.End()
+	r.noteDelivery(payload, err)
 	if err != nil {
 		r.Logger.Error(fmt.Sprintf("error setting state: %v", err))
 		return
@@ -210,6 +247,10 @@ func (r *Runtime) updateAndEmit(payload sync.DataSync) {
 		if allReady {
 			r.initialized.Store(true)
 			r.initializedOnce.Do(func() { close(r.initChan()) })
+			if r.resetDone != nil {
+				close(r.resetDone)
+				r.resetDone = nil
+			}
 		}
 	}
 }

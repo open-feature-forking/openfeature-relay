@@ -29,7 +29,7 @@ func render(t *testing.T, manifest string) (rendered, output string, err error) 
 // placeholder version for each component module and has no replaces.
 func TestRenderedManifestHasNoReplaces(t *testing.T) {
 	module := regexp.MustCompile(`\{module: [^,}]+, version: ([^,}]+)\}`)
-	for _, name := range []string{"flagd-minimal", "flagd-cloud", "flagd-kubernetes", "flagd-sync"} {
+	for _, name := range []string{"flagd-minimal", "flagd-minimal-otel", "flagd-cloud", "flagd-kubernetes", "flagd-sync"} {
 		t.Run(name, func(t *testing.T) {
 			rendered, out, err := render(t, filepath.Join("distributions", name, "manifest.yaml"))
 			require.NoError(t, err, out)

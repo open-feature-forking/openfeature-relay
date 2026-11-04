@@ -10,6 +10,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	"github.com/open-feature-forking/openfeature-relay/service/ofrep/sse"
@@ -46,6 +47,8 @@ type SvcConfiguration struct {
 
 	// HTTPMiddleware wraps the routes after CORS and before the router. Nil means none.
 	HTTPMiddleware func(http.Handler) http.Handler
+	// Listen opens the service's listener; nil means net.Listen.
+	Listen service.ListenFunc
 }
 
 type Service struct {
@@ -53,6 +56,7 @@ type Service struct {
 	port   uint16
 	server *http.Server
 	sse    *sse.Service
+	listen service.ListenFunc
 }
 
 func NewOfrepService(
@@ -132,6 +136,7 @@ func NewOfrepService(
 		port:   cfg.Port,
 		server: &server,
 		sse:    sseService,
+		listen: cfg.Listen,
 	}, nil
 }
 
@@ -140,7 +145,10 @@ func (s Service) Start(ctx context.Context) error {
 
 	group.Go(func() error {
 		s.logger.Info(fmt.Sprintf("ofrep service listening at %d", s.port))
-		err := s.server.ListenAndServe()
+		listener, err := s.listen.Or()("tcp", s.server.Addr)
+		if err == nil {
+			err = s.server.Serve(listener)
+		}
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return fmt.Errorf("error from ofrep service: %w", err)
 		}
@@ -170,5 +178,14 @@ func (s Service) Start(ctx context.Context) error {
 		return fmt.Errorf("error from ofrep service: %w", err)
 	}
 
+	return nil
+}
+
+// Close stops what NewOfrepService started, for a service that is never started: the SSE tracker and its server. A
+// service that was started stops them itself when its context ends. Close is safe to repeat.
+func (s Service) Close() error {
+	if s.sse != nil {
+		s.sse.Close()
+	}
 	return nil
 }

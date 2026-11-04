@@ -67,7 +67,7 @@ build-flagd-fips:
 
 # UC-010 Q17: each standard distribution compiles as a FIPS variant too. The Builder generates the source of each
 # manifest, and the FIPS build of that source carries the certified module and the fips140 tag.
-STANDARD_DISTRIBUTIONS := flagd-minimal flagd-cloud flagd-kubernetes flagd-sync
+STANDARD_DISTRIBUTIONS := flagd-minimal flagd-minimal-otel flagd-cloud flagd-kubernetes flagd-sync
 .PHONY: build-standard-fips
 build-standard-fips:
 	cd builder && go build -o ../bin/relay-builder ./cmd/relay-builder
