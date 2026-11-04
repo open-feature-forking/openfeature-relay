@@ -203,7 +203,7 @@ var startCmd = &cobra.Command{
 
 		syncProviders, err := syncbuilder.ParseSyncProviderURIs(viper.GetStringSlice(uriFlagName), Components.Sync...)
 		if err != nil {
-			log.Fatal(withComponentsHint(err))
+			log.Fatal(unsupportedSourceError(err, viper.GetStringSlice(uriFlagName), Components))
 		}
 
 		syncProvidersFromConfig := []sync.SourceConfig{}

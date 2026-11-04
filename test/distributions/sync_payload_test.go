@@ -28,25 +28,34 @@ const syncPayloadGolden = "testdata/flag_sync_payload.golden"
 
 const syncService = "/flagd.sync.v1.FlagSyncService/"
 
-// startFlagdFull starts the flagd-full the Builder makes with the given sources and returns its sync port. It waits for
-// readiness and stops the process with the test.
+// startFlagdFull starts the flagd-full the Builder makes with the given sources and returns its sync port.
 func startFlagdFull(t *testing.T, sources ...string) (syncPort int) {
 	t.Helper()
-	path := filepath.Join(root(t), "distributions", "flagd-full", "manifest.yaml")
+	ports := startDistribution(t, "flagd-full", []string{"port", "management-port", "sync-port", "ofrep-port"}, nil, sources...)
+	return ports["sync-port"]
+}
+
+// startDistribution starts the distribution of distributions/<name> the Builder makes, with the given sources and extra
+// arguments, on a free port for each of the port flags named. It returns the ports, waits for readiness and stops the
+// process with the test.
+func startDistribution(t *testing.T, name string, portFlags, extra []string, sources ...string) map[string]int {
+	t.Helper()
+	path := filepath.Join(root(t), "distributions", name, "manifest.yaml")
 	b := build(t, path)
 	require.NoError(t, b.err, b.out)
 
 	ports := map[string]int{}
-	for _, name := range []string{"port", "management-port", "sync-port", "ofrep-port"} {
-		ports[name] = freePort(t)
+	for _, flagName := range portFlags {
+		ports[flagName] = freePort(t)
 	}
 	args := []string{"start"}
 	for _, source := range sources {
 		args = append(args, "--uri", "file:"+source)
 	}
-	for name, port := range ports {
-		args = append(args, "--"+name, fmt.Sprint(port))
+	for flagName, port := range ports {
+		args = append(args, "--"+flagName, fmt.Sprint(port))
 	}
+	args = append(args, extra...)
 	cmd := exec.Command(binary(t, path), args...)
 	cmd.Env = []string{"HOME=" + t.TempDir(), "PATH=" + os.Getenv("PATH")}
 	var stderr bytes.Buffer
@@ -71,8 +80,8 @@ func startFlagdFull(t *testing.T, sources ...string) (syncPort int) {
 		}
 		defer resp.Body.Close()
 		return resp.StatusCode == http.StatusOK
-	}, 60*time.Second, 200*time.Millisecond, "flagd-full becomes ready: %s", &stderr)
-	return ports["sync-port"]
+	}, 60*time.Second, 200*time.Millisecond, "%s becomes ready: %s", name, &stderr)
+	return ports
 }
 
 // canonical renders the envelope of a Connect response with sorted keys and its numbers as written, so that the
@@ -146,7 +155,30 @@ func firstStreamMessage(t *testing.T, base, request string) []byte {
 // body, ETag and headers of the flags route. A distribution that serves flag sync from the same sources (UC-017) keeps
 // every byte of it.
 func TestFlagSyncPayloadCharacterization(t *testing.T) {
-	dir := t.TempDir()
+	dir, paths := writeSyncSources(t)
+	port := startFlagdFull(t, paths...)
+	got := flagSyncTranscript(t, fmt.Sprintf("http://127.0.0.1:%d", port), dir)
+	if *updateSyncPayload {
+		require.NoError(t, os.MkdirAll("testdata", 0o755))
+		require.NoError(t, os.WriteFile(syncPayloadGolden, []byte(got), 0o600))
+		return
+	}
+	require.Equal(t, recordedSyncPayload(t), got)
+}
+
+// recordedSyncPayload is what flagd-full's flag sync endpoint sent when the golden was recorded.
+func recordedSyncPayload(t *testing.T) string {
+	t.Helper()
+	want, err := os.ReadFile(syncPayloadGolden)
+	require.NoError(t, err, "record the current flagd-full with `go test -run TestFlagSyncPayloadCharacterization -update-sync-payload`")
+	return string(bytes.ReplaceAll(want, []byte("\r\n"), []byte("\n")))
+}
+
+// writeSyncSources writes the two file sources of the flag sync characterization, with flag sets and metadata, and
+// returns their directory and paths.
+func writeSyncSources(t *testing.T) (dir string, paths []string) {
+	t.Helper()
+	dir = t.TempDir()
 	sources := map[string]string{
 		"a.json": `{"metadata":{"flagSetId":"set-a","owner":"team-a"},"flags":{
   "flag-a": {"state":"ENABLED","defaultVariant":"on","variants":{"on":true,"off":false},"metadata":{"purpose":"a"}},
@@ -154,15 +186,18 @@ func TestFlagSyncPayloadCharacterization(t *testing.T) {
 		"b.json": `{"metadata":{"flagSetId":"set-b","owner":"team-b"},"flags":{
   "flag-b": {"state":"DISABLED","defaultVariant":"zero","variants":{"zero":0,"one":1}}}}`,
 	}
-	var paths []string
 	for _, name := range []string{"a.json", "b.json"} {
 		path := filepath.Join(dir, name)
 		require.NoError(t, os.WriteFile(path, []byte(sources[name]), 0o600))
 		paths = append(paths, path)
 	}
-	port := startFlagdFull(t, paths...)
-	base := fmt.Sprintf("http://127.0.0.1:%d", port)
+	return dir, paths
+}
 
+// flagSyncTranscript sends the requests of the characterization to a flag sync endpoint and renders what came back,
+// with the directory of the sources masked.
+func flagSyncTranscript(t *testing.T, base, dir string) string {
+	t.Helper()
 	var out strings.Builder
 	section := func(title, body string) { fmt.Fprintf(&out, "== %s\n%s\n", title, body) }
 
@@ -199,13 +234,5 @@ func TestFlagSyncPayloadCharacterization(t *testing.T) {
 			fmt.Sprintf("%d\n%s\n%s", resp.StatusCode, headersOf(resp.Header), body))
 	}
 
-	got := strings.ReplaceAll(out.String(), dir, "<dir>")
-	if *updateSyncPayload {
-		require.NoError(t, os.MkdirAll("testdata", 0o755))
-		require.NoError(t, os.WriteFile(syncPayloadGolden, []byte(got), 0o600))
-		return
-	}
-	want, err := os.ReadFile(syncPayloadGolden)
-	require.NoError(t, err, "record the current flagd-full with `go test -run TestFlagSyncPayloadCharacterization -update-sync-payload`")
-	require.Equal(t, string(bytes.ReplaceAll(want, []byte("\r\n"), []byte("\n"))), got)
+	return strings.ReplaceAll(out.String(), dir, "<dir>")
 }
