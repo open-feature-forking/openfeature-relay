@@ -29,11 +29,17 @@ accepted:
     note: "the values are opaque; normalize.go masks them in bodies and headers"
     covered_by: ["runtime ofrep_stream_test.go TestOFREPEventStreamAnnouncesAVendorChange"]
   - kind: "#78"
+    item: "Flag sync reads the `Flagd-Configuration-Format` header"
+    covered_by: ["service/flag-sync TestUnknownFormatInvalidArgument", "service/flag-sync TestNoFormatHeaderServesFlagdUnchanged"]
+  - kind: "#78"
     item: "Shutdown: event streams get `provider_shutdown`"
     covered_by: ["runtime shutdown_characterization_test.go"]
   - kind: "#78"
     item: "The operator source delivers `spec.flagSpec` as written"
     covered_by: ["sync/openfeature-operator tests"]
+  - kind: "#78"
+    item: "`flagd components` lists the components instead of failing"
+    covered_by: ["runtime/cmd TestComponentsListsInventory", "runtime/cmd TestComponentsJSONSameContentAsText"]
   - kind: "#78"
     item: "A file read or decode error keeps the current flags"
     covered_by: ["sync/file tests"]

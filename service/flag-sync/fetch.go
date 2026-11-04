@@ -27,6 +27,10 @@ const (
 	fetchBoundSelectorInvalid
 	fetchStoreRead
 	fetchMarshal
+	fetchFormatUnknown
+	fetchDocumentMissing
+	fetchDocumentAmbiguous
+	fetchDocumentNoText
 )
 
 // fetchError classifies a failure so each transport maps it onto its own status vocabulary.
@@ -74,6 +78,16 @@ func fetchAllFlags(ctx context.Context, s store.IStore, expression string) ([]by
 	}
 
 	return body, nil
+}
+
+// fetchFormatDocument is the body of FetchAllFlags and the flags route for a configuration format other than
+// flagd's: the one document the expression names, and its text.
+func fetchFormatDocument(ctx context.Context, s store.IStore, format, expression string) (store.Document, string, error) {
+	selector, err := newSelector(ctx, expression)
+	if err != nil {
+		return store.Document{}, "", err
+	}
+	return formatDocument(s, format, &selector)
 }
 
 // wellFormedSelector checks shape only; unknown keys are store.NewSelector's call.

@@ -1,0 +1,21 @@
+{
+  "id": 1,
+  "name": "Production",
+  "api_key": "ENVKEY1",
+  "updated_at": "2026-01-03T00:00:00Z",
+  "project": {
+    "id": 1,
+    "name": "Project",
+    "hide_disabled_flags": false,
+    "segments": []
+  },
+  "feature_states": [
+    {"feature": {"id": 1, "name": "dark-mode", "type": "STANDARD"}, "enabled": true, "feature_state_value": null, "django_id": 1},
+    {"feature": {"id": 2, "name": "welcome", "type": "STANDARD"}, "enabled": true, "feature_state_value": "changed", "django_id": 2},
+    {"feature": {"id": 4, "name": "ratio", "type": "STANDARD"}, "enabled": true, "feature_state_value": "0.5", "django_id": 4},
+    {"feature": {"id": 5, "name": "kill-switch", "type": "STANDARD"}, "enabled": false, "feature_state_value": "off", "django_id": 5},
+    {"feature": {"id": 6, "name": "banner", "type": "STANDARD"}, "enabled": true, "feature_state_value": "default-banner", "django_id": 6},
+    {"feature": {"id": 9, "name": "added", "type": "STANDARD"}, "enabled": true, "feature_state_value": "new", "django_id": 9}
+  ],
+  "identity_overrides": []
+}

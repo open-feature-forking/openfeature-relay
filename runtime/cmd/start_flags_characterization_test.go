@@ -105,5 +105,5 @@ func TestRootSubcommands(t *testing.T) {
 		names = append(names, c.Name())
 	}
 	sort.Strings(names)
-	require.Equal(t, []string{"start", "version"}, names, "completion and help are added when the command executes")
+	require.Equal(t, []string{"components", "start", "version"}, names, "completion and help are added when the command executes; components is hidden")
 }
