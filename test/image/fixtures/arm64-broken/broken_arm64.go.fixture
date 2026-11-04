@@ -1,0 +1,6 @@
+//go:build arm64
+
+package main
+
+// a component that does not support the platform: the compile fails on arm64 only
+var _ int = "linux/arm64 is not supported"
