@@ -60,11 +60,12 @@ class BuildWorkflow(unittest.TestCase):
     def test_jobs(self):
         names = re.findall(r"^  ([a-z][a-z-]*):\n", self.text.split("\njobs:\n", 1)[1], re.M)
         self.assertEqual(
-            ["lint", "benchmark", "docs-check", "test", "fips", "docker-local", "upgrade-test", "release-dry-run"], names)
+            ["lint", "benchmark", "docs-check", "test", "fips", "docker-local", "upgrade-test", "release-dry-run", "testbed",
+             "testbed-rpc-outages"], names)
 
     def test_gated_jobs(self):
         gate = "if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'"
-        for name in ("fips", "docker-local"):
+        for name in ("fips", "docker-local", "testbed-rpc-outages"):
             with self.subTest(job=name):
                 self.assertIn(gate, self.job(name))
         self.assertIn("if: github.event_name == 'pull_request'", self.job("benchmark"))
@@ -76,6 +77,21 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIn('[ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]', job)
         self.assertIn(r"^\.github/scripts/testdata/|^\.github/workflows/release-please\.yaml$|^builder/|^distributions/|Dockerfile$", job)
         self.assertIn("if: steps.gate.outputs.run == 'true'", job)
+
+    def test_testbed_runs_when_go_code_or_the_testbed_changes(self):
+        """UC-022 Q14: the relay testbed has a gate step: FULL_CI, a manual run, or a change outside docs/ and .claude/."""
+        job = self.job("testbed")
+        self.assertNotIn("\n    if:", job)
+        self.assertIn('[ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]', job)
+        self.assertIn(r"grep -Ev '^(docs|\.claude)/'", job)
+        self.assertIn(r"\.go$|(^|/)go\.(mod|sum)$", job)
+        self.assertIn("if: steps.gate.outputs.run == 'true'", job)
+        self.assertIn("make testbed-contract-both", job)
+        self.assertIn("make testbed-suites", job)
+
+    def test_outage_job_compares_both_images(self):
+        """UC-022 Q16: the gated job runs the RPC suite with the outage scenarios against both images."""
+        self.assertIn("make testbed-rpc-outages", self.job("testbed-rpc-outages"))
 
 
 class BuildDockerfiles(unittest.TestCase):
