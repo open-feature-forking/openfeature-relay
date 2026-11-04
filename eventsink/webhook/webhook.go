@@ -3,7 +3,10 @@
 //
 // A distribution selects it with the settings
 //
-//	{"url": "https://hooks.example.com/flagd", "timeout": "5s"}
+//	{"url": "https://hooks.example.com/flagd", "timeout": "5s", "headers": {"Authorization": "Bearer <token>"}}
+//
+// The headers are sent with every request, which is how a credential reaches the receiver. A header value is never
+// logged and never appears in an error.
 //
 // By default the sink subscribes to every kind of event. Created with only configuration change events as its
 // kinds, it works as a notifier that tells another system about flag changes.
@@ -20,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
@@ -33,6 +37,7 @@ const Type = "webhook"
 const (
 	SettingURL     = "url"
 	SettingTimeout = "timeout"
+	SettingHeaders = "headers"
 )
 
 const defaultTimeout = 5 * time.Second
@@ -89,7 +94,63 @@ func (f Factory) Create(s eventsink.Settings) (eventsink.Sink, error) {
 	if client == nil {
 		client = &http.Client{}
 	}
-	return &Webhook{url: u.String(), timeout: timeout, client: client}, nil
+	headers, err := parseHeaders(s.Config[SettingHeaders])
+	if err != nil {
+		return nil, err
+	}
+	return &Webhook{url: u.String(), timeout: timeout, client: client, headers: headers}, nil
+}
+
+// parseHeaders reads the mapping of header names to values. An error names the setting and the header, never a value.
+func parseHeaders(raw any) (http.Header, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	values := map[string]string{}
+	switch m := raw.(type) {
+	case map[string]string:
+		values = m
+	case map[string]any:
+		for name, v := range m {
+			str, ok := v.(string)
+			if !ok {
+				return nil, fmt.Errorf("setting %q: the value of header %q is not a string", SettingHeaders, name)
+			}
+			values[name] = str
+		}
+	default:
+		return nil, fmt.Errorf("setting %q: expected a mapping of header names to strings, observed %T", SettingHeaders, raw)
+	}
+	h := make(http.Header, len(values))
+	for name, value := range values {
+		if !validHeaderName(name) {
+			return nil, fmt.Errorf("setting %q: %q is not a valid header name", SettingHeaders, name)
+		}
+		switch http.CanonicalHeaderKey(name) {
+		case "Content-Type", "Content-Length", "Host":
+			return nil, fmt.Errorf("setting %q: the sink sets the header %q itself", SettingHeaders, name)
+		}
+		if strings.ContainsAny(value, "\r\n") {
+			return nil, fmt.Errorf("setting %q: the value of header %q contains a line break", SettingHeaders, name)
+		}
+		h.Set(name, value)
+	}
+	return h, nil
+}
+
+// validHeaderName reports whether name is an RFC 9110 token.
+func validHeaderName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, c := range name {
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', strings.ContainsRune("!#$%&'*+-.^_`|~", c):
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // Webhook posts batches of events to a URL.
@@ -97,6 +158,7 @@ type Webhook struct {
 	url     string
 	timeout time.Duration
 	client  *http.Client
+	headers http.Header
 }
 
 // Deliver posts the batch as a JSON array.
@@ -110,6 +172,9 @@ func (w *Webhook) Deliver(ctx context.Context, batch []events.Event) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.url, bytes.NewReader(body))
 	if err != nil {
 		return eventsink.Permanent(err)
+	}
+	for name, values := range w.headers {
+		req.Header[name] = values
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := w.client.Do(req)

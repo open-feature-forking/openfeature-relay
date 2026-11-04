@@ -25,6 +25,7 @@ type hook struct {
 	gate    chan struct{} // closed while the receiver answers
 	batches [][]events.Event
 	status  int // 0 accepts
+	headers []http.Header
 	raw     [][]map[string]any
 }
 
@@ -40,6 +41,7 @@ func newHook(t *testing.T) *hook {
 func (h *hook) serve(w http.ResponseWriter, r *http.Request) {
 	h.mu.Lock()
 	gate, status := h.gate, h.status
+	h.headers = append(h.headers, r.Header.Clone())
 	h.mu.Unlock()
 	select {
 	case <-gate:
@@ -247,4 +249,80 @@ func TestDefaultKinds(t *testing.T) {
 		webhook.Factory{}.Kinds())
 	require.Equal(t, "webhook", webhook.Factory{}.Type())
 	require.NoError(t, eventsink.ValidateDeclarations(webhook.Factory{}))
+}
+
+func TestConfiguredHeadersAreSentWithEveryRequest(t *testing.T) {
+	h := newHook(t)
+	sink, err := webhook.Factory{}.Create(eventsink.Settings{Config: map[string]any{
+		webhook.SettingURL:     h.srv.URL,
+		webhook.SettingHeaders: map[string]any{"Authorization": "Bearer s3cret", "x-tenant": "acme"},
+	}})
+	require.NoError(t, err)
+
+	for range 2 {
+		require.NoError(t, sink.Deliver(context.Background(), []events.Event{events.Evaluation{FlagKey: "f"}}))
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	require.Len(t, h.headers, 2)
+	for _, got := range h.headers {
+		require.Equal(t, "Bearer s3cret", got.Get("Authorization"))
+		require.Equal(t, "acme", got.Get("X-Tenant"))
+		require.Equal(t, "application/json", got.Get("Content-Type"))
+	}
+}
+
+func TestHeadersAsStringMap(t *testing.T) {
+	h := newHook(t)
+	sink, err := webhook.Factory{}.Create(eventsink.Settings{Config: map[string]any{
+		webhook.SettingURL: h.srv.URL, webhook.SettingHeaders: map[string]string{"Authorization": "Bearer s3cret"},
+	}})
+	require.NoError(t, err)
+	require.NoError(t, sink.Deliver(context.Background(), []events.Event{events.Evaluation{FlagKey: "f"}}))
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	require.Equal(t, "Bearer s3cret", h.headers[0].Get("Authorization"))
+}
+
+func TestInvalidHeadersNameTheSettingNeverTheValue(t *testing.T) {
+	const secret = "s3cret-token"
+	for name, tt := range map[string]struct {
+		headers any
+		named   string
+	}{
+		"not a mapping":      {[]string{secret}, `"headers"`},
+		"value not a string": {map[string]any{"Authorization": []string{secret}}, `"Authorization"`},
+		"bad name":           {map[string]any{"Bad Name": secret}, `"Bad Name"`},
+		"empty name":         {map[string]any{"": secret}, `"headers"`},
+		"content type":       {map[string]any{"Content-Type": secret}, `"Content-Type"`},
+		"host":               {map[string]any{"host": secret}, `"host"`},
+		"line break":         {map[string]any{"X-Token": secret + "\r\nX-Evil: 1"}, `"X-Token"`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := webhook.Factory{}.Create(eventsink.Settings{Config: map[string]any{
+				webhook.SettingURL: "http://x", webhook.SettingHeaders: tt.headers,
+			}})
+			require.ErrorContains(t, err, tt.named)
+			require.ErrorContains(t, err, "headers")
+			require.NotContains(t, err.Error(), secret)
+		})
+	}
+}
+
+func TestDeliveryErrorsNeverCarryHeaderValues(t *testing.T) {
+	const secret = "Bearer s3cret-token"
+	h := newHook(t)
+	h.status = http.StatusUnauthorized
+	cfg := map[string]any{webhook.SettingURL: h.srv.URL, webhook.SettingHeaders: map[string]any{"Authorization": secret}}
+	sink, err := webhook.Factory{}.Create(eventsink.Settings{Config: cfg})
+	require.NoError(t, err)
+
+	err = sink.Deliver(context.Background(), []events.Event{events.Evaluation{FlagKey: "f"}})
+	require.Error(t, err)
+	require.NotContains(t, err.Error(), "s3cret-token")
+
+	h.srv.Close()
+	err = sink.Deliver(context.Background(), []events.Event{events.Evaluation{FlagKey: "f"}})
+	require.Error(t, err)
+	require.NotContains(t, err.Error(), "s3cret-token")
 }
