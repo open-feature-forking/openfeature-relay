@@ -15,6 +15,7 @@ var (
 )
 
 func main() {
-	runtimecmd.Execute(distribution.Info{Name: "flagd-full", Version: version, Commit: commit, Date: date},
+	runtimecmd.Execute(distribution.Info{Name: "flagd-full", Version: version, Commit: commit, Date: date,
+		ComponentsHint: false},
 		components.Components(), components.Inventory())
 }

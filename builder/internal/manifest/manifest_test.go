@@ -84,6 +84,16 @@ event_sinks: [{module: example.com/eventsink/webhook, version: v0.2.0}]
 	require.Len(t, m.Entries(), 8, "the runtime is not a component")
 }
 
+func TestComponentsHint(t *testing.T) {
+	require.True(t, parse(t, valid).ComponentsHintOn(), "the startup errors point to the components command unless the manifest says otherwise")
+
+	for hint, want := range map[string]bool{"true": true, "false": false} {
+		m := parse(t, strings.Replace(valid, "output_path: ./build/custom", "output_path: ./build/custom\n  components_hint: "+hint, 1))
+		require.NoError(t, m.Validate())
+		require.Equal(t, want, m.ComponentsHintOn(), hint)
+	}
+}
+
 func TestManifestValidation(t *testing.T) {
 	tests := map[string]struct {
 		manifest string
@@ -108,6 +118,10 @@ func TestManifestValidation(t *testing.T) {
 		"binary name": {
 			strings.Replace(valid, "output_path: ./build/custom", "output_path: ./build/custom\n  binary: bin/flagd", 1),
 			[]string{`5:11 dist: binary "bin/flagd" is not a file name`},
+		},
+		"components hint": {
+			strings.Replace(valid, "output_path: ./build/custom", "output_path: ./build/custom\n  components_hint: maybe", 1),
+			[]string{`5:20 dist: components_hint "maybe" must be true or false`},
 		},
 		"unknown key in dist": {
 			strings.Replace(valid, "output_path: ./build/custom", "output_path: ./build/custom\n  color: red", 1),
