@@ -180,5 +180,4 @@ This use case is `Implemented` for the service endpoint side: the factory, setti
 | Middleware factories, the chain, the official endpoints honouring a bound selector, FR-047 | UC-005 |
 | Event sinks and their flush | UC-020 |
 | Vendor flags on the flag evaluation event stream | UC-019 |
-| Flag sync of vendor documents | UC-017 |
 | A webhook fetch trigger | UC-019 |
