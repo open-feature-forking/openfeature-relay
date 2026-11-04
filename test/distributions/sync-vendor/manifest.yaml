@@ -1,0 +1,46 @@
+# sync-vendor: a vendor configuration proxy (UC-017 A7). It is flagd-sync (file sync, flagd's configuration format and
+# the flag sync endpoint) plus the keyvalue engine module, a vendor's configuration format with its evaluator, and the
+# example REST endpoint that serves the vendor's documents through the vendor's own sync protocol. Its command line
+# (the cmd entry) hands the endpoints their ports and the two sources. flagd's evaluator is not selected.
+dist:
+  name: sync-vendor
+  version: 0.0.0
+  output_path: ./build
+  module: github.com/open-feature-forking/openfeature-relay/test/distributions/sync-vendor
+  binary: sync-vendor
+sync_providers:
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/file, version: v0.0.0}
+configuration_formats:
+  - {module: github.com/open-feature-forking/openfeature-relay/configformat/flagd, version: v0.0.0}
+engines:
+  - {module: github.com/open-feature/flagd/test/configformat-example, version: v0.0.0}
+service_endpoints:
+  - {module: github.com/open-feature-forking/openfeature-relay/service/flag-sync, version: v0.0.0}
+  - {module: github.com/open-feature/flagd/test/service-example, version: v0.0.0}
+telemetry: {module: github.com/open-feature-forking/openfeature-relay/telemetry/otel, version: v0.0.0}
+runtime: {module: github.com/open-feature-forking/openfeature-relay/runtime, version: v0.0.0}
+cmd: {module: github.com/open-feature-forking/openfeature-relay/test/distributions/sync-vendor/cmd, version: v0.0.0}
+replaces:
+  - {module: github.com/open-feature-forking/openfeature-relay/configformat/flagd, path: ../../../configformat/flagd}
+  - {module: github.com/open-feature-forking/openfeature-relay/core, path: ../../../core}
+  - {module: github.com/open-feature-forking/openfeature-relay/evaluator/flagd, path: ../../../evaluator/flagd}
+  - {module: github.com/open-feature-forking/openfeature-relay/eventsink/webhook, path: ../../../eventsink/webhook}
+  - {module: github.com/open-feature-forking/openfeature-relay/runtime, path: ../../../runtime}
+  - {module: github.com/open-feature-forking/openfeature-relay/service/event-collector, path: ../../../service/event-collector}
+  - {module: github.com/open-feature-forking/openfeature-relay/service/flag-evaluation, path: ../../../service/flag-evaluation}
+  - {module: github.com/open-feature-forking/openfeature-relay/service/flag-sync, path: ../../../service/flag-sync}
+  - {module: github.com/open-feature-forking/openfeature-relay/service/ofrep, path: ../../../service/ofrep}
+  - {module: github.com/open-feature-forking/openfeature-relay/service/transport, path: ../../../service/transport}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/azblob, path: ../../../sync/azblob}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/builder, path: ../../../sync/builder}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/file, path: ../../../sync/file}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc, path: ../../../sync/flagd-grpc}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/gcs, path: ../../../sync/gcs}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/http, path: ../../../sync/http}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator, path: ../../../sync/openfeature-operator}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/s3, path: ../../../sync/s3}
+  - {module: github.com/open-feature-forking/openfeature-relay/telemetry/otel, path: ../../../telemetry/otel}
+  - {module: github.com/open-feature-forking/openfeature-relay/test/distributions/sync-vendor/cmd, path: ./cmd}
+  - {module: github.com/open-feature/flagd/flagd, path: ../../../flagd}
+  - {module: github.com/open-feature/flagd/test/configformat-example, path: ../../../test/configformat-example}
+  - {module: github.com/open-feature/flagd/test/service-example, path: ../../../test/service-example}

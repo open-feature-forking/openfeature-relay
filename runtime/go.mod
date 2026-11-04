@@ -30,6 +30,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.47.0
 	go.uber.org/mock v0.5.2
 	go.uber.org/zap v1.27.0
+	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/net v0.61.0
 	golang.org/x/sync v0.24.0
 	golang.org/x/sys v0.49.0
@@ -177,7 +178,6 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.47.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.11.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/oauth2 v0.37.0 // indirect
@@ -211,6 +211,8 @@ replace (
 	github.com/open-feature-forking/openfeature-relay/core => ../core
 	github.com/open-feature-forking/openfeature-relay/evaluator/flagd => ../evaluator/flagd
 	github.com/open-feature-forking/openfeature-relay/service/flag-evaluation => ../service/flag-evaluation
+	github.com/open-feature-forking/openfeature-relay/service/event-collector => ../service/event-collector
+	github.com/open-feature-forking/openfeature-relay/eventsink/webhook => ../eventsink/webhook
 	github.com/open-feature-forking/openfeature-relay/service/flag-sync => ../service/flag-sync
 	github.com/open-feature-forking/openfeature-relay/service/ofrep => ../service/ofrep
 	github.com/open-feature-forking/openfeature-relay/service/transport => ../service/transport

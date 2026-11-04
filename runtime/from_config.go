@@ -15,6 +15,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/middleware"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/secret"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
@@ -68,8 +69,13 @@ type Config struct {
 	// EndpointSettings are the settings of the service endpoints of a distribution, besides the official ones, keyed by
 	// the endpoint's type. An endpoint gets its own as Settings.Config.
 	EndpointSettings map[string]map[string]any
+	// EventSinksNeedMetrics makes FromConfig refuse event sinks when the telemetry provider serves no /metrics: the
+	// events a sink does not get are counted through the provider and reported on the management port (UC-021 A5), and
+	// the operator's event-sinks setting promises that. A main that lists its own event sinks in Components.EventSinks
+	// leaves it unset.
+	EventSinksNeedMetrics bool
 
-	ContextValues              map[string]any
+	ContextValues             map[string]any
 	HeaderToContextKeyMappings map[string]string
 	MaxRequestBodyBytes        int64
 	MaxRequestHeaderBytes      int64
@@ -110,6 +116,12 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 			_ = shutdownTelemetry(ctx)
 		}
 	}()
+
+	if config.EventSinksNeedMetrics && len(components.EventSinks) > 0 && metricsHandler(tp, components) == nil {
+		return nil, fmt.Errorf("the setting event-sinks needs a telemetry provider that serves /metrics, because the events "+
+			"an event sink does not get are reported on the management port; the telemetry provider of this distribution "+
+			"(%s) serves none", telemetryTypeName(components))
+	}
 
 	syncProviders := sourcesWithKnownFormat(logger, config.SyncProviders, config.ConfigurationFormats)
 	sources := []string{}
@@ -382,6 +394,14 @@ func withComponents(config Config, components Components) Config {
 	return config
 }
 
+// telemetryTypeName is the type of the components' telemetry provider, or the noop provider's without one.
+func telemetryTypeName(components Components) string {
+	if components.Telemetry == nil {
+		return telemetry.NoopType
+	}
+	return components.Telemetry.Type()
+}
+
 // metricsHandler returns what serves /metrics on the management port: the handler of the components, or else the one
 // of the telemetry provider if it has one.
 func metricsHandler(tp telemetry.Provider, components Components) http.Handler {
@@ -407,10 +427,16 @@ func httpMiddleware(
 		if err := middleware.ValidateDeclarations(c.Factory); err != nil {
 			return nil, fmt.Errorf("the middleware factory at position %d declares: %w", i, err)
 		}
+		// A setting may name its value, a credential, in an environment variable or a file; the middleware gets the
+		// value. Nothing here logs it, and an error names the setting and where it was to come from, never the value.
+		config, err := secret.ResolveSettings(c.Config)
+		if err != nil {
+			return nil, fmt.Errorf("error creating the middleware %q: %w", c.Factory.Type(), err)
+		}
 		mw, err := c.Factory.Create(middleware.Settings{
 			Logger:    logger.WithFields(zap.String("component", "middleware"), zap.String("middleware", c.Factory.Type())),
 			Telemetry: tp,
-			Config:    c.Config,
+			Config:    config,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("error creating the middleware %q: %w", c.Factory.Type(), err)

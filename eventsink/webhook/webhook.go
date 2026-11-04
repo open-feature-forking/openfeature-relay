@@ -113,6 +113,7 @@ func (f Factory) Create(s eventsink.Settings) (eventsink.Sink, error) {
 var settings = []string{
 	SettingURL, SettingTimeout, SettingHeaders,
 	eventsink.KeyBufferSize, eventsink.KeyBatchSize, eventsink.KeyFlushInterval, eventsink.KeyMaxAttempts,
+	eventsink.KeyKinds,
 }
 
 // checkKnown rejects a key that is not a setting, so a misspelt one does not start the sink with a default.

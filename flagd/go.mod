@@ -8,7 +8,9 @@ require (
 	github.com/open-feature-forking/openfeature-relay/configformat/flagd v0.1.0
 	github.com/open-feature-forking/openfeature-relay/core v0.20.0
 	github.com/open-feature-forking/openfeature-relay/evaluator/flagd v0.1.0
+	github.com/open-feature-forking/openfeature-relay/eventsink/webhook v0.0.0
 	github.com/open-feature-forking/openfeature-relay/runtime v0.0.0
+	github.com/open-feature-forking/openfeature-relay/service/event-collector v0.0.0
 	github.com/open-feature-forking/openfeature-relay/service/flag-evaluation v0.1.0
 	github.com/open-feature-forking/openfeature-relay/service/flag-sync v0.1.0
 	github.com/open-feature-forking/openfeature-relay/service/ofrep v0.1.0
@@ -211,7 +213,9 @@ replace (
 	github.com/open-feature-forking/openfeature-relay/configformat/flagd => ../configformat/flagd
 	github.com/open-feature-forking/openfeature-relay/core => ../core
 	github.com/open-feature-forking/openfeature-relay/evaluator/flagd => ../evaluator/flagd
+	github.com/open-feature-forking/openfeature-relay/eventsink/webhook => ../eventsink/webhook
 	github.com/open-feature-forking/openfeature-relay/runtime => ../runtime
+	github.com/open-feature-forking/openfeature-relay/service/event-collector => ../service/event-collector
 	github.com/open-feature-forking/openfeature-relay/service/flag-evaluation => ../service/flag-evaluation
 	github.com/open-feature-forking/openfeature-relay/service/flag-sync => ../service/flag-sync
 	github.com/open-feature-forking/openfeature-relay/service/ofrep => ../service/ofrep

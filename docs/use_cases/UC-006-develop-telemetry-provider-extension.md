@@ -119,4 +119,4 @@ This use case is `Implemented` for the telemetry provider side: the telemetry fa
 | Main scenario steps 7–8, A2, BR-010, FR-003, FR-008 | UC-001 |
 | A distribution with no observability code compiled in (BR-002, FR-024), and the noop telemetry provider and the official middleware as component modules of their own | UC-001 with UC-010 |
 | The OpenTelemetry instrumentation of Google's client libraries in any distribution with the GCS sync provider, whatever telemetry provider it selects | UC-010 (flagd-minimal leaves out the GCS sync provider) and UC-001 (the runtime stops importing every sync provider) |
-| flagd-proxy's own sync metrics | UC-017 |
+| flagd-proxy's own sync metrics | not delivered: flagd-proxy stays a separate program (UC-017 BR-007, UC-012 BR-013) |

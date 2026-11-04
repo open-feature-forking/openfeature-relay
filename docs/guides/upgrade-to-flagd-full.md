@@ -51,11 +51,30 @@ Before, flagd started and never became ready.
 The `s3://` source uses AWS SDK v2 only.
 Remove `awssdk=v1` from the URL.
 
+#### `event-sinks`, `middleware` and `endpoint-settings` in the configuration file are no longer ignored
+
+The keys `event-sinks`, `middleware` and `endpoint-settings` of flagd's configuration file used to be ignored, like any key flagd does not know.
+They now configure the components a distribution contains besides its official ones: event sinks, middleware and the service endpoints of extensions.
+An entry names its component with `type`, and the other keys are that component's settings.
+flagd-full contains none of these components, so an entry in these keys makes it stop at startup with an error that names the type and lists what the distribution has.
+`endpoint-settings` also stops startup when it holds `flag-evaluation`, `flag-sync` or `ofrep`: the settings of those endpoints are the flags of `flagd start`.
+The keys are matched as written, in lower case; `Event-Sinks` is still ignored, as every unknown key is.
+A file that holds the keys with no entries, as `event-sinks: []`, starts as before.
+If your configuration file has these keys for another purpose, remove them before you upgrade.
+
 ### Visible to clients, unlikely to break them
 
 #### Flag sync's `Last-Modified` moves only on a configuration change
 
 The `Last-Modified` of the flag sync service endpoint changes when the flag configuration changes, and not on every reload.
+
+#### flagd-full links two more modules and the `event-collector` key is no longer ignored
+
+flagd-full now contains the webhook event sink, `eventsink/webhook`, and the event collector, `service/event-collector`, so `go version -m` and the SBOM list two more modules.
+Neither does anything until you configure it: the sink subscribes to nothing without an `event-sinks` entry, and the collector opens no port.
+The `event-collector` key of the configuration file used to be ignored. Now `event-collector: {port: 8017}` opens the collector's port, and an unknown setting under it stops startup with an error that names it.
+The collector takes `--cors-origin`, `--max-request-body` and `--max-request-header` as OFREP does; a setting under `event-collector` or `endpoint-settings` wins over a flag.
+If your configuration file has an `event-collector` key for another purpose, remove it before you upgrade.
 
 #### OFREP `flagConfigEtag` values change
 

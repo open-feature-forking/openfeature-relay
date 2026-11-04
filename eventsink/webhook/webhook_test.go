@@ -339,7 +339,7 @@ func TestUnknownSettingIsRefusedNamingItAndTheValidOnes(t *testing.T) {
 	}})
 	require.Error(t, err)
 	require.ErrorContains(t, err, `"hedaers", "timout"`)
-	for _, valid := range []string{"url", "timeout", "headers", "bufferSize", "batchSize", "flushInterval", "maxAttempts"} {
+	for _, valid := range []string{"url", "timeout", "headers", "bufferSize", "batchSize", "flushInterval", "maxAttempts", "kinds"} {
 		require.ErrorContains(t, err, valid)
 	}
 }
@@ -347,7 +347,7 @@ func TestUnknownSettingIsRefusedNamingItAndTheValidOnes(t *testing.T) {
 func TestCoreOwnedSettingsAreAccepted(t *testing.T) {
 	_, err := webhook.Factory{}.Create(eventsink.Settings{Config: map[string]any{
 		webhook.SettingURL: "http://x", eventsink.KeyBufferSize: 10, eventsink.KeyBatchSize: 5,
-		eventsink.KeyFlushInterval: "1s", eventsink.KeyMaxAttempts: 2,
+		eventsink.KeyFlushInterval: "1s", eventsink.KeyMaxAttempts: 2, eventsink.KeyKinds: []any{"evaluation"},
 	}})
 	require.NoError(t, err)
 }
