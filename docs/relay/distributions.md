@@ -53,6 +53,10 @@ OpenTelemetry with all three clouds is 75.3 MiB, the size of flagd-cloud; with t
 - OpenTelemetry costs 8.6 MiB.
 - A distribution for one cloud would save 13 to 35 MiB against flagd-cloud.
 
+Percentages come from the unrounded sizes; flagd-kubernetes reads −36.9% when computed from the rounded values.
+flagd-full measures smaller than upstream while linking 7 more modules.
+This is not attributed to a change and is not a goal: a toolchain or dependency bump moves it by this much.
+
 The release dry run writes the size of each `linux_x86_64` binary it builds to the job summary.
 
 ## Custom distributions

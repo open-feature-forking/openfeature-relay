@@ -136,12 +136,13 @@ if [ "${DRY_RUN_DISTRIBUTIONS:-on}" != off ]; then
   .github/scripts/release-dry-run-distributions.sh "${version}" "${commit}" "${date}" "${out}" || fail "the standard distributions"
 fi
 
-note ""
-note ""
-note "#### Binary sizes (linux_x86_64)"
-note ""
-note "| Binary | MiB |"
-note "|---|---|"
-cat "${sizes_file}" | tee -a "${summary}"
+if [ -s "${sizes_file}" ]; then
+  note ""
+  note "#### Binary sizes (linux_x86_64)"
+  note ""
+  note "| Binary | MiB |"
+  note "|---|---|"
+  tee -a "${summary}" <"${sizes_file}"
+fi
 if [ "${failures}" -gt 0 ]; then note "${failures} check(s) failed."; exit 1; fi
 note "Nothing was pushed or signed."

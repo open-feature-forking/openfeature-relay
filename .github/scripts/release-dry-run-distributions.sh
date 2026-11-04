@@ -190,10 +190,4 @@ for d in ${full_path} ${others}; do
     "$(image_tags "${name}" | tr '\n' ' ' | sed 's/ $//')"
 done
 
-note ""
-note "#### Binary sizes (linux_x86_64)"
-note ""
-note "| Binary | MiB |"
-note "|---|---|"
-cat "${sizes_file}" | tee -a "${summary}"
 if [ "${failures}" -gt 0 ]; then exit 1; fi
