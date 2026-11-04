@@ -59,9 +59,10 @@ func TestRenderLifecycle(t *testing.T) {
 	loadStarted := make(chan struct{})
 	releaseLoad := make(chan struct{})
 	releaseOnce := sync.OnceFunc(func() { close(releaseLoad) })
-	t.Cleanup(releaseOnce) // a failed assertion must not leave the change blocked
 	target := &fakeTarget{}
 	ts := newTestServer(t, target, nil)
+	// after the server's own cleanup, so that it runs first and a failed assertion does not leave the change blocked
+	t.Cleanup(releaseOnce)
 	atStart := ts.rendered(t)
 	require.Equal(t, golden(t, "start"), atStart, "rendered at start")
 
