@@ -110,6 +110,10 @@ Spans and metrics that are still buffered are exported before flagd exits.
     Use the binary archives or the image, which are the supported install paths.
     Restoring `go install` needs published component modules (UC-012).
 
+- **flagd-proxy words the error for a missing source file differently.**
+    It syncs through this repository's file sync provider, so a request for a file that does not exist fails with the provider's text.
+    The status code is the same; only the message differs.
+
 ## Rolling back
 
 An upgrade changes your configuration only where an item above asks for it (an `awssdk=v1` option, an exporter variable that flagd could not build), so a rollback needs no change beyond undoing those.
