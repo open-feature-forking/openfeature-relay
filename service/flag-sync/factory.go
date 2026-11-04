@@ -74,6 +74,7 @@ func (Factory) Create(s service.Settings) (service.Endpoint, error) {
 	cfg.Initialized = s.Initialized
 	cfg.Formats = slices.Clone(s.Formats)
 	cfg.HTTPMiddleware = s.HTTPMiddleware
+	cfg.Listen = s.Listen
 	cfg.Telemetry = s.Telemetry
 	if p, ok := s.Telemetry.(connectInstrumentation); ok {
 		cfg.Options = append(slices.Clone(cfg.Options), p.ConnectHandlerOptions()...)

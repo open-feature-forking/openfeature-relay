@@ -106,6 +106,8 @@ type ConnectService struct {
 	withoutManagement bool
 	// httpMiddleware is the distribution's middleware, applied after CORS and before the instrumentation.
 	httpMiddleware func(http.Handler) http.Handler
+	// listen opens the endpoint's listener; nil means net.Listen.
+	listen service.ListenFunc
 }
 
 // DisableManagement leaves the management port, health, readiness and metrics, to the runtime: Serve then serves
@@ -164,10 +166,10 @@ func (s *ConnectService) setupServer(svcConf service.Configuration) (net.Listene
 	var err error
 
 	if svcConf.SocketPath != "" {
-		lis, err = net.Listen("unix", svcConf.SocketPath)
+		lis, err = s.listen.Or()("unix", svcConf.SocketPath)
 	} else {
 		address := fmt.Sprintf(":%d", svcConf.Port)
-		lis, err = net.Listen("tcp", address)
+		lis, err = s.listen.Or()("tcp", address)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("error creating listener for flag evaluation service: %w", err)

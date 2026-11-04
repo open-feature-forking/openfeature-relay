@@ -48,6 +48,8 @@ type Runtime struct {
 	hooks     []shutdownHook
 	// MetricsHandler serves /metrics on the management port; nil answers 404.
 	MetricsHandler http.Handler
+	// Listen opens the management port; nil means net.Listen.
+	Listen service.ListenFunc
 	// Telemetry is the telemetry provider the runtime records its flagSync spans through; nil means the noop
 	// telemetry provider.
 	Telemetry telemetry.Provider
