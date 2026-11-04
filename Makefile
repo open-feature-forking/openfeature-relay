@@ -177,8 +177,9 @@ fips-closure-standard:
 	@set -e; tr -d '\r' < docs/reference/fips-crypto-closure.txt | LC_ALL=C sort -u > bin/recorded-fips-closure.txt; \
 	for d in $(STANDARD_DISTRIBUTIONS); do \
 		GOWORK=off ./bin/relay-builder --manifest distributions/$$d/manifest.yaml --skip-compile; \
-		(cd distributions/$$d/build && GOWORK=off $(FIPS_ENV) GOOS=linux GOARCH=amd64 go list -tags $(FIPS_TAGS) -deps . \
-			| grep -E '^(crypto|golang\.org/x/crypto)($$|/)|/crypto($$|/)' | LC_ALL=C sort -u) > bin/$$d-fips-closure.txt; \
+		(cd distributions/$$d/build && GOWORK=off $(FIPS_ENV) GOOS=linux GOARCH=amd64 go list -tags $(FIPS_TAGS) -deps .) > bin/$$d-deps.txt; \
+		grep -E '^(crypto|golang\.org/x/crypto)($$|/)|/crypto($$|/)' bin/$$d-deps.txt | LC_ALL=C sort -u > bin/$$d-fips-closure.txt; \
+		grep -qx 'crypto/fips140' bin/$$d-fips-closure.txt || { echo "$$d: the closure lacks crypto/fips140, so the package list is wrong"; exit 1; }; \
 		extra=$$(LC_ALL=C comm -23 bin/$$d-fips-closure.txt bin/recorded-fips-closure.txt); \
 		if [ -n "$$extra" ]; then echo "$$d reaches crypto packages outside the recorded closure:"; echo "$$extra"; exit 1; fi; \
 		echo "$$d: FIPS crypto closure is within the recorded one"; \
