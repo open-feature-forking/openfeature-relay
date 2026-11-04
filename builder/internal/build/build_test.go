@@ -43,6 +43,7 @@ type Components struct {
 	ConfigurationFormats []configformat.Factory
 	Evaluators           []evaluator.Factory
 	Endpoints            []service.Factory
+	Telemetry            interface{ Type() string }
 }
 
 type Info struct{ Name, Version, Commit, Date string }
@@ -54,6 +55,7 @@ const (
 	GroupConfigurationFormat Group = "configuration_formats"
 	GroupEvaluator           Group = "evaluators"
 	GroupServiceEndpoint     Group = "service_endpoints"
+	GroupTelemetry           Group = "telemetry"
 )
 
 type ComponentInfo struct {
@@ -330,4 +332,42 @@ func TestSourceUsesOnlyGeneratedFiles(t *testing.T) {
 		}
 		require.Equal(t, string(want), string(got), name)
 	}
+}
+
+func TestCmdModuleWithoutExecuteNamesTheModule(t *testing.T) {
+	f := setup(t, "file", "flagdformat", "flagdeval", "ofrep")
+	require.NoError(t, os.MkdirAll(filepath.Join(f.dir, "stubs", "mycmd"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(f.dir, "stubs", "mycmd", "go.mod"), []byte("module example.test/mycmd\n\ngo 1.26.0\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(f.dir, "stubs", "mycmd", "cmd.go"), []byte("package mycmd\n"), 0o644))
+	text, err := os.ReadFile(f.manifest)
+	require.NoError(t, err)
+	text = append(text, []byte("cmd: {module: example.test/mycmd, version: v0.0.0}\n  - {module: example.test/mycmd, path: ./stubs/mycmd}\n")...)
+	// replaces is the last key, so the line is appended to it; the cmd entry goes before it
+	manifestText := strings.Replace(string(text), "replaces:\n", "cmd: {module: example.test/mycmd, version: v0.0.0}\nreplaces:\n", 1)
+	manifestText = strings.Replace(manifestText, "cmd: {module: example.test/mycmd, version: v0.0.0}\n  - {module: example.test/mycmd, path: ./stubs/mycmd}\n", "  - {module: example.test/mycmd, path: ./stubs/mycmd}\n", 1)
+	require.NoError(t, os.WriteFile(f.manifest, []byte(manifestText), 0o644))
+	opts, _ := options(t)
+
+	res, err := Run(ctx, f.load(t), opts)
+
+	var cerr *gotool.CompileError
+	require.ErrorAs(t, err, &cerr)
+	require.Len(t, cerr.Components, 1)
+	require.Equal(t, "example.test/mycmd", cerr.Components[0].Module)
+	require.Contains(t, err.Error(), "Execute")
+	require.Empty(t, res.Binary)
+}
+
+func TestRelativeManifestPath(t *testing.T) {
+	f := setup(t, "file", "flagdformat", "flagdeval", "ofrep")
+	opts, _ := options(t)
+	t.Chdir(f.dir)
+	m, err := manifest.Load("manifest.yaml")
+	require.NoError(t, err)
+
+	res, err := Run(ctx, m, opts)
+
+	require.NoError(t, err)
+	require.Equal(t, filepath.Join(f.dir, "out", "relay"), res.Binary, "the binary is where the output location says, whatever the working directory")
+	require.FileExists(t, res.Binary)
 }

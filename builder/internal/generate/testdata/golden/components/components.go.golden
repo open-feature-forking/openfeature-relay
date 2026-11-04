@@ -4,14 +4,18 @@
 package components
 
 import (
+	middleware0 "example.com/cors"
 	engine0 "example.com/keyvalue/engine"
+	eventsink0 "example.com/sink"
 	format0 "github.com/open-feature-forking/openfeature-relay/configformat/flagd"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/distribution"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/eventsink"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/middleware"
 	evaluator0 "github.com/open-feature-forking/openfeature-relay/evaluator/flagd"
 	endpoint0 "github.com/open-feature-forking/openfeature-relay/service/ofrep"
 	sync0 "github.com/open-feature-forking/openfeature-relay/sync/file"
 	sync1 "github.com/open-feature-forking/openfeature-relay/sync/http"
-	_ "github.com/open-feature-forking/openfeature-relay/telemetry/otel"
+	telemetry0 "github.com/open-feature-forking/openfeature-relay/telemetry/otel"
 )
 
 // Components are the factories of the distribution's components.
@@ -24,6 +28,9 @@ func Components() distribution.Components {
 	c.ConfigurationFormats = append(c.ConfigurationFormats, engine0.NewConfigurationFormatFactory())
 	c.Evaluators = append(c.Evaluators, engine0.NewEvaluatorFactory())
 	c.Endpoints = append(c.Endpoints, endpoint0.NewFactory())
+	c.Telemetry = telemetry0.NewFactory()
+	c.Middleware = append(c.Middleware, middleware.Configured{Factory: middleware0.NewFactory()})
+	c.EventSinks = append(c.EventSinks, eventsink.Configured{Factory: eventsink0.NewFactory()})
 	return c
 }
 
@@ -44,5 +51,8 @@ func Inventory() distribution.Inventory {
 	add(distribution.GroupConfigurationFormat, engine0.NewConfigurationFormatFactory().Type(), "example.com/keyvalue")
 	add(distribution.GroupEvaluator, engine0.NewEvaluatorFactory().Type(), "example.com/keyvalue")
 	add(distribution.GroupServiceEndpoint, endpoint0.NewFactory().Type(), "github.com/open-feature-forking/openfeature-relay/service/ofrep")
+	add(distribution.GroupTelemetry, telemetry0.NewFactory().Type(), "github.com/open-feature-forking/openfeature-relay/telemetry/otel")
+	add(distribution.GroupMiddleware, middleware0.NewFactory().Type(), "example.com/cors")
+	add(distribution.GroupEventSink, eventsink0.NewFactory().Type(), "example.com/sink")
 	return inv
 }

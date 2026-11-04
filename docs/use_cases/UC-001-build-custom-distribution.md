@@ -8,7 +8,7 @@
 **Secondary Actors:** Go Toolchain  
 **Goal:** Turn a manifest into a runnable flagd binary that contains exactly the components the manifest selects, with its generated source available for inspection or commit.  
 **Trigger:** Distribution Builder needs a flagd with a set of components that no standard distribution offers  
-**Status:** Draft  
+**Status:** Implemented  
 
 **Requirements:** [FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007, FR-008, FR-017, FR-018, FR-034, NFR-008, NFR-010, C-001](../requirements.md)
 
@@ -21,7 +21,7 @@
 ## Main Success Scenario
 
 1. Distribution Builder writes a manifest that names the distribution, its version and the output location.
-2. Distribution Builder lists in the manifest the components to compile in, grouped by component type (sync providers, configuration formats, evaluators, service endpoints, and optionally a telemetry provider and middleware), each as a component module path with a version.
+2. Distribution Builder lists in the manifest the components to compile in, grouped by component type (sync providers, configuration formats, evaluators, engines, service endpoints, and optionally a telemetry provider, middleware and event sinks), each as a component module path with a version. The manifest can also name the module that provides the distribution's command line, with a version; without it the distribution has the command line of the runtime.
 3. Distribution Builder runs the Builder on the manifest.
 4. Builder validates the manifest.
 5. Builder generates the distribution source into the output location: an entry point that registers the factory of every listed component, and a module definition that requires every listed component module at its declared version.
@@ -168,7 +168,7 @@ A manifest names the distribution, its version and its output location, and list
 
 ### BR-002: Component Cardinality
 
-A distribution contains at least one sync provider, at least one configuration format and at least one service endpoint. It contains one evaluator for each configuration format whose flags it evaluates, and none when no selected component needs one, as in a configuration proxy; an evaluator nothing needs is compiled in with a warning (A11). A telemetry provider is optional, at most one is selected, and the noop telemetry provider is compiled in when the manifest names none. Middleware is optional.
+A distribution contains at least one sync provider, at least one configuration format and at least one service endpoint. An engine module, which provides a configuration format and its evaluator together, is listed once under engines and counts for both. It contains one evaluator for each configuration format whose flags it evaluates, and none when no selected component needs one, as in a configuration proxy; an evaluator nothing needs is compiled in with a warning (A11). A telemetry provider is optional, at most one is selected, and the noop telemetry provider is compiled in when the manifest names none. Middleware is optional.
 
 ### BR-003: Same Reference for Every Component
 
@@ -184,7 +184,7 @@ The distribution source registers exactly the components the manifest lists; no 
 
 ### BR-006: Declared Versions Are Binding
 
-A distribution is built only when every component module resolves at the version the manifest declares, so that the manifest stays an exact record of the distribution's contents. Replaced modules (A2) and skipped module resolution (A5) are exempt.
+A distribution is built only when every component module resolves at the version the manifest declares, so that the manifest stays an exact record of the distribution's contents. Replaced modules (A2) and skipped module resolution (A5) are exempt. The Distribution Builder can ask the Builder to report a version that differs from the declared one as a warning instead (`--skip-strict-versioning`).
 
 ### BR-007: Local Replacement Target
 
@@ -221,3 +221,19 @@ Each component states which component types or components it needs; a distributi
 ### BR-015: One Sync Provider per Scheme
 
 Every scheme is claimed by exactly one selected sync provider. A scheme is the prefix of a source, which need not be a URI scheme (for example `core.openfeature.dev/`); two sync providers claiming the same prefix make the manifest invalid.
+
+## Delivered by Later Use Cases
+
+This use case is `Implemented`: the manifest and its validation, the generated source, module resolution with the version checks, the checks of needs and schemes, the compile, the skippable steps, the distribution's own command line, and the manifests of flagd-full and of the test distributions that the Builder builds in CI. These parts are delivered by the use cases named here, and are accepted gaps of this one:
+
+| Gap | Delivered by |
+|-----|--------------|
+| Tagged releases and the Builder's release | UC-012 |
+| Standard manifests, the platform matrix, flagd-minimal's NFR-003 and NFR-004 | UC-010 |
+| A module graph that does not carry the tests of the runtime and the sync builder: `go mod tidy` reads them, so every manifest replaces all sync modules, which inflates the module graph of a small distribution | UC-010 |
+| Settings of absent components stop startup (the table of flag to component settings exists) | UC-010 |
+| flagd-full released from the generated source | UC-009 |
+| `flagd components` (the inventory and the identity exist) | UC-011 |
+| Operator settings for extension components | UC-021 |
+| Reference Dockerfile (FR-009) | UC-002 |
+| Compiling a distribution with middleware or event sinks, which no repository manifest does yet: the generated source lists their factories without configuration, and the example components need some, so it waits for operator settings for extension components | UC-021 |

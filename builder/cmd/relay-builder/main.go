@@ -1,5 +1,5 @@
 // Command relay-builder turns a manifest into a distribution of the relay: a flagd binary that contains exactly the
-// components the manifest selects (UC-001). Building is experimental until the runtime module provides its cmd package.
+// components the manifest selects (UC-001).
 package main
 
 import (
@@ -99,7 +99,6 @@ func run(args []string, stdout, stderr io.Writer) int {
 var version = "dev"
 
 func buildDistribution(m *manifest.Manifest, o options, stdout, stderr io.Writer) int {
-	fmt.Fprintln(stderr, "warning: building a distribution is experimental until the runtime module provides its cmd package")
 	generateOptions := generate.Options{}
 	if version != "dev" {
 		generateOptions.RuntimeVersion, generateOptions.CoreVersion = version, version

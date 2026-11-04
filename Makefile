@@ -1,7 +1,7 @@
 PHONY: .docker-build .build .run .mockgen
 PREFIX=/usr/local
 PUBLIC_JSON_SCHEMA_DIR=docs/schema/v0/
-ALL_GO_MOD_DIRS := $(shell find . \( -path ./test/integration -o -path ./.claude -o -path ./test-harness -o -path ./spec -o -path ./schemas -o -path ./playground-app \) -prune -o -type f -name 'go.mod' -exec dirname {} \; | sort)
+ALL_GO_MOD_DIRS := $(shell find . \( -path ./test/integration -o -path ./.claude -o -path ./test-harness -o -path ./spec -o -path ./schemas -o -path ./playground-app -o -path "./distributions/*/build" -o -path "./test/distributions/*/build" \) -prune -o -type f -name 'go.mod' -exec dirname {} \; | sort)
 
 # The library modules: what embedders import. Tests, the FIPS tests and the benchmarks run on exactly
 # these (plus the binaries), and testdata/go-packages.txt pins the packages they contain.
@@ -65,6 +65,7 @@ TEST_TARGETS += test-core
 TEST_TARGETS += test-flagd
 TEST_TARGETS += test-flagd-proxy
 TEST_TARGETS += test-builder
+TEST_TARGETS += test-distributions
 TEST_TARGETS += test-configformat-example
 TEST_TARGETS += test-service-example
 TEST_TARGETS += test-evaluator-testkit
@@ -105,6 +106,8 @@ test-inprocess-example:
 # The Builder is a tool of its own: it imports no relay module (UC-001 Q1).
 test-builder:
 	go test -race -short -count=1 ./builder/...
+test-distributions:
+	cd test/distributions && go test -count=1 -timeout 30m ./...
 test-flagd-proxy:
 	go test -race -covermode=atomic -cover -short ./flagd-proxy/pkg/... -coverprofile=flagd-proxy-coverage.out
 # fips140=only makes non-approved algorithms error or panic, so this fails if a
@@ -175,7 +178,7 @@ check-package-coverage:
 flagd-full-modules:
 	@go list -deps -f '{{with .Module}}{{.Path}}{{end}}' ./flagd | grep -v '^$$' | LC_ALL=C sort -u
 check-flagd-full-modules:
-	@$(MAKE) --no-print-directory flagd-full-modules > .flagd-full-modules.tmp; 	tr -d '' < testdata/flagd-full-modules.txt > .flagd-full-modules.want; 	if ! diff -u .flagd-full-modules.want .flagd-full-modules.tmp; then rm -f .flagd-full-modules.tmp .flagd-full-modules.want; 		echo "the modules flagd-full links differ from testdata/flagd-full-modules.txt"; exit 1; fi; 	rm -f .flagd-full-modules.tmp .flagd-full-modules.want
+	@$(MAKE) --no-print-directory flagd-full-modules > .flagd-full-modules.tmp; 	tr -d '' < testdata/flagd-full-modules.txt > .flagd-full-modules.want; 	if ! diff -u .flagd-full-modules.want .flagd-full-modules.tmp; then rm -f .flagd-full-modules.tmp .flagd-full-modules.want; 		echo "the modules flagd-full links differ from testdata/flagd-full-modules.txt"; exit 1; fi; 	rm -f .flagd-full-modules.tmp .flagd-full-modules.want
 
 # testdata/module-boundaries.txt lists <module dir>:<packages>:<forbidden import path regexp>; no package of
 # <packages>, nor anything it imports, may match.
@@ -287,3 +290,26 @@ playground-build:
 .PHONY: playground-publish
 playground-publish: playground-build
 	cp playground-app/dist/assets/index-*.js docs/playground/playground.js
+
+# UC-001 7a: the Builder builds flagd-full from its manifest, the binary is named flagd, and the duration is printed
+# (NFR-008 asks for under three minutes). Run it with a warm module cache.
+.PHONY: build-flagd-full
+build-flagd-full:
+	cd builder && go build -o ../bin/relay-builder ./cmd/relay-builder
+	start=$$(date +%s); \
+	GOWORK=off ./bin/relay-builder --manifest distributions/flagd-full/manifest.yaml || exit 1; \
+	echo "flagd-full built in $$(( $$(date +%s) - start ))s"
+	test -x distributions/flagd-full/build/flagd
+	cd flagd && FLAGD_BINARY=$$(cd ../distributions/flagd-full/build && pwd)/flagd go test -count=1 -run "TestCLICharacterization|TestStartupLogCharacterization" ./
+
+# UC-001 Q12: the source the Builder generates from the manifest of flagd-full holds the components flagd keeps in
+# hand (flagd/components): same factories, modules, schemes, evaluator format and needs.
+.PHONY: check-flagd-full-manifest
+check-flagd-full-manifest:
+	cd builder && go build -o ../bin/relay-builder ./cmd/relay-builder
+	GOWORK=off ./bin/relay-builder --manifest distributions/flagd-full/manifest.yaml --skip-compile
+	cd flagd && FLAGD_FULL_GENERATED=$$(cd ../distributions/flagd-full/build && pwd) go test -count=1 -run TestGeneratedComponentsEqualHandWritten ./components/
+
+# UC-001: the Builder builds flagd-full from its manifest (7a), and the generated components equal flagd's.
+.PHONY: builder-e2e
+builder-e2e: check-flagd-full-manifest build-flagd-full

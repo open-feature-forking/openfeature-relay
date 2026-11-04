@@ -1,3 +1,2 @@
 testdata/*.txt text eol=lf
 *.golden text eol=lf
-builder/internal/generate/testdata/golden/** -text

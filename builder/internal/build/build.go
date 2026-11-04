@@ -50,7 +50,12 @@ func (e *NoSourceError) Error() string {
 
 // Run builds the distribution of the manifest.
 func Run(ctx context.Context, m *manifest.Manifest, opts Options) (Result, error) {
-	res := Result{SourceDir: generate.OutputDir(m)}
+	// the Go Toolchain runs in the source directory, so the paths handed to it are absolute
+	sourceDir, err := filepath.Abs(generate.OutputDir(m))
+	if err != nil {
+		return Result{}, err
+	}
+	res := Result{SourceDir: sourceDir}
 	warn := func(messages ...string) {
 		for _, msg := range messages {
 			res.Warnings = append(res.Warnings, msg)
@@ -73,6 +78,19 @@ func Run(ctx context.Context, m *manifest.Manifest, opts Options) (Result, error
 	for i, it := range items {
 		components[i] = gotool.Component{Group: string(it.Group), Module: it.Module, Version: it.Version,
 			Import: it.Import, Alias: it.Alias, Replaced: it.Replaced}
+	}
+	if m.Cmd != nil {
+		// main.go calls its Execute; a compile error that names runtimecmd concerns this module
+		replaced := false
+		for _, r := range m.Replaces {
+			replaced = replaced || r.Module == m.Cmd.Module
+		}
+		importPath := m.Cmd.Import
+		if importPath == "" {
+			importPath = m.Cmd.Module
+		}
+		components = append(components, gotool.Component{Group: "cmd", Module: m.Cmd.Module, Version: m.Cmd.Version,
+			Import: importPath, Alias: "runtimecmd", Replaced: replaced})
 	}
 	tool := opts.Tool
 

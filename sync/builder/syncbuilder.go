@@ -10,7 +10,6 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/fetching"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/polling"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
-	"k8s.io/client-go/dynamic"
 )
 
 const (
@@ -25,8 +24,10 @@ type ISyncBuilder interface {
 
 // SyncBuilder creates the sync providers of sources from the factories of the sync components it knows.
 type SyncBuilder struct {
-	factories        []sync.Factory
-	k8sClientBuilder IK8sClientBuilder
+	factories []sync.Factory
+	// k8sClientBuilder is set by tests, with a mock of the Kubernetes client builder; the builder imports no Kubernetes
+	// package itself.
+	k8sClientBuilder any
 
 	// SyncMetricsRecorder, when non-nil, is passed to every sync provider so they can
 	// record the universal client-side sync metrics
@@ -186,8 +187,4 @@ func quoteAnd(names []string) string {
 		return strings.Join(quoted, "")
 	}
 	return strings.Join(quoted[:len(quoted)-1], ", ") + " or " + quoted[len(quoted)-1]
-}
-
-type IK8sClientBuilder interface {
-	GetK8sClient() (dynamic.Interface, error)
 }

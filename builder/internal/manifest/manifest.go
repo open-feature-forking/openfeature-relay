@@ -92,6 +92,9 @@ type Manifest struct {
 	Dist Dist
 	// Runtime pins the runtime module; it is optional.
 	Runtime *Entry
+	// Cmd is the module whose Execute function is the command line of the distribution: its flags, configuration and
+	// commands. It is optional; without it the distribution has the command line of the runtime module (flagd's).
+	Cmd *Entry
 
 	SyncProviders        []Entry
 	ConfigurationFormats []Entry

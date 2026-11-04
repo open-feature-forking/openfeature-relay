@@ -6,8 +6,8 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/builder/internal/manifest"
 )
 
-// Kind is how the generated source wires the item: "sync", "format", "evaluator", "engine", "endpoint", or "" for a
-// group whose factories distribution.Components has no field for yet; such a component is compiled in by its import.
+// Kind is how the generated source wires the item: "sync", "format", "evaluator", "engine", "endpoint", "telemetry",
+// "middleware" or "eventsink".
 func (i Item) Kind() string {
 	switch i.Group {
 	case manifest.SyncProviders:
@@ -20,6 +20,12 @@ func (i Item) Kind() string {
 		return "engine"
 	case manifest.ServiceEndpoints:
 		return "endpoint"
+	case manifest.Telemetry:
+		return "telemetry"
+	case manifest.Middleware:
+		return "middleware"
+	case manifest.EventSinks:
+		return "eventsink"
 	}
 	return ""
 }
@@ -58,7 +64,7 @@ package main
 
 import (
 	"{{.CoreModule}}/pkg/distribution"
-	runtimecmd "{{.RuntimeModule}}/cmd"
+	runtimecmd "{{.CmdImport}}"
 	"{{.Module}}/components"
 )
 
@@ -81,6 +87,12 @@ package components
 
 import (
 	"{{.CoreModule}}/pkg/distribution"
+{{- if .Has "eventsink"}}
+	"{{.CoreModule}}/pkg/eventsink"
+{{- end}}
+{{- if .Has "middleware"}}
+	"{{.CoreModule}}/pkg/middleware"
+{{- end}}
 {{- range .Items}}
 {{- if .Kind}}
 	{{.Alias}} "{{.Import}}"
@@ -105,6 +117,12 @@ func Components() distribution.Components {
 	c.Evaluators = append(c.Evaluators, {{.Alias}}.NewEvaluatorFactory())
 {{- else if eq .Kind "endpoint"}}
 	c.Endpoints = append(c.Endpoints, {{.Alias}}.NewFactory())
+{{- else if eq .Kind "telemetry"}}
+	c.Telemetry = {{.Alias}}.NewFactory()
+{{- else if eq .Kind "middleware"}}
+	c.Middleware = append(c.Middleware, middleware.Configured{Factory: {{.Alias}}.NewFactory()})
+{{- else if eq .Kind "eventsink"}}
+	c.EventSinks = append(c.EventSinks, eventsink.Configured{Factory: {{.Alias}}.NewFactory()})
 {{- end}}
 {{- end}}
 	return c
@@ -130,6 +148,12 @@ func Inventory() distribution.Inventory {
 	add(distribution.GroupEvaluator, {{.Alias}}.NewEvaluatorFactory().Type(), {{printf "%q" .Module}})
 {{- else if eq .Kind "endpoint"}}
 	add(distribution.GroupServiceEndpoint, {{.Alias}}.NewFactory().Type(), {{printf "%q" .Module}})
+{{- else if eq .Kind "telemetry"}}
+	add(distribution.GroupTelemetry, {{.Alias}}.NewFactory().Type(), {{printf "%q" .Module}})
+{{- else if eq .Kind "middleware"}}
+	add(distribution.GroupMiddleware, {{.Alias}}.NewFactory().Type(), {{printf "%q" .Module}})
+{{- else if eq .Kind "eventsink"}}
+	add(distribution.GroupEventSink, {{.Alias}}.NewFactory().Type(), {{printf "%q" .Module}})
 {{- end}}
 {{- end}}
 	return inv
@@ -197,6 +221,10 @@ func main() {
 		n := f.Needs()
 		items = append(items, item{Group: distribution.GroupServiceEndpoint, Type: f.Type(),
 			Module: moduleOf(distribution.GroupServiceEndpoint, f.Type()), Needs: &needs{Router: n.Router, Format: n.Format}})
+	}
+	if c.Telemetry != nil {
+		items = append(items, item{Group: distribution.GroupTelemetry, Type: c.Telemetry.Type(),
+			Module: moduleOf(distribution.GroupTelemetry, c.Telemetry.Type())})
 	}
 	if err := json.NewEncoder(os.Stdout).Encode(items); err != nil {
 		os.Exit(1)
