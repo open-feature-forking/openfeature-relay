@@ -181,5 +181,4 @@ This use case is `Implemented` for the service endpoint side: the factory, setti
 | Event sinks and their flush | UC-020 |
 | An official collector endpoint, FR-039 | UC-021 |
 | Vendor flags on the flag evaluation event stream | UC-019 |
-| Flag sync of vendor documents | UC-017 |
 | A webhook fetch trigger | UC-019 |

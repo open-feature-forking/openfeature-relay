@@ -8,7 +8,7 @@
 **Secondary Actors:** In-Process Provider  
 **Goal:** Give in-process providers one place to receive validated flag configurations from, by running a configuration proxy that reads the sources and serves the flag sync endpoint without evaluating any flag.  
 **Trigger:** Operator decides that in-process providers receive their flag configurations from a configuration proxy instead of reading the sources themselves  
-**Status:** Draft  
+**Status:** Implemented  
 
 **Requirements:** [FR-025, FR-026, FR-022, FR-029, FR-044, FR-048, NFR-011, C-005](../requirements.md)
 
@@ -28,9 +28,9 @@
 6. System reports readiness on the management port once every configured source has delivered a flag configuration its configuration format accepted.
 7. Operator configures the in-process providers of the deployment with the address of the configuration proxy's flag sync endpoint, each with the selector of the flags it needs.
 8. In-Process Provider subscribes to the flag sync endpoint with its selector, naming the configuration format it reads or none for flagd's.
-9. System sends the In-Process Provider the documents of the requested configuration format in the store that match its selector, unchanged.
+9. System sends the In-Process Provider the documents of the requested configuration format in the store that match its selector, unchanged. For a configuration format other than flagd's that is exactly one document, chosen by the selector.
 10. A source changes and its sync provider delivers the new flag configuration.
-11. System validates the new flag configuration, updates the store and sends the changed documents to every subscribed In-Process Provider whose configuration format and selector they match.
+11. System validates the new flag configuration, updates the store and sends the changed documents to every subscribed In-Process Provider whose configuration format and selector they match; for a configuration format other than flagd's, the one document again when its version changed.
 12. In-Process Provider evaluates flags locally with the flag configuration it received; the deployment's in-process providers get their flag configurations from one place while the configuration proxy evaluates nothing.
 
 ## Alternative Flows
@@ -45,7 +45,7 @@
 
 ### A2: Setting for an Absent Component
 
-**Trigger:** A setting of the start command, configuration file or environment variables belongs to a component the configuration proxy does not contain, such as an OFREP port or an OpenTelemetry collector address (step 2)  
+**Trigger:** A setting of the start command, configuration file or environment variables belongs to a component the configuration proxy does not contain, such as an OFREP port or a flag evaluation port (step 2)  
 **Flow:**
 
 1. System refuses to start and names each such setting and the component it belongs to.
@@ -144,7 +144,7 @@ The flag sync endpoint sends only documents that are in the store, and the store
 
 ### BR-004: Documents of the Requested Format, Unchanged
 
-A flag sync request may name the configuration format it reads; a request that names none reads flagd's (FR-044). The flag sync endpoint sends only documents of that configuration format, unchanged; it never converts them into another configuration format or into the flag model. Today's in-process providers name no format and receive only flagd documents.
+A flag sync request may name the configuration format it reads; a request that names none reads flagd's (FR-044). The flag sync endpoint sends only documents of that configuration format, unchanged; it never converts them into another configuration format or into the flag model. Today's in-process providers name no format and receive only flagd documents. For a configuration format other than flagd's the request resolves to exactly one document, chosen by the selector (by source, by flag set, or because it is the only one): several matches are refused with an error that names them, and the flag sync endpoint sends the document again when its version changes. Merging several sources is flagd's configuration format's rule (BR-005).
 
 ### BR-005: Same Flag Sync Contract as flagd-full
 
@@ -161,3 +161,13 @@ The sources a configuration proxy reads are given on the command line or in the 
 ### BR-008: Vendor Sync Protocols Are Service Endpoint Extensions
 
 A vendor's own sync protocol for its in-process providers, such as Flagsmith's environment document endpoint or GO Feature Flag's flag configuration endpoint, is a service endpoint extension. It reads the vendor's documents and their document versions from the same store as the flag sync endpoint and forwards them unchanged; the configuration proxy's validation applies to it alike.
+
+## Delivered by Later Use Cases
+
+This use case is `Implemented` for the configuration proxy: flagd-sync as a built binary and a vendor configuration proxy (the `sync-vendor` test distribution) run the main scenario and every alternative flow against the sources, the flag sync endpoint and the management port; the flag sync endpoint reads the configuration format a request names; and the set of flag configurations flagd-full accepts and rejects is checked against flagd-sync (UC-013 BR-008). These parts are delivered by the use cases named here, and are accepted gaps of this one:
+
+| Gap | Delivered by |
+|-----|--------------|
+| flagd-sync as a released binary and image (precondition) | UC-002 and UC-012 |
+| A7 with a vendor's real sync protocol, such as Flagsmith's environment document endpoint, in place of the example endpoint | UC-019 |
+| Main step 12 and A6 at the level of a released in-process provider: the proxy is tested with a subscriber of the flag sync protocol, and the released Go provider runs against flagd built from this repository in `make flagd-integration-test` | UC-015 |
