@@ -78,3 +78,10 @@ contrib/flagsmith/engine:./...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|rest
 # UC-022: the control module of the testbed knows no relay component and no flagd type. It sits above the runtime and
 # outlives it, and a testbed for another SDK or vendor reuses it.
 testbed/control:./...:openfeature-relay/(runtime|core|service|sync|evaluator|configformat|telemetry|eventsink|contrib)|open-feature/flagd
+# UC-022 NFR-015: the testbed is a test harness. No standard distribution and no module a distribution is built from imports it.
+flagd:./...:openfeature-relay/testbed
+runtime:./...:openfeature-relay/testbed
+service/flag-evaluation:./...:openfeature-relay/testbed
+service/flag-sync:./...:openfeature-relay/testbed
+# The testbed command links the components the pinned suites use and no other: no telemetry, event sink, vendor module, OFREP, event collector or other sync provider (BR-005).
+testbed/cmd:./...:openfeature-relay/(telemetry|eventsink|contrib|service/(ofrep|event-collector)|sync/(http|flagd-grpc|openfeature-operator|gcs|azblob|s3|sse))
