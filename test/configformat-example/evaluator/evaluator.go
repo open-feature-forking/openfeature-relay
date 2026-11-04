@@ -140,18 +140,27 @@ func (e *Evaluator) collect(view store.View, req evaluator.Request) []hit {
 			if named && doc.FlagSet != flagSet {
 				continue
 			}
-			values, _ := doc.Value.(map[string]string)
+			values, _ := doc.Value.(valueGetter)
 			for _, key := range doc.FlagKeys {
 				if _, ok := wanted[key]; wanted != nil && !ok {
 					continue
 				}
+				var raw string
+				if values != nil {
+					raw, _ = values.Get(key)
+				}
 				hits = append(hits, hit{
-					flagSet: doc.FlagSet, key: key, priority: priority, raw: values[key], hidden: !visible(key, req.Attributes),
+					flagSet: doc.FlagSet, key: key, priority: priority, raw: raw, hidden: !visible(key, req.Attributes),
 				})
 			}
 		}
 	}
 	return hits
+}
+
+// valueGetter is what the value of a keyvalue document offers: the raw JSON text of a key.
+type valueGetter interface {
+	Get(key string) (string, bool)
 }
 
 func visible(key string, attributes map[string]any) bool {
