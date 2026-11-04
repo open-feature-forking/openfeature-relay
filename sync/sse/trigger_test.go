@@ -2,6 +2,8 @@ package sse
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	gosync "sync"
@@ -10,6 +12,7 @@ import (
 	"time"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/secret"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/fetching"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync/polling"
@@ -449,10 +452,37 @@ func TestSettings(t *testing.T) {
 		"a header value with a line break": {
 			with("headers", map[string]any{"X-Key": "v\r\nInjected: 1"}), `header "X-Key"`,
 		},
-		"a setting nothing reads": {with("header", map[string]any{"X-Key": "v"}), `unknown setting "header" (allowed: headers, url)`},
+		"headersFrom": {
+			with("headersFrom", map[string]any{"X-Key": map[string]any{"env": "RELAY_SSE_TEST_KEY"}}), "",
+		},
+		"headersFrom that is no mapping": {
+			with("headersFrom", "X-Key"), `"headersFrom" must be a mapping`,
+		},
+		"a headersFrom entry that is no mapping": {
+			with("headersFrom", map[string]any{"X-Key": "RELAY_SSE_TEST_KEY"}), `header "X-Key" in "headersFrom" must be a mapping with env or file`,
+		},
+		"a headersFrom entry with an unknown key": {
+			with("headersFrom", map[string]any{"X-Key": map[string]any{"environment": "A"}}), `header "X-Key" in "headersFrom": unknown key "environment"`,
+		},
+		"a headersFrom entry with a value that is no text": {
+			with("headersFrom", map[string]any{"X-Key": map[string]any{"env": 5}}), `header "X-Key" in "headersFrom": "env" must be text`,
+		},
+		"a headersFrom entry with env and file": {
+			with("headersFrom", map[string]any{"X-Key": map[string]any{"env": "A", "file": "/b"}}), "exactly one of env and file",
+		},
+		"a headersFrom entry with neither": {
+			with("headersFrom", map[string]any{"X-Key": map[string]any{}}), "exactly one of env and file",
+		},
+		"an idleTimeout":                     {with("idleTimeout", "90s"), ""},
+		"an idleTimeout that is no text":     {with("idleTimeout", 90), `"idleTimeout" must be a duration such as "5m"`},
+		"an idleTimeout that is no duration": {with("idleTimeout", "soon"), `"idleTimeout" must be a duration such as "5m"`},
+		"an idleTimeout of zero":             {with("idleTimeout", "0s"), `"idleTimeout" must be a duration such as "5m"`},
+		"a negative idleTimeout":             {with("idleTimeout", "-5s"), `"idleTimeout" must be a duration such as "5m"`},
+		"a setting nothing reads":            {with("header", map[string]any{"X-Key": "v"}), `unknown setting "header" (allowed: headers, headersFrom, idleTimeout, url)`},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
+			t.Setenv("RELAY_SSE_TEST_KEY", "a-key")
 			_, err := Factory{}.CreateTrigger(sync.Settings{Config: tt.config, Logger: logger.NewLogger(nil, false)})
 			if tt.err == "" {
 				require.NoError(t, err)
@@ -482,4 +512,159 @@ func TestFactoryDeclarations(t *testing.T) {
 		require.True(t, isTrigger)
 	}
 	require.Equal(t, []string{"sse"}, types)
+}
+
+func TestHeadersFromEnv(t *testing.T) {
+	t.Setenv("RELAY_SSE_TEST_KEY", "key-from-env")
+	s := newStream(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	trigger := create(t, map[string]any{
+		"url":         s.URL(),
+		"headersFrom": map[string]any{"X-Environment-Key": map[string]any{"env": "RELAY_SSE_TEST_KEY"}},
+	})
+	runOnce(ctx, trigger, func() {})
+	connected(t, s, 1)
+
+	header := s.lastHeader.Load().(map[string][]string)
+	require.Equal(t, []string{"key-from-env"}, header["X-Environment-Key"])
+}
+
+func TestHeadersFromFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "key")
+	require.NoError(t, os.WriteFile(path, []byte("  Bearer key-from-file \n"), 0o600))
+	s := newStream(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	trigger := create(t, map[string]any{
+		"url":         s.URL(),
+		"headers":     map[string]any{"X-Team": "payments"},
+		"headersFrom": map[string]any{"Authorization": map[string]any{"file": path}},
+	})
+	runOnce(ctx, trigger, func() {})
+	connected(t, s, 1)
+
+	header := s.lastHeader.Load().(map[string][]string)
+	require.Equal(t, []string{"Bearer key-from-file"}, header["Authorization"], "the file's surrounding whitespace is dropped")
+	require.Equal(t, []string{"payments"}, header["X-Team"], "headers still apply")
+}
+
+func TestHeadersFromWinsOverHeaders(t *testing.T) {
+	t.Setenv("RELAY_SSE_TEST_KEY", "key-from-env")
+	s := newStream(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	trigger := create(t, map[string]any{
+		"url":         s.URL(),
+		"headers":     map[string]any{"x-environment-key": "key-in-the-manifest"},
+		"headersFrom": map[string]any{"X-Environment-Key": map[string]any{"env": "RELAY_SSE_TEST_KEY"}},
+	})
+	runOnce(ctx, trigger, func() {})
+	connected(t, s, 1)
+
+	header := s.lastHeader.Load().(map[string][]string)
+	require.Equal(t, []string{"key-from-env"}, header["X-Environment-Key"])
+}
+
+// A secret that cannot be read stops the trigger from being created, so the distribution does not start with a stream
+// it can never open. The error names the source, the header and the variable, never a value.
+func TestHeadersFromMissingStopsCreation(t *testing.T) {
+	_, err := Factory{}.CreateTrigger(sync.Settings{
+		Source: sync.SourceConfig{URI: "https://flags.example.test/env-1"},
+		Config: map[string]any{
+			"url":         "https://flags.example.test/events",
+			"headersFrom": map[string]any{"X-Environment-Key": map[string]any{"env": "RELAY_SSE_TEST_NOT_SET"}},
+		},
+	})
+	require.ErrorContains(t, err, "https://flags.example.test/env-1")
+	require.ErrorContains(t, err, "X-Environment-Key")
+	require.ErrorContains(t, err, "RELAY_SSE_TEST_NOT_SET")
+
+	_, err = Factory{}.CreateTrigger(sync.Settings{Config: map[string]any{
+		"url":         "https://flags.example.test/events",
+		"headersFrom": map[string]any{"X-Environment-Key": map[string]any{"file": filepath.Join(t.TempDir(), "absent")}},
+	}})
+	require.ErrorContains(t, err, "X-Environment-Key")
+}
+
+func TestHeadersFromValueWithALineBreakIsRefusedWithoutItsValue(t *testing.T) {
+	t.Setenv("RELAY_SSE_TEST_KEY", "first\r\nInjected: second-secret")
+	_, err := Factory{}.CreateTrigger(sync.Settings{Config: map[string]any{
+		"url":         "https://flags.example.test/events",
+		"headersFrom": map[string]any{"X-Environment-Key": map[string]any{"env": "RELAY_SSE_TEST_KEY"}},
+	}})
+	require.ErrorContains(t, err, `"X-Environment-Key"`)
+	require.NotContains(t, err.Error(), "second-secret")
+	require.NotContains(t, err.Error(), "Injected")
+}
+
+func TestHeadersFromAsGoTypes(t *testing.T) {
+	t.Setenv("RELAY_SSE_TEST_KEY", "key-from-env")
+	for name, from := range map[string]any{
+		"secret refs":    map[string]secret.Ref{"X-Environment-Key": {Env: "RELAY_SSE_TEST_KEY"}},
+		"string mapping": map[string]map[string]string{"X-Environment-Key": {"env": "RELAY_SSE_TEST_KEY"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := newStream(t)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			runOnce(ctx, create(t, map[string]any{"url": s.URL(), "headersFrom": from}), func() {})
+			connected(t, s, 1)
+			require.Equal(t, []string{"key-from-env"}, s.lastHeader.Load().(map[string][]string)["X-Environment-Key"])
+		})
+	}
+}
+
+// A connection that dies without closing delivers nothing, not even an error. With an idleTimeout, a stream that sends
+// no byte for that long ends Run with an error, and the provider connects again. Servers send comments as keepalives.
+func TestIdleTimeoutEndsASilentStream(t *testing.T) {
+	s := newStream(t)
+	trigger := create(t, map[string]any{"url": s.URL(), "idleTimeout": "200ms"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	started := time.Now()
+	select {
+	case err := <-runOnce(ctx, trigger, func() {}):
+		require.ErrorContains(t, err, "no data for 200ms")
+		require.GreaterOrEqual(t, time.Since(started), 200*time.Millisecond)
+	case <-time.After(wait):
+		t.Fatal("a silent stream did not end Run")
+	}
+}
+
+func TestKeepalivesKeepTheStreamOpen(t *testing.T) {
+	s := newStream(t)
+	trigger := create(t, map[string]any{"url": s.URL(), "idleTimeout": "300ms"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var c counter
+	done := runOnce(ctx, trigger, c.signal)
+	connected(t, s, 1)
+
+	for i := 0; i < 12; i++ { // four times the timeout, one comment every 100ms
+		s.send(": keepalive\n\n")
+		time.Sleep(100 * time.Millisecond)
+	}
+	select {
+	case err := <-done:
+		t.Fatalf("Run ended on a stream that sends keepalives: %v", err)
+	default:
+	}
+	s.event(t)
+	require.Eventually(t, func() bool { return c.n.Load() == 1 }, wait, 5*time.Millisecond, "the stream still works")
+}
+
+func TestWithoutIdleTimeoutASilentStreamStaysOpen(t *testing.T) {
+	s := newStream(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := runOnce(ctx, create(t, map[string]any{"url": s.URL()}), func() {})
+	connected(t, s, 1)
+
+	select {
+	case err := <-done:
+		t.Fatalf("Run ended on a silent stream with no idleTimeout: %v", err)
+	case <-time.After(400 * time.Millisecond):
+	}
 }

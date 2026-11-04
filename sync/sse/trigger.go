@@ -12,15 +12,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"mime"
 	"net"
 	"net/http"
 	"net/url"
 	"sort"
 	"strings"
+	gosync "sync"
 	"time"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/secret"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 )
 
@@ -29,12 +32,20 @@ const Type = "sse"
 
 // The settings of the trigger.
 const (
-	settingURL     = "url"
-	settingHeaders = "headers"
+	settingURL         = "url"
+	settingHeaders     = "headers"
+	settingHeadersFrom = "headersFrom"
+	settingIdleTimeout = "idleTimeout"
 )
 
-// Factory creates the SSE fetch trigger of a source. Its settings are the url of the stream and the headers to send
-// with the request, which carry a credential where the stream needs one.
+// Factory creates the SSE fetch trigger of a source. Its settings are:
+//   - url, the address of the stream;
+//   - headers, to send with the request;
+//   - headersFrom, headers whose values are read from an environment variable or a file, as {"env": "NAME"} or
+//     {"file": "PATH"}, so that a credential is in neither the configuration nor the command line. They are merged
+//     over headers, as the headersFrom of a source is (sync.ResolveHeaders);
+//   - idleTimeout, a duration such as "5m": a stream that sends no byte for that long is closed and connected again.
+//     Servers send comments as keepalives for this; without it, a connection that dies silently stays open.
 type Factory struct{}
 
 var _ sync.TriggerFactory = Factory{}
@@ -47,61 +58,104 @@ func (Factory) Type() string { return Type }
 
 // CreateTrigger checks the settings and creates the trigger. It does not connect.
 func (Factory) CreateTrigger(settings sync.Settings) (sync.Trigger, error) {
-	target, headers, err := parseSettings(settings.Config)
+	parsed, err := parseSettings(settings.Config)
 	if err != nil {
 		return nil, fmt.Errorf("the %s fetch trigger of %q: %w", Type, settings.Source.URI, err)
 	}
+	// the shared resolver reads the secrets and merges them over the headers; its error names the source and the header
+	headers, err := sync.ResolveHeaders(sync.SourceConfig{
+		URI: settings.Source.URI, Headers: parsed.headers, HeadersFrom: parsed.headersFrom,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("the %s fetch trigger: %w", Type, err)
+	}
+	if _, err := checkHeaders(headers); err != nil {
+		return nil, fmt.Errorf("the %s fetch trigger of %q: %w", Type, settings.Source.URI, err)
+	}
 	return &trigger{
-		url:     target.String(),
-		shown:   describe(target),
+		url:     parsed.target.String(),
+		shown:   describe(parsed.target),
 		headers: headers,
+		idle:    parsed.idle,
 		log:     settings.Logger,
 		client:  newClient(),
 	}, nil
 }
 
+// the settings of a trigger, read and checked
+type parsedSettings struct {
+	target      *url.URL
+	headers     map[string]string
+	headersFrom map[string]secret.Ref
+	idle        time.Duration
+}
+
+// allowedSettings lists the settings for the error of an unknown one.
+func allowedSettings() string {
+	names := []string{settingURL, settingHeaders, settingHeadersFrom, settingIdleTimeout}
+	sort.Strings(names)
+	return strings.Join(names, ", ")
+}
+
 // parseSettings reads and checks the settings. An error names the setting and, for a header, its name: never a value.
-func parseSettings(config map[string]any) (*url.URL, map[string]string, error) {
+func parseSettings(config map[string]any) (parsedSettings, error) {
 	var unknown []string
 	for key := range config {
-		if key != settingURL && key != settingHeaders {
+		switch key {
+		case settingURL, settingHeaders, settingHeadersFrom, settingIdleTimeout:
+		default:
 			unknown = append(unknown, key)
 		}
 	}
 	if len(unknown) > 0 {
 		sort.Strings(unknown)
-		return nil, nil, fmt.Errorf("unknown setting %q (allowed: %s, %s)", unknown[0], settingHeaders, settingURL)
+		return parsedSettings{}, fmt.Errorf("unknown setting %q (allowed: %s)", unknown[0], allowedSettings())
 	}
+	target, err := parseURL(config)
+	if err != nil {
+		return parsedSettings{}, err
+	}
+	headers, err := parseHeaders(config[settingHeaders])
+	if err != nil {
+		return parsedSettings{}, err
+	}
+	from, err := parseHeadersFrom(config[settingHeadersFrom])
+	if err != nil {
+		return parsedSettings{}, err
+	}
+	idle, err := parseIdleTimeout(config[settingIdleTimeout])
+	if err != nil {
+		return parsedSettings{}, err
+	}
+	return parsedSettings{target: target, headers: headers, headersFrom: from, idle: idle}, nil
+}
 
+func parseURL(config map[string]any) (*url.URL, error) {
 	raw, ok := config[settingURL]
 	if !ok {
-		return nil, nil, fmt.Errorf("the setting %q is mandatory: the address of the event stream", settingURL)
+		return nil, fmt.Errorf("the setting %q is mandatory: the address of the event stream", settingURL)
 	}
 	text, ok := raw.(string)
 	if !ok {
-		return nil, nil, fmt.Errorf("the setting %q must be text", settingURL)
+		return nil, fmt.Errorf("the setting %q must be text", settingURL)
 	}
 	text = strings.TrimSpace(text)
 	if text == "" {
-		return nil, nil, fmt.Errorf("the setting %q is mandatory: the address of the event stream", settingURL)
+		return nil, fmt.Errorf("the setting %q is mandatory: the address of the event stream", settingURL)
 	}
 	target, err := url.Parse(text)
 	if err != nil {
 		// the parse error quotes the address, which may carry a token in its query
-		return nil, nil, fmt.Errorf("the setting %q is not a valid address", settingURL)
+		return nil, fmt.Errorf("the setting %q is not a valid address", settingURL)
 	}
 	if target.Scheme != "http" && target.Scheme != "https" {
-		return nil, nil, fmt.Errorf("the setting %q must be an http or https address", settingURL)
+		return nil, fmt.Errorf("the setting %q must be an http or https address", settingURL)
 	}
 	if target.Hostname() == "" {
-		return nil, nil, fmt.Errorf("the setting %q needs a host", settingURL)
+		return nil, fmt.Errorf("the setting %q needs a host", settingURL)
 	}
 
-	headers, err := parseHeaders(config[settingHeaders])
-	if err != nil {
-		return nil, nil, err
-	}
-	return target, headers, nil
+	return target, nil
 }
 
 func parseHeaders(raw any) (map[string]string, error) {
@@ -123,6 +177,102 @@ func parseHeaders(raw any) (map[string]string, error) {
 	default:
 		return nil, fmt.Errorf("the setting %q must be a mapping of header names to text", settingHeaders)
 	}
+}
+
+func parseHeadersFrom(raw any) (map[string]secret.Ref, error) {
+	var out map[string]secret.Ref
+	set := func(name string, ref secret.Ref) {
+		if out == nil {
+			out = map[string]secret.Ref{}
+		}
+		out[name] = ref
+	}
+	switch h := raw.(type) {
+	case nil:
+		return nil, nil
+	case map[string]secret.Ref:
+		for name, ref := range h {
+			set(name, ref)
+		}
+	case map[string]map[string]string:
+		for name, m := range h {
+			ref, err := refFromStrings(name, m)
+			if err != nil {
+				return nil, err
+			}
+			set(name, ref)
+		}
+	case map[string]any:
+		for name, v := range h {
+			var ref secret.Ref
+			switch entry := v.(type) {
+			case secret.Ref:
+				ref = entry
+			case map[string]string:
+				var err error
+				if ref, err = refFromStrings(name, entry); err != nil {
+					return nil, err
+				}
+			case map[string]any:
+				strs := make(map[string]string, len(entry))
+				for key, value := range entry {
+					text, ok := value.(string)
+					if !ok && (key == "env" || key == "file") {
+						return nil, fmt.Errorf("the header %q in %q: %q must be text", name, settingHeadersFrom, key)
+					}
+					strs[key] = text
+				}
+				var err error
+				if ref, err = refFromStrings(name, strs); err != nil {
+					return nil, err
+				}
+			default:
+				return nil, fmt.Errorf("the header %q in %q must be a mapping with env or file", name, settingHeadersFrom)
+			}
+			set(name, ref)
+		}
+	default:
+		return nil, fmt.Errorf("the setting %q must be a mapping of header names to {\"env\": NAME} or {\"file\": PATH}", settingHeadersFrom)
+	}
+	return out, nil
+}
+
+// refFromStrings reads {"env": NAME} or {"file": PATH}; which of the two a secret names is checked when it is read.
+func refFromStrings(header string, m map[string]string) (secret.Ref, error) {
+	var ref secret.Ref
+	for key, value := range m {
+		switch key {
+		case "env":
+			ref.Env = value
+		case "file":
+			ref.File = value
+		default:
+			return secret.Ref{}, fmt.Errorf("the header %q in %q: unknown key %q (allowed: env, file)", header, settingHeadersFrom, key)
+		}
+	}
+	return ref, nil
+}
+
+func parseIdleTimeout(raw any) (time.Duration, error) {
+	var d time.Duration
+	switch v := raw.(type) {
+	case nil:
+		return 0, nil
+	case time.Duration:
+		d = v
+	case string:
+		parsed, err := time.ParseDuration(strings.TrimSpace(v))
+		if err != nil {
+			return 0, fmt.Errorf("the setting %q must be a duration such as \"5m\"", settingIdleTimeout)
+		}
+		d = parsed
+	default:
+		return 0, fmt.Errorf("the setting %q must be a duration such as \"5m\"", settingIdleTimeout)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("the setting %q must be a duration such as \"5m\", longer than zero", settingIdleTimeout)
+	}
+	return d, nil
 }
 
 func checkHeaders(headers map[string]string) (map[string]string, error) {
@@ -170,8 +320,10 @@ type trigger struct {
 	url     string
 	shown   string
 	headers map[string]string
-	log     *logger.Logger
-	client  *http.Client
+	// idle is how long the stream may send no byte before Run ends; zero means no limit.
+	idle   time.Duration
+	log    *logger.Logger
+	client *http.Client
 }
 
 var _ sync.Trigger = (*trigger)(nil)
@@ -182,7 +334,10 @@ var _ sync.Trigger = (*trigger)(nil)
 func (t *trigger) Run(ctx context.Context, signal func()) error {
 	defer t.client.CloseIdleConnections()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, t.url, nil)
+	// reqCtx ends the request on shutdown, and when the stream has been silent for too long
+	reqCtx, cancelRequest := context.WithCancel(ctx)
+	defer cancelRequest()
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, t.url, nil)
 	if err != nil {
 		// the error quotes the whole address
 		return fmt.Errorf("cannot request the event stream at %s", t.shown)
@@ -215,9 +370,19 @@ func (t *trigger) Run(ctx context.Context, signal func()) error {
 	}
 	t.debug("connected to the event stream at " + t.shown)
 
-	err = readEvents(resp.Body, func(event) { signal() })
+	var body io.Reader = resp.Body
+	var silence *idleReader
+	if t.idle > 0 {
+		silence = newIdleReader(resp.Body, t.idle, cancelRequest)
+		defer silence.stop()
+		body = silence
+	}
+	err = readEvents(body, func(event) { signal() })
 	if ctx.Err() != nil {
 		return nil
+	}
+	if silence != nil && silence.expired() {
+		return fmt.Errorf("the event stream at %s sent no data for %s", t.shown, t.idle)
 	}
 	if err != nil {
 		return fmt.Errorf("the event stream at %s broke: %w", t.shown, err)
@@ -229,4 +394,47 @@ func (t *trigger) debug(msg string) {
 	if t.log != nil {
 		t.log.Debug(msg)
 	}
+}
+
+// idleReader reads from r and calls onIdle when no byte has arrived for d, which ends a read that would block.
+type idleReader struct {
+	r      io.Reader
+	d      time.Duration
+	timer  *time.Timer
+	mu     gosync.Mutex
+	fired  bool
+	closed bool
+}
+
+func newIdleReader(r io.Reader, d time.Duration, onIdle func()) *idleReader {
+	i := &idleReader{r: r, d: d}
+	i.timer = time.AfterFunc(d, func() {
+		i.mu.Lock()
+		i.fired = !i.closed
+		i.mu.Unlock()
+		onIdle()
+	})
+	return i
+}
+
+func (i *idleReader) Read(p []byte) (int, error) {
+	n, err := i.r.Read(p)
+	if n > 0 {
+		i.timer.Reset(i.d)
+	}
+	return n, err
+}
+
+// expired reports whether the timer ended the stream.
+func (i *idleReader) expired() bool {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	return i.fired
+}
+
+func (i *idleReader) stop() {
+	i.mu.Lock()
+	i.closed = true
+	i.mu.Unlock()
+	i.timer.Stop()
 }
