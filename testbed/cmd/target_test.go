@@ -476,3 +476,27 @@ func TestUnknownConfigurationLeavesTheRuntimeServing(t *testing.T) {
 	require.Less(t, time.Since(began), time.Second)
 	b.requireVariant("foo")
 }
+
+// stuckConfig names the combined flags and a file whose flags the format never accepts, so a switch to it does not get
+// ready and times out instead of failing at once.
+const stuckConfig = `{"sources":[{"uri":"flags/allFlags.json","provider":"file"},{"uri":"configs/never.json","provider":"file"}]}`
+
+// TestChangeAfterTimedOutSwitch: a switch that times out leaves no runtime behind, so /change fails at once and does not
+// load into it.
+func TestChangeAfterTimedOutSwitch(t *testing.T) {
+	b := newBed(t, 2*time.Second, map[string]string{"stuck": stuckConfig, "never": `{"flags": 5}`})
+
+	code, body := b.get("/start?config=stuck")
+	require.Equal(t, 500, code, body)
+	require.Contains(t, body, "health check timed out")
+	require.Nil(t, b.target.runtime(), "the runtime of the timed out switch is gone")
+	b.requirePortsRefused()
+
+	began := time.Now()
+	code, _ = b.get("/change")
+	require.Equal(t, 500, code)
+	require.Less(t, time.Since(began), time.Second)
+
+	b.mustGet("/start?config=default")
+	b.requireServing()
+}

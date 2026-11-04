@@ -167,6 +167,10 @@ func (t *target) rebuild(ctx context.Context, config, path string) error {
 			}
 			return err
 		case <-ctx.Done():
+			// the gate is closed, so the runtime stops quickly; a later change must not load into it
+			stop, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			_ = t.stopRuntime(stop)
 			return ctx.Err()
 		case <-tick.C:
 		}
