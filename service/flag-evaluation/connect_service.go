@@ -316,6 +316,8 @@ func (s *ConnectService) startServer(ctx context.Context, svcConf service.Config
 	})
 }
 
+// startMetricsServer serves the management port of the embedder path, which only an embedder starts through Serve. It
+// opens its listener with ListenAndServe, outside Settings.Listen: the runtime serves the management port itself.
 func (s *ConnectService) startMetricsServer(ctx context.Context, svcConf service.Configuration) error {
 	s.logger.Info(fmt.Sprintf("metrics and probes listening at %d", svcConf.ManagementPort))
 
