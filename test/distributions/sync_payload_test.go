@@ -75,32 +75,16 @@ func startFlagdFull(t *testing.T, sources ...string) (syncPort int) {
 	return ports["sync-port"]
 }
 
-// canonical renders a JSON document with sorted keys, and expands the strings that hold JSON themselves, so that the
-// formatting protojson chooses for each response does not show.
+// canonical renders the envelope of a Connect response with sorted keys and its numbers as written, so that the
+// formatting protojson chooses for each response does not show. The flag configuration inside it is a string and stays
+// exactly as the endpoint sent it.
 func canonical(t *testing.T, raw []byte) string {
 	t.Helper()
 	var v any
-	require.NoError(t, json.Unmarshal(raw, &v), string(raw))
-	var expand func(any) any
-	expand = func(v any) any {
-		switch x := v.(type) {
-		case map[string]any:
-			for k, e := range x {
-				x[k] = expand(e)
-			}
-		case []any:
-			for i, e := range x {
-				x[i] = expand(e)
-			}
-		case string:
-			var inner any
-			if strings.HasPrefix(x, "{") && json.Unmarshal([]byte(x), &inner) == nil {
-				return map[string]any{"json": expand(inner)}
-			}
-		}
-		return v
-	}
-	out, err := json.MarshalIndent(expand(v), "", "  ")
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	require.NoError(t, dec.Decode(&v), string(raw))
+	out, err := json.MarshalIndent(v, "", "  ")
 	require.NoError(t, err)
 	return string(out)
 }
@@ -212,7 +196,7 @@ func TestFlagSyncPayloadCharacterization(t *testing.T) {
 			resp.Header.Set(name, "<"+strings.ToLower(name)+">")
 		}
 		section(fmt.Sprintf("GET /v1/flags, selector %q", selector),
-			fmt.Sprintf("%d\n%s\n%s", resp.StatusCode, headersOf(resp.Header), canonical(t, body)))
+			fmt.Sprintf("%d\n%s\n%s", resp.StatusCode, headersOf(resp.Header), body))
 	}
 
 	got := strings.ReplaceAll(out.String(), dir, "<dir>")
