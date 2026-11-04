@@ -46,7 +46,10 @@ type Components struct {
 	Telemetry            interface{ Type() string }
 }
 
-type Info struct{ Name, Version, Commit, Date string }
+type Info struct {
+	Name, Version, Commit, Date string
+	ComponentsHint              bool
+}
 
 type Group string
 

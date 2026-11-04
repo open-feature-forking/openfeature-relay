@@ -38,6 +38,8 @@ jobs:
       - run: make lint
       - run: make check-package-coverage
       - run: make check-flagd-full-modules
+      - name: Test the workflow characterization
+        run: python3 .github/scripts/test_workflows.py
       - name: Test the benchmark comparison
         run: python3 .github/scripts/test_compare_allocs.py
       # The module boundary tables include the evaluator boundary (NFR-005), which check-evaluator-boundary names.
@@ -292,8 +294,8 @@ jobs:
           HEAD: ${{ github.sha }}
         run: |
           # Dockerfiles; the manifest of flagd-full and the Builder that builds it; flagd, which holds flagd-full's main
-          # and its list of components; the differential's own test and this workflow
-          pattern='(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^flagd/|^test/upgrade/|^\.github/workflows/build\.yaml$'
+          # and its list of components; the differential's own test, the reference Dockerfile and its image tests, and this workflow
+          pattern='(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^flagd/|^test/upgrade/|^builder/reference/|^test/image/|^\.github/workflows/build\.yaml$'
           run=false
           if [ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]; then
             run=true
@@ -320,6 +322,9 @@ jobs:
       - name: Today's flagd and the flagd-full the Builder made, side by side (UC-009)
         if: steps.gate.outputs.run == 'true'
         run: make upgrade-test
+      - name: The reference Dockerfile's images, as OCI layouts and loaded locally (UC-002)
+        if: steps.gate.outputs.run == 'true'
+        run: make image-test
 
   release-dry-run:
     name: Release dry run

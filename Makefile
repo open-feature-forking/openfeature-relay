@@ -73,6 +73,7 @@ TEST_TARGETS += test-contrib
 TEST_TARGETS += test-builder
 TEST_TARGETS += test-distributions
 TEST_TARGETS += test-upgrade-accepted
+TEST_TARGETS += test-image-pins
 TEST_TARGETS += test-configformat-example
 TEST_TARGETS += test-service-example
 TEST_TARGETS += test-evaluator-testkit
@@ -372,9 +373,15 @@ builder-e2e: check-flagd-full-generated build-flagd-full build-flagsmith
 
 # UC-009: the differential of today's flagd against the flagd-full the Builder made. It builds two images, so it needs
 # Docker and stays out of `make test`; TestAcceptedMatchesIssue does not need Docker and runs there.
-.PHONY: upgrade-test test-upgrade-accepted refresh-issue-78
+.PHONY: upgrade-test test-upgrade-accepted refresh-issue-78 image-test test-image-pins
 upgrade-test:
 	cd test/upgrade && UPGRADE_TEST=1 go test -count=1 -timeout 60m -v ./...
+
+# The reference image's tests build images with buildx (UC-002).
+image-test:
+	cd test/image && IMAGE_TEST=1 go test -count=1 -timeout 60m -v ./...
+test-image-pins:
+	cd test/image && go test -count=1 -run TestReferenceDockerfilePins ./...
 
 test-upgrade-accepted:
 	cd test/upgrade && go test -count=1 -run 'TestAcceptedMatchesIssue|TestSurfaces|TestGuideCoversAcceptedItems' ./...
