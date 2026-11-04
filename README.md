@@ -53,10 +53,10 @@ flowchart LR
 | Sync provider | Reads flag configurations from a kind of source | file, HTTP, gRPC, Kubernetes, GCS, Azure Blob, S3 |
 | Configuration format | Validates flag configurations of one format and keeps them in the store as documents | flagd's JSON schema |
 | Evaluator | Resolves flags for an evaluation context from its paired format's documents; emits no telemetry | flagd's JsonLogic evaluator |
-| Service endpoint | Serves flags to clients over a protocol | flag evaluation (gRPC/Connect), OFREP, flag sync |
-| Middleware | Wraps an endpoint's HTTP handler (auth, CORS, rate limits) | h2c, CORS, HTTP metrics |
+| Service endpoint | Serves flags to clients over a protocol | flag evaluation (gRPC/Connect), OFREP, flag sync, event collector (off until configured) |
+| Middleware | Wraps an endpoint's HTTP handler (auth, CORS, rate limits) | none; configured in flagd's configuration file |
 | Telemetry provider | Tracing and metrics for endpoints and middleware | OpenTelemetry |
-| Event sink | Delivers configuration change, evaluation and tracking events elsewhere | — (new) |
+| Event sink | Delivers configuration change, evaluation and tracking events elsewhere | webhook (off until configured) |
 
 A configuration format and its evaluator can ship together as an **engine module** — that is how vendors ship their engines.
 Each format keeps its own documents in the store, so flagd's flag model stays unchanged while a vendor's stays the vendor's.
@@ -74,16 +74,15 @@ All terms are defined in the [glossary](docs/glossary.md).
 
 ## Status
 
-Proof of concept. The specification is complete enough to build against; the code is at the start.
+Proof of concept. The specification is complete enough to build against, and the code follows it: the component types, the runtime, the builder (`relay-builder`) and the standard distributions are on `main`, and flagd-full is built by the builder from its manifest.
 
 | | |
 |---|---|
-| **Done** | The evaluator no longer imports OpenTelemetry, gRPC, Kubernetes or cloud SDKs, enforced by `depguard` rules and a CI boundary check; `golang.org/x/exp` replaced by the standard library. |
-| **In progress** | Splitting the configuration format out of the evaluator, with document versions ([UC-018](docs/use_cases/UC-018-develop-configuration-format-extension.md)). |
-| **Next** | Dependency-free evaluator and format modules for in-process providers; the untyped bulk evaluator and evaluation router; sync, service and other factories with the event bus; contract tests; the module split, builder CLI and manifest; flagd-full built by the builder passing the flagd test harness; a Flagsmith engine module as the cross-vendor proof. |
+| **Done** | Steps 1 to 11 of the plan, and most of step 12: the component factories and contract tests, the builder and manifest, flagd-full and the standard distributions, event export, a Flagsmith distribution behind OFREP, the reference image and the CI checks. |
+| **In progress** | The release of the distributions and component modules ([UC-012](docs/use_cases/UC-012-release-distributions-and-component-modules.md)), and the flagd testbed as a distribution. |
+| **Deferred** | Recovering from a snapshot ([UC-016](docs/use_cases/UC-016-recover-from-snapshot.md)). Provider migration (formerly UC-015) is a follow-up after the proof of concept, [#156](https://github.com/open-feature-forking/openfeature-relay/issues/156). |
 
-What you can run today is flagd-full — that is, flagd built from this tree.
-The full order is in [Status and roadmap](docs/relay/status.md); each use case's `Status` line in [docs/use_cases/](docs/use_cases/) says where it stands.
+The full order and what each check verifies are in [Status and roadmap](docs/relay/status.md); each use case's `Status` line in [docs/use_cases/](docs/use_cases/) says where it stands.
 
 ## Try it
 

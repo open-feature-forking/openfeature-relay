@@ -1,185 +1,230 @@
 # Step 14 plan: adopt the Go flagd provider's gRPC sync features in `sync/flagd-grpc` (issue #158)
 
-**Status: revision 1, not opposed yet.** Section 0 holds the questions for the project lead, numbered, each with options and a recommendation.
+**Status: revision 2, final. The project lead has decided all 16 questions.**
+- Revision 2 resolved `step-14-opposer.md` (0 blockers, 2 major, 9 minor; section 8).
+- Every recommendation was taken except two: **Q3 (b)**, the new settings live in a nested `grpc` object on the source; and **Q8 (b)**, readiness on first payload is an opt-in setting in that object.
+- Open: none.
 
 **Decision (2026-11-04, #158): in the PoC, roadmap step 14.** Bring the Go flagd provider's gRPC sync features into `sync/flagd-grpc`, so that one gRPC sync module can serve both the Relay and, later, in-process providers (#156).
 
 **Hard constraint (drop-in):** a `grpc` source keeps today's behaviour with today's settings.
 - Every addition is an **opt-in source setting**.
-- Where the provider behaves differently from flagd today (retry timing, error reporting, the selector header), today's flagd is the default and the provider's behaviour is opt-in.
-- The upgrade differential's `source-grpc` scenario (`test/upgrade/surfaces.yaml`) stays green.
+- Where the provider behaves differently from flagd today, today's flagd is the default and the provider's behaviour is opt-in.
+- The upgrade differential's `source-grpc` scenario stays green. It covers the happy path (start, ready, one resolve); C1–C4 pin the failure paths (NFR-016).
 
-**Base.** `main` @ dd44d8fc. Step 13 (#110) is planned. Its spec PR reserves UC-022, FR-056, FR-057, NFR-014 and NFR-015, so this step uses **UC-023, FR-058–FR-063 and NFR-016**. "R" is `github.com/open-feature-forking/openfeature-relay`.
+**Base.** `main` @ 5aa3ca2e. Step 13 reserves UC-022, FR-056, FR-057, NFR-014 and NFR-015, so this step uses **UC-023, FR-058–FR-062 and NFR-016**. "R" is `github.com/open-feature-forking/openfeature-relay`.
 
 **Read (read-only):**
-- go-sdk-contrib `providers/flagd/pkg/service/in_process/` at `providers/flagd/v0.8.0`, the version `test/integration` pins: `grpc_sync.go`, `grpc_config.go`, `grpc_interceptors.go`, `service.go` and their tests.
-- `sync/flagd-grpc` on `main` (`grpc_sync.go`, `factory.go`, tests), and `core/pkg/sync.SourceConfig`.
-- The provider spec, `docs/reference/specifications/providers.md` in the flagd checkout (e6be905): "Stream Reconnection", "gRPC Retry Policy", "Fatal Status Codes", and the configuration table.
+- go-sdk-contrib `providers/flagd/v0.8.0`, the version `test/integration` pins: `pkg/service/in_process/` (`grpc_sync.go`, `grpc_config.go`, `grpc_interceptors.go`, `service.go`, tests) and `internal/flagdmeta`.
+- `sync/flagd-grpc`, `core/pkg/sync` (`isync.go`, `fetch.go`, `headers.go`) and `runtime/runtime.go` on `main`.
+- The provider spec, `docs/reference/specifications/providers.md` at e6be905 in the flagd checkout.
+- grpc-go **v1.84.0**, the version `sync/flagd-grpc` requires, for keepalive (`dialoptions.go:575-583`, `internal/transport/http2_client.go:266`).
 
 ## 1. Comparison, field by field
 
-Legend: **have**: ours already does it; **missing**: the provider or spec has it and we don't; **differs**: both have it, with different behaviour; **ours only**; **n/a**: belongs to the provider's SDK-event layer, not to a sync provider.
+Legend: **have**, **missing**, **differs**, **ours only**, and **n/a** (the provider's SDK-event layer, not a sync provider).
 
-**How flagd configures a `grpc` source today** (`--sources` JSON, `sync.SourceConfig`; or `--uri grpc://…`, `grpcs://…`, `envoy://…`): `uri`, `provider: "grpc"`, `tls`, `certPath`, `providerID`, `selector`, `maxMsgSize`, `headers`, `headersFrom`, `incrementalUpdates` and `staleAfter`. Nothing else reaches `flagdgrpc.Sync`.
+**How flagd configures a `grpc` source today:** the `--sources` JSON, decoded into `sync.SourceConfig` without `DisallowUnknownFields` (so unknown keys are ignored), or `--uri grpc://…`, `grpcs://…`, `envoy://…`. The keys that reach `flagdgrpc.Sync` are `uri`, `provider`, `tls`, `certPath`, `providerID`, `selector`, `maxMsgSize`, `headers` (not `headersFrom`), `incrementalUpdates` and `staleAfter`.
 
 | # | Feature | Provider v0.8.0 | Provider spec | Ours on `main` | Status |
 |---|---|---|---|---|---|
-| 1 | Target | `URI`, custom resolvers (envoy) | `host`/`port`, `targetUri`, `socketPath` | `grpc://`, `grpcs://`, `envoy`, `dns`, `uds` and `xds` schemes; envoy resolver | **have** |
-| 2 | TLS, `certPath` | `CredentialBuilder.Build(Secure, CertPath)` | `tls`, `certPath` | same builder (`tls`, `certPath`) | **have** |
+| 1 | Target | `URI`, envoy resolver | `host`/`port`, `targetUri`, `socketPath` | `grpc://`, `grpcs://`, `envoy`, `dns`, `uds`, `xds`; envoy resolver | **have** |
+| 2 | TLS, `certPath` | `CredentialBuilder.Build` | `tls`, `certPath` | same builder | **have** |
 | 3 | `providerID` in the request | yes | `providerId` | yes | **have** |
 | 4 | Selector in the request body (deprecated field) | yes | `selector` | yes | **have** |
-| 5 | Selector as `flagd-selector` metadata, on unary and stream calls | interceptors, whenever a selector is set | header has precedence over the body | not sent (only `headers` could carry it) | **missing** (Q6) |
+| 5 | `flagd-selector` metadata on unary and stream calls | interceptors whenever a selector is set, in the override path too | header before body (Selector Precedence) | not sent | **missing** (Q6) |
 | 6 | Max receive message size | `MaxMsgSize` | — | `maxMsgSize` | **have** |
-| 7 | Custom headers | — | — | `headers` sent on `SyncFlags` and `FetchAllFlags`; **`headersFrom` ignored** (the factory passes `config.Headers`; `http` and Flagsmith call `sync.ResolveHeaders`) | **ours only**, with a gap (Q10) |
-| 8 | gRPC retry policy (service config) | `MaxAttempts 4`, initial `RetryBackOffMs` (default 1 s), max `RetryBackOffMaxMs` (default 5 s), ×2, `UNKNOWN`/`UNAVAILABLE`, on `flagd.sync.v1.FlagSyncService` | the same, but `InitialBackoff` fixed at `1s` | none | **missing**, and provider and spec differ on the initial backoff (Q4) |
-| 9 | Application-level delay before re-opening a stream | a fixed `RetryBackOffMaxMs` after every failed cycle | "must apply … `retryBackoffMaxMs`" after an error **or completion** | `connectWithRetry`: 4 s, 16 s, 64 s, then 60 s constant; the first failure of `Sync` goes straight to it; the schedule restarts each time a stream ends | **differs** (Q4) |
-| 10 | `WaitForReady` on `SyncFlags` | always | — | no: a call fails at once when the connection is not ready | **differs** (Q9) |
-| 11 | Stream deadline | `StreamDeadlineMs`; reaching it recycles the stream with no error and no delay | `streamDeadlineMs`, default 600000; delay after "completion" too | none: a stream lives until it breaks | **missing**, provider and spec differ (Q7) |
-| 12 | Unary deadline for `FetchAllFlags` (`ReSync`) | from the caller's context | `deadlineMs`, default 500 | none | **missing** (Q12) |
-| 13 | Keepalive | `Time` = `KeepAliveTime` ms (default 0), `Timeout` 5 s, `PermitWithoutStream: true`, always applied | `keepAliveTime`, default 0 | none | **missing** (Q13). See R2: grpc-go raises a `Time` below 10 s to 10 s, so the provider's "0" may ping every 10 s; the implementer verifies this against grpc-go before Q13's defaults are fixed |
-| 14 | Fatal status codes | `FatalStatusCodes`; a match on a failed **first** cycle stops the sync with `ProviderFatal`; unknown names are warned about and ignored | `fatalStatusCodes`, default `[]`; "during initialization" only | none: every error is retried forever; a failed first connect no longer exits (#78) | **missing** (Q5) |
-| 15 | Readiness of the sync provider | ready after the **first payload** | — | ready when the stream **opens** (`handleFlagSync` stores `ready` before `Recv`; pinned by `TestReadinessCharacterization`) | **differs**, and invisible at the runtime's readiness, which waits for an accepted configuration per source (Q8) |
-| 16 | Context cancellation | `Recv` in a goroutine, `select` on ctx; `Sync` returns `ctx.Err()` | — | `Recv` on a stream bound to ctx, and the send to `dataSync` selects on ctx; `Sync` returns `nil` | **have** in effect; the return value differs and the runtime relies on ours. Kept |
-| 17 | Connection state monitor (`TransientFailure` raises an SDK error event) | yes | STALE then ERROR after `retryGracePeriod` | stream metrics (`RecordStreamOpened`/`Closed`/`Reconnect`), `LastContact`, `staleAfter` readiness | **n/a**: SDK events. The relay's analog is `staleAfter` (FR-052) and the stream metrics |
-| 18 | `retryGracePeriod` | in `service.go` (stale to error timer) | default 10 s | — | **n/a**: provider state machine |
-| 19 | Closing the connection | `Shutdown` closes the `ClientConn` | — | **never closed**: `Init` creates it and nothing closes it | **missing**, an internal leak. It matters once a process builds several runtimes (step 13's configuration switch). Fixed without a setting (P1) |
-| 20 | `GrpcDialOptionsOverride` | yes | — | yes | **have** |
-| 21 | Client instrumentation, sync metrics, stream metrics, `LastContact`, `incrementalUpdates` | — | — | yes | **ours only**, kept |
+| 7 | Custom headers | — | — | `headers` on both calls; **`headersFrom` ignored** (the factory passes `config.Headers`, where `http` and Flagsmith call `sync.ResolveHeaders`) | **ours only**, with a gap (Q10) |
+| 8 | gRPC retry service config | `MaxAttempts 4`, initial `RetryBackOffMs` (default 1000), max `RetryBackOffMaxMs` (default 5000), ×2, `UNKNOWN`/`UNAVAILABLE`, on `flagd.sync.v1.FlagSyncService`; not applied under the override | the same, but `InitialBackoff` fixed at `1s` | none | **missing**; the provider and the spec differ (Q4) |
+| 9 | Delay before re-opening a stream | a fixed `RetryBackOffMaxMs` after every failed cycle, none after a deadline recycle | `retryBackoffMaxMs` after an error **or completion** | 4 s, 16 s, 64 s, then 60 s; restarts each time a stream ends | **differs** (Q4, Q7) |
+| 10 | `WaitForReady` on `SyncFlags` | always | — | no (fail fast) | **differs** (Q9) |
+| 11 | Stream deadline | `StreamDeadlineMs`; recycle without error or delay | `streamDeadlineMs`, default 600000 | none | **missing** (Q7) |
+| 12 | Unary deadline | `deadlineMs` bounds local evaluations (`applyDeadlineToContext`), not the sync | `deadlineMs`, default 500 | none; `FetchAllFlags` is reached only through `ReSync`, which only flagd-proxy and `synctest` call | **n/a for flagd today** (Q12) |
+| 13 | Keepalive | `WithKeepaliveParams` always applied: `Time` = `KeepAliveTime` ms, `Timeout` 5 s, `PermitWithoutStream: true`. grpc-go raises any `Time` below 10 s to 10 s **when the dial option is built**, so the default `0` **pings every 10 s, without a stream too**; not applied under the override | `keepAliveTime`, default 0 | none: no keepalive parameters | **missing**, and the provider's `0` means "every 10 s" (Q13) |
+| 14 | Fatal status codes | on a failed first cycle with `!IsReady()`: `Sync` returns `ProviderInitError{ProviderFatalCode}`; unknown names warned about and skipped; the set is a **package global** | `fatalStatusCodes`, `[]`; "during initialization" | none: every error retried; a failed first connect doesn't exit (#78) | **missing** (Q5) |
+| 15 | Sync provider readiness | after the first payload | — | when the stream opens, pinned by `TestReadinessCharacterization` | **differs**; invisible at the runtime's readiness (Q8) |
+| 16 | Context cancellation | `Sync` returns `ctx.Err()` | — | `Sync` returns `nil`; the runtime relies on it (an error from `Sync` exits flagd, `runtime.go:113-120`) | **have**, return value kept |
+| 17 | Connection state events, `retryGracePeriod` | SDK events, stale to error timer | — | stream metrics, `LastContact`, `staleAfter` | **n/a** |
+| 18 | Closing the connection | `Shutdown` closes the `ClientConn` | — | never closed | **missing**; an internal leak that matters once a process builds several runtimes (step 13 Q22). Fixed without a setting (P1) |
+| 19 | `GrpcDialOptionsOverride` | yes; interceptors applied on top, service config and keepalive not | — | yes; `DialOptions` (instrumentation) applied on top | **have**; the new options under the override are Q15 |
+| 20 | Instrumentation, sync and stream metrics, `LastContact`, `incrementalUpdates` | — | — | yes | **ours only**, kept |
 
-**Missing or different, by drop-in risk:**
-- **Invisible to flagd-full**, done without asking: the `ClientConn` close (19).
-- **New outbound behaviour,** so opt-in: the retry policy (8, 9), `WaitForReady` (10), the stream deadline (11), the unary deadline (12), keepalive (13), fatal codes (14) and the selector header (5).
-- **Default kept:** readiness (15), and the return value on cancel (16).
-- **Ours with a gap:** `headersFrom` (7).
+**The runtime's rule for a `Sync` that returns an error:** every sync provider's `Sync` runs in the runtime's errgroup. An error from it ends the group, and **flagd exits** (`runtime.go:113-120`). The repository has already used that on purpose: a fetching source refused before its first successful fetch (`sync.ErrSourceRefused`, UC-019 Q13) ends the provider, and `runtime/refused_source_test.go` `TestRuntimeExitsOnRefusedSource` pins that flagd exits naming the source.
 
-## 0. Open questions for the project lead
+## 0. Questions for the project lead (all decided)
 
-The recommendation comes first; each keeps today's flagd as the default.
+Each question keeps its number. The decided option is marked, and every decision keeps today's flagd as the default.
 
-- **Q1, slicing and parallelism.**
-  - (a) Seven PRs (section 4): C (pins), S (spec), P1 (settings surface, `headersFrom`, connection close), then P2 (reconnect: delay, `WaitForReady`, fatal codes) and P4 (dial options: retry service config, keepalive, selector header) in parallel on P1. Then P3 (deadlines) on P2, T (testbed integration) on P2, P3, P4 and step 13's I, and X (close).
-  - (b) One PR per setting: smaller reviews, but each one edits `grpc_sync.go`, so they would conflict.
+- **Q1, slicing. (decided: (a))**
+  - (a) **Six PRs** (section 4): S (spec) and C (pins) now; P1 (settings surface, validation, `headersFrom`, connection close) on C; then P2 (the `Sync` loop: reconnect delay, `WaitForReady`, fatal codes, stream deadline) and P4 (`Init`: retry service config, keepalive, selector interceptors) in parallel on P1; T (testbed job) on P2, P4 and step 13's I; X last.
+  - (b) One PR per setting. Smaller, but they all edit `grpc_sync.go`.
   - (c) A single PR.
-  - **Recommendation:** (a).
+  - **Decided, as recommended:** (a). The critical path is C → P1 → P2 → T → X.
 
-- **Q2, which use case owns this.**
-  - (a) A new **UC-023 "Sync From an Upstream Flag Sync Endpoint"**. The Operator configures a `grpc` source's resilience settings to chain flagd, flagd-sync or a vendor relay. It brings FR-058–FR-063 and NFR-016 (section 2).
-  - (b) Business rules in **UC-003** (Develop Sync Provider Extension). UC-003's actor is the Extension Author, and these are operator settings of an official provider.
-  - (c) An alternative flow of **UC-017** (Run Configuration Proxy), the proxy chain. Narrower than the settings, which also apply to a plain flagd syncing from another flagd.
-  - **Recommendation:** (a).
+- **Q2, which use case owns this. (decided: (a), new UC-023)**
+  - (a) A new **UC-023 "Sync From an Upstream Flag Sync Endpoint"**, actor Operator, with FR-058–FR-062 and NFR-016.
+  - (b) Business rules in UC-003, whose actor is the Extension Author.
+  - (c) An alternative flow of UC-017 (the proxy chain), which is narrower than the settings.
+  - **Decided, as recommended:** (a).
 
-- **Q3, the settings surface.**
-  - (a) **One opt-in key per feature,** named as the provider spec names them: `retryBackoffMs`, `retryBackoffMaxMs`, `streamDeadlineMs`, `deadlineMs`, `keepAliveTime` (ms), `fatalStatusCodes`, plus `selectorHeader` (bool), which the spec has no name for. Absent or zero keeps today's behaviour.
-  - (b) **One switch,** `profile: "provider"`, which turns on the provider's defaults together (1 s and 5 s retry, `WaitForReady`, 600000 ms stream deadline, 500 ms unary deadline, keepalive, selector header).
-  - (c) Both: the profile sets the defaults, and the individual keys override them.
-  - **Recommendation:** (a). An operator turns on exactly what they need, and the names match the provider documentation operators already know. (b) and (c) can be added later without breaking (a).
+- **Q3, the settings surface. (decided: (b), a nested `grpc` object; this differs from the recommendation)**
+  - **The shape:** the new settings live in one object, `grpc`, on the source. Inside it the keys are named as the provider spec names them:
 
-- **Q4, reconnect timing once opted in** (`retryBackoffMs` or `retryBackoffMaxMs` set).
+    ```json
+    {"uri": "flagd-upstream:8015", "provider": "grpc", "selector": "flagSetId=app",
+     "grpc": {"retryBackoffMs": 1000, "retryBackoffMaxMs": 5000, "streamDeadlineMs": 600000,
+              "keepAliveTime": 30000, "fatalStatusCodes": ["PERMISSION_DENIED"],
+              "selectorHeader": true, "readyOnFirstPayload": true}}
+    ```
+
+  - **`sync.SourceConfig` gains one field,** `GRPC *GRPCSourceSettings` with the tag `json:"grpc,omitempty"`. The struct lives in `core/pkg/sync`, so the core keeps no dependency on the module, and `flagd-grpc` reads it into `flagdgrpc.Options` (Q11). With `omitempty` and a nil pointer, `TestSourceConfigJSONRoundTripWithoutHeadersFrom` and `start_config.golden` stay unchanged.
+  - **The values:**
+    - inside the object, absent or `0` (or `false`) means "not set", key by key;
+    - an empty `grpc: {}` changes nothing;
+    - an unknown key inside the object stops startup, naming the source and the key. The object is decoded strictly, unlike the rest of the source.
+  - **A `grpc` object on a source whose provider isn't `grpc`** stops startup, naming the source.
+  - **The settings that already exist stay where they are:** `tls`, `certPath`, `providerID`, `selector`, `maxMsgSize`, `headers`, `headersFrom`, `incrementalUpdates` and `staleAfter`.
+  - *Not chosen:* (a) flat keys; (c) a `profile` switch.
+
+- **Q4, reconnect timing once opted in (decided: (a))** (`retryBackoffMs` or `retryBackoffMaxMs` set).
   - (a) **The provider's:**
-    - the gRPC retry service config on `flagd.sync.v1.FlagSyncService`, initial `retryBackoffMs` (default 1 s), max `retryBackoffMaxMs` (default 5 s), ×2, 4 attempts, `UNKNOWN`/`UNAVAILABLE`;
-    - a fixed `retryBackoffMaxMs` delay before re-opening a stream after an error, in place of 4/16/64/60 s.
-  - (b) **The spec's literal policy:** as (a), but `InitialBackoff` fixed at 1 s and `retryBackoffMs` used only for the application-level delay.
-  - (c) **Today's 4^n schedule, made configurable** (base and cap), with no service config.
-  - **Recommendation:** (a). It is what every released Go provider runs, so a relay in a provider's place behaves like one. The spec difference goes to the spec maintainers as a note, outside this repository's scope.
+    - the retry service config with initial `retryBackoffMs`, max `retryBackoffMaxMs`, ×2, 4 attempts, `UNKNOWN`/`UNAVAILABLE`;
+    - a fixed `retryBackoffMaxMs` delay before re-opening after an error, in place of 4/16/64/60 s.
 
-- **Q5, what a fatal status code does in the relay** (`fatalStatusCodes` set, and a listed code arrives before the source's first payload).
-  - (a) **The source stops.** It logs an error naming the source and the code, and stops retrying. flagd keeps running and serving its other sources, and stays **not ready**, because that source never delivers (FR-052's readiness).
-  - (b) **flagd exits** with an error naming the source and the code: a fail-fast startup error like UC-010 BR-001's.
-  - (c) **The source stops whenever a listed code arrives,** before or after the first payload. This goes beyond the spec, which limits fatal codes to initialization.
-  - **Recommendation:** (a). It matches the spec's "during initialization", keeps the other sources served, and readiness already makes the failure visible to Kubernetes and load balancers. An unknown code name in the setting stops startup with the name (an invalid component configuration), unlike the provider, which warns and ignores it.
+    If only one key is set, the provider's default fills the other (1000 or 5000 ms). `retryBackoffMs` above `retryBackoffMaxMs` stops startup.
+  - (b) The spec's literal policy: as (a), with `InitialBackoff` fixed at 1 s.
+  - (c) Today's 4^n schedule, made configurable, with no service config.
+  - **Decided, as recommended:** (a). It is what the released Go providers run.
 
-- **Q6, the `flagd-selector` header.** Today flagd sends the selector only in the deprecated request field. The provider also sends it as metadata whenever a selector is set.
-  - (a) **Opt-in `selectorHeader: true`:** the header is sent in addition to the body field, on `SyncFlags` and `FetchAllFlags`.
-  - (b) **Always,** whenever `selector` is set, as the provider does. That changes what every upstream server sees, so it breaks the drop-in rule.
-  - (c) **Opt-in, and it replaces the body field:** the header only. An old upstream that ignores headers would then get no selector at all.
-  - **Recommendation:** (a).
-    - It is the subscriber side of #149: a later on-demand-selector server reads the header first, as the spec's precedence says.
-    - flagd-proxy reads only the body, and gets the same value either way.
+- **Q5, what a fatal status code does (decided: (a))** (`grpc.fatalStatusCodes` set, and a listed code arrives before the source's first payload).
+  - (a) **flagd exits,** naming the source and the code, as for a fetching source refused before its first fetch (`ErrSourceRefused`): `Sync` returns the error and the runtime ends. One rule for both kinds of source, and an orchestrator restarts or alerts as for any failed start.
+  - (b) **The source stops and flagd keeps serving its other sources,** never becoming ready. That is not the provider's code: `Sync` would have to stop retrying and block until `ctx` is done, returning `nil`, because an error from `Sync` exits flagd.
+  - (c) The source stops on a listed code at any time, before or after the first payload. This goes beyond the spec.
+  - **Decided, as recommended:** (a).
+    - "Before the first payload" is tracked in its own flag, not in `ready`, which is set when the stream opens (Q8): a `PERMISSION_DENIED` on the first `Recv` comes with `ready` already true.
+    - After the first payload, a listed code is retried like any error.
+    - The set of codes is held per `Sync`, not in a package global as in the provider.
+    - An unknown code name stops startup.
 
-- **Q7, stream deadline semantics** (`streamDeadlineMs` set).
-  - (a) **The provider's:** when the deadline elapses with the parent context alive, the stream is re-opened at once, with no error, no backoff and no stream metric counted as a failure.
-  - (b) **The spec's:** a completed stream is treated like an error, with the `retryBackoffMaxMs` delay before re-opening.
-  - (c) **(a), counted:** recycle at once, but record it as a reconnect in the stream metrics.
-  - **Recommendation:** (a), with a distinct log line at debug level. The deadline is an application-level keepalive, not a failure.
+- **Q6, the `flagd-selector` header. (decided: (a))**
+  - (a) **Opt-in `selectorHeader: true`:** the header is sent in addition to the body field, on `SyncFlags` and `FetchAllFlags`. A `headers` entry named `flagd-selector` on the same source stops startup, because `AppendToOutgoingContext` would send two values and the first wins.
+  - (b) Always, whenever a selector is set, as the provider does. That changes what every upstream sees, so it breaks the drop-in rule.
+  - (c) Opt-in, header only, with no body field. An old upstream would then get no selector.
+  - **Decided, as recommended:** (a). It is the subscriber's side of #149. Our flag sync endpoint already prefers the header and gets the same value; flagd-proxy reads only the body.
 
-- **Q8, sync provider readiness.** Ours is ready when the stream opens; the provider's after the first payload.
-  - (a) **Keep today's,** no setting. The runtime's readiness already waits for an accepted configuration from each source, so the difference is not observable outside the module, and `TestReadinessCharacterization` stays as it is.
-  - (b) An opt-in `readyOnFirstPayload`.
-  - (c) Switch to the provider's by default. It breaks a pin, for no visible gain.
-  - **Recommendation:** (a).
+- **Q7, stream deadline semantics (decided: (a))** (`grpc.streamDeadlineMs` set).
+  - (a) **The provider's:** when the deadline elapses with the parent context alive, re-open at once, with no error, no delay and no failure in the stream metrics.
+  - (b) The spec's: a completed stream waits `retryBackoffMaxMs` before re-opening.
+  - (c) (a), but counted as a reconnect.
+  - **Decided, as recommended:** (a), with a debug log line.
 
-- **Q9, `WaitForReady` on `SyncFlags`.**
-  - (a) **On when Q4's retry policy is opted in, off otherwise.** The provider couples them, and `WaitForReady` without the service config would block where flagd now fails fast and backs off.
-  - (b) A separate opt-in key.
+- **Q8, sync provider readiness. (decided: (b), an opt-in `grpc.readyOnFirstPayload`; this differs from the recommendation)**
+  - **By default** the source is ready when its stream opens, as today; `TestReadinessCharacterization` stays as it is.
+  - **With `readyOnFirstPayload: true`,** `IsReady()` turns true only once the first payload has been received, as in the provider. The same first-payload flag that Q5 uses for fatal codes drives it.
+  - **What the runtime sees:** its readiness already waits for an accepted configuration per source, so the setting changes `IsReady()` for callers that ask the sync provider directly. Today that is the stream metrics and flagd-proxy-style users of the module (#156).
+  - **Tests:** `TestReadyWhenStreamOpensByDefault` and `TestReadyOnFirstPayloadOptIn`. The second covers a stream that opens and fails before any payload: never ready.
+  - *Not chosen:* (a) no setting; (c) the provider's by default.
+
+- **Q9, `WaitForReady` on `SyncFlags`. (decided: (a))**
+  - (a) **On exactly when Q4's retry policy is opted in.**
+  - (b) A key of its own.
   - (c) Never.
-  - **Recommendation:** (a).
+  - **Decided, as recommended:** (a). Without the service config it would block where flagd now fails fast and backs off.
 
-- **Q10, `headersFrom` on `grpc` sources.** It is documented for every source (`sync.SourceConfig`), but `flagd-grpc` ignores it. Upstream flagd never had the key, so honouring it changes nothing for a configuration today's flagd accepts.
-  - (a) **Fix in this step (P1):** the factory calls `sync.ResolveHeaders`, as `http` does. An unreadable variable or file stops startup naming the header.
-  - (b) A separate issue, outside step 14.
+- **Q10, `headersFrom` on `grpc` sources. (decided: (a))**
+  - (a) **Fix it in P1:** the factory calls `sync.ResolveHeaders`, as `http` does. Upstream flagd never had the key, so nothing a configuration means today changes.
+  - (b) A separate issue.
   - (c) Document `headersFrom` as http-only.
-  - **Recommendation:** (a).
+  - **Decided, as recommended:** (a).
 
-- **Q11, provider consumption later (#156).**
-  - (a) **Keep the runtime-facing `Sync` and factory for now.** Make the settings one exported struct (`flagdgrpc.Options`) that both the factory and a future provider constructor fill. No provider-facing API, events or `retryGracePeriod` in this step.
-  - (b) Add a provider-facing constructor and an event callback now, so a provider could switch at once.
-  - (c) Nothing; #156 designs its own.
-  - **Recommendation:** (a). It keeps one place for the settings without designing #156's API early.
+- **Q11, provider consumption later (#156). (decided: (a))**
+  - (a) **One exported `flagdgrpc.Options` struct** that the factory fills, and that a later provider constructor can fill too. No provider-facing API in this step.
+  - (b) A provider constructor and an event callback now.
+  - (c) Nothing.
+  - **Decided, as recommended:** (a).
 
-- **Q12, a unary deadline for `FetchAllFlags`** (`deadlineMs`).
-  - (a) **Include it,** opt-in. Absent means no deadline, as today. It bounds `ReSync`, which step 13's store reset calls on every source.
-  - (b) Leave it out.
-  - (c) Include it with the spec's default of 500 ms. That changes today's behaviour.
-  - **Recommendation:** (a).
+- **Q12, a unary deadline for `FetchAllFlags`. (decided: (a), left out)**
+  - (a) **Leave it out** until something in flagd calls `FetchAllFlags`. Today only flagd-proxy and `synctest` call `ReSync`. Step 13's testbed has no `grpc` source, and the provider's `deadlineMs` bounds local evaluations, which have no relay counterpart.
+  - (b) An opt-in `deadlineMs` now, with nothing behind it in flagd.
+  - (c) The spec's 500 ms default. That changes today's behaviour.
+  - **Decided, as recommended:** (a).
 
-- **Q13, keepalive** (`keepAliveTime` set, in ms).
-  - (a) **The provider's parameters:** `Time` = `keepAliveTime`, `Timeout` 5 s, `PermitWithoutStream: true`. The settings document grpc-go's 10 s floor and the upstream server's ping policy (R2).
-  - (b) As (a), plus `keepAliveTimeout` and `keepAlivePermitWithoutStream` as their own keys.
+- **Q13, keepalive (decided: (a))** (`grpc.keepAliveTime` in ms).
+  - (a) **Absent and `0` mean no keepalive parameters, as today.** That deliberately differs from the provider, where `0` means a 10 s ping.
+    - A value from 1 to 9999 stops startup, naming the setting and grpc-go's 10 s floor, instead of being raised silently.
+    - Any value of 10000 or more sets `Time`, with `Timeout` 5 s and `PermitWithoutStream: true`, as the provider does.
+    - The settings table says that a grpc-go upstream with default enforcement (5-minute `MinTime`, no pings without streams; flagd-proxy is one) answers faster pings with `GOAWAY ENHANCE_YOUR_CALM "too_many_pings"`.
+  - (b) As (a), and `0` means the provider's 10 s ping. That matches the name's meaning in the provider, but turns "not set" into a behaviour.
   - (c) Leave keepalive out.
-  - **Recommendation:** (a). Absent means no keepalive parameters at all, as today. The provider applies them always, even at 0; we don't.
+  - **Decided, as recommended:** (a).
 
-- **Q14, how these features are tested end to end.**
-  - (a) **Unit tests always, plus a gated testbed job.**
-    - **Unit tests** run on every PR: a `bufconn` or loopback flag sync server with fault injection in the test, and a fake clock for timings.
-    - **The gated job** (`FULL_CI` or a manual dispatch) runs flagd-full with a `grpc` source pointed at step 13's testbed. The testbed's `/restart` closes its listeners for real reconnects, and envoy's 9212 answers `PERMISSION_DENIED` for fatal codes. It covers reconnect timing, fatal codes, the selector header and the stream deadline.
+- **Q14, end-to-end tests. (decided: (a))**
+  - (a) **Unit tests always, plus a gated testbed job** (`FULL_CI` or a manual dispatch).
+    - The job runs flagd-full with a `grpc` source against step 13's testbed. Its `/restart` closes the listeners for real reconnects, and envoy's 9212 answers `PERMISSION_DENIED` for fatal codes.
+    - The selector header and keepalive stay unit-tested only: the testbed's endpoint runs on `net/http`, which neither enforces a ping policy nor echoes headers.
   - (b) Unit tests only.
   - (c) The testbed job on every PR.
-  - **Recommendation:** (a). T depends on step 13's B1 and I, so it is last.
+  - **Decided, as recommended:** (a).
+
+- **Q15, the new options under `GrpcDialOptionsOverride`. (decided: (a))**
+  - (a) **The provider's rule:** the selector interceptors apply on top of an override, and the retry service config and keepalive don't, because the override owns the dial. `DialOptions` (instrumentation) keep applying on both paths, as today.
+  - (b) Every new option applies on top of the override.
+  - (c) None applies under an override.
+  - **Decided, as recommended:** (a), pinned by `TestOverrideKeepsInterceptorsOnly`.
+
+- **Q16, configurations that already carry these keys. (decided: (a), re-examined under Q3 (b))** Today flagd decodes `--sources` without `DisallowUnknownFields`, so any key it doesn't know is ignored.
+  - **Under Q3 (b) the residual risk is narrow:**
+    - **Flat provider-named keys** on a source, such as `keepAliveTime` or `retryBackoffMaxMs` copied from the provider docs, **stay ignored, exactly as today**. Step 14 reads them nowhere. `TestFlatProviderKeysStillIgnored` pins that, with `keepAliveTime: 5000` (which would fail Q13's validation if read) and `fatalStatusCodes`.
+    - **The one change:** a configuration that already carries a key named `grpc` on a source. Today that key is ignored.
+      - With step 14 it is read. If its content has the right shape, it acts.
+      - If it holds an unknown key, a value of the wrong type, or sits on a non-gRPC source, **startup stops**, where today's flagd started.
+    - No flagd release or document has used a `grpc` key on a source, so such a configuration is unlikely, but it is the exact edge.
+  - **Recorded:**
+    - a #78 item, "A `grpc` object on a source is read and validated (step 14)", with its `accepted.yaml` entry (`covered_by` `TestFlatProviderKeysStillIgnored`, `TestSettingsValidation` and `TestGRPCObjectRejectedOnOtherProviders`) after `make refresh-issue-78`;
+    - the same line in the upgrade guide (`docs/relay/`);
+    - UC-023 A4.
+  - *Not chosen:* (b) a `providerSettings` switch; (c) warn first, act later.
 
 ## 2. Spec change (Q2 (a); for PR S)
 
 **UC-023: Sync From an Upstream Flag Sync Endpoint.**
-- **Primary actor:** Operator. **Secondary actor:** the upstream flag sync endpoint (flagd, flagd-sync, or a vendor relay).
-- **Goal:** configure a `grpc` source to survive the upstream's outages and misconfigurations as the flagd providers do, without changing anything for sources that don't opt in.
+- **Primary actor:** Operator. **Secondary actor:** the upstream flag sync endpoint (flagd, flagd-sync, a vendor relay).
+- **Goal:** configure a `grpc` source to survive the upstream's outages and misconfigurations as the flagd providers do, with nothing changing for sources that don't opt in.
 
 **Main success scenario:**
-1. The Operator configures a `grpc` source with any of the opt-in settings.
+1. The Operator sets any of the keys of a `grpc` object (Q3) on a `grpc` source.
 2. flagd validates them.
-3. flagd syncs, re-opening streams with the configured timing.
-4. flagd recycles streams at the configured deadline.
-5. flagd keeps the connection alive with the configured keepalive.
-6. flagd sends the selector header when configured.
-7. flagd's readiness reflects the source as today.
+3. flagd syncs, re-opening streams with Q4's timing.
+4. flagd recycles streams at the deadline (Q7).
+5. flagd keeps the connection alive (Q13).
+6. flagd sends the selector header (Q6).
+7. Readiness reflects the source as today, or after its first payload with `readyOnFirstPayload` (Q8).
 
 **Alternative flows:**
-- **A1 Fatal code at initialization:** Q5.
-- **A2 Invalid setting** (unknown code name, negative duration): startup stops and names the setting.
-- **A3 Upstream outage:** the reconnect timing of Q4.
-- **A4 No opt-in setting:** today's behaviour, byte for byte (NFR-016).
+- **A1 Fatal code before the first payload:** flagd exits, naming the source and the code (Q5).
+- **A2 Invalid setting:** startup stops and names the setting and the source, for:
+  - an unknown code name;
+  - a negative duration;
+  - `retryBackoffMs` above `retryBackoffMaxMs`;
+  - `keepAliveTime` from 1 to 9999;
+  - `selectorHeader` together with a `flagd-selector` entry in `headers`;
+  - an unknown key or a wrong type inside the `grpc` object;
+  - a `grpc` object on a source whose provider isn't `grpc`.
+- **A3 Upstream outage:** Q4's timing.
+- **A4 No `grpc` object:** today's behaviour. Flat keys spelled as in the provider docs stay ignored. The one change is a configuration that already carried a `grpc` key on a source, which is now read and validated (Q16).
 
 **Requirements:**
 
 | ID | Requirement |
 |---|---|
-| FR-058 | A `grpc` source can opt into the provider's retry policy and reconnect delay (`retryBackoffMs`, `retryBackoffMaxMs`) |
-| FR-059 | A `grpc` source can opt into fatal status codes that stop it before its first payload (`fatalStatusCodes`) |
-| FR-060 | A `grpc` source can opt into stream and unary deadlines (`streamDeadlineMs`, `deadlineMs`) |
-| FR-061 | A `grpc` source can opt into HTTP/2 keepalive (`keepAliveTime`) |
-| FR-062 | A `grpc` source can opt into sending its selector as the `flagd-selector` header (`selectorHeader`) |
-| FR-063 | A `grpc` source honours `headersFrom` like every other source (Q10) |
-| NFR-016 | Without any of these settings, a `grpc` source behaves as today. The upgrade differential's `source-grpc` scenario and the pins of section 3 stay green |
+| FR-058 | A `grpc` source can opt into the provider's retry policy and reconnect delay (`grpc.retryBackoffMs`, `grpc.retryBackoffMaxMs`), with `WaitForReady` |
+| FR-059 | A `grpc` source can opt into fatal status codes that end flagd before the source's first payload (`grpc.fatalStatusCodes`) |
+| FR-060 | A `grpc` source can opt into a stream deadline (`grpc.streamDeadlineMs`), HTTP/2 keepalive (`grpc.keepAliveTime`, at least 10 s) and readiness on its first payload (`grpc.readyOnFirstPayload`) |
+| FR-061 | A `grpc` source can opt into sending its selector as the `flagd-selector` header (`grpc.selectorHeader`) |
+| FR-062 | A `grpc` source honours `headersFrom` like every other source |
+| NFR-016 | Without a `grpc` object, a `grpc` source behaves as today. The happy path is proven by the upgrade differential's `source-grpc` scenario; the failure paths (schedule, fail-fast, retries, no keepalive, no service config, no header) by C1–C4 |
 
-UC-003 gets one line under "Delivered by later use cases", and `docs/relay/` gets the source settings table.
+UC-003 gets one line under "Delivered by later use cases", and `docs/relay/` gets the `grpc` object's settings table, with the example of Q3, the upgrade-guide line of Q16 and the differences from the provider: `keepAliveTime` 0, the override rule, and fatal codes ending flagd.
 
 ## 3. Tests
 
@@ -187,44 +232,74 @@ UC-003 gets one line under "Delivered by later use cases", and `docs/relay/` get
 
 | Pin | Test | Pins |
 |---|---|---|
-| C1 | `sync/flagd-grpc` `TestDefaultRequestMetadataCharacterization` | Against a loopback flag sync server: the incoming metadata of `SyncFlags` and `FetchAllFlags` with today's settings has no `flagd-selector` key; `headers` arrive as set |
-| C2 | `TestDefaultReconnectScheduleCharacterization` | With a fake clock injected through a new `sleep` seam (same behaviour): the delays after repeated stream failures are 4 s, 16 s, 64 s, 60 s, 60 s, and the first failure of `Sync` goes straight to the schedule |
-| C3 | `TestDefaultNoDeadlineNoKeepaliveCharacterization` | An idle stream stays open past 2 minutes of fake time with no `GOAWAY` and no ping from the client (the server counts pings); `FetchAllFlags` has no deadline in its context |
-| C4 | `TestDefaultFailFastCharacterization` | Without `WaitForReady`, `SyncFlags` against a closed port fails at once and enters the schedule; `PERMISSION_DENIED` on the first call is retried like any error |
+| C1 | `sync/flagd-grpc` `TestDefaultRequestMetadataCharacterization` | Against a loopback flag sync server, with today's settings: the metadata of `SyncFlags` and `FetchAllFlags` has no `flagd-selector` key; `headers` arrive as set |
+| C2 | `TestDefaultReconnectScheduleCharacterization` | With a fake clock through a new, behaviour-neutral `sleep` seam: the delays after repeated failures are 4 s, 16 s, 64 s, 60 s, 60 s; the first failure of `Sync` goes straight to the schedule; the schedule restarts after a stream ends |
+| C3 | `TestDefaultDialOptionsCharacterization` | Through a behaviour-neutral recording seam over the dial options, with today's settings: no `WithKeepaliveParams`, no `WithDefaultServiceConfig`, no interceptors. `FetchAllFlags`'s context has no deadline. Keepalive is pinned at the dial, not by waiting for pings, because grpc-go's ping timers are real-time |
+| C4 | `TestDefaultFailFastCharacterization` | Without `WaitForReady`, `SyncFlags` against a closed port fails at once and enters the schedule; `PERMISSION_DENIED` on the first call or the first `Recv` is retried like any error, and flagd keeps running |
 | — | already there | `TestReadinessCharacterization`, `Test_ConnectWithRetry`, `Test_SyncRetry`, the stream metric tests, the upgrade differential's `source-grpc` |
 
-**Per feature (P1–P4):**
-- table tests per setting: absent means C1–C4 unchanged; set means the provider's behaviour;
-- `TestRetryServiceConfigJSON`: the generated service config equals the provider's `buildRetryPolicy` output for the same values, including fractional seconds;
-- `TestFatalCodeStopsBeforeFirstPayload` and `TestFatalCodeAfterReadyIsRetried`;
-- `TestStreamDeadlineRecyclesWithoutBackoff`;
-- `TestKeepaliveParameters`, which checks the ping interval the server sees, including grpc-go's 10 s floor;
-- `TestSelectorHeaderOnBothCalls`;
-- `TestHeadersFromResolved`;
-- `TestConnectionClosedWhenSyncReturns`, with a goroutine and fd leak check;
-- `TestUnknownFatalCodeStopsStartup`.
+**Per feature:**
+- **P1:**
+  - `TestSettingsValidation`: a table over every A2 case, each error naming the source and the setting;
+  - `TestGRPCObjectRejectedOnOtherProviders` (an `http` and a `file` source with a `grpc` object);
+  - `TestGRPCObjectDecodedStrictly` (an unknown key and a wrong type inside the object);
+  - `TestEmptyGRPCObjectChangesNothing` (C1–C4 hold with `grpc: {}`);
+  - `TestFlatProviderKeysStillIgnored` (Q16);
+  - `TestHeadersFromResolved`;
+  - `TestConnectionClosedWhenSyncReturns`, with `goleak` and an fd count;
+  - `TestSourceConfigJSONRoundTripWithoutHeadersFrom` and `start_config.golden` unchanged.
+- **P2:**
+  - `TestRetryDelayFixedOnceOptedIn` and `TestSingleBackoffKeyFillsTheOther`;
+  - `TestWaitForReadyOnlyWithRetryPolicy`;
+  - `TestFatalCodeOnFirstRecvStopsSync` (the stream opens, then `PERMISSION_DENIED`) and `TestFatalCodeAfterFirstPayloadIsRetried`;
+  - `TestFatalCodesPerSync` (two sources, different sets);
+  - `runtime` `TestRuntimeExitsOnFatalGRPCCode`, beside `TestRuntimeExitsOnRefusedSource`;
+  - `TestStreamDeadlineRecyclesWithoutDelay`;
+  - `TestReadyWhenStreamOpensByDefault` and `TestReadyOnFirstPayloadOptIn` (Q8).
+- **P4:**
+  - `TestRetryServiceConfigJSON`: equal to the provider's `buildRetryPolicy` output for the same values, fractional seconds included;
+  - `TestKeepaliveParameters`: the recorded `ClientParameters` for 10000 ms and more;
+  - `TestSelectorHeaderOnBothCalls`;
+  - `TestOverrideKeepsInterceptorsOnly` (Q15).
 
-**End to end (T, gated, Q14):** `test/testbed-grpc`. flagd-full syncs from step 13's testbed, through its flag sync port and through envoy's 9212, and the settings are exercised against real outages.
+**Flow to test** (UC-023 as #164 writes it: alternative flows A1–A4, business rules BR-001–BR-009):
 
-**Drop-in:**
-- the upgrade differential's `source-grpc` scenario;
-- `make flagd-integration-test`;
-- CI's allocs/op comparison.
+| Flow or rule | Tests |
+|---|---|
+| Main scenario | P2's and P4's per-feature tests; T |
+| A1 Fatal status code before the first payload | `TestFatalCodeOnFirstRecvStopsSync`; runtime's `TestRuntimeExitsOnFatalGRPCCode`; T through envoy's 9212 |
+| A2 Invalid setting | `TestSettingsValidation`, `TestGRPCObjectDecodedStrictly`, `TestGRPCObjectRejectedOnOtherProviders` |
+| A3 Upstream outage | `TestRetryDelayFixedOnceOptedIn`, `TestSingleBackoffKeyFillsTheOther`; T through `/restart` |
+| A4 Source without a `grpc` object | `TestFlatProviderKeysStillIgnored`, `TestEmptyGRPCObjectChangesNothing`, C1–C4, the upgrade differential's `source-grpc` |
+| BR-001 Opt-in only | C1–C4, `TestEmptyGRPCObjectChangesNothing`, `source-grpc` |
+| BR-002 Strict object | `TestGRPCObjectDecodedStrictly`, `TestGRPCObjectRejectedOnOtherProviders` |
+| BR-003 Provider retry timing | `TestRetryServiceConfigJSON`, `TestRetryDelayFixedOnceOptedIn`, `TestSingleBackoffKeyFillsTheOther`, `TestWaitForReadyOnlyWithRetryPolicy` |
+| BR-004 Stream deadline | `TestStreamDeadlineRecyclesWithoutDelay` |
+| BR-005 Keepalive | `TestKeepaliveParameters`; the 1–9999 case of `TestSettingsValidation` |
+| BR-006 Selector header | `TestSelectorHeaderOnBothCalls`; the `headers` conflict case of `TestSettingsValidation` |
+| BR-007 Readiness | `TestReadyWhenStreamOpensByDefault`, `TestReadyOnFirstPayloadOptIn` |
+| BR-008 Fatal codes | `TestFatalCodeOnFirstRecvStopsSync`, `TestFatalCodeAfterFirstPayloadIsRetried`, `TestFatalCodesPerSync`, runtime's `TestRuntimeExitsOnFatalGRPCCode` |
+| BR-009 Dial options override | `TestOverrideKeepsInterceptorsOnly` |
+
+**End to end (T, gated, Q14):** flagd-full with a `grpc` source against step 13's testbed.
+- **Through 8015:** `/restart` gives real reconnects, timed against Q4.
+- **Through envoy's 9212:** `PERMISSION_DENIED` gives the fatal exit (Q5).
+- **A stream deadline:** the stream recycles.
+- **Not covered here:** the selector header and keepalive enforcement (Q14).
 
 ## 4. PR slicing
 
 | PR | Model | Base | Content | Starts |
 |---|---|---|---|---|
-| S | mechanic | `main` (spec, straight to `main`) | UC-023, FR-058–FR-063, NFR-016, the UC-003 line, the `docs/relay/` settings table | now |
-| C | implementer | `main` | C1–C4. The only code change is the `sleep` seam, behaviour-neutral | now |
-| P1 | implementer | C | The new `SourceConfig` keys with validation (Q3, Q5's unknown-code error); `flagdgrpc.Options` (Q11); `headersFrom` (Q10); the `ClientConn` closed when `Sync` returns (item 19) | after C |
-| P2 | implementer | P1 | The reconnect delay, `WaitForReady` (Q9) and fatal codes (Q5), in the `Sync` loop | after P1 |
-| P4 | implementer | P1 | Dial options: the retry service config (Q4), keepalive (Q13), selector interceptors (Q6), in `Init` | after P1, beside P2 |
-| P3 | implementer | P2 | Stream deadline (Q7) and unary deadline (Q12) | after P2 |
-| T | implementer | P2 + P3 + P4, and step 13's I merged | The gated testbed job (Q14) | after both |
-| X | mechanic | T | UC-023 status, requirement statuses, #158 | last |
+| S | mechanic | `main` (spec, straight to `main`) | UC-023, FR-058–FR-062, NFR-016, the UC-003 line, the `docs/relay/` settings table | now |
+| C | implementer | `main` | C1–C4. The only code changes are the `sleep` and dial-option recording seams, behaviour-neutral | now |
+| P1 | implementer | C | `sync.SourceConfig.GRPC` (`*GRPCSourceSettings`, `omitempty`) with strict decoding of the object and A2's validation; the object rejected on non-gRPC sources; `flagdgrpc.Options` (Q11) filled from it; `headersFrom` (Q10); the `ClientConn` closed when `Sync` returns | after C |
+| P2 | implementer | P1 | The `Sync` loop: Q4's delay, Q9's `WaitForReady`, Q5's fatal codes with a first-payload flag and a per-`Sync` set, Q8's `readyOnFirstPayload` on the same flag, Q7's stream deadline | after P1 |
+| P4 | implementer | P1 | `Init`: Q4's service config, Q13's keepalive, Q6's interceptors, Q15's override rule | after P1, beside P2 |
+| T | implementer | P2 + P4, and step 13's B1 merged (the testbed image) | The gated testbed job (Q14) | after P2, P4 and step 13's B1 |
+| X | mechanic | T | UC-023 status, requirement statuses, the #78 item of Q16 with its `accepted.yaml` entry and upgrade-guide line, #158 | last |
 
-The critical path is C → P1 → P2 → P3 → T → X. T also waits for step 13.
+The critical path is C → P1 → P2 → T → X. P2 and P4 edit different functions of `grpc_sync.go`, so their merge is mechanical.
 
 ## 5. Gates
 
@@ -234,26 +309,56 @@ In WSL from the repository root (`export GOTOOLCHAIN=go1.27.3`; in a worktree `e
 |---|---|---|
 | Unit tests | `make workspace-init && make test` | all |
 | Lint, boundaries | `make lint check-module-boundary check-package-coverage` | all |
-| Drop-in | the upgrade differential (`source-grpc`), `make flagd-integration-test` | P1–P4 |
-| Benchmarks | CI's allocs/op comparison | P1–P4 |
+| Drop-in, happy path | the upgrade differential (`source-grpc`), `make flagd-integration-test` | P1, P2, P4 |
+| Drop-in, failure paths | C1–C4 unchanged | P1, P2, P4 |
+| Benchmarks | CI's allocs/op comparison | P1, P2, P4 |
+| #78 | `TestAcceptedMatchesIssue` | X |
 | Testbed | the gated job on a manual dispatch | T |
 | Spec | `spec_lint.py --docs docs` on Windows | S, X |
 
 ## 6. Risks
 
-- **R1, retry layers multiply.** The service config retries an RPC up to 4 times inside one stream attempt, and the application-level delay then waits `retryBackoffMaxMs`. That is the provider's behaviour, by design (Q4). Timings in the settings documentation are stated as "at least", and `TestRetryServiceConfigJSON` keeps the policy identical to the provider's.
-- **R2, keepalive against the upstream's ping policy.**
-  - grpc-go raises any client `Time` below 10 s to 10 s.
-  - A grpc-go **server** (flagd-proxy is one) enforces a 5-minute minimum by default, and answers faster pings, especially with `PermitWithoutStream`, with `GOAWAY ENHANCE_YOUR_CALM ("too_many_pings")`. flagd's own flag sync endpoint runs on `net/http`, which does not enforce it.
-  - The settings table states both. `TestKeepaliveParameters` checks the floor, and T's job runs keepalive against the testbed.
-- **R3, fatal codes and readiness (Q5).** A source stopped by a fatal code keeps flagd not ready for good. The error log names the source and the code, and the stream metrics record no reconnect for it.
-- **R4, the provider spec and the Go provider differ.** On the initial backoff (Q4) and on the delay after a deadline (Q7), we follow the provider code. Nothing goes upstream (containment); the differences are noted in the plan and the docs.
-- **R5, drift from the provider (#156).** We port behaviour, not the provider's package. The provider's service-config builder is matched by a test, not shared. #156 decides whether providers later import `flagd-grpc`.
-- **R6, step 13 dependency.** T needs step 13's testbed. P1–P4 do not.
-- **R7, `headersFrom` reads secrets.** It is the same resolver as `http`, already reviewed: values are never logged, and unreadable sources stop startup.
+- **R1, retry layers multiply.** The service config retries an RPC up to 4 times inside one attempt, and the application-level delay then waits `retryBackoffMaxMs`. That is the provider's design (Q4). The settings table states timings as "at least", and `TestRetryServiceConfigJSON` keeps the policy identical to the provider's.
+- **R2, keepalive against a strict upstream.**
+  - grpc-go v1.84.0 raises a `Time` below 10 s to 10 s when the dial option is built. The provider's default therefore pings every 10 s, with `PermitWithoutStream`.
+  - A grpc-go server with default enforcement, such as flagd-proxy, answers faster pings with `GOAWAY ENHANCE_YOUR_CALM "too_many_pings"`.
+  - Q13 (a) keeps "off" as the default, rejects 1–9999, and the settings table states the GOAWAY.
+- **R3, fatal codes end flagd (Q5).** That is the same rule as a refused fetching source, and it is opt-in. One misconfigured source then stops the others too, which the settings table says.
+- **R4, the provider spec and the Go provider differ** on the initial backoff (Q4) and the delay after a deadline (Q7). We follow the provider code. Nothing goes upstream; the docs name the differences.
+- **R5, drift from the provider (#156).** We port behaviour, not the package. The service-config builder is matched by a test, and the provider's package-global fatal set is not ported.
+- **R6, configurations that already carry a `grpc` key (Q16).** Flat provider-named keys stay ignored. Only a pre-existing `grpc` key on a source now acts, or stops startup when it is malformed. Recorded in #78, the upgrade guide and A4.
+- **R7, step 13 dependency.** Only T waits for step 13's testbed image (B1).
+- **R8, `headersFrom` reads secrets.** It uses the same resolver as `http`: values never logged, unreadable sources stop startup.
 
 ## 7. Considered
 
-- **Step 13's testbed** is the end-to-end harness (Q14): real listener closes for reconnects, envoy's `PERMISSION_DENIED` for fatal codes, and `/change` for payloads after a recycle.
-- **#149:** the selector header (Q6) is the subscriber's side. An on-demand-selector server keys on it, and flagd-proxy keeps reading the body field, so both get the selector.
-- **#156:** the `Options` struct (Q11) is where a provider would later configure the same module.
+- **Step 13's testbed** is the end-to-end harness for reconnects and fatal codes (Q14).
+- **#149:** the selector header is the subscriber's side (Q6).
+- **#156:** `flagdgrpc.Options` is where a provider would later configure the module (Q11).
+
+## 8. Changelog
+
+### Final decisions (project lead)
+
+| Question | Decision | Change |
+|---|---|---|
+| Q3 | (b), not the recommendation | The settings live in a nested, strictly decoded `grpc` object (`sync.SourceConfig.GRPC`); a `grpc` object on a non-gRPC source stops startup; P1 and the tests reworked; docs example in Q3 |
+| Q8 | (b), not the recommendation | `grpc.readyOnFirstPayload`, off by default; P2 drives it from Q5's first-payload flag; FR-060 extended; a test per mode |
+| Q16 | (a), re-examined | Flat keys stay ignored, as today; only a pre-existing `grpc` key acts or stops startup; #78 item, `accepted.yaml` entry and upgrade-guide line in X |
+| Q1, Q2, Q4–Q7, Q9–Q15 | (a), as recommended | Marked decided; T waits for step 13's B1 |
+
+### Revision 2 (`step-14-opposer.md`)
+
+| Finding | Severity | Outcome |
+|---|---|---|
+| 1 A returning `Sync` exits flagd; the precedent is exit | major | Adopted. Verified `runtime.go:113-120` and `TestRuntimeExitsOnRefusedSource`. Q5 now recommends exit; the first payload is tracked separately; runtime-level test added; the alternative names what it would take |
+| 2 The provider's `keepAliveTime: 0` pings every 10 s | major | Adopted as fact (R2). Q13: 0 means off, 1–9999 rejected; `TestKeepaliveParameters` uses the recording seam |
+| 3 Q12 has no caller in flagd | minor | Adopted. Verified the `ReSync` callers (flagd-proxy, `synctest`). Q12 recommends leaving it out; FR-060 drops `deadlineMs`; P3 is gone |
+| 4 C3 can't use a fake clock | minor | Adopted. C3 pins the absence at the dial through a recording seam |
+| 5 Today flagd ignores these keys | minor | Adopted as Q16, with A4 and a #78 item in X |
+| 6 Where the keys live | minor | Adopted, then superseded by the final Q3 (b): a nested `grpc` object, rejected on other providers; `omitempty` keeps the round-trip pin and `start_config.golden` |
+| 7 Header conflict | minor | Adopted. Q6 (a) rejects `selectorHeader` with a `flagd-selector` entry in `headers` (A2) |
+| 8 A2 tests one case | minor | Adopted. `TestSettingsValidation` covers every case; Q4 states the single-key rule |
+| 9 What T and the differential prove | minor | Adopted. NFR-016, section 5 and Q14 say it |
+| 10 The override path; the global fatal set | minor | Adopted. Q15; the fatal set per `Sync` (Q5, `TestFatalCodesPerSync`) |
+| 11 Fold P3 into P2 | minor | Adopted. Six PRs |
