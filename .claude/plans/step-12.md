@@ -1,5 +1,7 @@
 # Step 12 plan: Package Distribution as Image, Release Distributions and Component Modules, Verify Change Against Distributions (UC-002, UC-012, UC-013)
 
+**Decision (2026-11-04):** revision 2 approved by the project lead; every recommendation (Q1–Q17) accepted.
+
 **Status: revision 2.** It resolves `step-12-opposer.md` (0 blockers, 4 major, 5 minor); each finding's outcome is in section 8. Section 0 holds the questions for the project lead. Each recommendation leaves today's flagd and flagd-proxy images and release as they are on `main`.
 
 - **Changed recommendations:** Q8 (one standard distribution through the full path), Q9 (no release configuration change), Q10 (a placeholder version), Q14 (NFR-001 kept), Q15 (inside P3), Q16 (inside `upgrade-test`; the dry run gets a changed-files gate) and Q17 (two terms).
