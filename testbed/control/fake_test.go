@@ -23,6 +23,7 @@ type fakeTarget struct {
 	startFn func(ctx context.Context, config string) error
 	stopFn  func(ctx context.Context) error
 	loadFn  func(ctx context.Context, document []byte, version string) error
+	openFn  func(ctx context.Context) error
 
 	notReady atomic.Bool
 }
@@ -55,6 +56,23 @@ func (f *fakeTarget) hooks() (start func(context.Context, string) error, stop fu
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.startFn, f.stopFn, f.loadFn
+}
+
+func (f *fakeTarget) setOpen(fn func(context.Context) error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.openFn = fn
+}
+
+func (f *fakeTarget) Open(ctx context.Context) error {
+	f.record("open")
+	f.mu.Lock()
+	open := f.openFn
+	f.mu.Unlock()
+	if open != nil {
+		return open(ctx)
+	}
+	return nil
 }
 
 func (f *fakeTarget) setStart(fn func(context.Context, string) error) {

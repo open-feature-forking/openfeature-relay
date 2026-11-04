@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"sync"
@@ -57,6 +58,8 @@ func TestDocumentIsWhatIsRendered(t *testing.T) {
 func TestRenderLifecycle(t *testing.T) {
 	loadStarted := make(chan struct{})
 	releaseLoad := make(chan struct{})
+	releaseOnce := sync.OnceFunc(func() { close(releaseLoad) })
+	t.Cleanup(releaseOnce) // a failed assertion must not leave the change blocked
 	target := &fakeTarget{}
 	ts := newTestServer(t, target, nil)
 	atStart := ts.rendered(t)
@@ -75,7 +78,7 @@ func TestRenderLifecycle(t *testing.T) {
 	}()
 	<-loadStarted
 	require.Equal(t, atStart, ts.rendered(t), "the old file stays while the target takes the document in")
-	close(releaseLoad)
+	releaseOnce()
 	require.Equal(t, 200, <-changed)
 	require.Equal(t, golden(t, "change1"), ts.rendered(t), "rendered after the change")
 	target.setLoad(nil)
@@ -276,4 +279,60 @@ func snapshot(t *testing.T, dir string) map[string]string {
 		out[e.Name()] = info.ModTime().String() + "|" + string(data)
 	}
 	return out
+}
+
+// Q3 step 4, Q22: the file is rendered before the target is opened. During a restart the file is gone while the target
+// starts, and is back, with the document that survived, when Open is called.
+func TestRenderBeforeOpen(t *testing.T) {
+	type seen struct {
+		existsAtStart bool
+		atOpen        []byte
+	}
+	var mu sync.Mutex
+	var observed []seen
+	var ts *testServer
+	target := &fakeTarget{}
+	ts = newTestServer(t, target, nil)
+	target.setStart(func(context.Context, string) error {
+		_, err := os.Stat(ts.render)
+		mu.Lock()
+		observed = append(observed, seen{existsAtStart: err == nil})
+		mu.Unlock()
+		return nil
+	})
+	target.setOpen(func(context.Context) error {
+		data, _ := os.ReadFile(ts.render)
+		mu.Lock()
+		observed[len(observed)-1].atOpen = data
+		mu.Unlock()
+		return nil
+	})
+
+	ts.get(t, "/change") // the document that has to survive
+	ts.get(t, "/restart?seconds=0")
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(observed) == 1 && observed[0].atOpen != nil
+	}, 5*time.Second, 10*time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.False(t, observed[0].existsAtStart, "no file while the target starts during a restart")
+	require.Equal(t, golden(t, "change1"), observed[0].atOpen, "the file is there when the target is opened")
+}
+
+// A target that cannot be opened is closed again, and the start fails.
+func TestOpenFailureClosesTheTarget(t *testing.T) {
+	target := &fakeTarget{}
+	ts := newTestServer(t, target, nil)
+	target.setOpen(func(context.Context) error { return errors.New("port in use") })
+	stops := target.count("stop")
+
+	code, body := ts.get(t, "/start?config=ssl")
+
+	require.Equal(t, 500, code)
+	require.Equal(t, `{"status":"error","message":"Failed to start flagd: port in use"}`+"\n", body)
+	require.Equal(t, stops+1, target.count("stop"))
+	require.Equal(t, "default", ts.config())
 }

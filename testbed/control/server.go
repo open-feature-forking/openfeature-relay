@@ -110,10 +110,10 @@ func (s *Server) Serve(ctx context.Context) error {
 	served := make(chan error, 1)
 	go func() { served <- server.Serve(listener) }()
 	defer func() {
-		s.cancelRestart()
 		timeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = server.Shutdown(timeout)
+		_ = server.Shutdown(timeout) // no new call can schedule a restart after this
+		s.cancelRestart()
 		s.unrender()
 	}()
 
@@ -167,22 +167,25 @@ func (s *Server) handleStart(w http.ResponseWriter, r *http.Request) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.cancelRestartLocked()
 	if config == "" {
 		config = s.current
 	}
 	if err := s.start(context.WithoutCancel(r.Context()), config); err != nil {
+		// A start that did not happen, or did not get ready, leaves a pending restart as it was: an unknown name must
+		// not end the outage that the restart is going to end.
 		respond(w, http.StatusInternalServerError, "error", fmt.Sprintf("Failed to start flagd: %v", err))
 		return
 	}
+	s.cancelRestartLocked()
 	respond(w, http.StatusOK, "success", "flagd started successfully")
 }
 
 // errNotReady is a start that returned without the target being ready.
 var errNotReady = errors.New("flagd health check timed out")
 
-// start runs the target's start for the configuration under the readiness timeout, and renders the combined flags once
-// it is ready. A start that fails leaves the configuration in use as it was and the target closed. The caller holds mu.
+// start runs the target's start for the configuration under the readiness timeout, renders the combined flags once the
+// target is ready, and only then opens the target to its clients. A start that fails leaves the configuration in use as
+// it was and the target closed. The caller holds mu.
 func (s *Server) start(ctx context.Context, config string) error {
 	if !s.known(config) {
 		return fmt.Errorf("%w %q", ErrUnknownConfiguration, config)
@@ -194,10 +197,17 @@ func (s *Server) start(ctx context.Context, config string) error {
 	if err == nil && !s.target.Ready() {
 		err = errNotReady
 	}
-	if err != nil {
-		if errors.Is(err, ErrUnknownConfiguration) {
-			return err // nothing was started, and nothing is stopped
+	if errors.Is(err, ErrUnknownConfiguration) {
+		return err // nothing was started, and nothing is stopped
+	}
+	if err == nil {
+		document, _ := s.Document()
+		if renderErr := s.render(document); renderErr != nil {
+			s.log.Error("failed to render the combined flags", "error", renderErr)
 		}
+		err = s.target.Open(startCtx)
+	}
+	if err != nil {
 		s.closeAfterFailedStart()
 		if startCtx.Err() != nil {
 			return errNotReady
@@ -206,10 +216,6 @@ func (s *Server) start(ctx context.Context, config string) error {
 	}
 
 	s.current = config
-	document, _ := s.Document()
-	if err := s.render(document); err != nil {
-		s.log.Error("failed to render the combined flags", "error", err)
-	}
 	return nil
 }
 
@@ -314,7 +320,8 @@ func (s *Server) cancelRestartLocked() {
 // handleChange toggles the changing flag in the combined flags in memory, hands the new document to the target, and,
 // once the target holds it, renders it. It works during an outage, with the target closed behind its gate, as the
 // launchpad's file watcher did; and with no runtime to load into it fails at once. If the target does not take the
-// document in, the combined flags go back to what they were and nothing is rendered.
+// document in, nothing is rendered; if the target refuses it, or has no runtime, the combined flags go back to what they
+// were. A timeout is neither: the target may still take the document in late, so the combined flags stay as they are.
 func (s *Server) handleChange(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -353,10 +360,10 @@ func (s *Server) change(parent context.Context) (string, error) {
 	ctx, cancel := context.WithTimeout(parent, s.cfg.ChangeTimeout)
 	defer cancel()
 	if err := s.target.Load(ctx, document, version); err != nil {
-		s.setDocument(previous, previousBytes, previousVersion)
-		if errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 			return "", fmt.Errorf("Flags were not updated in time: %v", err) //nolint:staticcheck // the launchpad's text
 		}
+		s.setDocument(previous, previousBytes, previousVersion) // a definite refusal
 		return "", err
 	}
 
