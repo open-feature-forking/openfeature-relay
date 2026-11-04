@@ -48,7 +48,9 @@ const defaultTimeout = 5 * time.Second
 type Factory struct {
 	// EventKinds are the kinds the sink subscribes to; nil means every kind.
 	EventKinds []events.Kind
-	// Client sends the requests; nil means a client without a timeout of its own (the sink bounds each request).
+	// Client sends the requests; nil means a client without a timeout of its own (the sink bounds each request) that
+	// follows no redirect: a redirect answer is a refusal, because following it would send the batch to another
+	// location or, for a 301 or 302, turn the POST into a GET that "succeeds" without the batch.
 	Client *http.Client
 }
 
@@ -97,7 +99,7 @@ func (f Factory) Create(s eventsink.Settings) (eventsink.Sink, error) {
 	}
 	client := f.Client
 	if client == nil {
-		client = &http.Client{}
+		client = &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	}
 	headers, err := parseHeaders(s.Config[SettingHeaders])
 	if err != nil {

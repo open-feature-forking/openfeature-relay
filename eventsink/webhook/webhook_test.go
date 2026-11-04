@@ -351,3 +351,32 @@ func TestCoreOwnedSettingsAreAccepted(t *testing.T) {
 	}})
 	require.NoError(t, err)
 }
+
+func TestRedirectIsARefusalNotFollowed(t *testing.T) {
+	for _, status := range []int{
+		http.StatusMovedPermanently, http.StatusFound, http.StatusTemporaryRedirect, http.StatusPermanentRedirect,
+	} {
+		var hits int
+		var mu sync.Mutex
+		target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			hits++
+			mu.Unlock()
+			w.WriteHeader(http.StatusOK)
+		}))
+		redirecting := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, target.URL, status)
+		}))
+		sink, err := webhook.Factory{}.Create(eventsink.Settings{Config: map[string]any{webhook.SettingURL: redirecting.URL}})
+		require.NoError(t, err)
+
+		err = sink.Deliver(context.Background(), []events.Event{events.Evaluation{FlagKey: "f"}})
+		require.Error(t, err, status)
+		require.True(t, eventsink.IsPermanent(err), "a redirect is refused for good: %d", status)
+		mu.Lock()
+		require.Zero(t, hits, "the batch must not be sent to the redirect target: %d", status)
+		mu.Unlock()
+		redirecting.Close()
+		target.Close()
+	}
+}
