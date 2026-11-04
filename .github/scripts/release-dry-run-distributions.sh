@@ -3,7 +3,7 @@
 #
 # flagd-minimal takes the full path: the 11 archives of a release, standard and FIPS images for linux/amd64 and
 # linux/arm64 as OCI layouts with attestations, the FIPS refusal and `version --verbose`. flagd-minimal-otel, flagd-cloud, flagd-kubernetes
-# and flagd-sync are checked on what differs: the archive and image names of BR-012, one linux/amd64 archive with its
+# and flagd-sync are checked on what differs: the archive names of BR-012, one linux/amd64 archive with its
 # contents, and `version --verbose`. flagd-full is released under flagd's names by the flagd checks of release-dry-run.sh.
 #
 # usage: release-dry-run-distributions.sh <version without v> <commit> <date> <staging directory>
@@ -33,6 +33,12 @@ expect_equal() { # <what> <expected> <got>
 # the prefix.
 published_name() { # <distribution directory>
   if [ "$1" = flagd-full ]; then echo flagd; else echo "$1"; fi
+}
+
+# the size of each linux_x86_64 binary in MiB, for the step summary
+sizes_file="${out}/sizes.md"
+add_size() { # <name> <binary>
+  printf '| %s | %.1f |\n' "$1" "$(awk -v b="$(stat -c %s "$2")" "BEGIN { print b / 1048576 }")" >>"${sizes_file}"
 }
 
 note ""
@@ -78,11 +84,6 @@ check_version() { # <name> <binary>: BR-003, the stamped version and the distrib
   expect_equal "${name}: distribution" "distribution: ${name} v${version}" "$(grep '^distribution:' <<<"${printed}")"
 }
 
-# the names and tags a release pushes for a distribution (BR-012); the dry run pushes none of them
-image_tags() { # <published name>
-  for suffix in latest "v${version}" latest-fips "v${version}-fips"; do echo "${registry}/$1:${suffix}"; done
-}
-
 # flagd-minimal: the full path
 d="${full_path}"
 name="$(published_name "${d}")"
@@ -90,6 +91,7 @@ dir="${out}/${d}"
 .github/scripts/release-build.sh "${name}" "${version}" "${commit}" "${date}" "${dir}" "distributions/${d}/build"
 check_archives "${name}" "${dir}" "$(archive_names "${name}" "standard fips")"
 tar -xzf "${dir}/${name}_${version}_Linux_x86_64.tar.gz" -C "${dir}" "./${name}_linux_x86_64"
+add_size "${name}" "${dir}/${name}_linux_x86_64"
 expect_equal "${name}: build info path" "github.com/open-feature-forking/openfeature-relay/distributions/${d}" \
   "$(go version -m "${dir}/${name}_linux_x86_64" | awk '$1 == "path" {print $2}')"
 check_version "${name}" "${dir}/${name}_linux_x86_64"
@@ -158,6 +160,7 @@ for d in ${others}; do
     .github/scripts/release-build.sh "${name}" "${version}" "${commit}" "${date}" "${dir}" "distributions/${d}/build"
   check_archives "${name}" "${dir}" "${name}_${version}_Linux_x86_64.tar.gz"
   tar -xzf "${dir}/${name}_${version}_Linux_x86_64.tar.gz" -C "${dir}" "./${name}_linux_x86_64"
+  add_size "${name}" "${dir}/${name}_linux_x86_64"
   check_version "${name}" "${dir}/${name}_linux_x86_64"
 done
 
@@ -174,12 +177,6 @@ for d in ${full_path} ${others}; do
   else
     fail "${d}: the published manifest names a module that is not a component module of this repository"
   fi
-done
-
-for d in ${full_path} ${others}; do
-  name="$(published_name "${d}")"
-  expect_equal "${name}: image names and tags" "${registry}/${name}:latest ${registry}/${name}:v${version} ${registry}/${name}:latest-fips ${registry}/${name}:v${version}-fips" \
-    "$(image_tags "${name}" | tr '\n' ' ' | sed 's/ $//')"
 done
 
 if [ "${failures}" -gt 0 ]; then exit 1; fi
