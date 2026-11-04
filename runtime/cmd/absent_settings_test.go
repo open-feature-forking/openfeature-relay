@@ -153,6 +153,10 @@ func TestAbsentComponentSettingStopsStartup(t *testing.T) {
 			absentCase{components: "flag-evaluation flag-sync ofrep", hint: true, args: []string{"--metrics-exporter", "otel"}},
 			[]string{"--metrics-exporter (telemetry)"},
 		},
+		"the evaluation router with no endpoint that evaluates": {
+			absentCase{components: syncOnly, hint: true, args: []string{"--strict-numeric-range"}},
+			[]string{"--strict-numeric-range (flag-evaluation, ofrep)"},
+		},
 		"no OFREP": {
 			absentCase{components: "flag-evaluation flag-sync", hint: true, args: []string{"--ofrep-port", "9016"}},
 			[]string{"--ofrep-port (ofrep)"},
@@ -190,7 +194,7 @@ func TestDefaultsNeverStop(t *testing.T) {
 		"no component and no setting": {components: "", hint: true},
 		"only the runtime's own settings": {
 			components: "", hint: true, args: []string{"--log-format", "json", "--management-port", "9014", "--debug"},
-			env: map[string]string{"FLAGD_STRICT_NUMERIC_RANGE": "true"}, file: "keep-alive-min-time: 5s\n",
+			env: map[string]string{"FLAGD_KEEP_ALIVE_PERMIT_WITHOUT_STREAM": "false"}, file: "keep-alive-min-time: 5s\n",
 		},
 		"a setting of a component it contains": {components: syncOnly, hint: true, args: []string{"--sync-port", "9015"}},
 		"a setting that belongs to several components, one of them contained": {

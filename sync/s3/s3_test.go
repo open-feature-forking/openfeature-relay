@@ -96,7 +96,7 @@ func startStub(t *testing.T) (*stub, string) {
 	server := httptest.NewServer(s)
 	t.Cleanup(server.Close)
 	t.Setenv("AWS_ACCESS_KEY_ID", "key")
-	t.Setenv("AWS_SECRET_ACCESS_KEY", "secret")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "test-secret-access-key")
 	return s, "?region=us-east-1&use_path_style=true&endpoint=" + server.URL
 }
 
@@ -216,7 +216,7 @@ func TestVirtualHostedAddressingMovesTheBucketIntoTheHost(t *testing.T) {
 	server := httptest.NewServer(s)
 	defer server.Close()
 	t.Setenv("AWS_ACCESS_KEY_ID", "key")
-	t.Setenv("AWS_SECRET_ACCESS_KEY", "secret")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "test-secret-access-key")
 
 	// without use_path_style the bucket is a subdomain of the endpoint, which this stub does not serve; with
 	// hostname_immutable the endpoint is used as it is
@@ -229,7 +229,7 @@ func TestVirtualHostedAddressingMovesTheBucketIntoTheHost(t *testing.T) {
 // TestQueryOptions pins which URL query options are accepted, and how the others fail.
 func TestQueryOptions(t *testing.T) {
 	t.Setenv("AWS_ACCESS_KEY_ID", "key")
-	t.Setenv("AWS_SECRET_ACCESS_KEY", "secret")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "test-secret-access-key")
 	t.Setenv("AWS_CONFIG_FILE", "/nonexistent")
 	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", "/nonexistent")
 

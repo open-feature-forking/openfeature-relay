@@ -56,8 +56,8 @@ var settingComponents = map[string][]string{
 	"otel-ca-path":                     {componentTelemetry},
 	"otel-reload-interval":             {componentTelemetry},
 	"management-port":                  nil,
-	"strict-numeric-range":             nil,
-	"keep-alive-min-time":              nil,
+	"strict-numeric-range":             {componentFlagEvaluation, componentOFREP}, // the typed adapter of the endpoints that evaluate
+	"keep-alive-min-time":              nil,                                      // no-ops that flagd-full accepts with a warning
 	"keep-alive-permit-without-stream": nil,
 	"uri":                              nil,
 	"sources":                          nil,
