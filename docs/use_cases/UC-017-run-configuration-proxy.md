@@ -132,7 +132,7 @@
 
 ### BR-001: No Evaluation
 
-A configuration proxy contains sync providers, configuration formats and service endpoints that forward flag configurations, and neither the flag evaluation nor the OFREP service endpoint; it resolves no flag. The flagd-sync module graph contains no evaluator module and no `github.com/diegoholiveira/jsonlogic` module (NFR-011). A vendor configuration proxy carries the vendor's engine module, which holds the vendor's evaluator next to its configuration format (FR-048); that evaluator is compiled in but never resolves a flag.
+A configuration proxy contains sync providers, configuration formats and service endpoints that forward flag configurations, and neither the flag evaluation nor the OFREP service endpoint; it resolves no flag. The flagd-sync binary links no evaluator module and no `github.com/diegoholiveira/jsonlogic` module, and the packages of the distribution import none (NFR-011). A vendor configuration proxy carries the vendor's engine module, which holds the vendor's evaluator next to its configuration format (FR-048); that evaluator is compiled in but never resolves a flag.
 
 ### BR-002: Same Validation as flagd-full
 
