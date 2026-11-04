@@ -97,6 +97,7 @@ TEST_TARGETS += test-telemetry-example
 TEST_TARGETS += test-eventsink-example
 TEST_TARGETS += test-contract-external
 TEST_TARGETS += test-middleware-example
+TEST_TARGETS += test-release
 test: $(TEST_TARGETS)
 test-core: test-modules
 test-modules:
@@ -115,6 +116,9 @@ test-contract-external:
 	./test/contract-external.sh
 test-middleware-example:
 	go test -race -short -count=1 ./test/middleware-example/... ./test/middleware-example/distribution/...
+# The release tests read the module paths of the repository, not a binary.
+test-release:
+	go test -race -short -count=1 ./test/release/...
 test-eventsink-example:
 	go test -race -short -count=1 ./test/eventsink-example/... ./test/eventsink-example/distribution/...
 test-configformat-example:
@@ -364,9 +368,22 @@ build-flagd-full:
 	test -x $(FLAGD_FULL_BUILD_DIR)/flagd
 	cd flagd && FLAGD_BINARY=$$(cd ../$(FLAGD_FULL_BUILD_DIR) && pwd)/flagd go test -count=1 -run "TestCLICharacterization|TestStartupLogCharacterization" ./
 
-# UC-001, UC-009: the flagd module is what the Builder generates, and the Builder's binary passes the pins.
+# UC-019: the Builder builds the flagsmith vendor distribution from its manifest. Flagsmith's flagengine resolves from
+# the module proxy, so the build needs network access or a warm module cache. There is no FIPS variant of it: the engine
+# hashes with MD5.
+FLAGSMITH_BUILD_DIR := .flagsmith-build
+.PHONY: build-flagsmith
+build-flagsmith:
+	cd builder && go build -o ../bin/relay-builder ./cmd/relay-builder
+	rm -rf $(FLAGSMITH_BUILD_DIR)
+	GOWORK=off ./bin/relay-builder --manifest distributions/flagsmith/manifest.yaml --output $(FLAGSMITH_BUILD_DIR)
+	test -x $(FLAGSMITH_BUILD_DIR)/flagsmith
+	$(FLAGSMITH_BUILD_DIR)/flagsmith components --output json | grep -q 'contrib/flagsmith/engine"'
+
+# UC-001, UC-009, UC-019: the flagd module is what the Builder generates, and the Builder's binary passes the pins; the
+# vendor distribution builds too.
 .PHONY: builder-e2e
-builder-e2e: check-flagd-full-generated build-flagd-full
+builder-e2e: check-flagd-full-generated build-flagd-full build-flagsmith
 
 # UC-009: the differential of today's flagd against the flagd-full the Builder made. It builds two images, so it needs
 # Docker and stays out of `make test`; TestAcceptedMatchesIssue does not need Docker and runs there.

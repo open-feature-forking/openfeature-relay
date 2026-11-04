@@ -1,4 +1,5 @@
 """Tests of compare-allocs.py against saved outputs of go test -bench -benchmem (testdata/)."""
+import os
 import pathlib
 import subprocess
 import sys
@@ -10,17 +11,21 @@ SCRIPT = HERE / "compare-allocs.py"
 DATA = HERE / "testdata"
 
 
-def compare(base, head):
-    done = subprocess.run([sys.executable, str(SCRIPT), str(base), str(head)], capture_output=True, text=True, check=False)
+def compare(base, head, summary=None):
+    env = dict(os.environ)
+    env.pop("GITHUB_STEP_SUMMARY", None)
+    if summary:
+        env["GITHUB_STEP_SUMMARY"] = str(summary)
+    done = subprocess.run([sys.executable, str(SCRIPT), str(base), str(head)], capture_output=True, text=True, check=False, env=env)
     return done.returncode, done.stdout + done.stderr
 
 
-def bench(rows):
-    """A go test -bench output with the allocs/op of each benchmark run."""
+def bench(rows, ns=11000):
+    """A go test -bench output with the allocs/op of each benchmark run, all at ns ns/op."""
     out = "pkg: github.com/open-feature-forking/openfeature-relay/evaluator/flagd\n"
     for name, runs in rows.items():
         for allocs in runs:
-            out += f"{name}-4   \t 100\t 11000 ns/op\t 7649 B/op\t {allocs} allocs/op\n"
+            out += f"{name}-4   \t 100\t {ns} ns/op\t 7649 B/op\t {allocs} allocs/op\n"
     return out
 
 
@@ -80,6 +85,39 @@ class CompareAllocs(unittest.TestCase):
             b.write_text(bench({"BenchmarkX": [30, 36, 31]}))
             h.write_text(bench({"BenchmarkX": [34, 35, 36]}))
             self.assertEqual(compare(b, h)[0], 0)  # the base itself varies between 30 and 36
+
+    def run_ns(self, base_ns, head_ns, base_allocs=10, head_allocs=10):
+        with tempfile.TemporaryDirectory() as tmp:
+            b, h, s = pathlib.Path(tmp, "b"), pathlib.Path(tmp, "h"), pathlib.Path(tmp, "s")
+            b.write_text(bench({"BenchmarkX": [base_allocs] * 3}, base_ns))
+            h.write_text(bench({"BenchmarkX": [head_allocs] * 3}, head_ns))
+            code, text = compare(b, h, s)
+            return code, text, s.read_text() if s.exists() else ""
+
+    def test_a_time_deviation_beyond_5_percent_is_reported_and_passes(self):
+        for head_ns, change in ((12000, "+9.1%"), (9000, "-18.2%")):
+            with self.subTest(head_ns=head_ns):
+                code, text, summary = self.run_ns(11000, head_ns)
+                self.assertEqual(code, 0, text)
+                self.assertIn(f"::notice::flagd: BenchmarkX: ns/op 11000 -> {head_ns} ({change})", text)
+                self.assertIn(f"| flagd: BenchmarkX | 11000 | {head_ns} | {change} |", summary)
+
+    def test_a_time_deviation_within_5_percent_is_not_reported(self):
+        code, text, summary = self.run_ns(11000, 11500)
+        self.assertEqual(code, 0, text)
+        self.assertNotIn("::notice::", text)
+        self.assertNotIn("ns/op beyond", summary)
+
+    def test_a_time_deviation_with_more_allocations_is_a_failure_not_a_notice(self):
+        code, text, summary = self.run_ns(11000, 20000, 10, 12)
+        self.assertEqual(code, 1, text)
+        self.assertNotIn("::notice::", text)
+
+    def test_the_existing_fixtures_report_no_time_deviation(self):
+        for head in ("bench-head-noise.txt", "bench-head-fall.txt"):
+            code, text = compare(DATA / "bench-base.txt", DATA / head)
+            self.assertEqual(code, 0, text)
+            self.assertNotIn("::notice::", text)
 
     def test_unreadable_or_empty_output_is_not_a_pass(self):
         with tempfile.TemporaryDirectory() as tmp:

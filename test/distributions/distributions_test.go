@@ -393,3 +393,62 @@ func TestComponentsMatchesManifest(t *testing.T) {
 		})
 	}
 }
+
+// TestFlagsmithDistribution (UC-019 PR 6) pins the vendor distribution: it lists the Flagsmith engine next to flagd's
+// format and evaluator (BR-001), the Flagsmith sync provider with the SSE and file ones, and
+// OFREP alone; it links the Flagsmith engine, only the relay modules it selects, and no platform SDK or HTTP client of
+// the Flagsmith client module.
+func TestFlagsmithDistribution(t *testing.T) {
+	path := filepath.Join(root(t), "distributions", "flagsmith", "manifest.yaml")
+	b := build(t, path)
+	require.NoError(t, b.err, b.out)
+	bin := binary(t, path)
+
+	out, err := exec.Command(bin, "components", "--output", "json").Output()
+	require.NoError(t, err)
+	var listing struct {
+		Components map[string][]struct {
+			Type   string `json:"type"`
+			Module string `json:"module"`
+		} `json:"components"`
+	}
+	require.NoError(t, json.Unmarshal(out, &listing))
+	types := func(group string) []string {
+		var names []string
+		for _, c := range listing.Components[group] {
+			names = append(names, c.Type)
+		}
+		sort.Strings(names)
+		return names
+	}
+	require.ElementsMatch(t, []string{"flagd", "flagsmith"}, types("configuration_formats"))
+	require.ElementsMatch(t, []string{"jsonlogic", "flagsmith"}, types("evaluators"))
+	require.Equal(t, []string{"ofrep"}, types("service_endpoints"))
+	require.Empty(t, types("middleware"), "the command line of flagd configures no middleware")
+	require.Subset(t, types("sync_providers"), []string{"flagsmith", "sse", "file"})
+	for _, c := range listing.Components["configuration_formats"] {
+		if c.Type == "flagsmith" {
+			require.Equal(t, relay+"contrib/flagsmith/engine", c.Module)
+		}
+	}
+	for _, c := range listing.Components["evaluators"] {
+		if c.Type == "flagsmith" {
+			require.Equal(t, relay+"contrib/flagsmith/engine", c.Module, "the evaluator is the other half of the engine module")
+		}
+	}
+
+	allowed := map[string]bool{}
+	for _, m := range append(readManifest(t, path).selected(), infrastructure...) {
+		allowed[m] = true
+	}
+	modules := linked(t, bin)
+	require.Contains(t, modules, "github.com/Flagsmith/flagsmith-go-client/v5", "the engine links Flagsmith's flagengine")
+	for _, module := range modules {
+		if isRelay(module) {
+			require.True(t, allowed[module], "%s is linked, but the manifest does not select it", module)
+		}
+		for _, forbidden := range []string{"k8s.io/", "cloud.google.com/", "github.com/aws/", "github.com/Azure/", "github.com/go-resty/"} {
+			require.False(t, strings.HasPrefix(module, forbidden), "the Flagsmith distribution links %s", module)
+		}
+	}
+}
