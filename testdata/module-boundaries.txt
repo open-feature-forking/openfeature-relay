@@ -63,3 +63,6 @@ service/ofrep:./...:go.opentelemetry.io|prometheus/client_golang|otelconnect|ope
 service/flag-sync:./...:go.opentelemetry.io|prometheus/client_golang|otelconnect|openfeature-relay/telemetry/|openfeature-relay/(runtime|service/(flag-evaluation|ofrep))
 # The Builder (UC-001 Q1) depends on no relay module: it only reads manifests and runs the go binary.
 builder:./...:open-feature/flagd/|openfeature-relay/(core|runtime|sync|evaluator|configformat|telemetry|service|distribution)
+# The Flagsmith engine module (UC-019, FR-048): no telemetry, transport, HTTP client or relay component module in its packages.
+# The core logger links net/http through zap, so the direct-import rule is depguard's.
+contrib/flagsmith/engine:./...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|resty|openfeature-relay/(sync|telemetry|service|runtime|evaluator|configformat)/

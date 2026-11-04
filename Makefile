@@ -82,6 +82,7 @@ TEST_TARGETS += test-telemetry-example
 TEST_TARGETS += test-eventsink-example
 TEST_TARGETS += test-contract-external
 TEST_TARGETS += test-middleware-example
+TEST_TARGETS += test-contrib-flagsmith
 test: $(TEST_TARGETS)
 test-core: test-modules
 test-modules:
@@ -104,6 +105,20 @@ test-eventsink-example:
 	go test -race -short -count=1 ./test/eventsink-example/... ./test/eventsink-example/distribution/...
 test-configformat-example:
 	go test -race -short -count=1 ./test/configformat-example/... ./test/configformat-example/distribution/...
+# The Flagsmith components are vendor modules (UC-019 BR-009). They stay out of GO_LIB_MODULE_DIRS and test-fips: the engine
+# hashes with MD5, so the Flagsmith distribution has no FIPS variant.
+test-contrib-flagsmith:
+	go test -race -short -count=1 ./contrib/flagsmith/engine/...
+# Opt-in, not part of `make test`: the shared engine test data of Flagsmith has no licence, so it is read from a clone
+# outside this repository, at the commit that flagsmith-go-client v5.3.0 records for it.
+FLAGSMITH_ENGINE_DATA_COMMIT := 2e710ea7c6994110d17d1adb40b2ec2e90e7cf44
+FLAGSMITH_ENGINE_DATA_DIR ?= $(or $(XDG_CACHE_HOME),$(HOME)/.cache)/flagsmith-engine-test-data
+.PHONY: flagsmith-engine-data-check
+flagsmith-engine-data-check:
+	[ -d $(FLAGSMITH_ENGINE_DATA_DIR)/.git ] || git clone --quiet https://github.com/Flagsmith/engine-test-data.git $(FLAGSMITH_ENGINE_DATA_DIR)
+	git -C $(FLAGSMITH_ENGINE_DATA_DIR) fetch --quiet origin $(FLAGSMITH_ENGINE_DATA_COMMIT)
+	git -C $(FLAGSMITH_ENGINE_DATA_DIR) checkout --quiet $(FLAGSMITH_ENGINE_DATA_COMMIT)
+	FLAGSMITH_ENGINE_TEST_DATA=$(FLAGSMITH_ENGINE_DATA_DIR)/test_cases go test -count=1 -v -run TestSharedEngineTestData ./contrib/flagsmith/engine/...
 test-service-example:
 	go test -race -short -count=1 ./test/service-example/...
 # The testbed's evaluator suite lives in the test-harness submodule (git submodule update --init test-harness).
