@@ -214,9 +214,9 @@ func TestInvalidSettingsAreNamedNeverTheKey(t *testing.T) {
 	}{
 		"no environments":      {map[string]any{}, `"environments" is missing`},
 		"empty list":           {list(), `"environments"`},
-		"not a list":           {map[string]any{flagsmithmiddleware.SettingEnvironments: "k"}, `"environments"`},
+		"not a list":           {map[string]any{flagsmithmiddleware.SettingEnvironments: serverKey}, "string is not a list"},
 		"unknown setting":      {map[string]any{"realm": "x"}, `"realm"`},
-		"entry not a map":      {list("k"), "entry 0"},
+		"entry not a map":      {list(serverKey), "string is not a map"},
 		"unknown field":        {list(map[string]any{"kind": "server", flagsmithmiddleware.SettingKey: env, flagsmithmiddleware.SettingFlagSet: "a"}), `"kind"`},
 		"no flag set":          {list(entry(env, "")), `"flagSet"`},
 		"flag set with a list": {list(entry(env, "a,b")), `"a,b"`},
@@ -235,6 +235,7 @@ func TestInvalidSettingsAreNamedNeverTheKey(t *testing.T) {
 			require.ErrorContains(t, err, `"flagsmith-credential"`)
 			require.ErrorContains(t, err, tt.want)
 			require.NotContains(t, err.Error(), clientKey)
+			require.NotContains(t, err.Error(), serverKey)
 			require.NotContains(t, err.Error(), "LiteralKeyValue")
 		})
 	}

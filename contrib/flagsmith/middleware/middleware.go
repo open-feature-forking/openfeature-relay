@@ -16,6 +16,7 @@
 package flagsmithmiddleware
 
 import (
+	"crypto/sha256"
 	"crypto/subtle"
 	"fmt"
 	"net/http"
@@ -72,7 +73,7 @@ func (Factory) Create(s middleware.Settings) (middleware.Middleware, error) {
 		}
 		entries, ok := value.([]any)
 		if !ok || len(entries) == 0 {
-			return nil, fmt.Errorf("middleware %q: setting %q: %v is not a list of environments", Type, name, value)
+			return nil, fmt.Errorf("middleware %q: setting %q: a %T is not a list of environments", Type, name, value)
 		}
 		for i, e := range entries {
 			env, err := parseEnvironment(e)
@@ -80,7 +81,7 @@ func (Factory) Create(s middleware.Settings) (middleware.Middleware, error) {
 				return nil, fmt.Errorf("middleware %q: setting %q: entry %d: %w", Type, name, i, err)
 			}
 			for _, other := range m.environments {
-				if subtle.ConstantTimeCompare(other.key, env.key) == 1 {
+				if subtle.ConstantTimeCompare(other.digest[:], env.digest[:]) == 1 {
 					return nil, fmt.Errorf("middleware %q: setting %q: entry %d has the key of another entry", Type, name, i)
 				}
 			}
@@ -99,7 +100,7 @@ func (Factory) Create(s middleware.Settings) (middleware.Middleware, error) {
 func parseEnvironment(entry any) (environment, error) {
 	fields, ok := entry.(map[string]any)
 	if !ok {
-		return environment{}, fmt.Errorf("%v is not a map with %q and %q", entry, SettingKey, SettingFlagSet)
+		return environment{}, fmt.Errorf("a %T is not a map with %q and %q", entry, SettingKey, SettingFlagSet)
 	}
 	for name := range fields {
 		if name != SettingKey && name != SettingFlagSet {
@@ -125,11 +126,11 @@ func parseEnvironment(entry any) (environment, error) {
 	if strings.HasPrefix(key, serverKeyPrefix) {
 		kind = KindServer
 	}
-	return environment{key: []byte(key), selector: selector, kind: kind}, nil
+	return environment{digest: sha256.Sum256([]byte(key)), selector: selector, kind: kind}, nil
 }
 
 type environment struct {
-	key      []byte
+	digest   [sha256.Size]byte
 	selector string
 	kind     string
 }
@@ -140,14 +141,16 @@ type Middleware struct {
 	refused      telemetry.Int64Counter
 }
 
-// lookup returns the environment of a key; it compares every key in constant time.
+// lookup returns the environment of a key. It compares SHA-256 digests of the keys, which have a fixed length, in
+// constant time and against every environment, so that neither the length nor the position of a match shows.
 func (m *Middleware) lookup(presented string) (environment, bool) {
+	digest := sha256.Sum256([]byte(presented))
 	var (
 		found environment
 		ok    bool
 	)
 	for _, e := range m.environments {
-		if subtle.ConstantTimeCompare(e.key, []byte(presented)) == 1 {
+		if subtle.ConstantTimeCompare(e.digest[:], digest[:]) == 1 {
 			found, ok = e, true
 		}
 	}
