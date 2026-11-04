@@ -1,0 +1,47 @@
+{
+ "flags": {
+  "rollout": {
+   "state": "ENABLED",
+   "variants": {
+    "a": "alpha",
+    "b": "beta"
+   },
+   "defaultVariant": "a",
+   "targeting": {
+    "fractional": [
+     [
+      "a",
+      50
+     ],
+     [
+      "b",
+      50
+     ]
+    ]
+   }
+  },
+  "version-gate": {
+   "state": "ENABLED",
+   "variants": {
+    "old": 1,
+    "new": 2
+   },
+   "defaultVariant": "old",
+   "targeting": {
+    "if": [
+     {
+      "sem_ver": [
+       {
+        "var": "version"
+       },
+       ">=",
+       "2.0.0"
+      ]
+     },
+     "new",
+     "old"
+    ]
+   }
+  }
+ }
+}

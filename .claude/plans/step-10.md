@@ -106,7 +106,7 @@ The recommendation comes first.
   - **Recommendation:** the hint is a property of the generated `main`, not a name check.
     - **Mechanism:** the manifest takes `dist.components_hint` (default `true`). The Builder stamps it into `distribution.Info.ComponentsHint`. flagd-full's manifest sets `false`.
     - **With the hint on**, both the unknown-scheme error and stack S's absent-setting errors end with "run `flagd components` to list the components of this distribution".
-    - **With it off**, the unknown-scheme error keeps today's text (`invalid sync provider: …, must be one of with …`).
+    - **With it off**, the unknown-scheme error keeps today's text (`invalid sync uri argument: foo://x, must start with 'file:', 'http(s)://', …`, as `flagd/testdata/unknown_scheme.golden` pins).
     - **flagd-full** never meets an absent-setting error.
     - **Tests:** C2 pins flagd-full unchanged; S2 pins the hint on in a test distribution. UC-011 BR-003 governs the listing's layout, not error texts, so a per-manifest switch does not break it.
   - *Alternative:* the hint everywhere, flagd-full included. A changed log line, recorded in #78 with an `accepted.yaml` entry.
