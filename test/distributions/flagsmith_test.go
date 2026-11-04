@@ -25,6 +25,8 @@ const flagsmithKey = "ser.test-key"
 
 // startFlagsmith starts the built flagsmith distribution with one source that reads the environment document the stub
 // serves, and returns the address of its OFREP endpoint once it is ready.
+// The distribution has the OFREP endpoint only, so its start command sets no port of another endpoint: flagd stops at
+// startup on a setting whose component the distribution lacks.
 func startFlagsmith(t *testing.T, apiBase string) string {
 	t.Helper()
 	path := filepath.Join(root(t), "distributions", "flagsmith", "manifest.yaml")
@@ -32,7 +34,7 @@ func startFlagsmith(t *testing.T, apiBase string) string {
 	require.NoError(t, b.err, b.out)
 
 	ports := map[string]string{}
-	for _, name := range []string{"port", "management-port", "sync-port", "ofrep-port"} {
+	for _, name := range []string{"management-port", "ofrep-port"} {
 		ports[name] = fmt.Sprint(freePort(t))
 	}
 	source, err := json.Marshal([]map[string]any{{
@@ -42,8 +44,7 @@ func startFlagsmith(t *testing.T, apiBase string) string {
 	require.NoError(t, err)
 
 	cmd := exec.Command(binary(t, path), "start", "--sources", string(source),
-		"--port", ports["port"], "--management-port", ports["management-port"],
-		"--sync-port", ports["sync-port"], "--ofrep-port", ports["ofrep-port"])
+		"--management-port", ports["management-port"], "--ofrep-port", ports["ofrep-port"])
 	cmd.Env = append(os.Environ(), "FLAGSMITH_TEST_KEY="+flagsmithKey)
 	var output lockedBuffer
 	stderr := &output
