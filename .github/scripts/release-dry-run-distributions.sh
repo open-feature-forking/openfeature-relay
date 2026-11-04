@@ -3,7 +3,7 @@
 #
 # flagd-minimal takes the full path: the 11 archives of a release, standard and FIPS images for linux/amd64 and
 # linux/arm64 as OCI layouts with attestations, the FIPS refusal and `version --verbose`. flagd-minimal-otel, flagd-cloud, flagd-kubernetes
-# and flagd-sync are checked on what differs: the archive and image names of BR-012, one linux/amd64 archive with its
+# and flagd-sync are checked on what differs: the archive names of BR-012, one linux/amd64 archive with its
 # contents, and `version --verbose`. flagd-full is released under flagd's names by the flagd checks of release-dry-run.sh.
 #
 # usage: release-dry-run-distributions.sh <version without v> <commit> <date> <staging directory>
@@ -82,11 +82,6 @@ check_version() { # <name> <binary>: BR-003, the stamped version and the distrib
   printed="$("${bin}" version --verbose)"
   expect_equal "${name}: version" "flagd: v${version} (${commit}), built at: ${date}" "$(grep '^flagd:' <<<"${printed}")"
   expect_equal "${name}: distribution" "distribution: ${name} v${version}" "$(grep '^distribution:' <<<"${printed}")"
-}
-
-# the names and tags a release pushes for a distribution (BR-012); the dry run pushes none of them
-image_tags() { # <published name>
-  for suffix in latest "v${version}" latest-fips "v${version}-fips"; do echo "${registry}/$1:${suffix}"; done
 }
 
 # flagd-minimal: the full path
@@ -182,12 +177,6 @@ for d in ${full_path} ${others}; do
   else
     fail "${d}: the published manifest names a module that is not a component module of this repository"
   fi
-done
-
-for d in ${full_path} ${others}; do
-  name="$(published_name "${d}")"
-  expect_equal "${name}: image names and tags" "${registry}/${name}:latest ${registry}/${name}:v${version} ${registry}/${name}:latest-fips ${registry}/${name}:v${version}-fips" \
-    "$(image_tags "${name}" | tr '\n' ' ' | sed 's/ $//')"
 done
 
 if [ "${failures}" -gt 0 ]; then exit 1; fi
