@@ -38,6 +38,8 @@ jobs:
       - run: make lint
       - run: make check-package-coverage
       - run: make check-flagd-full-modules
+      - name: Test the workflow characterization
+        run: python3 .github/scripts/test_workflows.py
       - name: Test the benchmark comparison
         run: python3 .github/scripts/test_compare_allocs.py
       # The module boundary tables include the evaluator boundary (NFR-005), which check-evaluator-boundary names.
