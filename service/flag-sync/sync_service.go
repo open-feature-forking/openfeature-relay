@@ -158,6 +158,16 @@ func NewSyncService(cfg SvcConfigurations) (*Service, error) {
 	}, nil
 }
 
+// Close releases what NewSyncService opened, for a service that is never started: its listener and its streams. A
+// service that was started releases them itself when its context ends. Close is safe to repeat.
+func (s *Service) Close() error {
+	s.endStreams()
+	if err := s.listener.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+		return err
+	}
+	return nil
+}
+
 func (s *Service) Start(ctx context.Context) error {
 	// derive errgroup so we track ctx for exit as well as startup errors
 	g, lCtx := errgroup.WithContext(ctx)

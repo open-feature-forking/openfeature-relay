@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"io"
 	"maps"
 	"net/http"
 	"slices"
@@ -185,6 +186,20 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		store:           store,
 	}
 
+	// an endpoint may hold a resource from its Create on, such as the listener of flag sync: a build that fails after it
+	// releases it, since the endpoint is never served
+	var created []service.Endpoint
+	defer func() {
+		if rt != nil {
+			return
+		}
+		for _, e := range created {
+			if closer, ok := e.(io.Closer); ok {
+				_ = closer.Close()
+			}
+		}
+	}()
+
 	inputs, err := newEndpointInputs(logger, store, bus, components.Endpoints, formatTypes, config.Evaluators,
 		func(evaluatorType string) map[string]any { return maps.Clone(config.EvaluatorSettings[evaluatorType]) },
 		config.StrictNumericRange)
@@ -212,6 +227,7 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		if err != nil {
 			return nil, fmt.Errorf("error creating the service endpoint %q: %w", factory.Type(), err)
 		}
+		created = append(created, endpoint)
 		rt.Endpoints = append(rt.Endpoints, NamedEndpoint{Type: factory.Type(), Endpoint: endpoint})
 	}
 
