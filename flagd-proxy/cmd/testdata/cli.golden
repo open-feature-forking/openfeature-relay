@@ -1,0 +1,68 @@
+== flagd-proxy --help
+exit 0
+-- stdout
+flagd-proxy allows flagd to subscribe to CRD changes without the required permissions.
+
+Usage:
+  flagd [command]
+
+Available Commands:
+  completion  Generate the autocompletion script for the specified shell
+  help        Help about any command
+  start       Start flagd-proxy
+
+Flags:
+      --config string   config file (default is $HOME/.agent.yaml)
+  -x, --debug           verbose logging
+  -h, --help            help for flagd
+
+Use "flagd [command] --help" for more information about a command.
+-- stderr
+== flagd-proxy start --help
+exit 0
+-- stdout
+Start flagd-proxy
+
+Usage:
+  flagd start [flags]
+
+Flags:
+  -h, --help                               help for start
+      --keep-alive-min-time duration       Minimum interval the flag sync gRPC server permits between client keepalive pings. Pings arriving more frequently than this are rejected with GOAWAY (ENHANCE_YOUR_CALM). Defaults to 30s. (default 30s)
+      --keep-alive-permit-without-stream   Permit clients of the flag sync gRPC server to send keepalive pings even when there is no active stream. Defaults to true. (default true)
+  -z, --log-format string                  Set the logging format, e.g. console or json (default "console")
+  -m, --management-port int32              Management port (default 8016)
+  -p, --port int32                         Port to listen on (default 8015)
+
+Global Flags:
+      --config string   config file (default is $HOME/.agent.yaml)
+  -x, --debug           verbose logging
+-- stderr
+== flagd-proxy version
+exit 1
+-- stdout
+-- stderr
+Error: unknown command "version" for "flagd"
+Run 'flagd --help' for usage.
+<time> unknown command "version" for "flagd"
+== flagd-proxy start --nope
+exit 1
+-- stdout
+-- stderr
+Error: unknown flag: --nope
+Usage:
+  flagd start [flags]
+
+Flags:
+  -h, --help                               help for start
+      --keep-alive-min-time duration       Minimum interval the flag sync gRPC server permits between client keepalive pings. Pings arriving more frequently than this are rejected with GOAWAY (ENHANCE_YOUR_CALM). Defaults to 30s. (default 30s)
+      --keep-alive-permit-without-stream   Permit clients of the flag sync gRPC server to send keepalive pings even when there is no active stream. Defaults to true. (default true)
+  -z, --log-format string                  Set the logging format, e.g. console or json (default "console")
+  -m, --management-port int32              Management port (default 8016)
+  -p, --port int32                         Port to listen on (default 8015)
+
+Global Flags:
+      --config string   config file (default is $HOME/.agent.yaml)
+  -x, --debug           verbose logging
+
+<time> unknown flag: --nope

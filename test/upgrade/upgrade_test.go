@@ -52,6 +52,7 @@ var scenarios = map[string]scenario{
 	"source-http":          scenarioSourceHTTP,
 	"source-grpc":          scenarioSourceGRPC,
 	"source-fsnotify":      scenarioSourceFSNotify,
+	"flagd-proxy":          scenarioFlagdProxy,
 }
 
 func scenarioVersion(t *testing.T, image string) Transcript {

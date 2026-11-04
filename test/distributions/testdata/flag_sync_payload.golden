@@ -1,0 +1,49 @@
+== SyncFlags, first message, no selector
+{
+  "flagConfiguration": "{\"flags\":{\"flag-a\":{\"state\":\"ENABLED\",\"defaultVariant\":\"on\",\"variants\":{\"off\":false,\"on\":true},\"source\":\"<dir>/a.json\",\"metadata\":{\"flagSetId\":\"set-a\",\"owner\":\"team-a\",\"purpose\":\"a\"}},\"flag-b\":{\"state\":\"DISABLED\",\"defaultVariant\":\"zero\",\"variants\":{\"one\":1,\"zero\":0},\"source\":\"<dir>/b.json\",\"metadata\":{\"flagSetId\":\"set-b\",\"owner\":\"team-b\"}},\"shared\":{\"state\":\"ENABLED\",\"defaultVariant\":\"red\",\"variants\":{\"blue\":\"blue\",\"red\":\"red\"},\"source\":\"<dir>/a.json\",\"metadata\":{\"flagSetId\":\"set-a\",\"owner\":\"team-a\"}}}}",
+  "syncContext": {}
+}
+== SyncFlags, first message, selector flagSetId=set-a
+{
+  "flagConfiguration": "{\"flags\":{\"flag-a\":{\"state\":\"ENABLED\",\"defaultVariant\":\"on\",\"variants\":{\"off\":false,\"on\":true},\"source\":\"<dir>/a.json\",\"metadata\":{\"flagSetId\":\"set-a\",\"owner\":\"team-a\",\"purpose\":\"a\"}},\"shared\":{\"state\":\"ENABLED\",\"defaultVariant\":\"red\",\"variants\":{\"blue\":\"blue\",\"red\":\"red\"},\"source\":\"<dir>/a.json\",\"metadata\":{\"flagSetId\":\"set-a\",\"owner\":\"team-a\"}}}}",
+  "syncContext": {}
+}
+== FetchAllFlags
+200
+Accept-Encoding: gzip
+Content-Type: application/json
+Vary: Origin
+{
+  "flagConfiguration": "{\"flags\":{\"flag-a\":{\"state\":\"ENABLED\",\"defaultVariant\":\"on\",\"variants\":{\"off\":false,\"on\":true},\"source\":\"<dir>/a.json\",\"metadata\":{\"flagSetId\":\"set-a\",\"owner\":\"team-a\",\"purpose\":\"a\"}},\"flag-b\":{\"state\":\"DISABLED\",\"defaultVariant\":\"zero\",\"variants\":{\"one\":1,\"zero\":0},\"source\":\"<dir>/b.json\",\"metadata\":{\"flagSetId\":\"set-b\",\"owner\":\"team-b\"}},\"shared\":{\"state\":\"ENABLED\",\"defaultVariant\":\"red\",\"variants\":{\"blue\":\"blue\",\"red\":\"red\"},\"source\":\"<dir>/a.json\",\"metadata\":{\"flagSetId\":\"set-a\",\"owner\":\"team-a\"}}}}"
+}
+== FetchAllFlags, selector flagSetId=set-b
+200
+{
+  "flagConfiguration": "{\"flags\":{\"flag-b\":{\"state\":\"DISABLED\",\"defaultVariant\":\"zero\",\"variants\":{\"one\":1,\"zero\":0},\"source\":\"<dir>/b.json\",\"metadata\":{\"flagSetId\":\"set-b\",\"owner\":\"team-b\"}}}}"
+}
+== GetMetadata
+200
+Accept-Encoding: gzip
+Content-Type: application/json
+Vary: Origin
+{
+  "metadata": {}
+}
+== GET /v1/flags, selector ""
+200
+Accept-Ranges: bytes
+Content-Length: <content-length>
+Content-Type: application/json
+Etag: <etag>
+Last-Modified: <last-modified>
+Vary: Flagd-Selector
+{"flags":{"flag-a":{"state":"ENABLED","defaultVariant":"on","variants":{"off":false,"on":true},"source":"<dir>/a.json","metadata":{"flagSetId":"set-a","owner":"team-a","purpose":"a"}},"flag-b":{"state":"DISABLED","defaultVariant":"zero","variants":{"one":1,"zero":0},"source":"<dir>/b.json","metadata":{"flagSetId":"set-b","owner":"team-b"}},"shared":{"state":"ENABLED","defaultVariant":"red","variants":{"blue":"blue","red":"red"},"source":"<dir>/a.json","metadata":{"flagSetId":"set-a","owner":"team-a"}}}}
+== GET /v1/flags, selector "flagSetId=set-a"
+200
+Accept-Ranges: bytes
+Content-Length: <content-length>
+Content-Type: application/json
+Etag: <etag>
+Last-Modified: <last-modified>
+Vary: Flagd-Selector
+{"flags":{"flag-a":{"state":"ENABLED","defaultVariant":"on","variants":{"off":false,"on":true},"source":"<dir>/a.json","metadata":{"flagSetId":"set-a","owner":"team-a","purpose":"a"}},"shared":{"state":"ENABLED","defaultVariant":"red","variants":{"blue":"blue","red":"red"},"source":"<dir>/a.json","metadata":{"flagSetId":"set-a","owner":"team-a"}}}}
