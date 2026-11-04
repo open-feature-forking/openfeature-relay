@@ -229,9 +229,7 @@ This use case is `Implemented`: the manifest and its validation, the generated s
 | Gap | Delivered by |
 |-----|--------------|
 | Tagged releases and the Builder's release | UC-012 |
-| Standard manifests, the platform matrix, flagd-minimal's NFR-003 and NFR-004 | UC-010 |
-| A module graph that does not carry the tests of the runtime and the sync builder: `go mod tidy` reads them, so every manifest replaces all sync modules, which inflates the module graph of a small distribution | UC-010 |
-| Settings of absent components stop startup (the table of flag to component settings exists) | UC-010 |
+| The platform matrix of the standard distributions (NFR-009) | UC-012 |
 | flagd-full released from the generated source | UC-009 |
 | `flagd components` (the inventory and the identity exist) | UC-011 |
 | Operator settings for extension components | UC-021 |
