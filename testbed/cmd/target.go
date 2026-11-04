@@ -91,7 +91,7 @@ func (t *target) newGate() *gate.Gate {
 	return g
 }
 
-// Start closes the gate, brings the runtime of the configuration to a loaded store, and opens the gate. The runtime is
+// Start closes the gate and brings the runtime of the configuration to a loaded store, ready but closed. The runtime is
 // reset when it is the one in use and built again when the configuration changed or the last build failed.
 func (t *target) Start(ctx context.Context, config string) error {
 	path := filepath.Join(t.configs, config+".json")
@@ -113,8 +113,11 @@ func (t *target) Start(ctx context.Context, config string) error {
 	} else if err := rt.Reset(ctx); err != nil {
 		return err
 	}
-	return t.currentGate().Open()
+	return nil
 }
+
+// Open opens the gate. The server calls it once it has rendered the combined flags.
+func (t *target) Open(context.Context) error { return t.currentGate().Open() }
 
 // rebuild stops the runtime in use, waits for it to release its addresses, and runs a new one.
 func (t *target) rebuild(ctx context.Context, config, path string) error {
