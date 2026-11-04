@@ -180,7 +180,6 @@ jobs:
       VERSION_NO_PREFIX: ${{ needs.release-please.outputs[format('{0}_version', matrix.path)] }}
       COMMIT: ${{ github.sha }}
       DATE: ${{ needs.release-please.outputs.date }}
-      BUILD_ARGS: '-a -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}"'
     steps:
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
@@ -194,68 +193,9 @@ jobs:
         uses: CycloneDX/gh-gomod-generate-sbom@efc74245d6802c8cefd925620515442756c70d8f # v2
         with:
           version: v1
-      - name: setup for builds
-        # TODO: The README should also be moved ready for bundling once both flagd-proxy and flagd have package specific READMEs
-        run: |
-          make workspace-init
-          mv ./${{ matrix.path }}/CHANGELOG.md CHANGELOG.md 
-          cd ${{ matrix.path }} && cyclonedx-gomod app > ../sbom.xml
-      - name: build darwin arm64
-        run: |
-          env CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build ${{ env.BUILD_ARGS }} -o ./${{ matrix.path }}_darwin_arm64 ./${{ matrix.path }}/main.go
-          tar -cvzf ${{ matrix.path }}_${{ env.VERSION_NO_PREFIX }}_Darwin_arm64.tar.gz ./${{ matrix.path }}_darwin_arm64 ./LICENSE ./CHANGELOG.md ./README.md ./sbom.xml
-      - name: build darwin x86_64
-        run: |
-          env CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build ${{ env.BUILD_ARGS }} -o ./${{ matrix.path }}_darwin_x86_64 ./${{ matrix.path }}/main.go
-          tar -cvzf ${{ matrix.path }}_${{ env.VERSION_NO_PREFIX }}_Darwin_x86_64.tar.gz ./${{ matrix.path }}_darwin_x86_64 ./LICENSE ./CHANGELOG.md ./README.md ./sbom.xml
-      - name: build linux arm64
-        run: |
-          env CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build ${{ env.BUILD_ARGS }} -o ./${{ matrix.path }}_linux_arm64 ./${{ matrix.path }}/main.go
-          tar -cvzf ${{ matrix.path }}_${{ env.VERSION_NO_PREFIX }}_Linux_arm64.tar.gz ./${{ matrix.path }}_linux_arm64 ./LICENSE ./CHANGELOG.md ./README.md ./sbom.xml
-      - name: build linux x86_64
-        run: |
-          env CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build ${{ env.BUILD_ARGS }} -o ./${{ matrix.path }}_linux_x86_64 ./${{ matrix.path }}/main.go
-          tar -cvzf ${{ matrix.path }}_${{ env.VERSION_NO_PREFIX }}_Linux_x86_64.tar.gz ./${{ matrix.path }}_linux_x86_64 ./LICENSE ./CHANGELOG.md ./README.md ./sbom.xml
-      # Windows artifacts use .zip archive
-      - name: build windows x86_64
-        run: |
-          env CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ${{ env.BUILD_ARGS }} -o ./${{ matrix.path }}_windows_x86_64 ./${{ matrix.path }}/main.go
-          zip -r ${{ matrix.path }}_${{ env.VERSION_NO_PREFIX }}_Windows_x86_64.zip ./${{ matrix.path }}_windows_x86_64 ./LICENSE ./CHANGELOG.md ./README.md ./sbom.xml
-      - name: build windows i386
-        run: |
-          env CGO_ENABLED=0 GOOS=windows GOARCH=386 go build ${{ env.BUILD_ARGS }} -o ./${{ matrix.path }}_windows_i386 ./${{ matrix.path }}/main.go
-          zip -r ${{ matrix.path }}_${{ env.VERSION_NO_PREFIX }}_Windows_i386.zip ./${{ matrix.path }}_windows_i386 ./LICENSE ./CHANGELOG.md ./README.md ./sbom.xml
-
-      # FIPS variant. Fewer targets than the standard build: FIPS mode is
-      # unsupported on windows/386, and linux/386 is not a validated operating
-      # environment for the module.
-      - name: build FIPS variant
-        env:
-          # The CMVP-certified Go Cryptographic Module v1.0.0 (certificate #5247).
-          GOFIPS140: v1.0.0
-        run: |
-          set -euo pipefail
-          build_fips() {
-            goos="$1"; goarch="$2"; label="$3"; format="$4"
-            bin="./${{ matrix.path }}-fips_${goos}_${goarch}"
-            env CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build ${{ env.BUILD_ARGS }} -tags fips140 -o "$bin" ./${{ matrix.path }}/main.go
-            # The toolchain adds fips140v1.0 only when GOFIPS140 is set, so both
-            # tags together prove the binary built as the FIPS variant.
-            build_info=$(go version -m "$bin")
-            grep -q -- '-tags=fips140,fips140v1.0' <<<"$build_info" \
-              || { echo "::error::$bin is not a FIPS 140-3 build"; exit 1; }
-            archive="${{ matrix.path }}-fips_${{ env.VERSION_NO_PREFIX }}_${label}"
-            if [ "$format" = tar ]; then
-              tar -cvzf "${archive}.tar.gz" "$bin" ./LICENSE ./CHANGELOG.md ./README.md ./sbom.xml
-            else
-              zip -r "${archive}.zip" "$bin" ./LICENSE ./CHANGELOG.md ./README.md ./sbom.xml
-            fi
-          }
-          build_fips darwin  arm64 Darwin_arm64   tar
-          build_fips darwin  amd64 Darwin_x86_64  tar
-          build_fips linux   arm64 Linux_arm64    tar
-          build_fips linux   amd64 Linux_x86_64   tar
-          build_fips windows amd64 Windows_x86_64 zip
+      - name: Build the archives
+        # one script builds the standard and the FIPS archives, so that the release dry run checks what is built here
+        run: .github/scripts/release-build.sh "${{ matrix.path }}" "${{ env.VERSION_NO_PREFIX }}" "${{ env.COMMIT }}" "${{ env.DATE }}"
       # Bundle release artifacts
       - name: Bundle release assets
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
