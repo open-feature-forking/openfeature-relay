@@ -212,11 +212,17 @@ func TestTimeoutBoundsADelivery(t *testing.T) {
 	}})
 	require.NoError(t, err)
 
-	began := time.Now()
-	err = sink.Deliver(context.Background(), []events.Event{events.Evaluation{FlagKey: "f"}})
+	result := make(chan error, 1)
+	go func() {
+		result <- sink.Deliver(context.Background(), []events.Event{events.Evaluation{FlagKey: "f"}})
+	}()
+	select {
+	case err = <-result:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected the delivery to return after its 50ms timeout\nobserved: still blocked after 2s")
+	}
 	require.Error(t, err)
 	require.False(t, eventsink.IsPermanent(err))
-	require.Less(t, time.Since(began), 2*time.Second)
 	require.True(t, errors.Is(err, context.DeadlineExceeded))
 }
 
