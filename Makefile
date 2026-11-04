@@ -11,6 +11,11 @@ GO_LIB_MODULE_DIRS := ./core ./sync/file ./sync/flagd-grpc ./sync/http ./sync/op
 # (UC-001 Q7). They are tested, benchmarked and pinned like the library modules.
 FLAGD_MODULE_DIRS := ./flagd ./runtime ./service/transport ./service/flag-evaluation ./service/ofrep ./service/flag-sync
 
+# The contrib component modules (vendor integrations). They are tested and pinned like the library modules, but stay
+# out of GO_LIB_MODULE_DIRS: they are not what embedders import, and an engine that hashes with MD5 cannot run under
+# test-fips.
+CONTRIB_MODULE_DIRS := ./contrib/flagsmith/middleware
+
 # The FIPS variant builds against the CMVP-certified Go Cryptographic Module
 # v1.0.0 (certificate #5247). The literal version is required; the
 # "certified"/"inprocess" aliases vary by toolchain. The fips140 tag makes the
@@ -64,6 +69,7 @@ build-flagd-fips:
 TEST_TARGETS += test-core
 TEST_TARGETS += test-flagd
 TEST_TARGETS += test-flagd-proxy
+TEST_TARGETS += test-contrib
 TEST_TARGETS += test-builder
 TEST_TARGETS += test-distributions
 TEST_TARGETS += test-upgrade-accepted
@@ -77,12 +83,15 @@ TEST_TARGETS += test-telemetry-example
 TEST_TARGETS += test-eventsink-example
 TEST_TARGETS += test-contract-external
 TEST_TARGETS += test-middleware-example
+TEST_TARGETS += test-contrib-flagsmith
 test: $(TEST_TARGETS)
 test-core: test-modules
 test-modules:
 	@rc=0; for m in $(GO_LIB_MODULE_DIRS); do \
 		go test -race -covermode=atomic -cover -short $$m/... -coverprofile=$$(echo $$m | sed 's#^\./##; s#/#-#g')-coverage.out || rc=1; \
 	done; exit $$rc
+test-contrib:
+	go test -race -covermode=atomic -cover -short $(addsuffix /...,$(CONTRIB_MODULE_DIRS))
 test-flagd:
 	go test -race -covermode=atomic -cover -short $(addsuffix /...,$(FLAGD_MODULE_DIRS)) -coverprofile=flagd-coverage.out
 test-sync-example:
@@ -100,6 +109,20 @@ test-eventsink-example:
 	go test -race -short -count=1 ./test/eventsink-example/... ./test/eventsink-example/distribution/...
 test-configformat-example:
 	go test -race -short -count=1 ./test/configformat-example/... ./test/configformat-example/distribution/...
+# The Flagsmith components are vendor modules (UC-019 BR-009). They stay out of GO_LIB_MODULE_DIRS and test-fips: the engine
+# hashes with MD5, so the Flagsmith distribution has no FIPS variant.
+test-contrib-flagsmith:
+	go test -race -short -count=1 ./contrib/flagsmith/engine/...
+# Opt-in, not part of `make test`: the shared engine test data of Flagsmith has no licence, so it is read from a clone
+# outside this repository, at the commit that flagsmith-go-client v5.3.0 records for it.
+FLAGSMITH_ENGINE_DATA_COMMIT := 2e710ea7c6994110d17d1adb40b2ec2e90e7cf44
+FLAGSMITH_ENGINE_DATA_DIR ?= $(or $(XDG_CACHE_HOME),$(HOME)/.cache)/flagsmith-engine-test-data
+.PHONY: flagsmith-engine-data-check
+flagsmith-engine-data-check:
+	[ -d $(FLAGSMITH_ENGINE_DATA_DIR)/.git ] || git clone --quiet https://github.com/Flagsmith/engine-test-data.git $(FLAGSMITH_ENGINE_DATA_DIR)
+	git -C $(FLAGSMITH_ENGINE_DATA_DIR) fetch --quiet origin $(FLAGSMITH_ENGINE_DATA_COMMIT)
+	git -C $(FLAGSMITH_ENGINE_DATA_DIR) checkout --quiet $(FLAGSMITH_ENGINE_DATA_COMMIT)
+	FLAGSMITH_ENGINE_TEST_DATA=$(FLAGSMITH_ENGINE_DATA_DIR)/test_cases go test -count=1 -v -run TestSharedEngineTestData ./contrib/flagsmith/engine/...
 test-service-example:
 	go test -race -short -count=1 ./test/service-example/...
 # The testbed's evaluator suite lives in the test-harness submodule (git submodule update --init test-harness).
@@ -172,7 +195,7 @@ lint-fix:
 # The packages of the library modules and of flagd-full's modules must not change unnoticed, so that a move cannot drop a package from the test run.
 .PHONY: check-package-coverage
 check-package-coverage:
-	@for m in $(GO_LIB_MODULE_DIRS) $(FLAGD_MODULE_DIRS); do (cd $$m && go list ./...) || exit 1; done | LC_ALL=C sort > .go-packages.tmp; \
+	@for m in $(GO_LIB_MODULE_DIRS) $(FLAGD_MODULE_DIRS) $(CONTRIB_MODULE_DIRS); do (cd $$m && go list ./...) || exit 1; done | LC_ALL=C sort > .go-packages.tmp; \
 	tr -d '\r' < testdata/go-packages.txt > .go-packages.want; \
 	if ! diff -u .go-packages.want .go-packages.tmp; then rm -f .go-packages.tmp .go-packages.want; \
 		echo "the packages of the library modules differ from testdata/go-packages.txt"; exit 1; fi; \

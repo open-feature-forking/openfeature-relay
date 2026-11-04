@@ -1,0 +1,67 @@
+{
+  "id": 1,
+  "name": "Production",
+  "api_key": "ENVKEY1",
+  "updated_at": "2026-01-02T03:04:05",
+  "project": {
+    "id": 1,
+    "name": "Project",
+    "hide_disabled_flags": false,
+    "segments": [
+      {
+        "id": 1,
+        "name": "beta users",
+        "rules": [
+          {
+            "type": "ALL",
+            "rules": [
+              {
+                "type": "ANY",
+                "conditions": [{"operator": "EQUAL", "property_": "plan", "value": "beta"}]
+              }
+            ]
+          }
+        ],
+        "feature_states": [
+          {
+            "feature": {"id": 6, "name": "banner", "type": "STANDARD"},
+            "enabled": true,
+            "feature_state_value": "beta-banner",
+            "feature_segment": {"priority": 0},
+            "django_id": 101
+          }
+        ]
+      }
+    ]
+  },
+  "feature_states": [
+    {"feature": {"id": 1, "name": "dark-mode", "type": "STANDARD"}, "enabled": true, "feature_state_value": null, "django_id": 1},
+    {"feature": {"id": 2, "name": "welcome", "type": "STANDARD"}, "enabled": true, "feature_state_value": "hello", "django_id": 2},
+    {"feature": {"id": 3, "name": "limit", "type": "STANDARD"}, "enabled": true, "feature_state_value": 10, "django_id": 3},
+    {"feature": {"id": 4, "name": "ratio", "type": "STANDARD"}, "enabled": true, "feature_state_value": "0.5", "django_id": 4},
+    {"feature": {"id": 5, "name": "kill-switch", "type": "STANDARD"}, "enabled": false, "feature_state_value": "off", "django_id": 5},
+    {"feature": {"id": 6, "name": "banner", "type": "STANDARD"}, "enabled": true, "feature_state_value": "default-banner", "django_id": 6},
+    {
+      "feature": {"id": 7, "name": "experiment", "type": "MULTIVARIATE"},
+      "enabled": true,
+      "feature_state_value": "control-value",
+      "django_id": 7,
+      "multivariate_feature_state_values": [
+        {"id": 1, "multivariate_feature_option": {"id": 1, "key": "variant-a", "value": "value-a"}, "percentage_allocation": 30},
+        {"id": 2, "multivariate_feature_option": {"id": 2, "key": "variant-b", "value": "value-b"}, "percentage_allocation": 30}
+      ]
+    },
+    {"feature": {"id": 8, "name": "config", "type": "STANDARD"}, "enabled": true, "feature_state_value": "{\"a\": 1}", "django_id": 8}
+  ],
+  "identity_overrides": [
+    {
+      "identifier": "vip-1",
+      "identity_uuid": "00000000-0000-0000-0000-000000000001",
+      "environment_api_key": "ENVKEY1",
+      "created_date": "2026-01-01T00:00:00Z",
+      "identity_features": [
+        {"feature": {"id": 1, "name": "dark-mode", "type": "STANDARD"}, "enabled": false, "feature_state_value": null, "django_id": 201}
+      ]
+    }
+  ]
+}
