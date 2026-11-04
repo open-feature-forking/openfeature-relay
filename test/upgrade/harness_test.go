@@ -282,11 +282,6 @@ type Transcript []Observation
 
 func (tr *Transcript) add(key, value string) { *tr = append(*tr, Observation{key, value}) }
 
-// Difference is one observation that the two flagds disagree on.
-type Difference struct {
-	Scenario, Key, Baseline, Candidate string
-}
-
 // diff compares two transcripts observation by observation.
 func diff(scenario string, baseline, candidate Transcript) []Difference {
 	b, c := map[string]string{}, map[string]string{}
