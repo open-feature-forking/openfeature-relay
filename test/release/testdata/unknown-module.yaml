@@ -1,0 +1,9 @@
+dist:
+  name: flagd-unknown
+  version: 0.0.0
+  module: github.com/open-feature-forking/openfeature-relay/distributions/flagd-unknown
+  binary: flagd
+sync_providers:
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/file, version: v0.0.0}
+  - {module: github.com/example/elsewhere/sync/vendor, version: v1.2.3}
+runtime: {module: github.com/open-feature-forking/openfeature-relay/runtime, version: v0.0.0}
