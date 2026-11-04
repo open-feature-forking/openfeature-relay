@@ -128,7 +128,7 @@ flagd-sync contains sync providers, a configuration format and the flag sync end
 
 ## Delivered by Later Use Cases
 
-This use case is `Implemented`: the manifests of flagd-minimal, flagd-cloud, flagd-kubernetes and flagd-sync, built by the Builder in CI; the bounds of flagd-minimal and flagd-sync, measured on the binaries and the packages they import (`test/distributions`); the stop at startup for a setting of an absent component and for a scheme the distribution cannot read, both naming what is missing and, with `dist.components_hint` on, pointing to `flagd components`; and the evaluation parity with flagd-full, byte for byte for flagd-sync's flag configurations. These parts are delivered by the use cases named here, and are accepted gaps of this one:
+This use case is `Implemented`: the manifests of flagd-minimal, flagd-minimal-otel, flagd-cloud, flagd-kubernetes and flagd-sync, built by the Builder in CI; the bounds of flagd-minimal and flagd-sync, measured on the binaries and the packages they import (`test/distributions`); the stop at startup for a setting of an absent component and for a scheme the distribution cannot read, both naming what is missing and, with `dist.components_hint` on, pointing to `flagd components`; and the evaluation parity with flagd-full, byte for byte for flagd-sync's flag configurations. These parts are delivered by the use cases named here, and are accepted gaps of this one:
 
 | Gap | Delivered by |
 |-----|--------------|
