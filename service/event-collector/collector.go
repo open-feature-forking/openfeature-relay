@@ -22,13 +22,19 @@
 // moment the batch arrives, hasValue to whether a value other than null was sent, and value of a tracking event to 0.
 // The origin is always in-process; one that a client sends is ignored.
 //
-// A batch is accepted as a whole or not at all. The answer to an accepted batch is 202 with {"accepted": n}. A batch
-// that has an invalid event is answered 400 with {"accepted": 0, "rejected": [{"index": i, "reason": "..."}]}, which
-// lists every invalid event, and nothing of it is published. A body that is not such an object is answered 400 with
-// {"error": "..."}, one above the size limit 413, another method 405 and another path 404.
+// Events are accepted one by one. Every valid event of a batch is published. A batch whose events are all valid is
+// answered 202 with {"accepted": n}. A batch with invalid events is answered 400 with {"accepted": n, "rejected":
+// [{"index": i, "reason": "..."}]}, which lists every invalid event by its position in the batch; nothing is published
+// for those, so a sender that resends only them does not publish an event twice. A body that is not such an object is
+// answered 400 with {"error": "..."}, one above the size limit 413, another method 405 and another path 404.
+//
+// A number in "value" of an evaluation event without a fraction or exponent arrives as an integer, as the value of an
+// integer flag does on the remote evaluation endpoints; any other number arrives as a float, as does every number
+// inside an object value or in "details".
 package eventcollector
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -55,6 +61,9 @@ const Path = "/events/v1"
 // switches it off, as it does for the other endpoints.
 const DefaultMaxRequestBodyBytes = 1_000_000
 
+// DefaultServiceName is the service name recorded with the HTTP metrics when the settings do not give one, flagd's.
+const DefaultServiceName = "flagd"
+
 // shutdownGrace is how long a request in flight gets when the context ends; then the connections are closed.
 const shutdownGrace = time.Second
 
@@ -69,12 +78,12 @@ type config struct {
 // decodeConfig reads Settings.Config. Its keys, the names OFREP uses for the same things, are:
 //
 //	port                       a number; 0 or absent leaves the endpoint inert
-//	service-name               a string, recorded with the HTTP metrics
+//	service-name               a string, recorded with the HTTP metrics; default "flagd"
 //	cors                       a list of allowed origins
 //	max-request-body-bytes     a number, default 1000000; 0 means no limit
 //	max-request-header-bytes   a number; 0 means Go's default
 func decodeConfig(settings map[string]any) (config, error) {
-	cfg := config{maxRequestBodyBytes: DefaultMaxRequestBodyBytes}
+	cfg := config{serviceName: DefaultServiceName, maxRequestBodyBytes: DefaultMaxRequestBodyBytes}
 	err := service.ConfigDecoder{
 		"port":                     service.Set(&cfg.port, service.Uint16),
 		"service-name":             service.Set(&cfg.serviceName, service.String),
@@ -221,10 +230,6 @@ func (c *collector) collect(w http.ResponseWriter, r *http.Request) {
 		}
 		accepted = append(accepted, ev)
 	}
-	if len(rejected) > 0 {
-		write(w, http.StatusBadRequest, map[string]any{"accepted": 0, "rejected": rejected})
-		return
-	}
 	for _, ev := range accepted {
 		switch v := ev.(type) {
 		case events.Evaluation:
@@ -232,6 +237,10 @@ func (c *collector) collect(w http.ResponseWriter, r *http.Request) {
 		case events.Tracking:
 			events.PublishTracking(c.bus, v)
 		}
+	}
+	if len(rejected) > 0 {
+		write(w, http.StatusBadRequest, map[string]any{"accepted": len(accepted), "rejected": rejected})
+		return
 	}
 	write(w, http.StatusAccepted, map[string]any{"accepted": len(accepted)})
 }
@@ -245,7 +254,9 @@ func write(w http.ResponseWriter, status int, body any) {
 // parseEvent turns one item of the batch into an event marked in-process, or says why it cannot.
 func parseEvent(raw json.RawMessage, now time.Time) (events.Event, string) {
 	var item map[string]any
-	if err := json.Unmarshal(raw, &item); err != nil || item == nil {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	if err := dec.Decode(&item); err != nil || item == nil {
 		return nil, "the event must be a JSON object"
 	}
 	when, reason := optTime(item, "time", now)
@@ -255,7 +266,7 @@ func parseEvent(raw json.RawMessage, now time.Time) (events.Event, string) {
 
 	switch kind, _ := item["kind"].(string); events.Kind(kind) {
 	case events.KindEvaluation:
-		ev := events.Evaluation{Time: when, Endpoint: Type, Origin: events.OriginInProcess, Value: item["value"]}
+		ev := events.Evaluation{Time: when, Endpoint: Type, Origin: events.OriginInProcess, Value: topLevelNumber(item["value"])}
 		fields := map[string]*string{
 			"flagKey": &ev.FlagKey, "flagSet": &ev.FlagSet, "format": &ev.Format, "variant": &ev.Variant,
 			"reason": &ev.Reason, "errorCode": &ev.ErrorCode, "targetingKey": &ev.TargetingKey,
@@ -293,8 +304,12 @@ func parseEvent(raw json.RawMessage, now time.Time) (events.Event, string) {
 			return nil, reason
 		}
 		if v, ok := item["value"]; ok && v != nil {
-			n, isNumber := v.(float64)
+			number, isNumber := v.(json.Number)
 			if !isNumber {
+				return nil, `"value" of a tracking event must be a number`
+			}
+			n, err := number.Float64()
+			if err != nil {
 				return nil, `"value" of a tracking event must be a number`
 			}
 			ev.Value = n
@@ -304,11 +319,47 @@ func parseEvent(raw json.RawMessage, now time.Time) (events.Event, string) {
 			if !isObject {
 				return nil, `"details" must be an object`
 			}
-			ev.Details = details
+			ev.Details = floats(details).(map[string]any)
 		}
 		return ev, ""
 	}
 	return nil, fmt.Sprintf(`the "kind" must be %q or %q`, events.KindEvaluation, events.KindTracking)
+}
+
+// topLevelNumber turns the number of a value into an integer when it is one and into a float otherwise, and every
+// number inside an object or array into a float; other values stay as they are.
+func topLevelNumber(v any) any {
+	if n, ok := v.(json.Number); ok {
+		if i, err := n.Int64(); err == nil {
+			return i
+		}
+	}
+	return floats(v)
+}
+
+// floats replaces every json.Number inside v with a float64, as the JSON of a flag configuration yields them.
+func floats(v any) any {
+	switch x := v.(type) {
+	case json.Number:
+		f, err := x.Float64()
+		if err != nil {
+			return x.String()
+		}
+		return f
+	case map[string]any:
+		out := make(map[string]any, len(x))
+		for k, item := range x {
+			out[k] = floats(item)
+		}
+		return out
+	case []any:
+		out := make([]any, len(x))
+		for i, item := range x {
+			out[i] = floats(item)
+		}
+		return out
+	}
+	return v
 }
 
 func optString(item map[string]any, key string) (string, string) {

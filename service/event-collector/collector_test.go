@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service/servicetest"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	"github.com/stretchr/testify/require"
 )
 
@@ -37,13 +39,23 @@ type started struct {
 
 func start(t *testing.T, config map[string]any) *started {
 	t.Helper()
+	return startWith(t, config, nil)
+}
+
+// startWith is start with a change to the settings the runtime would inject.
+func startWith(t *testing.T, config map[string]any, mutate func(*service.Settings)) *started {
+	t.Helper()
 	port := freePort(t)
 	settings := map[string]any{"port": port}
 	for k, v := range config {
 		settings[k] = v
 	}
 	bus := events.NewBus()
-	endpoint, err := Factory{}.Create(service.Settings{Bus: bus, Logger: logger.NewLogger(nil, false), Config: settings})
+	injected := service.Settings{Bus: bus, Logger: logger.NewLogger(nil, false), Config: settings}
+	if mutate != nil {
+		mutate(&injected)
+	}
+	endpoint, err := Factory{}.Create(injected)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -211,23 +223,25 @@ func TestCollectorRejectsInvalidEvents(t *testing.T) {
 		status int
 		// rejected maps the index of each invalid event to a part of its reason
 		rejected map[int]string
-		error    string
+		// published is the number of valid events of the batch, which are published and counted as accepted
+		published int
+		error     string
 	}{
-		"missing flagKey":        {`{"events": [` + valid + `, {"kind": "evaluation"}]}`, 400, map[int]string{1: `needs a "flagKey"`}, ""},
-		"missing name":           {`{"events": [{"kind": "tracking"}]}`, 400, map[int]string{0: `needs a "name"`}, ""},
-		"unknown kind":           {`{"events": [{"kind": "metric", "flagKey": "x"}]}`, 400, map[int]string{0: `the "kind" must be`}, ""},
-		"no kind":                {`{"events": [{"flagKey": "x"}]}`, 400, map[int]string{0: `the "kind" must be`}, ""},
-		"not an object":          {`{"events": ["evaluation", 3]}`, 400, map[int]string{0: "must be a JSON object", 1: "must be a JSON object"}, ""},
-		"wrong field type":       {`{"events": [{"kind": "evaluation", "flagKey": 5}]}`, 400, map[int]string{0: `"flagKey" must be a string`}, ""},
-		"bad time":               {`{"events": [{"kind": "evaluation", "flagKey": "x", "time": "yesterday"}]}`, 400, map[int]string{0: `"time" must be an RFC 3339 time`}, ""},
-		"hasValue not a boolean": {`{"events": [{"kind": "evaluation", "flagKey": "x", "hasValue": "yes"}]}`, 400, map[int]string{0: `"hasValue" must be a boolean`}, ""},
-		"tracking value":         {`{"events": [{"kind": "tracking", "name": "n", "value": "9"}]}`, 400, map[int]string{0: `must be a number`}, ""},
-		"tracking details":       {`{"events": [{"kind": "tracking", "name": "n", "details": [1]}]}`, 400, map[int]string{0: `"details" must be an object`}, ""},
-		"every invalid one":      {`{"events": [{"kind": "tracking"}, ` + valid + `, {"kind": "evaluation"}]}`, 400, map[int]string{0: `needs a "name"`, 2: `needs a "flagKey"`}, ""},
-		"not JSON":               {`{"events": [`, 400, nil, "events array"},
-		"no events array":        {`{"event": []}`, 400, nil, `"events" array`},
-		"events not an array":    {`{"events": {}}`, 400, nil, "events array"},
-		"body is an array":       {`[]`, 400, nil, "events array"},
+		"missing flagKey":        {`{"events": [` + valid + `, {"kind": "evaluation"}]}`, 400, map[int]string{1: `needs a "flagKey"`}, 1, ""},
+		"missing name":           {`{"events": [{"kind": "tracking"}]}`, 400, map[int]string{0: `needs a "name"`}, 0, ""},
+		"unknown kind":           {`{"events": [{"kind": "metric", "flagKey": "x"}]}`, 400, map[int]string{0: `the "kind" must be`}, 0, ""},
+		"no kind":                {`{"events": [{"flagKey": "x"}]}`, 400, map[int]string{0: `the "kind" must be`}, 0, ""},
+		"not an object":          {`{"events": ["evaluation", 3]}`, 400, map[int]string{0: "must be a JSON object", 1: "must be a JSON object"}, 0, ""},
+		"wrong field type":       {`{"events": [{"kind": "evaluation", "flagKey": 5}]}`, 400, map[int]string{0: `"flagKey" must be a string`}, 0, ""},
+		"bad time":               {`{"events": [{"kind": "evaluation", "flagKey": "x", "time": "yesterday"}]}`, 400, map[int]string{0: `"time" must be an RFC 3339 time`}, 0, ""},
+		"hasValue not a boolean": {`{"events": [{"kind": "evaluation", "flagKey": "x", "hasValue": "yes"}]}`, 400, map[int]string{0: `"hasValue" must be a boolean`}, 0, ""},
+		"tracking value":         {`{"events": [{"kind": "tracking", "name": "n", "value": "9"}]}`, 400, map[int]string{0: `must be a number`}, 0, ""},
+		"tracking details":       {`{"events": [{"kind": "tracking", "name": "n", "details": [1]}]}`, 400, map[int]string{0: `"details" must be an object`}, 0, ""},
+		"every invalid one":      {`{"events": [{"kind": "tracking"}, ` + valid + `, {"kind": "evaluation"}, ` + valid + `]}`, 400, map[int]string{0: `needs a "name"`, 2: `needs a "flagKey"`}, 2, ""},
+		"not JSON":               {`{"events": [`, 400, nil, 0, "events array"},
+		"no events array":        {`{"event": []}`, 400, nil, 0, `"events" array`},
+		"events not an array":    {`{"events": {}}`, 400, nil, 0, "events array"},
+		"body is an array":       {`[]`, 400, nil, 0, "events array"},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -241,7 +255,7 @@ func TestCollectorRejectsInvalidEvents(t *testing.T) {
 				require.Contains(t, out["error"], tt.error)
 			}
 			if tt.rejected != nil {
-				require.EqualValues(t, 0, out["accepted"])
+				require.EqualValues(t, tt.published, out["accepted"], "the answer counts the valid events it published")
 				list, _ := out["rejected"].([]any)
 				got := map[int]string{}
 				for _, r := range list {
@@ -253,9 +267,161 @@ func TestCollectorRejectsInvalidEvents(t *testing.T) {
 					require.Contains(t, got[index], part, "event %d", index)
 				}
 			}
-			require.Empty(t, drain(sub), "a batch with an invalid event publishes nothing, the valid events of it included")
+			published := drain(sub)
+			require.Len(t, published, tt.published, "the valid events of the batch are published, the invalid ones are not")
+			for _, ev := range published {
+				require.Equal(t, "ok", ev.(events.Evaluation).FlagKey)
+			}
 		})
 	}
+}
+
+func TestCollectorCountsNumbersAsTheRemoteEndpointsDo(t *testing.T) {
+	s := start(t, nil)
+	sub := subscribe(s.bus)
+	defer sub.Close()
+
+	status, _ := s.post(t, `{"events": [
+		{"kind": "evaluation", "flagKey": "int", "value": 5},
+		{"kind": "evaluation", "flagKey": "big", "value": 9007199254740993},
+		{"kind": "evaluation", "flagKey": "float", "value": 5.5},
+		{"kind": "evaluation", "flagKey": "fraction-zero", "value": 5.0},
+		{"kind": "evaluation", "flagKey": "exponent", "value": 1e2},
+		{"kind": "evaluation", "flagKey": "object", "value": {"n": 1, "list": [2, {"m": 3}]}},
+		{"kind": "tracking", "name": "t", "value": 7, "details": {"count": 4, "nested": {"x": 1}}}
+	]}`)
+	require.Equal(t, http.StatusAccepted, status)
+
+	got := drain(sub)
+	require.Len(t, got, 7)
+	values := map[string]any{}
+	for _, ev := range got[:6] {
+		e := ev.(events.Evaluation)
+		values[e.FlagKey] = e.Value
+	}
+	require.Equal(t, int64(5), values["int"], "a whole number stays an integer")
+	require.Equal(t, int64(9007199254740993), values["big"], "and keeps its digits")
+	require.Equal(t, 5.5, values["float"])
+	require.Equal(t, float64(5), values["fraction-zero"])
+	require.Equal(t, float64(100), values["exponent"])
+	require.Equal(t, map[string]any{"n": float64(1), "list": []any{float64(2), map[string]any{"m": float64(3)}}}, values["object"],
+		"numbers inside an object are floats, as in a flag configuration")
+
+	tracking := got[6].(events.Tracking)
+	require.Equal(t, float64(7), tracking.Value)
+	require.Equal(t, map[string]any{"count": float64(4), "nested": map[string]any{"x": float64(1)}}, tracking.Details)
+}
+
+// TestCollectorIsWrappedByTheDistributionsMiddleware pins that Settings.WrapHTTP applies to POST /events/v1: the
+// collector puts events on the bus, so an authentication middleware of the distribution has to see every request and be
+// able to refuse it. CORS stays outside it, so a preflight never reaches the middleware.
+func TestCollectorIsWrappedByTheDistributionsMiddleware(t *testing.T) {
+	var seen atomic.Int64
+	s := startWith(t, map[string]any{"cors": []string{"https://app.example.com"}}, func(settings *service.Settings) {
+		settings.HTTPMiddleware = func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				seen.Add(1)
+				if r.Header.Get("X-Api-Key") != "secret" {
+					http.Error(w, "key required", http.StatusUnauthorized)
+					return
+				}
+				next.ServeHTTP(w, r)
+			})
+		}
+	})
+	sub := subscribe(s.bus)
+	defer sub.Close()
+	const body = `{"events": [{"kind": "evaluation", "flagKey": "f"}]}`
+
+	post := func(key string) int {
+		req, err := http.NewRequest(http.MethodPost, "http://"+s.addr+Path, strings.NewReader(body))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+		if key != "" {
+			req.Header.Set("X-Api-Key", key)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+
+	require.Equal(t, http.StatusUnauthorized, post(""), "the middleware refuses the request")
+	require.Equal(t, http.StatusUnauthorized, post("wrong"))
+	require.Empty(t, drain(sub), "a refused request publishes nothing")
+	require.EqualValues(t, 2, seen.Load(), "the middleware saw both requests")
+
+	require.Equal(t, http.StatusAccepted, post("secret"))
+	require.Len(t, drain(sub), 1)
+	require.EqualValues(t, 3, seen.Load())
+
+	preflight, err := http.NewRequest(http.MethodOptions, "http://"+s.addr+Path, nil)
+	require.NoError(t, err)
+	preflight.Header.Set("Origin", "https://app.example.com")
+	preflight.Header.Set("Access-Control-Request-Method", "POST")
+	resp, err := http.DefaultClient.Do(preflight)
+	require.NoError(t, err)
+	resp.Body.Close()
+	require.Equal(t, "https://app.example.com", resp.Header.Get("Access-Control-Allow-Origin"))
+	require.EqualValues(t, 3, seen.Load(), "CORS answers a preflight before the middleware")
+}
+
+// instrumented is a telemetry provider that counts the requests that pass its HTTP wrappers and keeps their options.
+type instrumented struct {
+	telemetry.Provider
+	metrics, spans atomic.Int64
+	options        atomic.Pointer[telemetry.HTTPMetricsOptions]
+	operation      atomic.Pointer[string]
+}
+
+func (p *instrumented) HTTPServerMetrics(h http.Handler, opts telemetry.HTTPMetricsOptions) http.Handler {
+	p.options.Store(&opts)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p.metrics.Add(1)
+		h.ServeHTTP(w, r)
+	})
+}
+
+func (p *instrumented) HTTPServerSpans(h http.Handler, operation string) http.Handler {
+	p.operation.Store(&operation)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p.spans.Add(1)
+		h.ServeHTTP(w, r)
+	})
+}
+
+// TestCollectorIsInstrumentedThroughTheTelemetryProvider pins that every request passes the provider's HTTP metrics and
+// span wrappers, with the collector's route and flagd's service name.
+func TestCollectorIsInstrumentedThroughTheTelemetryProvider(t *testing.T) {
+	provider := &instrumented{Provider: telemetry.Noop()}
+	s := startWith(t, nil, func(settings *service.Settings) { settings.Telemetry = provider })
+
+	status, _ := s.post(t, `{"events": [{"kind": "evaluation", "flagKey": "f"}]}`)
+	require.Equal(t, http.StatusAccepted, status)
+	status, _ = s.post(t, `{"events": [{"kind": "evaluation"}]}`)
+	require.Equal(t, http.StatusBadRequest, status)
+
+	require.EqualValues(t, 2, provider.metrics.Load(), "each request is counted in the HTTP metrics")
+	require.EqualValues(t, 2, provider.spans.Load(), "and recorded as a span")
+	require.Equal(t, telemetry.HTTPMetricsOptions{Service: "flagd", Route: Path}, *provider.options.Load())
+	require.Equal(t, "flagd.event-collector", *provider.operation.Load())
+}
+
+// Go allows 4096 bytes beyond MaxHeaderBytes, so the header here is larger than that.
+func TestCollectorHonoursTheHeaderLimit(t *testing.T) {
+	s := start(t, map[string]any{"max-request-header-bytes": 1024})
+	sub := subscribe(s.bus)
+	defer sub.Close()
+
+	req, err := http.NewRequest(http.MethodPost, "http://"+s.addr+Path, strings.NewReader(`{"events": [{"kind": "evaluation", "flagKey": "f"}]}`))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Padding", strings.Repeat("x", 20000))
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	resp.Body.Close()
+	require.Equal(t, http.StatusRequestHeaderFieldsTooLarge, resp.StatusCode)
+	require.Empty(t, drain(sub))
 }
 
 func TestCollectorAnswersOtherRequestsPlainly(t *testing.T) {
@@ -366,6 +532,7 @@ func TestCollectorSettings(t *testing.T) {
 	cfg, err = decodeConfig(nil)
 	require.NoError(t, err)
 	require.Equal(t, int64(DefaultMaxRequestBodyBytes), cfg.maxRequestBodyBytes)
+	require.Equal(t, "flagd", cfg.serviceName, "the service name defaults to flagd's, as for the other endpoints")
 
 	for name, tt := range map[string]struct {
 		settings map[string]any
