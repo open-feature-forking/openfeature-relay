@@ -18,6 +18,8 @@ sync/s3:cloud.google.com|github.com/Azure|gocloud.dev|openfeature-relay/(telemet
 sync/sse:go.opentelemetry.io|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|openfeature-operator|gcs|azblob|s3|builder))
 # The Flagsmith sync provider (UC-019) requires the core only: no telemetry SDK, transport or other component module.
 contrib/flagsmith/sync:go.opentelemetry.io|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|openfeature-relay/(telemetry|sync/|evaluator|configformat|service|runtime)
+# The testbed sync provider (UC-022) requires the core only.
+testbed/source:go.opentelemetry.io|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|openfeature-relay/(telemetry|sync/|evaluator|configformat|service|runtime)
 # The telemetry module carries no sync provider and no Kubernetes or gocloud client (OpenTelemetry brings a few Google auth modules).
 telemetry/otel:openfeature-relay/sync/|k8s.io|gocloud.dev|github.com/Azure|github.com/aws
 # BR-001 of UC-004: the example service endpoint's module graph carries the core module only.
