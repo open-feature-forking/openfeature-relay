@@ -7,7 +7,7 @@
 **Primary Actor:** Operator  
 **Goal:** Learn which components a flagd binary or image contains, so that the Operator knows whether it supports the deployment's sources, service endpoints and telemetry before or after starting it.  
 **Trigger:** Operator asks a flagd binary or image which components it contains  
-**Status:** Draft  
+**Status:** Implemented  
 
 **Requirements:** [FR-023, FR-034](../requirements.md)
 
@@ -87,3 +87,11 @@ Standard and custom distributions list their components in the same text and JSO
 ### BR-004: Same Identity as Version
 
 The distribution name and version in the listing are the ones `flagd version` reports with `--verbose` (FR-034); the plain output stays as it is.
+
+## Delivered by Later Use Cases
+
+This use case is `Implemented`: the hidden `flagd components` command lists the components of any distribution as text and as JSON with the distribution's identity, the schemes of its sync providers and the module versions, reads no configuration and opens no port. This part is delivered by the use case named here, and is an accepted gap of this one:
+
+| Gap | Delivered by |
+|-----|--------------|
+| A2: the startup errors for an unsupported scheme or a setting of an absent component name `flagd components` (flagd-full keeps today's error text) | UC-010 |
