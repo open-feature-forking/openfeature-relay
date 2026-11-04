@@ -2,7 +2,17 @@ package sync
 
 import (
 	"context"
+	"errors"
 )
+
+// ErrSourceRefused is wrapped by the error of a fetch that the source refused because it does not accept the
+// credentials, as a vendor API does with an unknown key. The fetching sync provider ends while it has not yet
+// fetched successfully once, since no retry can make a wrong key valid. After one successful fetch the key is known
+// to work, whether or not the configuration format accepted what it returned: the provider then logs a refusal and
+// tries again, since a rotated key or a transient firewall may recover. The error must not hold a credential. A
+// fetcher that wraps it is one whose source tells a wrong key from an outage; fetchers of existing sources do not,
+// and are retried.
+var ErrSourceRefused = errors.New("the source refused the credentials")
 
 // Fetcher reads one source on request. It knows nothing about when to fetch: the core's fetching sync provider
 // decides, driven by the fetch triggers attached to the source. A Fetcher is used by one fetching sync provider and
@@ -13,7 +23,8 @@ import (
 type Fetcher interface {
 	// Fetch reads the source once. previous is the source version of the last fetch the provider accepted, empty for a
 	// full fetch. A fetch that fails returns an error and no flag configuration; it never returns a partial result. A
-	// fetch abandons its work when ctx is done.
+	// fetch abandons its work when ctx is done. A fetch that the source refuses for its credentials returns an error
+	// that wraps ErrSourceRefused.
 	Fetch(ctx context.Context, previous string) (FetchResult, error)
 }
 

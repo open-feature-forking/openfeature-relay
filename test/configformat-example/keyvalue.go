@@ -45,6 +45,25 @@ func (Factory) Create(s configformat.Settings) (configformat.ConfigurationFormat
 	return &Format{store: s.Store}, nil
 }
 
+// Values is the Value of a keyvalue document: the raw JSON text of each key, and the text of the delivery they came
+// from. It implements store.TextDocument, so that the flag sync endpoint sends the document unchanged to a request
+// that names this format.
+type Values struct {
+	ByKey map[string]string
+	Text  string
+}
+
+var _ store.TextDocument = Values{}
+
+// DocumentText implements store.TextDocument.
+func (v Values) DocumentText() string { return v.Text }
+
+// Get returns the raw JSON text of a key.
+func (v Values) Get(key string) (string, bool) {
+	raw, ok := v.ByKey[key]
+	return raw, ok
+}
+
 // Format is the keyvalue configuration format.
 type Format struct {
 	store *store.Store
@@ -89,7 +108,9 @@ func (f *Format) Accept(_ context.Context, in configformat.Input) (configformat.
 	var previous map[string]string
 	for _, d := range f.store.Documents(Type, in.Source) {
 		if d.FlagSet == raw.Environment {
-			previous, _ = d.Value.(map[string]string)
+			if v, ok := d.Value.(Values); ok {
+				previous = v.ByKey
+			}
 		}
 	}
 
@@ -114,7 +135,7 @@ func (f *Format) Accept(_ context.Context, in configformat.Input) (configformat.
 		Format: Type, Source: in.Source, Incremental: in.IncrementalUpdate,
 		Documents: []store.Document{{
 			Format: Type, Source: in.Source, FlagSet: raw.Environment, Version: report.Version,
-			FlagKeys: keys, Value: current,
+			FlagKeys: keys, Value: Values{ByKey: current, Text: in.Data},
 		}},
 	})
 	if err != nil {

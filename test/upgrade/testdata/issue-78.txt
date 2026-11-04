@@ -8,9 +8,11 @@ flagd built from this repository is a drop-in replacement for today's flagd: int
 
 **Visible to clients, unlikely to break them**
 - [ ] Flag sync's `Last-Modified` moves only on a configuration change (UC-004 Q10, #71).
+- [ ] Flag sync reads the `Flagd-Configuration-Format` header: a value that names a configuration format the distribution lacks is answered `InvalidArgument` (HTTP 400), where the header used to be ignored; no header, or `flagd`, keeps today's behaviour (FR-044, UC-017 Q10, #117).
 - [ ] OFREP `flagConfigEtag` values change (still opaque), and vendor-format changes send refetch events (Q8, #75).
 - [ ] Shutdown: event streams get `provider_shutdown` and end at once; flag sync streams end cleanly in under 2 s (#71, #76). With step 6's hooks, shutdown takes up to 10 s.
 - [ ] The operator source delivers `spec.flagSpec` as written (UC-003 Q5, #54).
+- [ ] `flagd components` lists the components instead of failing as an unknown command; the command is hidden from `--help` (UC-011 Q6).
 
 **Fixes for failure cases**
 - [ ] A file read or decode error keeps the current flags instead of wiping them (Q4, #54).
@@ -23,4 +25,7 @@ flagd built from this repository is a drop-in replacement for today's flagd: int
 **Unchanged and pinned by tests:** CLI flags, ports, endpoints, management paths and status codes, payloads, metric and span names. Tick an item once the migration guide covers it.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+UC-015 is deferred until after the proof of concept; this list stays the input for its migration guide.
+
 

@@ -222,6 +222,24 @@ func (k *Sync) fetch(ctx context.Context) (string, error) {
 }
 
 func (k *Sync) notify(ctx context.Context, c chan<- INotify) {
+	// The handlers block on their send. Once ctx is done nobody reads c, and a handler stuck on it keeps the
+	// informer from stopping, so events go through a channel that is drained until the informer has returned.
+	events := make(chan INotify)
+	forwarded := make(chan struct{})
+	go func() {
+		defer close(forwarded)
+		for e := range events {
+			select {
+			case c <- e:
+			case <-ctx.Done():
+			}
+		}
+	}()
+	defer func() {
+		close(events)
+		<-forwarded
+	}()
+
 	objectKey := types.NamespacedName{
 		Name:      k.crdName,
 		Namespace: k.namespace,
@@ -230,19 +248,19 @@ func (k *Sync) notify(ctx context.Context, c chan<- INotify) {
 	if _, err := k.informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			k.logger.Info(fmt.Sprintf("kube sync notifier event: add: %s %s", objectKey.Namespace, objectKey.Name))
-			if err := commonHandler(obj, objectKey, DefaultEventTypeCreate, c); err != nil {
+			if err := commonHandler(obj, objectKey, DefaultEventTypeCreate, events); err != nil {
 				k.logger.Warn(err.Error())
 			}
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			k.logger.Info(fmt.Sprintf("kube sync notifier event: update: %s %s", objectKey.Namespace, objectKey.Name))
-			if err := updateFuncHandler(oldObj, newObj, objectKey, c); err != nil {
+			if err := updateFuncHandler(oldObj, newObj, objectKey, events); err != nil {
 				k.logger.Warn(err.Error())
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
 			k.logger.Info(fmt.Sprintf("kube sync notifier event: delete: %s %s", objectKey.Namespace, objectKey.Name))
-			if err := commonHandler(obj, objectKey, DefaultEventTypeDelete, c); err != nil {
+			if err := commonHandler(obj, objectKey, DefaultEventTypeDelete, events); err != nil {
 				k.logger.Warn(err.Error())
 			}
 		},
@@ -250,7 +268,7 @@ func (k *Sync) notify(ctx context.Context, c chan<- INotify) {
 		k.logger.Fatal(err.Error())
 	}
 
-	c <- &Notifier{
+	events <- &Notifier{
 		Event: Event[DefaultEventType]{
 			EventType: DefaultEventTypeReady,
 		},

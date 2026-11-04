@@ -86,10 +86,14 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.agent.yaml)")
 	rootCmd.AddCommand(startCmd)
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(componentsCmd)
 }
 
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
+	if invokesComponents(os.Args[1:]) {
+		return
+	}
 	if cfgFile != "" {
 		// Use config file from the flag.
 		viper.SetConfigFile(cfgFile)
