@@ -4,10 +4,15 @@
 // A source is the API base, such as https://edge.api.flagsmith.com/api/v1/, with the provider name flagsmith, or the
 // same address with the prefix flagsmith+ (flagsmith+https://...), which selects this provider on the command line.
 // The environment's key goes into the X-Environment-Key header, read from an environment variable or a file through
-// headersFrom, so that it is neither in the configuration nor on the command line.
+// headersFrom, so that it is neither in the configuration nor on the command line. A key written in headers stops the
+// source.
 //
 // The fetcher is triggered by the core's poller, or by any fetch trigger a source lists, such as an SSE stream next to
 // the poller.
+//
+// Every fetch reads all pages and compares their digest: the fetcher sends no conditional request, since nothing shows
+// that the API answers one for the later pages. A poll, and each event of an SSE stream, therefore transfers the whole
+// document, identity overrides included, so a moderate poll interval is the better one.
 package flagsmith
 
 import (
@@ -289,6 +294,13 @@ func (Factory) ParseURI(uri string) (sync.SourceConfig, bool) {
 // CreateFetcher creates the fetcher of a source. The environment's key comes from headersFrom, and a variable or file
 // that cannot be read stops the source.
 func (Factory) CreateFetcher(settings sync.Settings) (sync.Fetcher, error) {
+	// the key is a credential (UC-019 BR-008): a value in the configuration would be in a manifest or on a command line
+	for name := range settings.Source.Headers {
+		if http.CanonicalHeaderKey(name) == KeyHeader {
+			return nil, fmt.Errorf("source %q: the %s header is a credential: read it with headersFrom ({\"env\": \"<VAR>\"} or {\"file\": \"<path>\"}), not headers",
+				settings.Source.URI, KeyHeader)
+		}
+	}
 	headers, err := sync.ResolveHeaders(settings.Source)
 	if err != nil {
 		return nil, err

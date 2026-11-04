@@ -423,20 +423,55 @@ func TestSourceNeedsTheKeyHeader(t *testing.T) {
 	})
 	require.ErrorContains(t, err, "RELAY_TEST_FLAGSMITH_UNSET", "an unset variable stops the source, naming the variable")
 
+	t.Setenv(envKeyVar, envKey)
 	_, err = Factory{}.CreateFetcher(sync.Settings{
-		Source: sync.SourceConfig{URI: "ftp://edge.example/", Provider: Provider, Headers: map[string]string{KeyHeader: "k"}},
+		Source: sync.SourceConfig{
+			URI: "ftp://edge.example/", Provider: Provider,
+			HeadersFrom: map[string]sync.HeaderSource{KeyHeader: {Env: envKeyVar}},
+		},
 		Logger: logger.NewLogger(nil, false),
 	})
 	require.ErrorContains(t, err, "http")
 }
 
-func TestKeyInPlainHeadersIsAccepted(t *testing.T) {
-	env := newEnvironment(t, page())
-	source := env.source(t)
-	source.HeadersFrom = nil
-	source.Headers = map[string]string{"x-environment-key": envKey}
-	_, err := fetcherFor(t, source, nil).Fetch(context.Background(), "")
-	require.NoError(t, err)
+// The key is a credential: it comes from an environment variable or a file, never from the configuration (UC-019
+// BR-008). A key written in headers stops the source, and the error never shows it.
+func TestKeyInPlainHeadersIsRefused(t *testing.T) {
+	tests := map[string]sync.SourceConfig{
+		"in headers": {
+			URI: "https://edge.example/api/v1/", Provider: Provider,
+			Headers: map[string]string{KeyHeader: envKey},
+		},
+		"in headers, in another case": {
+			URI: "https://edge.example/api/v1/", Provider: Provider,
+			Headers: map[string]string{"x-environment-key": envKey},
+		},
+		"in headers and in headersFrom": {
+			URI: "https://edge.example/api/v1/", Provider: Provider,
+			Headers:     map[string]string{KeyHeader: envKey},
+			HeadersFrom: map[string]sync.HeaderSource{KeyHeader: {Env: envKeyVar}},
+		},
+	}
+	t.Setenv(envKeyVar, envKey)
+	for name, source := range tests {
+		t.Run(name, func(t *testing.T) {
+			fetcher, err := Factory{}.CreateFetcher(sync.Settings{Source: source, Logger: logger.NewLogger(nil, false)})
+			require.Nil(t, fetcher)
+			require.ErrorContains(t, err, "https://edge.example/api/v1/", "names the source")
+			require.ErrorContains(t, err, KeyHeader, "names the header")
+			require.ErrorContains(t, err, "headersFrom", "points to where the key goes")
+			require.NotContains(t, err.Error(), envKey, "never the value")
+		})
+	}
+
+	t.Run("other headers are still accepted next to the key", func(t *testing.T) {
+		env := newEnvironment(t, page())
+		source := env.source(t)
+		source.Headers = map[string]string{"X-Team": "payments"}
+		_, err := fetcherFor(t, source, nil).Fetch(context.Background(), "")
+		require.NoError(t, err)
+		require.Equal(t, "payments", env.requests()[0].header.Get("X-Team"))
+	})
 }
 
 func TestSchemesAndURIs(t *testing.T) {
