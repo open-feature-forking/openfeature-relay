@@ -59,7 +59,7 @@ func TestMetricsHandlerSelection(t *testing.T) {
 // withFlagd adds the official sync components, flagd's configuration format and evaluator, which a Components literal of
 // a test lacks, as the distribution flagd-full has them.
 func withFlagd(c Components) Components {
-	official := flagdcomponents.Official()
+	official := flagdcomponents.Components()
 	c.ConfigurationFormats = append(slices.Clone(official.ConfigurationFormats), c.ConfigurationFormats...)
 	c.Evaluators = append(slices.Clone(official.Evaluators), c.Evaluators...)
 	c.Sync = append(slices.Clone(official.Sync), c.Sync...)

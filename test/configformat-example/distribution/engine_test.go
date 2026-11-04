@@ -73,7 +73,7 @@ func TestEngineServesBothFormats(t *testing.T) {
 		},
 		ConfigurationFormats: []configformat.Factory{keyvalue.Factory{}},
 		Evaluators:           []evaluator.Factory{keyvalueeval.Factory{}},
-	}, flagdcomponents.Official())
+	}, flagdcomponents.Components())
 	require.NoError(t, err)
 
 	done := make(chan error, 1)

@@ -346,7 +346,7 @@ func TestRuntimeStartsAnyEndpointSet(t *testing.T) {
 			},
 		},
 		{
-			name: "all three", endpoints: flagdcomponents.Endpoints(), evaluator: true,
+			name: "all three", endpoints: flagdcomponents.Components().Endpoints, evaluator: true,
 			check: func(t *testing.T, p ports) {
 				for _, port := range []uint16{p.service, p.ofrep, p.sync} {
 					waitForPort(t, port)
@@ -359,8 +359,8 @@ func TestRuntimeStartsAnyEndpointSet(t *testing.T) {
 			p := newPorts(t)
 			cfg := characterizedConfig(t, p)
 			rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, Components{
-				Sync:                 flagdcomponents.Official().Sync,
-				ConfigurationFormats: flagdcomponents.Official().ConfigurationFormats, Evaluators: flagdcomponents.Official().Evaluators, Endpoints: tt.endpoints,
+				Sync:                 flagdcomponents.Components().Sync,
+				ConfigurationFormats: flagdcomponents.Components().ConfigurationFormats, Evaluators: flagdcomponents.Components().Evaluators, Endpoints: tt.endpoints,
 			})
 			require.NoError(t, err)
 			require.Equal(t, tt.evaluator, rt.Evaluator != nil, "an evaluator is built only for an endpoint that needs one")

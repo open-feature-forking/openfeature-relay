@@ -153,7 +153,7 @@ func TestGRPCSyncClientInstrumentationCharacterization(t *testing.T) {
 		KeepAliveMinTime:             runtime.KeepAliveMinTimeDefault,
 		KeepAlivePermitWithoutStream: runtime.KeepAlivePermitWithoutStreamDefault,
 		SyncProviders:                []coresync.SourceConfig{{URI: l.Addr().String(), Provider: "grpc"}},
-	}, withOpenTelemetry(flagdcomponents.Official()))
+	}, withOpenTelemetry(flagdcomponents.Components()))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())

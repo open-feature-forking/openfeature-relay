@@ -38,7 +38,7 @@ func TestMiddlewareSeesH2CRequests(t *testing.T) {
 			if useTLS {
 				cfg.ServiceCertPath, cfg.ServiceKeyPath = certDir+"server-cert.pem", certDir+"server-key.pem"
 			}
-			components := flagdcomponents.Official()
+			components := flagdcomponents.Components()
 			components.Middleware = []middleware.Configured{{Factory: keyRequiredFactory{seen: &seen}}}
 			startRuntimeWith(t, cfg, components)
 

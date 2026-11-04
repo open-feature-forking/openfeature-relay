@@ -136,7 +136,7 @@ func TestSyncMetricsCharacterization(t *testing.T) {
 			{URI: addr, Provider: "grpc"},
 			{URI: addr, Provider: "grpc", Selector: "source=a"},
 		},
-	}, withOpenTelemetry(flagdcomponents.Official()))
+	}, withOpenTelemetry(flagdcomponents.Components()))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())

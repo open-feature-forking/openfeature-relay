@@ -29,7 +29,7 @@ func TestOFREPEventStreamAnnouncesAVendorChange(t *testing.T) {
 	require.NoError(t, os.WriteFile(vendor, []byte(`{}`), 0o600))
 	cfg.SyncProviders = append(cfg.SyncProviders, coresync.SourceConfig{URI: vendor, Provider: "file", Format: "versioned"})
 	rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, withFlagd(Components{
-		Endpoints:            flagdcomponents.Endpoints(),
+		Endpoints:            flagdcomponents.Components().Endpoints,
 		ConfigurationFormats: []configformat.Factory{versionedFactory{}},
 	}))
 	require.NoError(t, err)
