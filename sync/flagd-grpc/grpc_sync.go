@@ -94,6 +94,8 @@ func (g *Sync) Init(_ context.Context) error {
 		opts := make([]grpc.DialOption, 0, len(g.GrpcDialOptionsOverride)+len(g.DialOptions))
 		opts = append(opts, g.GrpcDialOptionsOverride...)
 		opts = append(opts, g.DialOptions...)
+		// the override owns the dial: the retry policy and the keepalive do not apply to it, the selector header does
+		opts = append(opts, g.Options.selectorOptions(g.Selector)...)
 		g.recordDial(opts)
 		rpcCon, err = grpc.NewClient(g.URI, opts...)
 	} else {
@@ -111,7 +113,9 @@ func (g *Sync) Init(_ context.Context) error {
 			g.Logger.Info(fmt.Sprintf("setting max receive message size %d bytes default 4MB", g.MaxMsgSize))
 			opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(g.MaxMsgSize)))
 		}
+		opts = append(opts, g.Options.connectionOptions()...)
 		opts = append(opts, g.DialOptions...)
+		opts = append(opts, g.Options.selectorOptions(g.Selector)...)
 		g.recordDial(opts)
 		rpcCon, err = grpc.NewClient(g.URI, opts...)
 	}
