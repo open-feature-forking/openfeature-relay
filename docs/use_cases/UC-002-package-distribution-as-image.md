@@ -8,7 +8,7 @@
 **Secondary Actors:** Image Build Environment, Container Registry  
 **Goal:** Ship a custom distribution as a multi-platform image in a container registry, built the same way flagd's own image is built today, so that Operators can run it.  
 **Trigger:** Distribution Builder decides to ship a custom distribution as an image  
-**Status:** Draft  
+**Status:** Implemented  
 
 **Requirements:** [FR-009, NFR-009, C-003](../requirements.md)
 
@@ -126,3 +126,12 @@ The Distribution Builder chooses the image name and tag of a custom distribution
 ### BR-007: FIPS Suffix
 
 A FIPS build of a distribution carries the `-fips` suffix and is published beside the regular image, never in its place.
+
+## Delivered by Later Use Cases
+
+This use case is `Implemented`: the reference Dockerfile builds a multi-platform image from a distribution source, as an OCI layout and not pushed (`test/image`). It covers the default and additional platforms, the local image (A2), the FIPS build (A3), the failed compilation that builds no image (A4), the same components as the binary, the minimal non-root runtime image and the pinned base images. These parts are accepted gaps of this use case, because they are behaviour of the Container Registry and of Docker, not of the Relay, or are delivered by another use case:
+
+| Gap | Delivered by |
+|-----|--------------|
+| Steps 7–8, A5 and A6: publishing to the Container Registry, its confirmation, its refusal and its absence. Nothing is pushed during the proof of concept | none; behaviour of the Container Registry (step 9 is proven on the local platform) |
+| BR-006: the image names of the standard distributions under `ghcr.io/open-feature/`, and their release | UC-012 |

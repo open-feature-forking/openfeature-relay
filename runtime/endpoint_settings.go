@@ -8,6 +8,7 @@ const (
 	flagEvaluationType = "flag-evaluation"
 	ofrepType          = "ofrep"
 	flagSyncType       = "flag-sync"
+	eventCollectorType = "event-collector"
 )
 
 // officialEndpointSettings maps the flags of flagd-full that Config carries to the plain-data settings of the
@@ -40,6 +41,15 @@ func officialEndpointSettings(c Config) map[string]map[string]any {
 			"cors":                           c.CORS,
 			"context-values":                 c.ContextValues,
 			"header-to-context-key-mappings": c.HeaderToContextKeyMappings,
+		},
+		// The event collector gets the flags it shares with OFREP, the CORS origins and the size limits, and nothing
+		// else: its port is its own setting (event-collector or endpoint-settings in the configuration file), and
+		// without one it opens none.
+		eventCollectorType: {
+			"service-name":             svcName,
+			"cors":                     c.CORS,
+			"max-request-body-bytes":   c.MaxRequestBodyBytes,
+			"max-request-header-bytes": c.MaxRequestHeaderBytes,
 		},
 		flagSyncType: {
 			"port":                     c.SyncServicePort,

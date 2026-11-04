@@ -130,10 +130,8 @@ An extension is referenced in a manifest by Go module path and version in the sa
 
 ## Delivered by Later Use Cases
 
-This use case is `Implemented` for the event sink side: the event sink factory interface and the pipeline in the core module that buffers, batches, retries and flushes on shutdown, the event sink contract tests, the runtime that subscribes the selected event sinks to the event bus and stops on an invalid event sink configuration, and `test/eventsink-example`, a webhook that receives the evaluation and configuration change events of a flagd-full distribution. These parts are delivered by the use cases named here, and are accepted gaps of this one:
+This use case is `Implemented` for the event sink side: the event sink factory interface and the pipeline in the core module that buffers, batches, retries and flushes on shutdown, the event sink contract tests, the runtime that subscribes the selected event sinks to the event bus and stops on an invalid event sink configuration, and `test/eventsink-example`, a webhook that receives the evaluation and configuration change events of a flagd-full distribution. UC-021 delivered the rest: the official webhook event sink and the event collector in flagd-full, and the operator settings for event sinks. These parts are delivered by the use cases named here, and are accepted gaps of this one:
 
 | Gap | Delivered by |
 |-----|--------------|
 | Main scenario steps 7–8, A4, BR-010, FR-003, FR-008 | UC-001 |
-| Tracking events and the evaluation events of in-process providers, from an official collector endpoint (BR-006, FR-039) | UC-021 |
-| Operator settings for event sinks in flagd-full | UC-021 |
