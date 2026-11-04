@@ -10,8 +10,10 @@
 // A testbed for another provider SDK, or for another vendor, implements Target and reuses the server and its tests.
 // The package imports the standard library only: it sits above the runtime and outlives it, so it cannot import it.
 //
-// Compatible with the launchpad of flagd-testbed v3.11.0 for every case that works there. Three quirks are fixed:
+// Compatible with the launchpad of flagd-testbed v3.11.0 for every case that works there. Four quirks are fixed:
 //   - a failed /start leaves the last good configuration remembered;
 //   - an unknown configuration is answered at once, naming it, instead of after the readiness timeout;
+//   - an unknown configuration no longer takes the target down: the launchpad kills flagd before it looks at the
+//     name, so the target and a pending restart stay as they were;
 //   - /change toggles the flag in memory and rewrites no file of the raw flags.
 package control

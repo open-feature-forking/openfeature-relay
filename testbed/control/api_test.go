@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -95,6 +96,39 @@ func TestUnknownConfigurationFromTheTarget(t *testing.T) {
 	require.Equal(t, `{"status":"error","message":"Failed to start flagd: unknown configuration \"ssl\""}`+"\n", body)
 	require.Equal(t, 2, len(target.log())-before, "the start only")
 	require.Zero(t, target.count("stop"))
+}
+
+// An unknown configuration changes nothing, a pending restart included: it still ends the outage.
+func TestUnknownConfigurationKeepsPendingRestart(t *testing.T) {
+	target := &fakeTarget{}
+	ts := newTestServer(t, target, nil)
+	starts := target.count("start-end")
+
+	ts.get(t, "/restart?seconds=1")
+	code, _ := ts.get(t, "/start?config=nope")
+	require.Equal(t, 500, code)
+
+	require.Eventually(t, func() bool { return target.count("start-end") == starts+1 && target.count("open") == 2 }, 5*time.Second, 10*time.Millisecond,
+		"the restart still happens, and opens the target: %v", target.log())
+}
+
+// A start that fails to get ready does not cancel a pending restart either.
+func TestFailedStartKeepsPendingRestart(t *testing.T) {
+	target := &fakeTarget{startFn: func(_ context.Context, config string) error {
+		if config == "broken" {
+			return errors.New("boom")
+		}
+		return nil
+	}}
+	ts := newTestServer(t, target, nil)
+	starts := target.count("start-end:default")
+
+	ts.get(t, "/restart?seconds=1")
+	code, _ := ts.get(t, "/start?config=broken")
+	require.Equal(t, 500, code)
+
+	require.Eventually(t, func() bool { return target.count("start-end:default") == starts+1 }, 5*time.Second, 10*time.Millisecond,
+		"the restart still happens: %v", target.log())
 }
 
 // Quirk 1 is fixed: a start that fails does not replace the configuration in use.
@@ -242,8 +276,15 @@ func TestChangeTimesOut(t *testing.T) {
 	require.Equal(t, "Failed to toggle changing flag: Flags were not updated in time: context deadline exceeded\n", body)
 	require.Equal(t, rendered, ts.rendered(t), "nothing is rendered")
 	gotDocument, gotVersion := ts.Document()
-	require.Equal(t, document, gotDocument, "the combined flags go back")
-	require.Equal(t, version, gotVersion)
+	require.NotEqual(t, document, gotDocument, "a timeout settles nothing, so the toggled document stays")
+	require.NotEqual(t, version, gotVersion)
+
+	// the target takes it in late; the next change toggles from the state that stayed
+	target.setLoad(nil)
+	code, body = ts.get(t, "/change")
+	require.Equal(t, 200, code)
+	require.Contains(t, body, "changed to 'foo'", "the toggle after the timeout starts from the toggled state")
+	require.Equal(t, ts.rendered(t), func() []byte { d, _ := ts.Document(); return d }())
 }
 
 // R3-1: the target rejects the document, so nothing is rendered and the combined flags stay.
@@ -310,6 +351,22 @@ func TestChangeDuringOutageRenders(t *testing.T) {
 	require.Equal(t, document, ts.rendered(t), "rendered again while the target is closed")
 }
 
+// /change after /stop: the target is closed and the runtime runs behind it, so the document is loaded and rendered.
+func TestChangeAfterStop(t *testing.T) {
+	target := &fakeTarget{}
+	ts := newTestServer(t, target, nil)
+	ts.get(t, "/stop")
+	loads := target.count("load")
+
+	code, _ := ts.get(t, "/change")
+
+	require.Equal(t, 200, code)
+	require.Equal(t, loads+1, target.count("load"))
+	document, _ := ts.Document()
+	require.Equal(t, document, ts.rendered(t))
+	require.Zero(t, target.count("start-begin")-1, "and nothing started again")
+}
+
 // R3-5: with no runtime to load into, /change fails at once and does not wait out its timeout.
 func TestChangeWithNoRuntimeFailsAtOnce(t *testing.T) {
 	target := &fakeTarget{loadFn: func(context.Context, []byte, string) error { return ErrNoRuntime }}
@@ -337,6 +394,8 @@ func TestChangeWithoutTheChangingFlagFails(t *testing.T) {
 // R3-6: one lock for every call, so a Load never overlaps a Start.
 func TestChangeDuringStartIsSerialized(t *testing.T) {
 	release := make(chan struct{})
+	releaseOnce := sync.OnceFunc(func() { close(release) })
+	t.Cleanup(releaseOnce) // a failed assertion must not leave the start blocked
 	target := &fakeTarget{}
 	target.startFn = func(_ context.Context, config string) error {
 		if config == "ssl" {
@@ -361,15 +420,17 @@ func TestChangeDuringStartIsSerialized(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	require.Zero(t, target.count("load"), "the change waits for the start: %v", target.log())
 
-	close(release)
+	releaseOnce()
 	require.Equal(t, 200, <-started)
 	require.Equal(t, 200, <-changed)
 	calls := target.log()
-	require.Equal(t, []string{"start-begin:ssl", "start-end:ssl", "load"}, calls[len(calls)-3:])
+	require.Equal(t, []string{"start-begin:ssl", "start-end:ssl", "open", "load"}, calls[len(calls)-4:])
 }
 
 func TestChangeDuringTheDelayedStartIsSerialized(t *testing.T) {
 	release := make(chan struct{})
+	releaseOnce := sync.OnceFunc(func() { close(release) })
+	t.Cleanup(releaseOnce)
 	target := &fakeTarget{}
 	ts := newTestServer(t, target, nil)
 	target.setStart(func(context.Context, string) error {
@@ -388,7 +449,7 @@ func TestChangeDuringTheDelayedStartIsSerialized(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	require.Zero(t, target.count("load"))
 
-	close(release)
+	releaseOnce()
 	require.Equal(t, 200, <-changed)
 }
 
