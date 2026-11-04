@@ -7,7 +7,7 @@
 **Primary Actor:** Operator  
 **Goal:** Replace a running flagd from before the builder with flagd-full without changing the start command, configuration file, environment variables, ports or image name, and keep the same evaluation results.  
 **Trigger:** Operator decides to move a flagd deployment to the first release built as flagd-full  
-**Status:** Draft  
+**Status:** Implemented  
 
 **Requirements:** [FR-020, FR-033, FR-034, FR-052, NFR-002, NFR-007, C-003](../requirements.md)
 
@@ -61,7 +61,7 @@
 **Trigger:** A source does not deliver flag configurations at startup (step 4)  
 **Flow:**
 
-1. System keeps retrying the source and reports it as not ready, with the same retry and readiness behaviour as the previous flagd.
+1. System keeps retrying the source and reports it as not ready, with the retry and readiness behaviour that the migration notes describe: a failed first fetch or connect no longer exits the process.
 2. Operator restores access to the source.
 3. Use case continues at step 5.
 
@@ -120,3 +120,13 @@ Binary archives follow today's release pattern with the distribution name in the
 ### BR-008: No Staleness Limit by Default
 
 flagd-full applies no staleness limit unless the Operator configures one, so readiness behaves as before the upgrade (C-003). With a configured limit, readiness fails while a source has not delivered within it (FR-052).
+
+## Delivered by Later Use Cases
+
+This use case is `Implemented`: flagd-full is the committed output of the Builder, its binary and image are built from that source with today's names, tags and contents, the upgrade differential shows no difference but the accepted ones, the spans, the startup time and the test-harness suites match, and the migration notes list every accepted change. These parts are delivered by the use cases named here, and are accepted gaps of this one:
+
+| Gap | Delivered by |
+|-----|--------------|
+| Publishing the release: tagging, pushing the images and archives, signing and the SBOM attestations (the release build steps and their dry run exist) | UC-012 |
+| `go install github.com/open-feature/flagd/flagd@<version>`, which needs published component modules without `replace` directives (a known break since UC-014, listed in the migration notes) | UC-012 |
+| Readiness that fails past a configured staleness limit (BR-008 holds, because flagd offers no limit today) | UC-019 |

@@ -35,6 +35,9 @@ accepted:
     item: "The operator source delivers `spec.flagSpec` as written"
     covered_by: ["sync/openfeature-operator tests"]
   - kind: "#78"
+    item: "`flagd components` lists the components instead of failing"
+    covered_by: ["runtime/cmd TestComponentsListsInventory", "runtime/cmd TestComponentsJSONSameContentAsText"]
+  - kind: "#78"
     item: "A file read or decode error keeps the current flags"
     covered_by: ["sync/file tests"]
   - kind: "#78"
@@ -55,4 +58,5 @@ accepted:
   - kind: known-break
     item: "go install github.com/open-feature/flagd/flagd@<version> fails: flagd/go.mod carries local replace directives"
     owner: UC-012
+    guide: "go install github.com/open-feature/flagd/flagd@<version>"
     note: "since UC-014; restoring it needs published component modules without replaces. The binary archives and images are the supported install paths."

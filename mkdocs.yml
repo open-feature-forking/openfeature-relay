@@ -124,6 +124,7 @@ nav:
     - 'Guides':
       - 'Migrating to Flag Sets': 'guides/migrating-to-flag-sets.md'
       - 'Running A/B Experiments': 'guides/experimentation.md'
+      - 'Upgrading to flagd-full': 'guides/upgrade-to-flagd-full.md'
     - 'OpenFeature Providers':
       - 'providers/index.md'
       - 'Go': 'providers/go.md'
@@ -140,6 +141,7 @@ nav:
         - 'Overview': 'reference/flagd-cli/flagd.md'
         - 'Start': 'reference/flagd-cli/flagd_start.md'
         - 'Version': 'reference/flagd-cli/flagd_version.md'
+        - 'Components': 'reference/flagd-components.md'
       - 'Sync Configuration': 'reference/sync-configuration.md'
       - 'Selector Syntax': 'reference/selector-syntax.md'
       - 'gRPC sync service': 'reference/grpc-sync-service.md'

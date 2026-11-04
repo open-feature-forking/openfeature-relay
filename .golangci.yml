@@ -55,6 +55,30 @@ linters:
               desc: a configuration format knows no evaluator engine
             - pkg: github.com/open-feature-forking/openfeature-relay/sync/
               desc: a configuration format knows no sync provider
+        # The Flagsmith engine module has no transport, telemetry or platform client of its own. The module boundaries
+        # cover the packages transitively; net/http stays out of its own imports, though zap, through the core logger,
+        # still links it.
+        flagsmith-engine-boundary:
+          files:
+            - "!$test"
+            - "**/contrib/flagsmith/engine/**"
+          deny:
+            - pkg: net/http
+              desc: the engine module imports no transport
+            - pkg: go.opentelemetry.io
+              desc: the engine module imports no telemetry
+            - pkg: google.golang.org/grpc
+              desc: the engine module imports no transport
+            - pkg: connectrpc.com
+              desc: the engine module imports no transport
+            - pkg: github.com/go-resty
+              desc: the engine module imports no HTTP client
+            - pkg: github.com/open-feature-forking/openfeature-relay/sync/
+              desc: an engine module knows no sync provider
+            - pkg: github.com/open-feature-forking/openfeature-relay/telemetry/
+              desc: an engine module knows no telemetry provider
+            - pkg: github.com/open-feature-forking/openfeature-relay/service/
+              desc: an engine module knows no service endpoint
         # flagd's service endpoints and runtime record through the telemetry provider they are injected with.
         # Depguard checks direct imports only: the module boundaries cover the service endpoints transitively. The
         # runtime reaches OpenTelemetry through the sync providers of the GCS module, which no check can forbid yet.

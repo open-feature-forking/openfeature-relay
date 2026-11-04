@@ -83,6 +83,10 @@ type SourceConfig struct {
 	// required to purge them.
 	IncrementalUpdates bool              `json:"incrementalUpdates,omitempty"`
 	Headers            map[string]string `json:"headers,omitempty"`
+	// HeadersFrom names the environment variable or file that holds the value of a header, so that a credential is
+	// neither in the configuration nor on the command line. It is read when the source is created and merged over
+	// Headers (ResolveHeaders). Components that send headers read it.
+	HeadersFrom map[string]HeaderSource `json:"headersFrom,omitempty"`
 
 	OAuth *OAuthCredentialHandler `json:"oauth,omitempty"`
 
