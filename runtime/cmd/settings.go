@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/distribution"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -143,6 +144,48 @@ func withComponentsHint(err error) error {
 		return err
 	}
 	return fmt.Errorf("%w%s", err, componentsHint)
+}
+
+// unsupportedSourceError is the error for a source URI none of the distribution's sync providers handles. A
+// distribution whose manifest has the hint on names the source and the schemes its sync providers handle (UC-010 A2); one
+// that has it off, flagd-full, keeps the text it always had. A distribution that lists no sync providers, which is a
+// hand-written main, keeps that text too.
+func unsupportedSourceError(err error, uris []string, c distribution.Components) error {
+	if !ComponentsHint {
+		return err
+	}
+	var factories []sync.SchemeFactory
+	schemes := map[string]bool{}
+	for _, f := range c.Sync {
+		if sf, ok := f.(sync.SchemeFactory); ok {
+			factories = append(factories, sf)
+			for _, s := range sf.Schemes() {
+				schemes[s] = true
+			}
+		}
+	}
+	if len(factories) == 0 {
+		return withComponentsHint(err)
+	}
+	for _, uri := range uris {
+		claimed := false
+		for _, f := range factories {
+			if _, ok := f.ParseURI(uri); ok {
+				claimed = true
+				break
+			}
+		}
+		if !claimed {
+			list := make([]string, 0, len(schemes))
+			for s := range schemes {
+				list = append(list, s)
+			}
+			sort.Strings(list)
+			return withComponentsHint(fmt.Errorf("invalid sync uri argument: %s, the distribution %s has no sync provider for it and handles %s",
+				uri, Distribution, strings.Join(list, ", ")))
+		}
+	}
+	return withComponentsHint(err)
 }
 
 // absentSettingsError returns the error that names every explicit setting none of whose components the distribution

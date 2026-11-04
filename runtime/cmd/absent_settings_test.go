@@ -15,6 +15,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/distribution"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
+	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	"github.com/open-feature-forking/openfeature-relay/runtime"
 	"github.com/stretchr/testify/require"
@@ -220,4 +221,36 @@ func TestUnknownSchemeHint(t *testing.T) {
 	require.Equal(t, 1, without.exit, without.output)
 	require.Contains(t, without.output, text)
 	require.NotContains(t, without.output, hint)
+}
+
+// prefixSync is a sync component that handles the sources starting with its schemes.
+type prefixSync struct{ schemes []string }
+
+func (p prefixSync) Type() string      { return p.schemes[0] }
+func (p prefixSync) Schemes() []string { return p.schemes }
+func (p prefixSync) ParseURI(uri string) (coresync.SourceConfig, bool) {
+	for _, s := range p.schemes {
+		if strings.HasPrefix(uri, s) {
+			return coresync.SourceConfig{URI: uri, Provider: p.schemes[0]}, true
+		}
+	}
+	return coresync.SourceConfig{}, false
+}
+
+// TestUnsupportedSourceNamesTheSchemes pins UC-010 A2: a distribution with the hint on names the source whose scheme it
+// does not support and the schemes its sync providers handle; with the hint off the error keeps its text.
+func TestUnsupportedSourceNamesTheSchemes(t *testing.T) {
+	defer func(hint bool, name string) { ComponentsHint, Distribution = hint, name }(ComponentsHint, Distribution)
+	Distribution = "flagd-minimal"
+	c := distribution.Components{Sync: []coresync.Factory{prefixSync{[]string{"file:"}}, prefixSync{[]string{"http://", "https://"}}}}
+	original := errors.New("invalid sync uri argument: s3://bucket/flags.json, must start with 'file:' or 's3://'")
+	uris := []string{"file:/flags.json", "s3://bucket/flags.json"}
+
+	ComponentsHint = true
+	err := unsupportedSourceError(original, uris, c)
+	require.EqualError(t, err, "invalid sync uri argument: s3://bucket/flags.json, the distribution flagd-minimal has no sync provider for it and handles "+
+		`file:, http://, https://; run "flagd components" to list the components of this distribution`)
+
+	ComponentsHint = false
+	require.Equal(t, original, unsupportedSourceError(original, uris, c))
 }
