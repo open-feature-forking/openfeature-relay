@@ -397,11 +397,28 @@ func TestWaitAcceptedAfterAccept(t *testing.T) {
 		require.ElementsMatch(t, []string{"f1", "f2"}, r.flagKeys(t), "the store holds the version when the wait returns")
 	})
 
-	t.Run("an older accepted version is still known", func(t *testing.T) {
+	t.Run("an earlier version is waited for again once the source has moved on", func(t *testing.T) {
 		a.set(flagsJSON("f3"), "v3")
 		a.push(ctx)
 		require.NoError(t, r.rt.WaitAccepted(ctx, "a", "v3"))
-		require.NoError(t, r.rt.WaitAccepted(ctx, "a", "v2"), "v3 replaced v2, which was accepted")
+		short, stop := context.WithTimeout(ctx, 50*time.Millisecond)
+		defer stop()
+		require.ErrorIs(t, r.rt.WaitAccepted(short, "a", "v2"), context.DeadlineExceeded, "v3 replaced v2 in the store")
+	})
+
+	t.Run("a version the source goes back to is waited for", func(t *testing.T) {
+		// v1, v2, v1 again: the store serves v3 until the third delivery lands
+		waited := make(chan error, 1)
+		go func() { waited <- r.rt.WaitAccepted(ctx, "a", "v1") }()
+		select {
+		case err := <-waited:
+			t.Fatalf("WaitAccepted returned while the store still serves v3: %v", err)
+		case <-time.After(50 * time.Millisecond):
+		}
+		a.set(flagsJSON("f1"), "v1")
+		a.push(ctx)
+		require.NoError(t, <-waited)
+		require.Equal(t, []string{"f1"}, r.flagKeys(t))
 	})
 
 	t.Run("a version that never comes ends with the context", func(t *testing.T) {
@@ -503,4 +520,45 @@ func TestResetPublishesTheReloadOfAnUnchangedDocument(t *testing.T) {
 	require.NoError(t, r.rt.Reset(ctx))
 	require.Eventually(t, func() bool { return count() == 1 }, resetTimeout, time.Millisecond,
 		"the reload is announced after a reset")
+}
+
+// A delivery that was queued before the wipe is accepted after it; Reset still returns with the reload in the store.
+func TestResetEndsWithTheReloadNotAStaleDelivery(t *testing.T) {
+	a := newFakeSource("a", flagsJSON("old"), "v1")
+	r := newResettable(t, a)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*resetTimeout)
+	defer cancel()
+
+	for i := range 100 {
+		r.rt.mu.Lock() // the delivery loop takes a delivery and waits for the lock, as it does when busy
+		a.set(flagsJSON("stale"), fmt.Sprintf("stale%d", i))
+		a.push(ctx)
+		require.Eventually(t, func() bool { return len(r.rt.deliveries) == 0 }, resetTimeout, time.Microsecond)
+		a.set(flagsJSON("new"), fmt.Sprintf("new%d", i))
+		reset := make(chan error, 1)
+		go func() { reset <- r.rt.Reset(ctx) }()
+		time.Sleep(time.Millisecond)
+		r.rt.mu.Unlock()
+
+		require.NoError(t, <-reset)
+		require.Equal(t, []string{"new"}, r.flagKeys(t), "round %d", i)
+	}
+}
+
+func TestResetEndsWhenTheRuntimeStops(t *testing.T) {
+	a := newFakeSource("a", flagsJSON("f1"), "v1")
+	r := newResettable(t, a)
+	a.holdResync()
+
+	reset := make(chan error, 1)
+	go func() { reset <- r.rt.Reset(context.Background()) }()
+	require.Eventually(t, func() bool { return a.resyncs.Load() == 1 }, resetTimeout, time.Millisecond)
+	r.cancel()
+
+	select {
+	case err := <-reset:
+		require.ErrorContains(t, err, "stopped")
+	case <-time.After(resetTimeout):
+		t.Fatal("Reset did not return after the runtime stopped")
+	}
 }
