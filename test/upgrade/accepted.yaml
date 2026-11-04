@@ -22,6 +22,9 @@ accepted:
     item: "`awssdk=v1` on an `s3://` source stops startup"
     covered_by: ["sync/builder blob_sources_test.go"]
   - kind: "#78"
+    item: "`event-sinks`, `middleware` and `endpoint-settings` in the configuration file are no longer ignored"
+    covered_by: ["runtime/cmd TestInvalidExtensionSettingsStopStartup", "runtime/cmd TestUnknownConfigKeysIgnored"]
+  - kind: "#78"
     item: "Flag sync's `Last-Modified` moves only on a configuration change"
     covered_by: ["service/flag-sync contract_test.go"]
   - kind: "#78"
