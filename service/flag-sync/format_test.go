@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -9,7 +10,9 @@ import (
 
 	syncv1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/sync/v1"
 	"connectrpc.com/connect"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	flagdService "github.com/open-feature-forking/openfeature-relay/service/transport"
 	"github.com/stretchr/testify/require"
@@ -77,14 +80,16 @@ func TestNoFormatHeaderServesFlagdUnchanged(t *testing.T) {
 }
 
 func TestFormatHeaderServesVendorDocument(t *testing.T) {
-	s := newVendorStore(t, "s1", "s2")
+	s := newVendorStore(t, "s1", "s2", "s3")
 	applyVendor(t, s, "s1", "a", "v1", `{"env":"a"}`)
 	applyVendor(t, s, "s2", "b", "v1", "environment b, not JSON at all")
+	applyVendor(t, s, "s3", "", "v1", "the unnamed flag set")
 	handler := newFormatHandler(s)
 
 	tests := []struct{ name, selector, want string }{
 		{"by source", "source=s1", `{"env":"a"}`},
 		{"by flag set", "flagSetId=b", "environment b, not JSON at all"},
+		{"by the unnamed flag set", "flagSetId=", "the unnamed flag set"},
 	}
 	for _, tt := range tests {
 		t.Run("FetchAllFlags "+tt.name, func(t *testing.T) {
@@ -189,6 +194,7 @@ func TestDocumentWithoutTextInternal(t *testing.T) {
 
 	require.Equal(t, connect.CodeInternal, connect.CodeOf(err))
 	require.ErrorContains(t, err, vendorFormat)
+	require.ErrorContains(t, err, "store.TextDocument", "it points an extension author at the seam")
 }
 
 func TestNoDocumentNotFoundThenStreamWaits(t *testing.T) {
@@ -261,4 +267,50 @@ func TestUnchangedVersionSendsNothing(t *testing.T) {
 
 	cancel()
 	require.NoError(t, <-done)
+}
+
+// The endpoint wakes a stream of a vendor format through the configuration change events of the runtime, as it dates
+// its flags: a stream receives the new text of a document whose version changed, over the wire.
+func TestVendorStreamFollowsConfigurationChangeEvents(t *testing.T) {
+	const port = 18090
+
+	s := newVendorStore(t, "s1")
+	applyVendor(t, s, "s1", "", "v1", "first")
+	bus := events.NewBus()
+	initialized := make(chan struct{})
+	close(initialized)
+
+	endpoint, err := Factory{}.Create(service.Settings{
+		Store: s, Bus: bus, Initialized: initialized, Logger: logger.NewLogger(nil, false),
+		Formats: []string{"flagd", vendorFormat},
+		Config:  map[string]any{ConfigKey: SvcConfigurations{Port: port, Sources: []string{"s1"}}},
+	})
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- endpoint.Serve(ctx) }()
+	t.Cleanup(func() {
+		cancel()
+		require.NoError(t, <-done)
+	})
+
+	client := connectClient(t, fmt.Sprintf("http://localhost:%d", port), "")
+	fetch := connect.NewRequest(&syncv1.FetchAllFlagsRequest{})
+	fetch.Header().Set(FormatHeader, vendorFormat)
+	fetchWithRetry(t, client, fetch)
+
+	req := connect.NewRequest(&syncv1.SyncFlagsRequest{})
+	req.Header().Set(FormatHeader, vendorFormat)
+	stream, err := client.SyncFlags(ctx, req)
+	require.NoError(t, err)
+	defer stream.Close()
+	require.True(t, stream.Receive(), "the first document: %v", stream.Err())
+	require.Equal(t, "first", stream.Msg().GetFlagConfiguration())
+
+	applyVendor(t, s, "s1", "", "v2", "second")
+	events.PublishConfigurationChange(bus, events.ConfigurationChange{Source: "s1", Format: vendorFormat, Version: "v2"})
+
+	require.True(t, stream.Receive(), "the changed document: %v", stream.Err())
+	require.Equal(t, "second", stream.Msg().GetFlagConfiguration())
 }

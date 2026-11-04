@@ -55,7 +55,7 @@ func formatDocument(s store.IStore, format string, selector *store.Selector) (st
 			continue
 		}
 		for _, d := range docs.Documents(format, source) {
-			if id := selector.FlagSetId(); id != "" && d.FlagSet != id {
+			if id, named := selector.DocumentFlagSet(); named && d.FlagSet != id {
 				continue
 			}
 			matches = append(matches, d)
@@ -78,7 +78,8 @@ func formatDocument(s store.IStore, format string, selector *store.Selector) (st
 	text, ok := store.DocumentText(matches[0])
 	if !ok {
 		return store.Document{}, "", fetchError{kind: fetchDocumentNoText, cause: fmt.Errorf(
-			"the %s configuration format keeps its documents in a form flag sync cannot send", format)}
+			"the %s configuration format keeps its documents in a form flag sync cannot send: "+
+				"their values do not implement store.TextDocument", format)}
 	}
 	return matches[0], text, nil
 }
