@@ -64,10 +64,18 @@ class BuildWorkflow(unittest.TestCase):
 
     def test_gated_jobs(self):
         gate = "if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'"
-        for name in ("fips", "docker-local", "release-dry-run"):
+        for name in ("fips", "docker-local"):
             with self.subTest(job=name):
                 self.assertIn(gate, self.job(name))
         self.assertIn("if: github.event_name == 'pull_request'", self.job("benchmark"))
+
+    def test_release_dry_run_runs_when_its_inputs_change(self):
+        """Q16: the job has a gate step, like upgrade-test: FULL_CI, a manual run, or a change to the release's inputs."""
+        job = self.job("release-dry-run")
+        self.assertNotIn("\n    if:", job)
+        self.assertIn('[ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]', job)
+        self.assertIn(r"^\.github/scripts/testdata/|^\.github/workflows/release-please\.yaml$|^builder/|^distributions/|Dockerfile$", job)
+        self.assertIn("if: steps.gate.outputs.run == 'true'", job)
 
 
 class BuildDockerfiles(unittest.TestCase):

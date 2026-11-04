@@ -68,7 +68,7 @@ All terms are defined in the [glossary](docs/glossary.md).
 |--------------|----------|---------|
 | **flagd-full** | every component maintained in this repository | today's flagd, unchanged |
 | **flagd-sync** | sync providers, flagd's format, flag sync — no evaluator | a configuration proxy: in-process providers get validated flag configurations from one place |
-| flagd-minimal, flagd-cloud, flagd-kubernetes | subsets | smaller binaries without the SDKs you don't use |
+| flagd-minimal, flagd-minimal-otel, flagd-cloud, flagd-kubernetes | subsets | smaller binaries without the SDKs you don't use |
 | **vendor distribution** | a vendor's sync provider and engine behind OFREP | e.g. the Flagsmith engine or GO Feature Flag's, serving OpenFeature clients in place of the vendor's edge proxy |
 | your own | whatever your manifest lists | custom sources, endpoints, sinks |
 

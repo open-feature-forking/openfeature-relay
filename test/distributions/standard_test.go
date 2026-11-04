@@ -26,6 +26,7 @@ var (
 	allPortFlags = []string{"port", "management-port", "sync-port", "ofrep-port"}
 	standard     = []standardDistribution{
 		{"flagd-minimal", allPortFlags, true},
+		{"flagd-minimal-otel", allPortFlags, true},
 		{"flagd-cloud", allPortFlags, true},
 		{"flagd-kubernetes", allPortFlags, true},
 		{"flagd-sync", []string{"management-port", "sync-port"}, false},
@@ -70,6 +71,8 @@ func importedModules(t *testing.T, name string) map[string]bool {
 var forbiddenModules = map[string][]string{
 	// NFR-004
 	"flagd-minimal": {"k8s.io/", "cloud.google.com/", "github.com/aws/", "github.com/Azure/", "go.opentelemetry.io/otel/sdk"},
+	// flagd-minimal plus OpenTelemetry: the SDK is the one module of NFR-004 it adds
+	"flagd-minimal-otel": {"k8s.io/", "cloud.google.com/", "github.com/aws/", "github.com/Azure/"},
 	// no operator source, so no Kubernetes client
 	"flagd-cloud": {"k8s.io/", "sigs.k8s.io/"},
 	// no cloud storage source
@@ -101,6 +104,18 @@ func TestStandardModuleGraphs(t *testing.T) {
 			}
 			require.True(t, linkedModules[relay+"configformat/flagd"], "%s reads flagd's configuration format", d.name)
 		})
+	}
+}
+
+// TestMinimalOtelLinksTheSDK pins that flagd-minimal-otel is flagd-minimal plus OpenTelemetry: its binary links the
+// OpenTelemetry SDK, which flagd-minimal does not (NFR-004), and none of the modules the cloud and the operator bring.
+func TestMinimalOtelLinksTheSDK(t *testing.T) {
+	linkedModules := modulesOf(t, builtBinary(t, "flagd-minimal-otel"))
+	require.True(t, linkedModules["go.opentelemetry.io/otel/sdk"], "flagd-minimal-otel records telemetry with the OpenTelemetry SDK")
+	for module := range linkedModules {
+		for _, prefix := range []string{"k8s.io/", "cloud.google.com/", "github.com/aws/", "github.com/Azure/"} {
+			require.False(t, strings.HasPrefix(module, prefix), "flagd-minimal-otel links %s", module)
+		}
 	}
 }
 
@@ -159,7 +174,7 @@ func TestMinimalRecordsNoTelemetry(t *testing.T) {
 // TestVersionVerboseNamesEachDistribution pins UC-010 step 8: the running binary names the distribution and its
 // manifest version.
 func TestVersionVerboseNamesEachDistribution(t *testing.T) {
-	for _, name := range []string{"flagd-full", "flagd-minimal", "flagd-cloud", "flagd-kubernetes", "flagd-sync"} {
+	for _, name := range []string{"flagd-full", "flagd-minimal", "flagd-minimal-otel", "flagd-cloud", "flagd-kubernetes", "flagd-sync"} {
 		t.Run(name, func(t *testing.T) {
 			exit, out := runBinary(t, builtBinary(t, name), "version", "--verbose")
 			require.Zero(t, exit, out)

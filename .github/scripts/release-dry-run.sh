@@ -2,7 +2,7 @@
 # Runs the build steps of a release without publishing or signing anything, and checks what a release would produce
 # against what upstream flagd's release produces (UC-009 BR-007): the archives of flagd and flagd-proxy by name and
 # content, the version line, the build info path and the FIPS tags, and the image of flagd with its tags, entrypoint and
-# user. The names are literal, not derived from the repository this runs in, which would render other names here.
+# user, and the standard distributions (release-dry-run-distributions.sh). The names are literal, not derived from the repository this runs in, which would render other names here.
 #
 # usage: [DRY_RUN_ITEMS="flagd"] release-dry-run.sh [version without v] [commit] [date]
 #
@@ -123,6 +123,11 @@ expect_equal "image: flagd version" "flagd: v${version} (${commit}), built at: $
   "$(docker run --rm "ghcr.io/open-feature/flagd:v${version}" version | grep '^flagd:')"
 note "- image base: $(grep '^FROM gcr.io/distroless' flagd/build.Dockerfile | tail -1)"
 note "- platforms in the release workflow: $(grep -m1 'platforms: linux' "${workflow}" | sed 's/^ *//')"
+
+# the standard distributions (UC-012); DRY_RUN_DISTRIBUTIONS=off skips them
+if [ "${DRY_RUN_DISTRIBUTIONS:-on}" != off ]; then
+  .github/scripts/release-dry-run-distributions.sh "${version}" "${commit}" "${date}" "${out}" || fail "the standard distributions"
+fi
 
 note ""
 if [ "${failures}" -gt 0 ]; then note "${failures} check(s) failed."; exit 1; fi
