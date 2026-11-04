@@ -9,7 +9,7 @@ GO_LIB_MODULE_DIRS := ./core ./sync/file ./sync/flagd-grpc ./sync/http ./sync/op
 
 # The modules flagd-full is made of besides the library ones: its main module, the runtime and the service endpoints
 # (UC-001 Q7). They are tested, benchmarked and pinned like the library modules.
-FLAGD_MODULE_DIRS := ./flagd ./runtime ./service/transport ./service/flag-evaluation ./service/ofrep ./service/flag-sync
+FLAGD_MODULE_DIRS := ./flagd ./runtime ./service/transport ./service/flag-evaluation ./service/ofrep ./service/flag-sync ./service/event-collector
 
 # The contrib component modules (vendor integrations). They are tested and pinned like the library modules, but stay
 # out of GO_LIB_MODULE_DIRS: they are not what embedders import, and an engine that hashes with MD5 cannot run under
