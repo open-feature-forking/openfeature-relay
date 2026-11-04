@@ -122,7 +122,10 @@ func TestHTTPDeliveryCharacterization(t *testing.T) {
 		for range 2 {
 			require.NoError(t, provider.ReSync(context.Background(), deliveries))
 			require.Empty(t, fs.nextRequest(t).Get("If-None-Match"))
-			require.Equal(t, sync.DataSync{FlagData: flagsA, Source: uri, IncrementalUpdates: true}, <-deliveries)
+			got := <-deliveries
+			require.NotEmpty(t, got.Version, "a fetched delivery carries its source version")
+			got.Version = "" // the digest and the ETag are the fetching provider's own tests' business
+			require.Equal(t, sync.DataSync{FlagData: flagsA, Source: uri, IncrementalUpdates: true}, got)
 		}
 	})
 

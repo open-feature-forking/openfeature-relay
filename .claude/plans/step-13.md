@@ -39,7 +39,7 @@
 **Base.** `main` @ a684ba1e. Step 10 is merged: operator settings for extension components, `dist.components_hint`, the standard manifests and the `cmd:` entry. Issue: #110. "R" is `github.com/open-feature-forking/openfeature-relay`.
 
 **Drop-in rule for this step.** Today's provider suites run **unchanged** against our testbed:
-- the same launchpad endpoints, paths and payloads, without the three quirks of Q12;
+- the same launchpad endpoints, paths and payloads, without the four quirks of Q12;
 - the same ports, image paths, working directory, volume, healthcheck and compose file;
 - outages that close listeners, so connections are refused and streams break;
 - a store that holds exactly the sources' flags after every start.
@@ -126,8 +126,11 @@ Every question is decided. Each keeps its number; the decided option is stated f
 
     ```go
     type Target interface {
-        // Start cleans the store and reloads every source, the combined document included; it returns when ready.
+        // Start cleans the store and reloads every source, the combined document included; it returns when ready,
+        // with the target still closed.
         Start(ctx context.Context, config string) error
+        // Open makes the ready target reachable: it opens the listener gate.
+        Open(ctx context.Context) error
         Stop(ctx context.Context) error
         // Load hands the target the combined document and returns once the store has accepted that version.
         Load(ctx context.Context, document []byte, version string) error
@@ -135,6 +138,7 @@ Every question is decided. Each keeps its number; the decided option is stated f
     }
     ```
 
+  - **The order of a start:** `Start` leaves the target ready but closed. The server then renders `allFlags.json` (Q25) and calls `Open`. If `Open` fails, the server stops the target and the start fails. #157 implements it this way.
   - **What the server does, the same for every target:**
     - the four launchpad calls, their texts and status codes;
     - `/restart`'s delay and the cancellation of a pending restart by a later call;
@@ -209,16 +213,23 @@ Every question is decided. Each keeps its number; the decided option is stated f
 
 - **Q11, fault injection. (decided: a follow-up)** No fault middleware, no `/faults` and no new fault types in step 13. UC-001's gap "no repository manifest compiles middleware with `cmd:`" stays open for that follow-up.
 
-- **Q12, fidelity. (decided: compatible, quirks fixed)** Same endpoints, paths, methods, payload shapes (with the trailing newline), messages and status codes for every case that works today. The three quirks go:
+- **Q12, fidelity. (decided: compatible, quirks fixed)** Same endpoints, paths, methods, payload shapes (with the trailing newline), messages and status codes for every case that works today. The four quirks go:
 
   | # | Quirk at v3.11.0 | Revision 3 | A pinned suite depends on it? |
   |---|---|---|---|
   | 1 | A failed `/start?config=nope` is remembered, so a later `/restart` or bare `/start` fails too | A failed start leaves the last good configuration remembered | No. The only names at v2.3.0 are `default`, `ssl` and `socket`, and `socket` is excluded by `@unixsocket` in CI |
   | 2 | An unknown configuration answers after the 10 s readiness timeout, as "health check timed out" | It answers at once (Q24 for the code) | No. Every caller checks `200` only |
   | 3 | `/change` rewrites `changing-flag.json` through a narrow struct | No file is rewritten; the in-memory toggle keeps every field | No for RPC and in-process. File mode sees the rendered file (Q21), whose `changing-flag` keeps `state`, `variants` and `defaultVariant` |
+  | 4 | `/start?config=nope` cancels a pending restart and kills flagd before it fails | An unknown configuration changes nothing: no pending restart is cancelled, and the gate, the runtime and the remembered configuration stay as they were (Q24) | No. No pinned scenario names an unknown configuration |
 
-  - C pins the three quirks on today's image as **launchpad-only** cases.
-  - **Kept, because suites depend on them:** any HTTP method; `/restart`'s immediate answer and its cancellation of a pending restart; `/stop`'s cancellation; the 10 s limit for a start that doesn't get ready; the 5 s limit for `/change`.
+  - C pins the four quirks on today's image as **launchpad-only** cases.
+  - **Kept, because suites depend on them:**
+    - any HTTP method;
+    - `/restart`'s immediate answer and its cancellation of a pending restart;
+    - `/stop`'s cancellation;
+    - **every `/start` cancels a pending `/restart`**, a failed start of a known configuration included. The only exception is an unknown configuration (quirk 4), which changes nothing;
+    - the 10 s limit for a start that doesn't get ready;
+    - the 5 s limit for `/change`.
 
 - **Q13, the image. (decided)** `distributions/flagd-testbed/Dockerfile`, with the repository root as context:
   - `relay-builder` builds the binary;
@@ -295,7 +306,8 @@ Every question is decided. Each keeps its number; the decided option is stated f
   - *Rejected:* a child process on a switch; unsupported.
 
 - **Q23, how the testbed source replaces `flags/allFlags.json`. (decided: (a))** The configs stay upstream's (BR-007).
-  - `runtime/cmd.LoadConfig`, given a rewrite rule by the testbed `cmd`, turns the file source `flags/allFlags.json` into `testbed:allFlags`. Every other source stays as written.
+  - `runtime/cmd.LoadConfig`, given a rewrite rule by the testbed `cmd`, swaps the sync provider behind the source `flags/allFlags.json` for the testbed source, and **keeps the URI `flags/allFlags.json`**. Every other source stays as written.
+  - **Why the URI stays:** selectors address sources by URI (`source=flags/allFlags.json`), and flags carry their source in the store. With the URI renamed to `testbed:allFlags`, the both-images comparison failed "Flag disabled in one flag set, enabled in another".
   - L's `TestLoadConfigRewriteTouchesOneSource` checks each of the four configs.
   - *Rejected:* edited copies of the configs; the testbed source claiming the `flags/` prefix.
 
@@ -313,7 +325,7 @@ Every question is decided. Each keeps its number; the decided option is stated f
     - A file-mode provider's watcher therefore sees a create of the temp file and a rename, never a partly written `allFlags.json`.
   - **Options:**
     - **(a) The control module renders, triggered by the store's confirmation.** It renders after `Target.Load` or `Target.Start` has returned, which is when the store holds that version. It writes the bytes it encoded with the launchpad's encoder, because they are the bytes the store accepted. One encoder makes both the runtime's input and the file, and nothing runs asynchronously, so `/change` and `/start` answer only once the file is in place, as today.
-    - **(b) A small event sink** (UC-020) subscribed to configuration change events for `testbed:allFlags`. It fits the component model, but the pipeline is asynchronous and batched (default flush 1 s). Events carry flag keys and versions, not bodies, so the sink would have to ask for the document anyway, and `/change` would have no completion signal to wait on.
+    - **(b) A small event sink** (UC-020) subscribed to configuration change events for the testbed source (URI `flags/allFlags.json`). It fits the component model, but the pipeline is asynchronous and batched (default flush 1 s). Events carry flag keys and versions, not bodies, so the sink would have to ask for the document anyway, and `/change` would have no completion signal to wait on.
     - **(c) Re-encoding from the store's parsed flags.** It reads the "real" store, but it is not byte-compatible: it loses fields the flag model drops, and it formats numbers and ordering its own way. File-mode providers would parse a different file.
   - **Decided:** (a).
     - **Port the launchpad's code as it is:** the deep merge, `MarshalIndent` with two spaces, and an atomic write that matches `atomicWriteFile`: temp file `.tmp-*` in the target directory, mode `0644`, rename.
@@ -347,7 +359,7 @@ Every question is decided. Each keeps its number; the decided option is stated f
 - **A9 Unknown configuration:** answered at once (Q24); the last good configuration stays remembered.
 
 **Business rules:**
-- **BR-001 Compatible API:** v3.11.0's endpoints, paths, methods, payload shapes, messages and codes, except Q12's three quirks.
+- **BR-001 Compatible API:** v3.11.0's endpoints, paths, methods, payload shapes, messages and codes, except Q12's four quirks.
 - **BR-002 Outages close sockets:** a plain close, no application-level goodbye; the control port stays up.
 - **BR-003 Cleaned store per start:** every start empties the store, re-syncs every source, and opens the gate only when every source has been accepted again.
 - **BR-004:** the runtime reads no file the testbed changes.
@@ -478,7 +490,7 @@ In WSL from the repository root (`export GOTOOLCHAIN=go1.27.3`; in a worktree `e
 | `/restart?seconds=N` | gate close and removal of the rendered file; a start after N s | G1, K, B1 |
 | SIGKILL socket behaviour | plain close, no `Shutdown` | G1 |
 | every flagd port | `Components.Listen` through the gate | G2 |
-| `configs/*.json` | `runtime/cmd.LoadConfig`, with `flags/allFlags.json` rewritten to `testbed:allFlags` | L, B1 |
+| `configs/*.json` | `runtime/cmd.LoadConfig`, with the source `flags/allFlags.json` served by the testbed source under the same URI | L, B1 |
 | `rawflags/` combined into `allFlags.json` | combined once in memory with the launchpad's merge and encoder; the bytes are served by the testbed source | K, M |
 | `/change` rewriting `changing-flag.json` | in-memory toggle, `Target.Load` (internal trigger, wait on the store), then render | K, M, B1 |
 | `allFlags.json` written by the launchpad's `atomicWriteFile` | rendered by the control module from the in-memory state after the store holds it, with the same encoder and the same temp-and-rename write; never read by the runtime | K |
@@ -544,7 +556,7 @@ Every PR description starts with `Part of #110`.
 | Q2 own configurable module | `R/testbed/control`: a library with `Config` and `Target`, outside the gate by its own listener; PR K; BR-008 |
 | Q3 keep the runtime, cleaned store | `Runtime.Reset` (store emptied, readiness cleared, `ReSync` on every source); the runtime reads no file the testbed changes; `/change` toggles an in-memory document served by the testbed source (M). Open: Q21–Q23 |
 | Q4 noop telemetry | Decided |
-| Q12 quirks fixed | Quirks 1–3 dropped and pinned as launchpad-only; no pinned suite depends on them. Open: Q24 |
+| Q12 quirks fixed | Quirks 1–4 dropped and pinned as launchpad-only; no pinned suite depends on them. Open: Q24 |
 
 ### Revision 2 (`step-13-opposer.md`)
 

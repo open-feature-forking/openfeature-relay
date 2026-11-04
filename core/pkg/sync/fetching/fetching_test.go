@@ -222,7 +222,7 @@ func TestFirstFetchRetriesWithoutPoller(t *testing.T) {
 	})
 	r := start(t, Options{Fetcher: fetcher})
 
-	require.Equal(t, sync.DataSync{FlagData: flagsV1, Source: source}, r.next(t))
+	require.Equal(t, sync.DataSync{FlagData: flagsV1, Source: source, Version: "v1"}, r.next(t))
 	require.Equal(t, int32(3), calls.Load())
 	require.Eventually(t, r.provider.IsReady, timeout, time.Millisecond)
 }
@@ -420,7 +420,7 @@ func TestReSyncAlwaysDelivers(t *testing.T) {
 	r.next(t)
 
 	require.NoError(t, r.provider.ReSync(context.Background(), r.deliveries))
-	require.Equal(t, sync.DataSync{FlagData: flagsV1, Source: source}, r.next(t))
+	require.Equal(t, sync.DataSync{FlagData: flagsV1, Source: source, Version: "v1"}, r.next(t))
 	mu.Lock()
 	defer mu.Unlock()
 	require.Equal(t, []string{"", ""}, previous, "a resync asks for the full flag configuration")

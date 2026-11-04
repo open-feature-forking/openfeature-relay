@@ -255,6 +255,8 @@ func TestDeliveryRules(t *testing.T) {
 		t.Helper()
 		select {
 		case got := <-deliveries:
+			require.NotEmpty(t, got.Version, "a fetched delivery carries its source version")
+			got.Version = "" // the version is the fetching provider's own tests' business
 			require.Equal(t, sync.DataSync{FlagData: want, Source: sourceURI, IncrementalUpdates: true}, got)
 		case <-time.After(8 * time.Second):
 			t.Fatalf("no delivery of %q", want)

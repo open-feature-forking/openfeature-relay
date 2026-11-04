@@ -262,6 +262,25 @@ UC-003 gets one line under "Delivered by later use cases", and `docs/relay/` get
   - `TestSelectorHeaderOnBothCalls`;
   - `TestOverrideKeepsInterceptorsOnly` (Q15).
 
+**Flow to test** (UC-023 as #164 writes it: alternative flows A1–A4, business rules BR-001–BR-009):
+
+| Flow or rule | Tests |
+|---|---|
+| Main scenario | P2's and P4's per-feature tests; T |
+| A1 Fatal status code before the first payload | `TestFatalCodeOnFirstRecvStopsSync`; runtime's `TestRuntimeExitsOnFatalGRPCCode`; T through envoy's 9212 |
+| A2 Invalid setting | `TestSettingsValidation`, `TestGRPCObjectDecodedStrictly`, `TestGRPCObjectRejectedOnOtherProviders` |
+| A3 Upstream outage | `TestRetryDelayFixedOnceOptedIn`, `TestSingleBackoffKeyFillsTheOther`; T through `/restart` |
+| A4 Source without a `grpc` object | `TestFlatProviderKeysStillIgnored`, `TestEmptyGRPCObjectChangesNothing`, C1–C4, the upgrade differential's `source-grpc` |
+| BR-001 Opt-in only | C1–C4, `TestEmptyGRPCObjectChangesNothing`, `source-grpc` |
+| BR-002 Strict object | `TestGRPCObjectDecodedStrictly`, `TestGRPCObjectRejectedOnOtherProviders` |
+| BR-003 Provider retry timing | `TestRetryServiceConfigJSON`, `TestRetryDelayFixedOnceOptedIn`, `TestSingleBackoffKeyFillsTheOther`, `TestWaitForReadyOnlyWithRetryPolicy` |
+| BR-004 Stream deadline | `TestStreamDeadlineRecyclesWithoutDelay` |
+| BR-005 Keepalive | `TestKeepaliveParameters`; the 1–9999 case of `TestSettingsValidation` |
+| BR-006 Selector header | `TestSelectorHeaderOnBothCalls`; the `headers` conflict case of `TestSettingsValidation` |
+| BR-007 Readiness | `TestReadyWhenStreamOpensByDefault`, `TestReadyOnFirstPayloadOptIn` |
+| BR-008 Fatal codes | `TestFatalCodeOnFirstRecvStopsSync`, `TestFatalCodeAfterFirstPayloadIsRetried`, `TestFatalCodesPerSync`, runtime's `TestRuntimeExitsOnFatalGRPCCode` |
+| BR-009 Dial options override | `TestOverrideKeepsInterceptorsOnly` |
+
 **End to end (T, gated, Q14):** flagd-full with a `grpc` source against step 13's testbed.
 - **Through 8015:** `/restart` gives real reconnects, timed against Q4.
 - **Through envoy's 9212:** `PERMISSION_DENIED` gives the fatal exit (Q5).
