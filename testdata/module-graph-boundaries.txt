@@ -15,6 +15,7 @@ sync/openfeature-operator:openfeature-relay/(telemetry|sync/(file|flagd-grpc|htt
 sync/gcs:github.com/Azure|github.com/aws|gocloud.dev|openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|openfeature-operator|azblob|s3|builder))
 sync/azblob:cloud.google.com/go/storage|github.com/aws|gocloud.dev|google.golang.org/(api|grpc)|googleapis/gax-go|openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|openfeature-operator|gcs|s3|builder))
 sync/s3:cloud.google.com|github.com/Azure|gocloud.dev|openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|openfeature-operator|gcs|azblob|builder))
+sync/sse:go.opentelemetry.io|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|openfeature-operator|gcs|azblob|s3|builder))
 # The telemetry module carries no sync provider and no Kubernetes or gocloud client (OpenTelemetry brings a few Google auth modules).
 telemetry/otel:openfeature-relay/sync/|k8s.io|gocloud.dev|github.com/Azure|github.com/aws
 # BR-001 of UC-004: the example service endpoint's module graph carries the core module only.
