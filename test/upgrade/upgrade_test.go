@@ -1,8 +1,12 @@
 package upgrade
 
 import (
+	"context"
 	"fmt"
+	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -44,6 +48,10 @@ var scenarios = map[string]scenario{
 	"unreachable-source":   scenarioUnreachableSource,
 	"no-staleness-default": scenarioNoStalenessDefault,
 	"sigterm":              scenarioSigterm,
+	"streams":              scenarioStreams,
+	"source-http":          scenarioSourceHTTP,
+	"source-grpc":          scenarioSourceGRPC,
+	"source-fsnotify":      scenarioSourceFSNotify,
 }
 
 func scenarioVersion(t *testing.T, image string) Transcript {
@@ -51,7 +59,7 @@ func scenarioVersion(t *testing.T, image string) Transcript {
 	for _, args := range [][]string{{"version"}, {"--help"}} {
 		code, out := once(t, image, args, nil, nil)
 		tr.add(strings.Join(args, " ")+"/exit-code", fmt.Sprint(code))
-		tr.add(strings.Join(args, " ")+"/output", Text(out))
+		tr.add(strings.Join(args, " ")+"/output", strings.TrimSpace(out))
 	}
 	return tr
 }
@@ -91,6 +99,7 @@ func scenarioResolve(t *testing.T, image string) Transcript {
 		status, h, b, err := r.do(http.MethodPost, port, path, body, header)
 		require.NoError(t, err, key)
 		tr.add(key+"/status", fmt.Sprint(status))
+		tr.add(key+"/headers", Headers(h))
 		tr.add(key+"/body", JSON(b))
 		return h, b
 	}
@@ -114,13 +123,12 @@ func scenarioResolve(t *testing.T, image string) Transcript {
 		require.NoError(t, err)
 		tr.add("ofrep/bulk-conditional/status", fmt.Sprint(status))
 	}
-	tr.add("ofrep/etag", fmt.Sprint(h.Get("ETag") != ""))
 
 	status, sh, body, err := r.do(http.MethodPost, portSync, "/flagd.sync.v1.FlagSyncService/FetchAllFlags", `{}`, nil)
 	require.NoError(t, err)
 	tr.add("flag-sync/status", fmt.Sprint(status))
+	tr.add("flag-sync/headers", Headers(sh))
 	tr.add("flag-sync/body", JSON(body))
-	tr.add("flag-sync/last-modified", fmt.Sprint(sh.Get("Last-Modified") != ""))
 	return tr
 }
 
@@ -141,7 +149,7 @@ func scenarioManagement(t *testing.T, image string) Transcript {
 	status, _, body, err := r.do(http.MethodGet, portManagement, "/metrics", "", nil)
 	require.NoError(t, err)
 	tr.add("metrics/status", fmt.Sprint(status))
-	tr.add("metrics/names", strings.Join(MetricNames(string(body)), "\n"))
+	tr.add("metrics/series", strings.Join(MetricSeries(string(body)), "\n"))
 	return tr
 }
 
@@ -182,6 +190,103 @@ func scenarioSigterm(t *testing.T, image string) Transcript {
 	return tr
 }
 
+// The three event streams: the first messages each sends, in the order they arrive. The OFREP event stream is
+// subscribed on the channel of an empty selector.
+func scenarioStreams(t *testing.T, image string) Transcript {
+	r := startFile(t, image)
+	var tr Transcript
+	connect := map[string]string{"Content-Type": "application/connect+json", "Connect-Protocol-Version": "1"}
+	for _, c := range []struct{ name, port, path string }{
+		{"evaluation-v1", portEvaluation, "/flagd.evaluation.v1.Service/EventStream"},
+		{"evaluation-v2", portEvaluation, "/flagd.evaluation.v2.Service/EventStream"},
+		{"sync", portSync, "/flagd.sync.v1.FlagSyncService/SyncFlags"},
+	} {
+		status, h, body, err := r.stream(http.MethodPost, c.port, c.path, frame(`{}`), connect, 3*time.Second)
+		require.NoError(t, err, c.name)
+		tr.add(c.name+"/status", fmt.Sprint(status))
+		tr.add(c.name+"/headers", Headers(h))
+		messages := frames(body)
+		require.NotEmpty(t, messages, "%s: %s sent no message", image, c.name)
+		tr.add(c.name+"/messages", strings.Join(messages, "\n"))
+	}
+	status, h, body, err := r.stream(http.MethodGet, portOFREP, "/ofrep/v1/sse", nil, map[string]string{"Accept": "text/event-stream"}, 3*time.Second)
+	require.NoError(t, err)
+	tr.add("ofrep-sse/status", fmt.Sprint(status))
+	tr.add("ofrep-sse/headers", Headers(h))
+	tr.add("ofrep-sse/events", Text(string(body)))
+	return tr
+}
+
+// resolveBool asks the evaluation endpoint for bool-flag and returns the status and the JSON of the answer.
+func resolveBool(t *testing.T, r *run) string {
+	t.Helper()
+	status, _, body, err := r.do(http.MethodPost, portEvaluation, "/flagd.evaluation.v1.Service/ResolveBoolean", `{"flagKey":"bool-flag","context":{}}`, nil)
+	require.NoError(t, err)
+	return fmt.Sprint(status) + " " + JSON(body)
+}
+
+// The file source with the other file watch (the default outside Kubernetes is fileinfo): the flags are served, and a
+// change of the file is picked up.
+func scenarioSourceFSNotify(t *testing.T, image string) Transcript {
+	r := start(t, image, []string{"start", "--sources", `[{"uri":"/data/flags.json","provider":"fsnotify"}]`}, nil, map[string]string{"flags.json": flagsJSON})
+	require.True(t, r.ready(60*time.Second), "%s did not become ready: %s", image, r.logs())
+	var tr Transcript
+	before := resolveBool(t, r)
+	tr.add("before-change", before)
+	was := `"bool-flag":{"state":"ENABLED","variants":{"on":true,"off":false},"defaultVariant":"on"}`
+	changed := strings.Replace(flagsJSON, was, strings.Replace(was, `"defaultVariant":"on"`, `"defaultVariant":"off"`, 1), 1)
+	require.NotEqual(t, flagsJSON, changed)
+	require.NoError(t, os.WriteFile(filepath.Join(r.dir, "flags.json"), []byte(changed), 0o644))
+	after := before
+	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline) && after == before; {
+		time.Sleep(200 * time.Millisecond)
+		after = resolveBool(t, r)
+	}
+	tr.add("after-change", after)
+	return tr
+}
+
+// flagsServer serves the flag file over HTTP on every interface, so that a container reaches it as
+// host.docker.internal.
+func flagsServer(t *testing.T) (port int) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "0.0.0.0:0")
+	require.NoError(t, err)
+	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(flagsJSON))
+	})}
+	go func() { _ = server.Serve(listener) }()
+	t.Cleanup(func() { _ = server.Close() })
+	return listener.Addr().(*net.TCPAddr).Port
+}
+
+var hostGateway = []string{"--add-host=host.docker.internal:host-gateway"}
+
+// An http:// source that delivers.
+func scenarioSourceHTTP(t *testing.T, image string) Transcript {
+	port := flagsServer(t)
+	r := startWith(t, image, []string{"start", "--uri", fmt.Sprintf("http://host.docker.internal:%d/flags.json", port)}, nil, nil, hostGateway)
+	require.True(t, r.ready(60*time.Second), "%s did not become ready: %s", image, r.logs())
+	var tr Transcript
+	tr.add("resolve", resolveBool(t, r))
+	return tr
+}
+
+// A grpc:// source: this image serves the flags from a file, and a second container syncs them from the first one's
+// flag sync port, over the docker network.
+func scenarioSourceGRPC(t *testing.T, image string) Transcript {
+	upstream := startFile(t, image)
+	ip, err := docker(context.Background(), "inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", upstream.id)
+	require.NoError(t, err, ip)
+	require.NotEmpty(t, ip)
+	r := start(t, image, []string{"start", "--uri", "grpc://" + ip + ":" + portSync}, nil, nil)
+	require.True(t, r.ready(60*time.Second), "%s did not become ready: %s", image, r.logs())
+	var tr Transcript
+	tr.add("resolve", resolveBool(t, r))
+	return tr
+}
+
 // stripJSONFields removes the fields of a JSON log line that differ between two runs (the time and the caller).
 func stripJSONFields(line string) string {
 	for _, field := range []string{`"ts":`, `"caller":`} {
@@ -204,19 +309,27 @@ func TestUpgrade(t *testing.T) {
 	accepted, err := LoadAccepted("accepted.yaml")
 	require.NoError(t, err)
 
+	ran := 0
 	for name, run := range scenarios {
 		t.Run(name, func(t *testing.T) {
+			ran++
 			before := run(t, baseline)
 			after := run(t, candidate)
 			require.NotEmpty(t, before, "the baseline observed nothing")
 			for _, d := range diff(name, before, after) {
-				if entry, ok := accepted.Allows(d.Scenario, d.Key); ok {
+				if entry, ok := accepted.Allows(d); ok {
 					t.Logf("accepted (%s %q): %s/%s\n  baseline:  %s\n  candidate: %s", entry.Kind, entry.Item, d.Scenario, d.Key, d.Baseline, d.Candidate)
 					continue
 				}
 				t.Errorf("%s/%s differs\n  baseline:  %s\n  candidate: %s", d.Scenario, d.Key, d.Baseline, d.Candidate)
 			}
 		})
+	}
+	if ran == len(scenarios) {
+		for _, o := range accepted.Unfired() {
+			t.Errorf("accepted.yaml accepts %s/%s (%s -> %s), but no such difference was observed: remove the observation",
+				o.Scenario, o.Key, o.Baseline, o.Candidate)
+		}
 	}
 }
 

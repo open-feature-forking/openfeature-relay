@@ -270,18 +270,55 @@ jobs:
 
   upgrade-test:
     name: Upgrade differential
+    # The job builds two images (today's flagd and the flagd-full the Builder makes), so it follows the rule for images:
+    # it runs when the change touches a Dockerfile or the build (the pattern in the gate step), or with FULL_CI=true, or
+    # when the workflow is run manually. Otherwise only the gate step runs.
     runs-on: ubuntu-latest
+    # go test has a 60 minute timeout; this keeps a hung Docker build from holding a runner for GitHub's six hours
+    timeout-minutes: 75
     steps:
       - name: Checkout repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
         with:
           # the baseline is built from the upstream merge-base, which the shallow default does not fetch
           fetch-depth: 0
+      - name: Does the differential apply to this change?
+        id: gate
+        env:
+          FULL_CI: ${{ vars.FULL_CI }}
+          EVENT: ${{ github.event_name }}
+          # a pull request's own changes are base..merge commit; for a push, the commits it brought
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.sha }}
+        run: |
+          # Dockerfiles; the manifest of flagd-full and the Builder that builds it; flagd, which holds flagd-full's main
+          # and its list of components; the differential's own test and this workflow
+          pattern='(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^flagd/|^test/upgrade/|^\.github/workflows/build\.yaml$'
+          run=false
+          if [ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]; then
+            run=true
+            echo "::notice::The differential runs: FULL_CI or a manual run."
+          elif [ -z "$BASE" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ]; then
+            echo "::notice::No base to compare with (a new branch): the differential is skipped. Run the workflow manually or set FULL_CI."
+          else
+            changed=$(git diff --name-only "$BASE" "$HEAD")
+            hits=$(printf '%s\n' "$changed" | grep -E "$pattern" || true)
+            if [ -n "$hits" ]; then
+              run=true
+              echo "::notice::The differential runs: this change touches a Dockerfile or the build."
+              printf '%s\n' "$hits" | head -10
+            else
+              echo "::notice::The differential is skipped: no Dockerfile or build file changed. Set FULL_CI or run the workflow manually to run it."
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
       - name: Setup go
+        if: steps.gate.outputs.run == 'true'
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
         with:
           go-version-file: 'flagd/go.mod'
       - name: Today's flagd and the flagd-full the Builder made, side by side (UC-009)
+        if: steps.gate.outputs.run == 'true'
         run: make upgrade-test
 
   release-dry-run:

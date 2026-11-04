@@ -1,12 +1,17 @@
 # The differences between today's flagd and the flagd-full that the Builder made that the project lead accepts
 # (UC-009 Q5). The differential in upgrade_test.go fails on any other difference. An entry of kind #78 names an item
-# of issue 78 (testdata/issue-78.md; make refresh-issue-78); every item needs an entry, and every entry an item.
-# `observations` are the differences of the differential that the entry allows (scenario/key); `covered_by` names the
-# tests that pin an item the black-box differential cannot see. A known-break names the use case that removes it.
+# of issue 78 (testdata/issue-78.txt; make refresh-issue-78); every item needs an entry, and every entry an item.
+# `observations` are the differences of the differential that the entry allows: the scenario, the key and the values
+# both flagds show ("<not observed>" for a key one of them lacks). A difference with other values fails, and an
+# observation that no difference matched fails the run. `covered_by` names the tests that pin an item the black-box
+# differential cannot see. A known-break names the use case that removes it.
 accepted:
   - kind: "#78"
     item: "A failed first fetch or connect no longer exits flagd"
-    observations: ["unreachable-source/*"]
+    observations:
+      - {scenario: unreachable-source, key: exited, baseline: "true", candidate: "false"}
+      - {scenario: unreachable-source, key: exit-code, baseline: "1", candidate: "<not observed>"}
+      - {scenario: unreachable-source, key: ready, baseline: "<not observed>", candidate: "false"}
   - kind: "#78"
     item: "An unbuildable telemetry configuration stops startup"
     covered_by: ["runtime TestTelemetryProviderIsShutDownWhenFromConfigFails", "runtime/telemetrystartup_test"]
@@ -18,16 +23,13 @@ accepted:
     covered_by: ["sync/builder blob_sources_test.go"]
   - kind: "#78"
     item: "Flag sync's `Last-Modified` moves only on a configuration change"
-    observations: ["flag-sync/last-modified"]
     covered_by: ["service/flag-sync contract_test.go"]
   - kind: "#78"
     item: "OFREP `flagConfigEtag` values change"
-    observations: ["ofrep/etag"]
-    note: "the values are opaque; normalize.go masks them"
+    note: "the values are opaque; normalize.go masks them in bodies and headers"
     covered_by: ["service/ofrep TestOFREPEventStreamAnnouncesAVendorChange"]
   - kind: "#78"
     item: "Shutdown: event streams get `provider_shutdown`"
-    observations: ["sigterm/*"]
     covered_by: ["runtime shutdown_characterization_test.go"]
   - kind: "#78"
     item: "The operator source delivers `spec.flagSpec` as written"

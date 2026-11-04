@@ -1,3 +1,6 @@
 testdata/*.txt text eol=lf
 *.golden text eol=lf
 *.sh text eol=lf
+flagd/go.mod text eol=lf
+flagd/main.go text eol=lf
+flagd/components/components.go text eol=lf

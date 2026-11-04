@@ -3,6 +3,7 @@ package upgrade
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"net/http"
@@ -101,6 +102,7 @@ func images(t *testing.T) (baseline, candidate string) {
 type run struct {
 	t     *testing.T
 	id    string
+	dir   string            // the host directory mounted at /data
 	ports map[string]string // container port -> 127.0.0.1:<mapped>
 }
 
@@ -130,7 +132,7 @@ func startWith(t *testing.T, image string, args []string, env map[string]string,
 	dockerArgs = append(append(dockerArgs, image), args...)
 	id, err := docker(context.Background(), dockerArgs...)
 	require.NoError(t, err, id)
-	r := &run{t: t, id: id, ports: map[string]string{}}
+	r := &run{t: t, id: id, dir: dir, ports: map[string]string{}}
 	t.Cleanup(func() { _, _ = docker(context.Background(), "rm", "-f", id) })
 	return r
 }
@@ -184,6 +186,48 @@ func (r *run) do(method, port, path, body string, header map[string]string) (int
 	defer resp.Body.Close()
 	data, err := io.ReadAll(resp.Body)
 	return resp.StatusCode, resp.Header, data, err
+}
+
+// stream sends one request and reads what the server sends back for the time given, as the status, the headers and the
+// body read so far. A Connect streaming call sends the body as one frame and gets frames back; see frames.
+func (r *run) stream(method, port, path string, body []byte, header map[string]string, within time.Duration) (int, http.Header, []byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), within)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, method, "http://"+r.ports[port]+path, bytes.NewReader(body))
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	for k, v := range header {
+		req.Header.Set(k, v)
+	}
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(resp.Body) // ends at the deadline, with what arrived until then
+	return resp.StatusCode, resp.Header, data, nil
+}
+
+// frame wraps a JSON message in a Connect streaming envelope.
+func frame(message string) []byte {
+	out := make([]byte, 5, 5+len(message))
+	binary.BigEndian.PutUint32(out[1:], uint32(len(message)))
+	return append(out, message...)
+}
+
+// frames renders the messages of a Connect streaming response, one normalized line each.
+func frames(data []byte) []string {
+	var out []string
+	for len(data) >= 5 {
+		n := int(binary.BigEndian.Uint32(data[1:5]))
+		if len(data) < 5+n {
+			break
+		}
+		out = append(out, fmt.Sprintf("flags=%d %s", data[0], JSON(data[5:5+n])))
+		data = data[5+n:]
+	}
+	return out
 }
 
 // logs returns what the container wrote to stdout and stderr.
