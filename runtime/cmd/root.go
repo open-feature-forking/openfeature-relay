@@ -83,6 +83,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.agent.yaml)")
 	rootCmd.AddCommand(startCmd)
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(componentsCmd)
 }
 
 // initConfig reads in config file and ENV variables if set.
