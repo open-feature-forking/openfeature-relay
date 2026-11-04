@@ -1,6 +1,6 @@
 exit 1
 -- stdout
 -- stderr
-Error: unknown command "components" for "flagd"
+Error: unknown command "no-such-command" for "flagd"
 Run 'flagd --help' for usage.
-<time> unknown command "components" for "flagd"
+<time> unknown command "no-such-command" for "flagd"
