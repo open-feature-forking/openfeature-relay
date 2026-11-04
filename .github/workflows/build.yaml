@@ -262,5 +262,24 @@ jobs:
         with:
           go-version-file: 'flagd/go.mod'
 
+      - name: The flagd module is what the Builder generates from the manifest of flagd-full
+        run: make check-flagd-full-generated
+
       - name: Run test suite
         run: make workspace-clean && cd test/integration && go clean -testcache && go test -cover
+
+  upgrade-test:
+    name: Upgrade differential
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+        with:
+          # the baseline is built from the upstream merge-base, which the shallow default does not fetch
+          fetch-depth: 0
+      - name: Setup go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
+        with:
+          go-version-file: 'flagd/go.mod'
+      - name: Today's flagd and the flagd-full the Builder made, side by side (UC-009)
+        run: make upgrade-test
