@@ -56,3 +56,12 @@ accepted:
     item: "go install github.com/open-feature/flagd/flagd@<version> fails: flagd/go.mod carries local replace directives"
     owner: UC-012
     note: "since UC-014; restoring it needs published component modules without replaces. The binary archives and images are the supported install paths."
+  - kind: known-break
+    item: "flagd-proxy words the error for a source file that does not exist differently: it syncs through this repository's file sync provider"
+    owner: UC-017
+    note: "Q20 of step 10: UC-017 states that #78's sync items apply to flagd-proxy and replaces this entry with the item; the project lead decides whether the wording stays"
+    observations:
+      - baseline: "grpc-status=2 error fetching all flags from sync store: error adding watcher /data/missing.json: error from os.Open(/data/missing.json): open /data/missing.json: no such file or directory"
+        candidate: "grpc-status=2 error fetching all flags from sync store: error initializing the fetcher of /data/missing.json: error opening /data/missing.json: stat /data/missing.json: no such file or directory"
+        scenario: flagd-proxy
+        key: fetch-all/missing-file

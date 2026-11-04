@@ -32,3 +32,5 @@ surfaces:
     scenario: version
   - surface: "shutdown"
     scenario: sigterm
+  - surface: "flagd-proxy: a file source, one subscriber, the metric of the open streams, a source that is missing or cannot be reached"
+    scenario: flagd-proxy
