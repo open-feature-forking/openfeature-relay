@@ -65,7 +65,7 @@ func TestRuntimeExitsOnFatalGRPCCode(t *testing.T) {
 	select {
 	case err := <-done:
 		require.ErrorContains(t, err, source)
-		require.ErrorContains(t, err, "PermissionDenied")
+		require.ErrorContains(t, err, "PERMISSION_DENIED")
 	case <-time.After(10 * time.Second):
 		t.Fatal("the runtime kept running with a source that denies it")
 	}

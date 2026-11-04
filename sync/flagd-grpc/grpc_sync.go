@@ -204,8 +204,9 @@ func (g *Sync) Sync(ctx context.Context, dataSync chan<- sync.DataSync) error {
 	syncClient, err := g.openStream(streamCtx)
 	recycled := false
 	if err != nil {
+		recycled = g.deadlineElapsed(ctx, streamCtx)
 		cancel()
-		if fatal := g.fatalError(err); fatal != nil {
+		if fatal := g.fatalError(ctx, err, recycled); fatal != nil {
 			return fatal
 		}
 		g.Logger.Warn(fmt.Sprintf("unable to sync flags: %s", err.Error()))
@@ -223,7 +224,7 @@ func (g *Sync) Sync(ctx context.Context, dataSync chan<- sync.DataSync) error {
 			// This should not happen as handleFlagSync expects to return with an error
 			return nil
 		}
-		if fatal := g.fatalError(err); fatal != nil {
+		if fatal := g.fatalError(ctx, err, recycled); fatal != nil {
 			return fatal
 		}
 		g.logStreamEnd(err, recycled)
@@ -246,7 +247,7 @@ func (g *Sync) Sync(ctx context.Context, dataSync chan<- sync.DataSync) error {
 		recycled = g.deadlineElapsed(ctx, opened.ctx)
 		opened.cancel()
 		if err != nil {
-			if fatal := g.fatalError(err); fatal != nil {
+			if fatal := g.fatalError(ctx, err, recycled); fatal != nil {
 				return fatal
 			}
 			g.logStreamEnd(err, recycled)
@@ -313,8 +314,9 @@ func (g *Sync) reconnect(ctx context.Context, immediate bool) (*openedStream, er
 		streamCtx, cancel := g.streamContext(ctx)
 		syncClient, err := g.openStream(streamCtx)
 		if err != nil {
+			recycled := g.deadlineElapsed(ctx, streamCtx)
 			cancel()
-			if fatal := g.fatalError(err); fatal != nil {
+			if fatal := g.fatalError(ctx, err, recycled); fatal != nil {
 				return nil, fatal
 			}
 			g.Logger.Debug(fmt.Sprintf("error opening service client: %s", err.Error()))

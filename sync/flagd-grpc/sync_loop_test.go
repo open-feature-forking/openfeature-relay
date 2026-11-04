@@ -168,12 +168,10 @@ func TestFatalCodeOnFirstRecvStopsSync(t *testing.T) {
 		s.Options = Options{FatalStatusCodes: fatalOnDenied}
 		require.NoError(t, s.Init(context.Background()))
 
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
-		err := s.Sync(ctx, make(chan sync.DataSync, 1))
+		err := syncOrTimeout(t, s)
 		require.Error(t, err)
 		require.ErrorContains(t, err, uri, "the error names the source")
-		require.ErrorContains(t, err, "PermissionDenied", "and the code")
+		require.ErrorContains(t, err, "PERMISSION_DENIED", "and the code")
 		require.Equal(t, codes.PermissionDenied, status.Code(err))
 		require.True(t, s.IsReady(), "the stream had opened: ready is not the first-payload flag")
 	})
@@ -183,9 +181,9 @@ func TestFatalCodeOnFirstRecvStopsSync(t *testing.T) {
 		s.Options = Options{FatalStatusCodes: fatalOnDenied}
 		client := &scriptedSyncClient{steps: []func() (syncv1grpc.FlagSyncService_SyncFlagsClient, error){failOpen(permissionDenied)}}
 		s.client = client
-		err := s.Sync(context.Background(), make(chan sync.DataSync, 1))
+		err := syncOrTimeout(t, s)
 		require.ErrorContains(t, err, "host:8013")
-		require.ErrorContains(t, err, "PermissionDenied")
+		require.ErrorContains(t, err, "PERMISSION_DENIED")
 		require.EqualValues(t, 1, client.calls.Load(), "nothing is retried")
 	})
 
@@ -195,8 +193,8 @@ func TestFatalCodeOnFirstRecvStopsSync(t *testing.T) {
 		client := &scriptedSyncClient{steps: []func() (syncv1grpc.FlagSyncService_SyncFlagsClient, error){failOpen(errors.New("refused")), failOpen(permissionDenied)}}
 		s.client = client
 		s.after = func(time.Duration) <-chan time.Time { c := make(chan time.Time, 1); c <- time.Time{}; return c }
-		err := s.Sync(context.Background(), make(chan sync.DataSync, 1))
-		require.ErrorContains(t, err, "PermissionDenied")
+		err := syncOrTimeout(t, s)
+		require.ErrorContains(t, err, "PERMISSION_DENIED")
 		require.EqualValues(t, 2, client.calls.Load())
 	})
 
@@ -228,7 +226,7 @@ func TestFatalCodesPerSync(t *testing.T) {
 	other.Options = Options{FatalStatusCodes: []codes.Code{codes.Unauthenticated}}
 
 	listed.client = denied()
-	require.ErrorContains(t, listed.Sync(context.Background(), make(chan sync.DataSync, 1)), "listed:8013")
+	require.ErrorContains(t, syncOrTimeout(t, listed), "listed:8013")
 
 	_, stopped := runSync(t, other, denied(), 2)
 	require.NoError(t, <-stopped, "another source's set does not end this one")
@@ -350,4 +348,98 @@ func TestReadyOnFirstPayloadOptIn(t *testing.T) {
 		require.NoError(t, <-stopped)
 		require.False(t, s.IsReady())
 	})
+}
+
+// syncOrTimeout runs s.Sync and fails the test, instead of hanging, when it does not return within 10 s.
+func syncOrTimeout(t *testing.T, s *Sync) error {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- s.Sync(ctx, make(chan sync.DataSync, 1)) }()
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(10 * time.Second):
+		t.Fatal("Sync did not return")
+		return nil
+	}
+}
+
+// blockedClient holds every SyncFlags call until its context ends and then fails with err.
+type blockedClient struct {
+	syncv1grpc.FlagSyncServiceClient
+	err     error
+	started chan struct{}
+	once    gosync.Once
+}
+
+func (c *blockedClient) SyncFlags(ctx context.Context, _ *v1.SyncFlagsRequest, _ ...grpc.CallOption) (syncv1grpc.FlagSyncService_SyncFlagsClient, error) {
+	c.once.Do(func() { close(c.started) })
+	<-ctx.Done()
+	return nil, c.err
+}
+
+// grpc-go reports a plain context error as UNKNOWN, a cancelled open as CANCELLED and an elapsed deadline as
+// DEADLINE_EXCEEDED. None of them is a failure of the source when flagd is shutting down or the stream was recycled.
+func TestFatalCodeIgnoredOnShutdown(t *testing.T) {
+	for name, tc := range map[string]struct {
+		code codes.Code
+		err  error
+	}{
+		"UNKNOWN":           {codes.Unknown, errors.New("context canceled")},
+		"CANCELLED":         {codes.Canceled, status.Error(codes.Canceled, "context canceled")},
+		"DEADLINE_EXCEEDED": {codes.DeadlineExceeded, status.Error(codes.DeadlineExceeded, "context deadline exceeded")},
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := defaultSync("host:8013")
+			s.Options = Options{FatalStatusCodes: []codes.Code{tc.code}}
+			client := &blockedClient{err: tc.err, started: make(chan struct{})}
+			s.client = client
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			done := make(chan error, 1)
+			go func() { done <- s.Sync(ctx, make(chan sync.DataSync, 1)) }()
+			<-client.started
+			cancel()
+			select {
+			case err := <-done:
+				require.NoError(t, err, "a shutdown before the first payload is not a fatal status")
+			case <-time.After(10 * time.Second):
+				t.Fatal("Sync did not stop")
+			}
+		})
+	}
+}
+
+func TestFatalCodeIgnoredOnRecycle(t *testing.T) {
+	s := defaultSync("host:8013")
+	s.Options = Options{FatalStatusCodes: []codes.Code{codes.DeadlineExceeded}, StreamDeadline: 50 * time.Millisecond}
+	s.client = &blockedClient{err: status.Error(codes.DeadlineExceeded, "context deadline exceeded"), started: make(chan struct{})}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- s.Sync(ctx, make(chan sync.DataSync, 1)) }()
+	select {
+	case err := <-done:
+		t.Fatalf("a stream that reached its deadline ended Sync: %v", err)
+	case <-time.After(500 * time.Millisecond):
+	}
+	cancel()
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("Sync did not stop")
+	}
+}
+
+func TestStatusNameIsWhatTheOperatorWrites(t *testing.T) {
+	for code := codes.Canceled; code <= codes.Unauthenticated; code++ {
+		name := statusName(code)
+		got, ok := statusCode(name)
+		require.True(t, ok, name)
+		require.Equal(t, code, got, name)
+	}
+	require.Equal(t, "PERMISSION_DENIED", statusName(codes.PermissionDenied))
 }

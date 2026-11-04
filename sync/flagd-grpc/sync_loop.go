@@ -7,10 +7,12 @@ import (
 	"math"
 	"slices"
 	"time"
+	"unicode"
 
 	syncv1grpc "buf.build/gen/go/open-feature/flagd/grpc/go/flagd/sync/v1/syncv1grpc"
 	v1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/sync/v1"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
@@ -65,14 +67,31 @@ func (g *Sync) logStreamEnd(err error, recycled bool) {
 }
 
 // fatalError is non-nil when err carries one of the fatal status codes before the first payload of the source; Sync
-// returns it and the runtime ends. After the first payload the code is retried like any error.
-func (g *Sync) fatalError(err error) error {
-	if len(g.Options.FatalStatusCodes) == 0 || g.firstPayload.Load() {
+// returns it and the runtime ends. After the first payload the code is retried like any error. A shutdown, or a stream
+// that ended at its deadline, is no failure of the source, however grpc-go maps its context error.
+func (g *Sync) fatalError(ctx context.Context, err error, recycled bool) error {
+	if len(g.Options.FatalStatusCodes) == 0 || g.firstPayload.Load() || ctx.Err() != nil || recycled {
 		return nil
 	}
 	code := status.Code(err)
 	if !slices.Contains(g.Options.FatalStatusCodes, code) {
 		return nil
 	}
-	return fmt.Errorf("sync source %q: status %s before its first payload: %w", g.URI, code, err)
+	return fmt.Errorf("sync source %q: status %s before its first payload: %w", g.URI, statusName(code), err)
+}
+
+// statusName is the name of a gRPC status code as the operator writes it in fatalStatusCodes: PERMISSION_DENIED, not
+// the PermissionDenied of Code.String.
+func statusName(code codes.Code) string {
+	if code == codes.Canceled { // spelled with two l in the status code names
+		return "CANCELLED"
+	}
+	var name []rune
+	for i, r := range code.String() {
+		if i > 0 && unicode.IsUpper(r) {
+			name = append(name, '_')
+		}
+		name = append(name, unicode.ToUpper(r))
+	}
+	return string(name)
 }
