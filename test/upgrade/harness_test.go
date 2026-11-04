@@ -61,7 +61,36 @@ func images(t *testing.T) (baseline, candidate string) {
 	if os.Getenv("UPGRADE_TEST") == "" {
 		t.Skip("the upgrade differential needs Docker; make upgrade-test sets UPGRADE_TEST")
 	}
-	buildOnce.Do(func() {
+	buildOnce.Do(func() { buildErr = buildPair(t, "flagd", "flagd-upgrade-baseline", "flagd-upgrade-candidate") })
+	require.NoError(t, buildErr)
+	return "flagd-upgrade-baseline", "flagd-upgrade-candidate"
+}
+
+var (
+	proxyBuildOnce sync.Once
+	proxyBuildErr  error
+)
+
+// proxyImages builds the baseline and the candidate flagd-proxy once per run and returns the tags of the one that
+// belongs to the flagd image given.
+func proxyImages(t *testing.T, flagdImage string) string {
+	t.Helper()
+	proxyBuildOnce.Do(func() {
+		proxyBuildErr = buildPair(t, "flagd-proxy", "flagd-proxy-upgrade-baseline", "flagd-proxy-upgrade-candidate")
+	})
+	require.NoError(t, proxyBuildErr)
+	if flagdImage == "flagd-upgrade-baseline" {
+		return "flagd-proxy-upgrade-baseline"
+	}
+	return "flagd-proxy-upgrade-candidate"
+}
+
+// buildPair builds the image of module (the directory of its build.Dockerfile) from the baseline commit and from this
+// tree.
+func buildPair(t *testing.T, module, baselineTag, candidateTag string) error {
+	t.Helper()
+	var buildErr error
+	func() {
 		root := repoRoot(t)
 		ctx, cancel := context.WithTimeout(context.Background(), 40*time.Minute)
 		defer cancel()
@@ -83,8 +112,8 @@ func images(t *testing.T) (baseline, candidate string) {
 				return
 			}
 		}
-		for tag, dir := range map[string]string{"flagd-upgrade-baseline": context, "flagd-upgrade-candidate": root} {
-			args := []string{"build", "-q", "-f", filepath.Join(dir, "flagd", "build.Dockerfile"), "-t", tag}
+		for tag, dir := range map[string]string{baselineTag: context, candidateTag: root} {
+			args := []string{"build", "-q", "-f", filepath.Join(dir, module, "build.Dockerfile"), "-t", tag}
 			for _, a := range buildArgs {
 				args = append(args, "--build-arg", a)
 			}
@@ -93,16 +122,16 @@ func images(t *testing.T) (baseline, candidate string) {
 				return
 			}
 		}
-	})
-	require.NoError(t, buildErr)
-	return "flagd-upgrade-baseline", "flagd-upgrade-candidate"
+	}()
+	return buildErr
 }
 
-// TestMain removes the two images the run built, so that they do not stay on the machine.
+// TestMain removes the images the run built, so that they do not stay on the machine.
 func TestMain(m *testing.M) {
 	code := m.Run()
 	if os.Getenv("UPGRADE_TEST") != "" {
-		_, _ = docker(context.Background(), "rmi", "-f", "flagd-upgrade-baseline", "flagd-upgrade-candidate")
+		_, _ = docker(context.Background(), "rmi", "-f", "flagd-upgrade-baseline", "flagd-upgrade-candidate",
+			"flagd-proxy-upgrade-baseline", "flagd-proxy-upgrade-candidate")
 	}
 	os.Exit(code)
 }
