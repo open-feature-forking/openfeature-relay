@@ -31,13 +31,12 @@ func goldenRun(t *testing.T, golden string, r run, tmp string) {
 	require.Equal(t, string(bytes.ReplaceAll(want, []byte("\r\n"), []byte("\n"))), got)
 }
 
-// TestUnknownCommandExit pins what an unknown command prints and the exit status. flagd-full has no components
-// command today; UC-011 adds it, which changes this output (accepted.yaml).
+// TestUnknownCommandExit pins what an unknown command prints and the exit status.
 func TestUnknownCommandExit(t *testing.T) {
 	tmp := t.TempDir()
 	bin := buildFlagd(t, tmp)
 
-	r := execute(t, bin, "components")
+	r := execute(t, bin, "no-such-command")
 	require.Equal(t, 1, r.exit)
 	require.Empty(t, r.stdout, "the error goes to standard error")
 	goldenRun(t, "unknown_command.golden", r, tmp)

@@ -34,7 +34,7 @@ type Fetcher struct {
 var _ sync.Fetcher = (*Fetcher)(nil)
 
 // NewFetcher creates the fetcher of an http source. The configuration sets the authorization header, headers, OAuth
-// credentials and timeout.
+// credentials and timeout. It sends Headers as they are; the factory reads HeadersFrom first (sync.ResolveHeaders).
 func NewFetcher(config sync.SourceConfig, log *logger.Logger) *Fetcher {
 	var oauthCredential *oauthCredentialHandler
 	if config.OAuth != nil {
@@ -197,7 +197,13 @@ func (Factory) ParseURI(uri string) (sync.SourceConfig, bool) {
 
 // CreateFetcher creates the fetcher of a source.
 func (Factory) CreateFetcher(settings sync.Settings) (sync.Fetcher, error) {
-	return NewFetcher(settings.Source, settings.Logger), nil
+	headers, err := sync.ResolveHeaders(settings.Source)
+	if err != nil {
+		return nil, err
+	}
+	config := settings.Source
+	config.Headers, config.HeadersFrom = headers, nil
+	return NewFetcher(config, settings.Logger), nil
 }
 
 // NewFactories returns the factories of the HTTP sync component, as a generated main of a distribution calls it.

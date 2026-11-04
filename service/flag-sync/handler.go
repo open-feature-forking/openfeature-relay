@@ -28,6 +28,10 @@ type syncHandler struct {
 	deadline            time.Duration
 	disableSyncMetadata bool
 	metricsRecorder     *flagdService.Metrics
+	// formats are the configuration formats of the distribution, and changes wakes the streams of a format other than
+	// flagd's.
+	formats []string
+	changes *changeSignal
 }
 
 // syncFlagsSender is the subset of connect.ServerStream used here; it has no exported constructor,
@@ -47,6 +51,11 @@ func (s syncHandler) SyncFlags(
 func (s syncHandler) syncFlags(
 	ctx context.Context, header http.Header, providerID, bodySelector string, stream syncFlagsSender,
 ) error {
+	format, err := requestedFormat(header, s.formats)
+	if err != nil {
+		return s.connectError(err)
+	}
+
 	startTime := time.Now()
 	selectorExpression := s.getSelectorExpression(header, bodySelector)
 
@@ -95,6 +104,10 @@ func (s syncHandler) syncFlags(
 		defer cancel()
 	}
 
+	if format != "" {
+		return s.syncFormat(ctx, format, &selector, syncContext, stream, &exitReason)
+	}
+
 	s.store.Watch(ctx, &selector, watcher)
 
 	for {
@@ -129,7 +142,20 @@ func (s syncHandler) syncFlags(
 func (s syncHandler) FetchAllFlags(ctx context.Context, req *connect.Request[syncv1.FetchAllFlagsRequest]) (
 	*connect.Response[syncv1.FetchAllFlagsResponse], error,
 ) {
+	format, err := requestedFormat(req.Header(), s.formats)
+	if err != nil {
+		return nil, s.connectError(err)
+	}
+
 	expression := s.getSelectorExpression(req.Header(), req.Msg.GetSelector()) //nolint:staticcheck // deprecated selector kept for backwards compat
+
+	if format != "" {
+		_, text, err := fetchFormatDocument(ctx, s.store, format, expression)
+		if err != nil {
+			return nil, s.connectError(err)
+		}
+		return connect.NewResponse(&syncv1.FetchAllFlagsResponse{FlagConfiguration: text}), nil
+	}
 
 	flagsString, err := fetchAllFlags(ctx, s.store, expression)
 	if err != nil {
@@ -185,6 +211,13 @@ func (s syncHandler) connectError(err error) error {
 	case fetchMarshal:
 		s.log.Error("error marshalling flags", zap.Error(fetchErr.cause))
 		return connect.NewError(connect.CodeDataLoss, errors.New("error marshalling flags"))
+	case fetchFormatUnknown, fetchDocumentAmbiguous:
+		return connect.NewError(connect.CodeInvalidArgument, fetchErr.cause)
+	case fetchDocumentMissing:
+		return connect.NewError(connect.CodeNotFound, fetchErr.cause)
+	case fetchDocumentNoText:
+		s.log.Error("document without a text", zap.Error(fetchErr.cause))
+		return connect.NewError(connect.CodeInternal, fetchErr.cause)
 	default:
 		s.log.Error("error retrieving flags from store", zap.Error(fetchErr.cause))
 		return connect.NewError(connect.CodeInternal, errors.New("error retrieving flags from store"))

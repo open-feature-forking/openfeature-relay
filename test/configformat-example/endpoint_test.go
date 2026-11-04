@@ -26,8 +26,8 @@ type keyvalueEvaluator struct {
 
 func (e keyvalueEvaluator) Evaluate(_ context.Context, req evaluator.Request, dst []evaluator.Result) ([]evaluator.Result, model.Metadata, error) {
 	for _, d := range e.store.Documents(keyvalue.Type, e.source) {
-		values, _ := d.Value.(map[string]string)
-		if value, ok := values[req.FlagKey]; ok {
+		values, _ := d.Value.(keyvalue.Values)
+		if value, ok := values.Get(req.FlagKey); ok {
 			return append(dst, evaluator.Result{
 				FlagKey: req.FlagKey, Value: value, HasValue: true, Variant: "set", Reason: model.StaticReason,
 				Format: keyvalue.Type, Metadata: model.Metadata{"flagSetId": d.FlagSet},
