@@ -233,3 +233,4 @@ This use case is `Implemented`: the manifest and its validation, the generated s
 | flagd-full released from the generated source | UC-009 |
 | `flagd components` (the inventory and the identity exist) | UC-011 |
 | Reference Dockerfile (FR-009) | UC-002 |
+| Compiling a distribution with middleware: no repository manifest lists one yet; the Flagsmith distribution will list `contrib/flagsmith/middleware` | UC-019 (#94) |
