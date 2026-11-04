@@ -182,6 +182,7 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		Formats:         formats,
 		DefaultFormat:   defaultFormat,
 		sourceReadiness: sourceReadiness,
+		store:           store,
 	}
 
 	inputs, err := newEndpointInputs(logger, store, bus, components.Endpoints, formatTypes, config.Evaluators,
