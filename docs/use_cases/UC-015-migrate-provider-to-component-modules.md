@@ -8,7 +8,7 @@
 **Secondary Actors:** Maintainer, flagd Test Harness  
 **Goal:** An in-process provider moves from the current core import paths to the new component modules in one change and behaves exactly as before  
 **Trigger:** The Maintainers publish a core release that moves Go import paths under `core/`  
-**Status:** Draft  
+**Status:** Draft — Deferred (provider migration is planned for after the proof of concept; until then the flagd integration test checks that today's providers keep working unchanged)  
 
 **Requirements:** [FR-043, FR-044, C-004, C-005](../requirements.md)
 

@@ -60,9 +60,9 @@ After phase 1 (C1, C2, D), work proceeds one use case at a time, in this order. 
 | 9 | UC-009 Upgrade to flagd-full | flagd-full built by the builder, test-harness suites green |
 | 10 | UC-011, UC-010, UC-017, UC-021 | components command, standard distributions, flagd-sync, event export |
 | 11 | UC-019 Serve Vendor Flags | a Flagsmith engine module as the cross-vendor proof |
-| 12 | UC-002, UC-012, UC-013, UC-015 | image, release, CI verification, migration guide |
+| 12 | UC-002, UC-012, UC-013 | image, release, CI verification |
 
-UC-016 stays Deferred.
+UC-015 and UC-016 stay Deferred. For UC-015 the proof of concept only checks that today's providers keep working: `make flagd-integration-test` runs the released Go flagd provider, unchanged, in RPC and in-process mode against flagd built from this repository.
 
 A use case is done when its main success scenario and every alternative flow have an automated test, the reviewer's verdict is `ready`, the PR is merged, and its `**Status:**` line moves to `Implemented` (to `Tested` once a test case under `docs/test_cases/` covers it). This is a proof of concept: upstream reviewability (C-006) is a preference, not a gate. When a later use case delivers part of it, the use case still moves to `Implemented` once its own scope is done, provided every such step and rule is listed as an accepted gap naming the use case that delivers it, and the requirements it shares move to `In Progress` so the spec lint shows no drift.
 
