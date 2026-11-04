@@ -3,12 +3,18 @@
 **Status: revision 3, with the project lead's second set of decisions.**
 - It applies the decisions on Q2, Q3, Q4, Q10, Q11, Q12, Q14, Q15, Q16, Q18 and Q20 to revision 2, which resolved `step-13-opposer.md` (1 blocker, 4 major, 8 minor; section 8). Every other recommendation of revision 2 is accepted as written.
 - **Step 13 is a pure drop-in:** no fault injection, no public fetch call.
-- Open: Q21–Q24 (section 0).
+- It also folds in the project lead's clarification of Q3 and `/change`: `/change` alters the in-memory state, and `allFlags.json` is an output rendered from it (Q9, Q21, Q25).
+- Open: Q22–Q25 (section 0).
 
 **Decisions (project lead).**
 - **#110 (2026-11-04), in the PoC:** `distributions/flagd-testbed`, with a control endpoint and a listener gate in `service/transport` for stop and start. The provider test suites run against it as the testing harness. Restructuring upstream flagd-testbed is out of scope, and upstream gets nothing: no issues, PRs or comments outside this repository.
 - **Q2:** the control API is its own configurable module, which the provider TCK and other SDKs' testbeds reuse.
 - **Q3:** a restart keeps the runtime. A start gives a cleaned store, loaded fresh in memory from the sources, and the testbed never changes the files the runtime reads.
+- **Q3 and `/change`, clarified:**
+  - `/change` is an endpoint that alters the in-memory state, the store.
+  - `allFlags.json` is written from the in-memory state, never by rewriting source files. It is an output for providers that read the file directly (file, offline, and in-process file mode), and never a source the runtime reads back.
+  - The source flag files from `test-harness` never change.
+  - The testbed re-renders `allFlags.json` after every `/change` and after every start that cleans and reloads the store. This settles Q21.
 - **Q4:** noop telemetry.
 - **Q10, Q11, Q18:** fault injection, a public `/fetch` call and an evaluation-recording sink are follow-ups, not part of step 13.
 - **Q12:** compatible, with the launchpad's quirks fixed.
@@ -97,7 +103,7 @@ The Go suite here runs no `@file` scenario. Other languages run file mode agains
 
 ## 0. Open questions for the project lead
 
-Decided questions keep their number. Q21–Q24 are open.
+Decided questions keep their number. Q22–Q25 are open.
 
 - **Q1, slicing and parallelism. (updated: F, T and B2 removed)**
   - **Recommendation:** nine PRs (section 7).
@@ -114,9 +120,11 @@ Decided questions keep their number. Q21–Q24 are open.
 
     ```go
     type Target interface {
-        Start(ctx context.Context, config string) error // ready, or an error (500)
+        // Start cleans the store and reloads every source, the combined document included; it returns when ready.
+        Start(ctx context.Context, config string) error
         Stop(ctx context.Context) error
-        Change(ctx context.Context) (variant string, err error)
+        // Load hands the target the combined document and returns once the store has accepted that version.
+        Load(ctx context.Context, document []byte, version string) error
         Ready() bool
     }
     ```
@@ -125,8 +133,8 @@ Decided questions keep their number. Q21–Q24 are open.
     - the four launchpad calls, their texts and status codes;
     - `/restart`'s delay and the cancellation of a pending restart by a later call;
     - the timeouts;
-    - the in-memory combination of the raw flags;
-    - the export of Q21.
+    - the in-memory state: the combined document and its toggles (Q9);
+    - rendering `allFlags.json` from that state once the target confirms the store holds it (Q25).
 
     The testbed `cmd` supplies the flagd target. The provider TCK, or a Flagsmith or GO Feature Flag testbed, supplies its own and reuses the server, the API and the contract test unchanged.
   - **Outside the gate:** the server opens its own listener with `net.Listen` on its configured address, and is never passed `Components.Listen`.
@@ -137,7 +145,7 @@ Decided questions keep their number. Q21–Q24 are open.
     | `address` | `:8080` |
     | `configs` | `/configs` |
     | `rawFlags` | `/rawflags` |
-    | `export` | `/flags/allFlags.json` (Q21; empty means none) |
+    | `render` | `/flags/allFlags.json` (Q21, Q25; empty means none) |
     | `changingFlag` | `changing-flag`, variants `foo` and `bar` |
     | `startTimeout` | `10s` |
     | `changeTimeout` | `5s` |
@@ -148,7 +156,10 @@ Decided questions keep their number. Q21–Q24 are open.
   - **Start** (`/start` with the configuration in use, and `/restart`'s delayed start):
     1. `Runtime.Reset(ctx)` (L) removes every source's flags and documents in one store transaction and clears per-source readiness.
     2. It calls `ReSync` on every sync provider: a forced full fetch that bypasses the unchanged-version check and always delivers. This is internal plumbing, not a public call.
-    3. Once every source has been accepted again, the runtime is ready, the gate opens, and `/start` answers `200`.
+    3. Once every source has been accepted again, the runtime is ready.
+    4. The control module re-renders `allFlags.json` from the in-memory state (Q25). Then the gate opens, and `/start` answers `200`.
+
+    `/restart` also removes the rendered `allFlags.json` while the gate is closed, as the launchpad deletes it today. File-mode providers see the outage as a missing file (`@file @reconnect`, `events.feature`). Removing the output changes no source file, and the next start renders it again.
   - **The runtime reads no file the testbed changes:**
     - the combined flags come from the testbed source (Q23);
     - the selector and metadata files are read-only.
@@ -173,12 +184,17 @@ Decided questions keep their number. Q21–Q24 are open.
   - `ConnectService.Serve`'s embedder-path management server is the named exception.
   - flagd-full is unchanged.
 
-- **Q9, `/change`. (follows from Q3)**
-  - At startup the control module deep-merges `rawflags/*.json` (except `selector-*`) in memory; the files are read once and never written.
-  - `/change` toggles `changing-flag`'s `defaultVariant` in that document, keeping every other field, and calls the target's `Change`. The flagd target fires the testbed source's internal trigger, and the store accepts the new version.
-  - The server answers `200 … "Default variant successfully changed to '<v>'\n"` once the store holds the new variant, within 5 s. Otherwise it answers the plain-text `500`.
-  - The toggle survives restarts, as the rewritten file does today, because `Reset` reloads the same document.
-  - File-mode providers see the change only through Q21.
+- **Q9, `/change`. (decided: it alters the in-memory state, the store)**
+  - **At startup** the control module reads `rawflags/*.json` (except `selector-*`) once and deep-merges them into a map, as the launchpad does: decoded into `interface{}`, so numbers are `float64`. The source files are never written.
+  - **`/change`:**
+    1. toggles `changing-flag`'s `defaultVariant` between `foo` and `bar` in that map;
+    2. encodes the map with the launchpad's encoder (Q25), which gives the document bytes and a version (their digest);
+    3. calls `Target.Load(bytes, version)`. The flagd target hands the bytes to the testbed source and fires its internal trigger, and returns once the store holds that version;
+    4. re-renders `allFlags.json` from the same bytes (Q25);
+    5. answers `200 … "Default variant successfully changed to '<v>'\n"`, all within 5 s. Otherwise it answers the plain-text `500`.
+  - **The runtime reads exactly the bytes the launchpad would have written.** Today flagd reads the launchpad's `allFlags.json`, so RPC and in-process providers see the same flag values, including the numbers re-encoded as the launchpad encodes them (`10.0` becomes `10`).
+  - **Order:** the file is written only after the store has accepted the version, so a file-mode provider never sees a state the RPC and in-process paths don't serve yet. The launchpad wrote the file first and let flagd catch up.
+  - **Restarts:** the toggle survives them, as the rewritten source file does today, because a start reloads the same in-memory state.
 
 - **Q10, `/fetch`. (decided: a follow-up)**
   - No public endpoint.
@@ -193,7 +209,7 @@ Decided questions keep their number. Q21–Q24 are open.
   |---|---|---|---|
   | 1 | A failed `/start?config=nope` is remembered, so a later `/restart` or bare `/start` fails too | A failed start leaves the last good configuration remembered | No. The only names at v2.3.0 are `default`, `ssl` and `socket`, and `socket` is excluded by `@unixsocket` in CI |
   | 2 | An unknown configuration answers after the 10 s readiness timeout, as "health check timed out" | It answers at once (Q24 for the code) | No. Every caller checks `200` only |
-  | 3 | `/change` rewrites `changing-flag.json` through a narrow struct | No file is rewritten; the in-memory toggle keeps every field | No for RPC and in-process. File mode sees the export (Q21), whose `changing-flag` keeps `state`, `variants` and `defaultVariant` |
+  | 3 | `/change` rewrites `changing-flag.json` through a narrow struct | No file is rewritten; the in-memory toggle keeps every field | No for RPC and in-process. File mode sees the rendered file (Q21), whose `changing-flag` keeps `state`, `variants` and `defaultVariant` |
 
   - C pins the three quirks on today's image as **launchpad-only** cases.
   - **Kept, because suites depend on them:** any HTTP method; `/restart`'s immediate answer and its cancellation of a pending restart; `/stop`'s cancellation; the 10 s limit for a start that doesn't get ready; the 5 s limit for `/change`.
@@ -246,13 +262,14 @@ Decided questions keep their number. Q21–Q24 are open.
 
 - **Q20, flagd-full's file source after a deletion. (decided)** Nothing in step 13; no issue here. The upstream fix is open-feature/flagd#2117, "fix(core): re-watch file sync path after the file is deleted and restored". Step 13 doesn't depend on it.
 
-- **Q21, file-mode providers. (open)**
-  - **The constraint:** file mode reads `FLAGS_DIR/allFlags.json` directly. Its `@file` scenarios need the file at start, its removal across `/restart`, and its rewrite on `/change`. The decision says the testbed never changes the files the runtime reads.
-  - **Options:**
-    - **(a) An export file the runtime never reads.** The control module writes `/flags/allFlags.json` as the launchpad does: at startup and on `/change`, removed on `/restart`, recreated on start. Revision 2's blocker cannot return. Every pinned `@file` scenario keeps working.
-    - **(b) No file mode.** Nothing is written; `@file` suites keep the launchpad image.
-    - **(c) A static export, written once.** The `@file` evaluation scenarios pass; `@file @reconnect`, the event chains and "Flag change event" are excluded for file runs.
-  - **Recommendation:** (a), off when `export` is empty.
+- **Q21, file-mode providers. (decided by the clarification)**
+  - The testbed renders `/flags/allFlags.json` from the in-memory state:
+    - at startup;
+    - after every `/change`;
+    - after every start that cleans and reloads the store.
+  - It removes the file while a `/restart` keeps the gate closed.
+  - The runtime never reads it back. Every pinned `@file` scenario sees what it sees today: the file at start, gone during the outage, rewritten on `/change`.
+  - `render` set to empty turns it off, for a target with no file-mode providers.
 
 - **Q22, `/start` with another configuration. (open)** `ssl`, `sync-payload` and `metadata` change TLS, sources and endpoint settings, which a running runtime cannot change. CI's Go suites use `default` only; other languages use `ssl` (`@customCert`).
   - **Options:**
@@ -275,6 +292,21 @@ Decided questions keep their number. Q21–Q24 are open.
     - **(c) `400`**, as for bad `seconds`.
   - **Recommendation:** (a). A client that branches on the code sees no new value.
 
+- **Q25, where `allFlags.json` is rendered from, and by whom. (new; open)**
+  - **The facts:**
+    - The store keeps each source's document as the format's parsed value (`store.Document.Value` is opaque), not as bytes.
+    - The launchpad writes the deep-merged map with `json.MarshalIndent(map, "", "  ")`: keys sorted, two-space indent, no trailing newline, numbers re-encoded from `float64`.
+    - It writes through `atomicWriteFile`: `os.CreateTemp` in the same directory (`.tmp-*`), then write, `chmod 0644`, close and `os.Rename` over `allFlags.json`.
+    - A file-mode provider's watcher therefore sees a create of the temp file and a rename, never a partly written `allFlags.json`.
+  - **Options:**
+    - **(a) The control module renders, triggered by the store's confirmation.** It renders after `Target.Load` or `Target.Start` has returned, which is when the store holds that version. It writes the bytes it encoded with the launchpad's encoder, because they are the bytes the store accepted. One encoder makes both the runtime's input and the file, and nothing runs asynchronously, so `/change` and `/start` answer only once the file is in place, as today.
+    - **(b) A small event sink** (UC-020) subscribed to configuration change events for `testbed:allFlags`. It fits the component model, but the pipeline is asynchronous and batched (default flush 1 s). Events carry flag keys and versions, not bodies, so the sink would have to ask for the document anyway, and `/change` would have no completion signal to wait on.
+    - **(c) Re-encoding from the store's parsed flags.** It reads the "real" store, but it is not byte-compatible: it loses fields the flag model drops, and it formats numbers and ordering its own way. File-mode providers would parse a different file.
+  - **Recommendation:** (a).
+    - **Port the launchpad's code as it is:** the deep merge, `MarshalIndent` with two spaces, and an atomic write that matches `atomicWriteFile`: temp file `.tmp-*` in the target directory, mode `0644`, rename.
+    - **Pin the bytes:** C3 records today's image's `allFlags.json`, byte for byte, at start and after one and two `/change` calls; K's `TestRenderMatchesLaunchpad` compares against that golden.
+    - **Pin the atomicity:** K's `TestRenderIsAtomic` runs a reader loop during 1000 renders; every read parses, and every read is either the old or the new version.
+
 ## 1. Scope
 
 ### UC-022: Run Provider Test Suites Against the Testbed (draft for PR S)
@@ -286,11 +318,11 @@ Decided questions keep their number. Q21–Q24 are open.
 
 **Main success scenario:**
 1. CI starts the compose stack with the testbed image.
-2. The control module combines the raw flags in memory, writes the export (Q21), and builds the runtime from `configs/default.json`, with `flags/allFlags.json` read from the testbed source. When the runtime is ready, 8013–8015 open. The control API on 8080 is up from the start.
+2. The control module combines the raw flags in memory and builds the runtime from `configs/default.json`, with `flags/allFlags.json` read from the testbed source. When the runtime is ready, the control module renders `allFlags.json` from the in-memory state, and 8013–8015 open. The control API on 8080 is up from the start.
 3. The suite calls `/start?config=default` in every scenario. The testbed closes the gate, resets and reloads the store, opens the gate when the runtime is ready again, and answers.
-4. The suite evaluates flags over RPC, in-process sync or the exported file.
-5. The suite calls `/change`. The testbed toggles `changing-flag` in memory, fires the source's internal trigger, rewrites the export, waits until the store holds the new variant, and answers.
-6. The suite calls `/restart?seconds=N`. The testbed answers at once, closes the gate and removes the export; providers see refused connections and broken streams. After N s it starts as in step 3.
+4. The suite evaluates flags over RPC, in-process sync or the rendered file.
+5. The suite calls `/change`. The testbed toggles `changing-flag` in the in-memory state, loads the new version into the store, re-renders `allFlags.json` atomically once the store holds it, and answers.
+6. The suite calls `/restart?seconds=N`. The testbed answers at once, closes the gate and removes the rendered `allFlags.json`; providers see refused connections, broken streams and a missing file. After N s it starts as in step 3, which renders the file again.
 7. The providers reconnect and fire their ready events; the suite passes the same scenarios as against the launchpad image.
 
 **Alternative flows:**
@@ -310,6 +342,11 @@ Decided questions keep their number. Q21–Q24 are open.
 - **BR-006 Test-only:** NFR-015.
 - **BR-007 Data stays upstream's:** flags, configs, certificates, the compose file and Gherkin are unmodified; Q23's rewrite happens at load time.
 - **BR-008 Reusable control:** the control module knows no flagd type; a target supplies the behaviour.
+- **BR-009 Rendered output:**
+  - `allFlags.json` is rendered from the in-memory state only after the store holds it.
+  - It is byte-identical to what the launchpad writes for the same state.
+  - It is written atomically with a temp file and a rename.
+  - The runtime never reads it.
 
 **Realizes:**
 
@@ -330,7 +367,7 @@ Decided questions keep their number. Q21–Q24 are open.
 | main 6, BR-002 | G1's gate tests; B1's `TestRestartClosesEveryRuntimePort`, `TestControlPortOutsideGate` |
 | A1 | B1's `TestConfigSwitch` (Q22) |
 | A3, A4, A7, A8, A9 | K's tests against a fake target: `TestStopUntilStart`, `TestChangeTimesOut`, `TestStartNotReadyIn10s`, `TestUnknownConfiguration`, `TestFailedStartKeepsLastGoodConfiguration`; C and I |
-| Q21 export | K's `TestExportLifecycle`; C3 |
+| Q21, Q25, BR-009 | K's `TestRenderLifecycle` (rendered at start, after `/change` and after every start; removed during `/restart`; never before `Target.Load` returns), `TestRenderMatchesLaunchpad` (C3's golden), `TestRenderIsAtomic`; B1's `TestRuntimeNeverReadsRenderedFile` (the rendered path is in no source of the loaded configuration) |
 | BR-005 | `TestTestbedManifestIsMinimal` |
 | BR-006 | `TestStandardManifestsHaveNoTestbedModule` |
 | BR-007 | `TestImageDataMatchesSubmodule`; L's `TestLoadConfigRewriteTouchesOneSource` |
@@ -355,7 +392,7 @@ The oracle is today's image, built as `test/integration` builds it. The contract
 |---|---|---|
 | C1 | `TestTestbedContract/api` | For the four calls, with GET and POST: code, `Content-Type`, the exact body with the trailing newline. `/restart?seconds=x` and `-1`. `/change` three times. **Launchpad-only:** `/start?config=nope` after at least 10 s with "health check timed out" (quirk 2), and the remembered `nope` failing the next `/restart?seconds=0` and bare `/start` (quirk 1). These run last and recover with `default` |
 | C2 | `TestTestbedContract/outage` | During `/stop` and `/restart?seconds=3`: 8013, 8014 and 8015 refuse, and 8080 answers. What an idle `EventStream` (8013) and `SyncFlags` stream (8015) see is recorded, with no `provider_shutdown` before it. Afterwards `/readyz` is 200 and both streams reopen |
-| C3 | `TestTestbedContract/files` | `/flags/allFlags.json` exists at start, is gone during a restart, and is back afterwards. After each `/change` its `changing-flag` has the toggled `defaultVariant`. **Launchpad-only:** the byte layout of `rawflags/changing-flag.json` (quirk 3) |
+| C3 | `TestTestbedContract/files` | `/flags/allFlags.json` exists at start, is gone during a restart, and is back afterwards. Its bytes at start, after one `/change` and after two are recorded as goldens, and compared on both images. (`changing-flag.json` at v3.11.0 has only the three fields the narrow struct keeps, so quirk 3 leaves `allFlags.json` byte-identical.) **Launchpad-only:** the byte layout of `rawflags/changing-flag.json` (quirk 3) |
 | C4 | `TestTestbedContract/configs` | `ssl` serves TLS with the custom root CA; `sync-payload` syncs without metadata; `metadata` serves only the metadata flag set |
 | C5 | `TestTestbedContract/change-after-restart` | `/change`, `/restart?seconds=8`, `/change`: an RPC evaluation of `changing-flag` follows both toggles |
 
@@ -369,8 +406,8 @@ Every commit builds and passes `make test`. G2 and L must be invisible to flagd-
 | C | implementer | `main` | `test/testbed/`, `Makefile` `testbed-contract` | Section 2 | green against the launchpad image |
 | G1 | implementer | `main` | `service/transport/gate/` | Virtual listeners; `Open`; `Close` with a plain close; address release | the gate tests; `-race`; 100 reopen cycles |
 | G2 | implementer | `main` | `core/pkg/service`, `core/pkg/distribution`, `runtime`, `service/flag-evaluation`, `service/flag-sync`, `service/ofrep`, `service/event-collector` | Q8 | existing pins unchanged; `TestListenSeamUsedByEveryEndpoint`; `make check-flagd-full`; acceptance; upgrade differential; allocs/op |
-| K | implementer | `main` | `testbed/control/` (module) | Q2's server, `Config` and `Target`; the in-memory deep merge (ported); Q21's export; the launchpad texts; Q12's fixes and Q24 | K's tests against a fake target; C's api and files cases against a K server with a fake target |
-| M | implementer | `main` | `testbed/source/` (module) | The testbed sync provider (a fetcher, scheme `testbed:`, fetching a document from the store it is given, versioned by digest), with an internal trigger its owner fires. The trigger is not registered as a selectable trigger type | `synctest` contract run; `TestTriggerFetchesNow`; `TestUnchangedDocumentNotRedelivered`; `TestTriggerNotSelectable` |
+| K | implementer | `main` | `testbed/control/` (module) | Q2's server, `Config` and `Target`; the in-memory state with the launchpad's deep merge and encoder ported as they are; the render with the launchpad's atomic write (Q25); the launchpad texts; Q12's fixes and Q24 | K's tests against a fake target, among them the three render tests; C's api and files cases against a K server with a fake target |
+| M | implementer | `main` | `testbed/source/` (module) | The testbed sync provider: a fetcher with scheme `testbed:` that serves the document bytes its owner last loaded, versioned by the given digest. It has an internal trigger its owner fires; the trigger is not registered as a selectable trigger type | `synctest` contract run; `TestLoadFetchesNow`; `TestUnchangedDocumentNotRedelivered`; `TestTriggerNotSelectable` |
 | L | implementer | G2 | `runtime` (`Runtime.Run(ctx)`; `Runtime.Reset(ctx)`; `Start` unchanged), `runtime/cmd` (`LoadConfig(path, components, rewrites)` over a private viper) | Q3; Q22 (a); Q23 (a) | `TestRunStopsOnContext`, `TestResetEmptiesAndReloads`, `TestResetUnderLoad` (every answer during a reset is a flag or `FLAG_NOT_FOUND`), `TestFromConfigRepeatedly` (20 cycles, `goleak`, fd count), `TestLoadConfigMatchesStart` and `TestLoadConfigRewriteTouchesOneSource` per `test-harness` config; `start_config.golden` unchanged |
 | B1 | implementer | G1 + L + K + M | `testbed/cmd/` (module: the flagd `Target` wiring the gate, `Reset`, the testbed source over K's document and its trigger, `LoadConfig` with Q23's rewrite, Q22's switch), `distributions/flagd-testbed/manifest.yaml` (Q15), `Dockerfile` (`WORKDIR /`), `test/distributions` (`TestTestbedManifestIsMinimal`, `TestStandardManifestsHaveNoTestbedModule`, `TestImageDataMatchesSubmodule`), boundary rows | Q3, Q6, Q7, Q9, Q13, Q15, Q21–Q23 | B1's tests; the manifest builds in `make test-distributions`; `docker build` in WSL; C's contract against the built image |
 | I | implementer | B1 (+ C merged) | `test/integration` (image chosen by an environment variable; the default unchanged), `test/testbed` (second image), `.github/workflows/build.yaml` (the relay testbed run with Q14's filter; the gated `testbed-rpc-outages` job, Q16) | Q14, Q16 | both images pass `TestRPC` and `TestInProcess` with today's tags; pass sets equal; contract against both, launchpad-only cases on the launchpad image only; the outage job green on a manual dispatch |
@@ -410,6 +447,11 @@ In WSL from the repository root (`export GOTOOLCHAIN=go1.27.3`; in a worktree `e
 - **R8, reuse pressure on K.** K's tests use a fake target, and a boundary row keeps flagd types out. X documents the interface with a sketch for a second target.
 - **R9, CI time.** About 8 minutes more in `integration-test` when Q14's filter matches. The outage job runs only with `FULL_CI` or a manual dispatch.
 - **R10, upstream drift.** A new launchpad call upstream fails the differential until K implements it.
+- **R12, render fidelity.** File-mode providers parse the rendered file unchanged only if its bytes match the launchpad's.
+  - **Covered by:**
+    - porting the deep merge and `MarshalIndent(…, "", "  ")` as they are, decode into `interface{}` included, so `10.0` becomes `10` as today;
+    - C3's golden from today's image and K's `TestRenderMatchesLaunchpad`.
+  - **Atomicity:** the temp file is created in the target directory, so the rename never crosses a filesystem, which matters on a bind mount. Providers' watchers see the same create-and-rename pattern as today.
 - **R11, containment.** Nothing goes upstream. The ported deep merge is Apache-2.0 code from the same organization, and the file says where it comes from.
 
 ## 6. Mapping: launchpad to relay pieces
@@ -420,13 +462,13 @@ In WSL from the repository root (`export GOTOOLCHAIN=go1.27.3`; in a worktree `e
 | flagd binary at `/flagd` | the minimal testbed distribution (Q15) | B1 |
 | kill and re-exec on `/start` | gate close, `Runtime.Reset` (store emptied, every source re-synced), gate open when ready | G1, L, B1 |
 | `/stop` | gate close | G1, B1 |
-| `/restart?seconds=N` | gate close and export removal; a start after N s | G1, K, B1 |
+| `/restart?seconds=N` | gate close and removal of the rendered file; a start after N s | G1, K, B1 |
 | SIGKILL socket behaviour | plain close, no `Shutdown` | G1 |
 | every flagd port | `Components.Listen` through the gate | G2 |
 | `configs/*.json` | `runtime/cmd.LoadConfig`, with `flags/allFlags.json` rewritten to `testbed:allFlags` | L, B1 |
-| `rawflags/` combined into `allFlags.json` | combined once in memory, served by the testbed source | K, M |
-| `/change` rewriting `changing-flag.json` | in-memory toggle, internal trigger, wait on the store | K, M, B1 |
-| `/flags/allFlags.json` for file-mode providers | the export (Q21), never read by the runtime | K |
+| `rawflags/` combined into `allFlags.json` | combined once in memory with the launchpad's merge and encoder; the bytes are served by the testbed source | K, M |
+| `/change` rewriting `changing-flag.json` | in-memory toggle, `Target.Load` (internal trigger, wait on the store), then render | K, M, B1 |
+| `allFlags.json` written by the launchpad's `atomicWriteFile` | rendered by the control module from the in-memory state after the store holds it, with the same encoder and the same temp-and-rename write; never read by the runtime | K |
 | a configuration switch | Q22 | L, B1 |
 | `/ssl` certificates | the same certificate stage | B1 |
 | compose file, envoy, volume, healthcheck | unchanged, from `test-harness` | — |
@@ -449,6 +491,15 @@ In WSL from the repository root (`export GOTOOLCHAIN=go1.27.3`; in a worktree `e
 Every PR description starts with `Part of #110`.
 
 ## 8. Changelog
+
+### Revision 3, clarification of Q3 and `/change`
+
+| Point | Change |
+|---|---|
+| `/change` alters the in-memory state | Q9: toggle in the control module's map, `Target.Load` into the store, then render; `Target.Change` replaced by `Target.Load` |
+| `allFlags.json` is an output rendered from the in-memory state | Q21 decided; Q25 (new) recommends the control module as renderer, after the store confirms, with the launchpad's encoder and atomic write; BR-009; `export` renamed `render` |
+| Re-rendered after every `/change` and start | Q3 step 4; removed during `/restart` for file-mode outages |
+| Source files never change | Unchanged: K reads `rawflags/` once |
 
 ### Revision 3, second set of decisions
 
