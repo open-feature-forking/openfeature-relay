@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/launchdarkly/eventsource"
@@ -32,6 +33,7 @@ type Service struct {
 	es                *eventsource.Server
 	tracker           *Tracker
 	heartbeatInterval time.Duration
+	closeOnce         sync.Once
 }
 
 // New builds an SSE Service backed by the shared flag store.
@@ -87,8 +89,7 @@ func (svc *Service) Start(ctx context.Context) error {
 		case <-ctx.Done():
 			// Order matters: the tracker's event loop is the only publisher, and
 			// eventsource.Server.Publish blocks forever once the server is closed.
-			svc.tracker.Close()
-			svc.es.Close()
+			svc.Close()
 			if svc.logger != nil {
 				svc.logger.Info("shutting down ofrep sse service")
 			}
@@ -99,4 +100,13 @@ func (svc *Service) Start(ctx context.Context) error {
 			}
 		}
 	}
+}
+
+// Close stops what New started, for a service that is never started: the tracker's event loop and the eventsource
+// server. A service that was started stops them itself when its context ends. Close is safe to repeat.
+func (svc *Service) Close() {
+	svc.closeOnce.Do(func() {
+		svc.tracker.Close()
+		svc.es.Close()
+	})
 }

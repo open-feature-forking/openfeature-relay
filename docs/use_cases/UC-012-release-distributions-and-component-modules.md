@@ -8,7 +8,7 @@
 **Secondary Actors:** GitHub Actions, Container Registry  
 **Goal:** Publish a version of every changed component module and, with each flagd release, the manifests, binaries and images of all standard distributions, so that manifests can pin component versions and Operators can use the standard distributions directly.  
 **Trigger:** Maintainer decides to release the changes merged on main since the last release  
-**Status:** Draft  
+**Status:** Implemented  
 
 **Requirements:** [FR-030, FR-031, NFR-009, C-003, C-009, C-011](../requirements.md)
 
@@ -166,3 +166,16 @@ For flagd-full this rule yields exactly today's image and archive names.
 ### BR-013: flagd-proxy Stays a Separate Release
 
 Today's flagd-proxy is not a standard distribution. It keeps its own version, release tag, binaries and image `ghcr.io/open-feature/flagd-proxy`, released as today; flagd-sync, the standard configuration proxy, does not replace it.
+
+## Accepted Test Gaps
+
+This use case is `Implemented` as a dry run: `.github/scripts/release-dry-run.sh` builds and checks, without publishing, signing or tagging anything, everything one release would produce for flagd and flagd-proxy as today and for flagd-minimal through the full path (BR-003, BR-006, BR-007, BR-009, BR-012, BR-013), and `test/release` checks that every component module's path matches its tag directory (BR-001, A4). flagd-full is checked under flagd's names: all 11 archives, the image configuration, and the standard image for both platforms. flagd-minimal-otel, flagd-cloud, flagd-kubernetes and flagd-sync are checked on their archive names, one `linux/amd64` archive, `version --verbose` and the rendered manifest; their image names follow BR-012, but no image is built. BR-004 is covered in shape only: the rendered manifests pin a placeholder version and have no replaces. These parts are accepted gaps, owned by the work after the incubator:
+
+| Gap | Owner |
+|-----|-------|
+| flagd-minimal-otel, flagd-cloud, flagd-kubernetes and flagd-sync: the rest of the archive matrix, the FIPS archives, and the standard and FIPS images (steps 7-10) | after the incubator |
+| flagd-full: the FIPS image for both platforms, the provenance and SBOM attestations, and its rendered published manifest (steps 9-10, BR-004, BR-009) | after the incubator |
+| Wiring the standard distributions into the release workflow, creating tags and pushing images (steps 5, 9, 10, 11, A3, A5, A6, BR-008 in the workflow) | after the incubator |
+| Registering component modules with release-please, and the release pull request: proposed versions, changelogs, wrong-version corrections (steps 1-4, A1, BR-002, BR-010, BR-011) | after the incubator |
+| Building against real released component versions (steps 6-7, BR-004, BR-005, A2); the dry run renders manifests at the placeholder `v0.0.0-dryrun` and builds from the tree | after the incubator |
+| Signing images with cosign (BR-009); provenance and software bill of materials attestations are checked | after the incubator |

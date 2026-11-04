@@ -111,5 +111,14 @@ func (e *endpoint) Serve(ctx context.Context) error {
 	return e.svc.Start(ctx)
 }
 
+// Close implements io.Closer for an endpoint that is never served, which the runtime closes when it fails to build:
+// Create bound the listener and subscribed to the events.
+func (e *endpoint) Close() error {
+	if e.changes != nil {
+		e.changes.Close()
+	}
+	return e.svc.Close()
+}
+
 // NewFactory returns the factory of the flag sync endpoint, as a generated main of a distribution calls it.
 func NewFactory() service.Factory { return Factory{} }
