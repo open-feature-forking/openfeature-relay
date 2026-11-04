@@ -77,11 +77,10 @@ The table shows the order; the sections above say which rows are done.
 | 9 | [UC-009](../use_cases/UC-009-upgrade-to-flagd-full.md) | flagd-full built by the builder, flagd test harness green |
 | 10 | [UC-011](../use_cases/UC-011-inspect-distribution-components.md), [UC-010](../use_cases/UC-010-adopt-standard-distribution.md), [UC-017](../use_cases/UC-017-run-configuration-proxy.md), [UC-021](../use_cases/UC-021-export-evaluation-data.md) | components command, standard distributions, flagd-sync, event export |
 | 11 | [UC-019](../use_cases/UC-019-serve-vendor-flags.md) | a Flagsmith engine module as the cross-vendor proof |
-| 12 | [UC-002](../use_cases/UC-002-package-distribution-as-image.md), [UC-012](../use_cases/UC-012-release-distributions-and-component-modules.md), [UC-013](../use_cases/UC-013-verify-change-against-distributions.md), [UC-015](../use_cases/UC-015-migrate-provider-to-component-modules.md) | image, release, CI verification, migration guide |
+| 12 | [UC-002](../use_cases/UC-002-package-distribution-as-image.md), [UC-012](../use_cases/UC-012-release-distributions-and-component-modules.md), [UC-013](../use_cases/UC-013-verify-change-against-distributions.md) | image, release, CI verification |
 | 13 | UC-022 (in progress, [#110](https://github.com/open-feature-forking/openfeature-relay/issues/110)) | the flagd testbed as a `relay-builder` distribution |
 
-[UC-015 Migrate Provider to Component Modules](../use_cases/UC-015-migrate-provider-to-component-modules.md) and [UC-016 Recover from Snapshot](../use_cases/UC-016-recover-from-snapshot.md) are deferred to a later release.
-Until then, the flagd integration test checks that today's providers keep working against flagd built from this repository.
+[UC-016 Recover from Snapshot](../use_cases/UC-016-recover-from-snapshot.md) is deferred to a later release.
 
 Three ideas are written down and not scheduled: [on-demand selectors for sources, with flagd-sync replacing flagd-proxy](https://github.com/open-feature-forking/openfeature-relay/issues/149), [the repository layout after the proof of concept](https://github.com/open-feature-forking/openfeature-relay/issues/111) and [linking evaluations to the sync trace that delivered their configuration](https://github.com/open-feature-forking/openfeature-relay/issues/59).
 
