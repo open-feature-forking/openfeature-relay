@@ -154,5 +154,6 @@ This use case is `Implemented` for the sync provider side: the factory interface
 - Telemetry injected generically: the gRPC dial options and the stream recorder stay fields of the `flagd-grpc` factory until UC-006 supplies them through the telemetry provider.
 - Fetch triggers that need an inbound endpoint or a vendor: a webhook, server-sent events and vendor change events (UC-019). Notifying a system of a change is an event sink (UC-020).
 - The official `http` fetcher answers conditionally with the ETag and the body digest only; sources that answer `If-Modified-Since`, such as the Flagsmith environment document, need their own fetcher (UC-019).
+- The opt-in reconnect, fatal-code, keepalive, stream deadline, selector header and readiness settings of the `grpc` sync provider, which the Go flagd provider has: UC-023.
 - flagd-proxy keeps `SyncFromURI`. Not delivered: flagd-proxy stays a separate program (UC-017 BR-007, UC-012 BR-013).
 - The exported names this use case removed (`NewHTTP`, `NewFileSync`, the fields of `file.Sync`, `polling.Poller`, `CronPoller`, `NewCronPoller`, `NewSourcePoller`, `MockPoller`, `gcs.New`, `azblob.New`, `s3.New`, and the module `sync/blob` with `blob.NewSync`, `blob.Factory`, `blob.Fetcher` and the fields of `blob.Sync`; each cloud module now exports `NewFactory`) go into the migration guide of UC-015.
