@@ -7,7 +7,7 @@
 **Primary Actor:** Operator  
 **Goal:** Deliver every evaluation flagd serves or collects, and every configuration change it accepts, to the analytics, experimentation and audit systems the Operator chooses, without slowing or failing evaluation.  
 **Trigger:** Operator decides that a deployment's evaluation and configuration change events must reach external systems  
-**Status:** Draft  
+**Status:** Implemented  
 
 **Requirements:** [FR-037, FR-038, FR-039, FR-028, NFR-013](../requirements.md)
 
@@ -128,3 +128,35 @@ Event sink credentials come from environment variables or files, never from the 
 ### BR-007: Event Sinks Cover All Flag Sets
 
 An event sink receives the events of its kinds for every flag set; event sinks per flag set are out of scope for the first release.
+
+### BR-008: The Operator Configures Event Sinks in the Configuration File
+
+An Operator configures the components of a distribution besides its official ones with keys of flagd's configuration file, and with no flag, so flagd's help is unchanged:
+
+- `event-sinks` is a list; an entry names the event sink with `type`, may narrow its event kinds with `kinds` (never widen: a kind the event sink does not declare stops startup), may size its buffer with `bufferSize`, `batchSize`, `flushInterval` and `maxAttempts`, and holds the event sink's own settings, such as `url` and `headers` of the webhook event sink.
+- `middleware` is a list of entries in the same form; its order is the order of the chain.
+- `endpoint-settings` holds the settings of a service endpoint besides the official ones, by its type; `event-collector` holds those of the event collector. Where both name a key, `endpoint-settings` wins.
+- A setting's value may name a credential, `{env: NAME}` or `{file: PATH}`; the value is read when the event sink is created, and an unset variable or an unreadable file stops startup naming the event sink and the setting, never the value. No string is a reference.
+- The keys are matched as written, in lower case, and in a YAML or JSON file.
+
+Without these keys nothing subscribes and no port opens beyond those of flagd's flags. The settings of an event sink need a telemetry provider that serves metrics, because the drops of A5 are reported there; a distribution without one refuses the `event-sinks` key at startup.
+
+### BR-009: The Collector's Protocol Is Provisional
+
+The service endpoint that collects provider events (A3 and A4, FR-039) is the event collector. It opens a port only when the Operator gives it one with the `event-collector` key. It serves `POST /events/v1`, a JSON object with an `events` array whose items are evaluation or tracking events. No OpenFeature specification defines how an in-process provider reports its events, so this protocol is specific to this project and may change until one does.
+
+- An evaluation event needs a `flagKey`. It may carry `time` (RFC 3339, default the arrival of the batch), `flagSet`, `format`, `variant`, `reason`, `errorCode`, `targetingKey`, `value` and `hasValue`. A whole number in `value` arrives as an integer, any other number as a float.
+- A tracking event needs a `name`. It may carry `time`, `targetingKey`, `value` (a number) and `details` (an object).
+- The origin of every event is in-process; one that a sender gives is ignored.
+- Events are accepted one by one. The valid events of a batch are published, and the answer is 202 `{"accepted": n}`. A batch with invalid events is answered 400 `{"accepted": n, "rejected": [{"index": i, "reason": "..."}]}`, which lists every invalid event, and nothing is published for those (A4).
+- The service endpoint's CORS origins and size limits are those of OFREP: `--cors-origin`, `--max-request-body` and `--max-request-header`.
+
+No in-process provider sends these events yet; the provider side of A3 is outside this repository.
+
+## Delivered by Later Use Cases
+
+This use case is `Implemented`: the webhook event sink and the event collector in flagd-full, the operator settings of BR-008 for event sinks, middleware and extension service endpoints, credentials from the environment or files, the event kinds an event sink subscribes to, and an end-to-end test on the built flagd-full that exports to a webhook. One part is delivered by another use case and is an accepted gap of this one:
+
+| Gap | Delivered by |
+|-----|--------------|
+| Main step 1: the listing that shows an Operator the event sinks of a distribution (`flagd components` exists; its use case is still open) | UC-011 |

@@ -224,7 +224,7 @@ Every scheme is claimed by exactly one selected sync provider. A scheme is the p
 
 ## Delivered by Later Use Cases
 
-This use case is `Implemented`: the manifest and its validation, the generated source, module resolution with the version checks, the checks of needs and schemes, the compile, the skippable steps, the distribution's own command line, and the manifests of flagd-full and of the test distributions that the Builder builds in CI. These parts are delivered by the use cases named here, and are accepted gaps of this one:
+This use case is `Implemented`: the manifest and its validation, the generated source, module resolution with the version checks, the checks of needs and schemes, the compile, the skippable steps, the distribution's own command line, the manifests of flagd-full and of the test distributions that the Builder builds in CI, and (UC-021) the operator settings for the middleware, event sinks and service endpoints a generated source lists: the generated source lists their factories, and the Operator's configuration file activates them. These parts are delivered by the use cases named here, and are accepted gaps of this one:
 
 | Gap | Delivered by |
 |-----|--------------|
@@ -234,6 +234,4 @@ This use case is `Implemented`: the manifest and its validation, the generated s
 | Settings of absent components stop startup (the table of flag to component settings exists) | UC-010 |
 | flagd-full released from the generated source | UC-009 |
 | `flagd components` (the inventory and the identity exist) | UC-011 |
-| Operator settings for extension components | UC-021 |
 | Reference Dockerfile (FR-009) | UC-002 |
-| Compiling a distribution with middleware or event sinks, which no repository manifest does yet: the generated source lists their factories without configuration, and the example components need some, so it waits for operator settings for extension components | UC-021 |
