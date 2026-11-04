@@ -89,14 +89,23 @@ func (s *Server) Handler() http.Handler {
 	return mux
 }
 
-// Serve combines the raw flags, starts the API on its own listener, which is never behind the target's gate, and
-// starts the target with the default configuration. It returns when ctx ends, after it has removed the rendered file,
-// or at once with the error of a failed combination, a failed listen, or a start of the default configuration that
-// did not get ready.
+// Serve combines the raw flags, starts the target with the default configuration, and only when the target is ready
+// opens the API on its own listener, which is never behind the target's gate. Until then the port refuses connections,
+// as the launchpad's does while it starts flagd. It returns when ctx ends, after it has removed the rendered file, or at
+// once with the error of a failed combination, a start of the default configuration that did not get ready (the
+// launchpad exits), or a failed listen.
 func (s *Server) Serve(ctx context.Context) error {
 	if err := s.load(); err != nil {
 		return err
 	}
+
+	s.mu.Lock()
+	err := s.start(ctx, s.cfg.DefaultConfig)
+	s.mu.Unlock()
+	if err != nil {
+		return fmt.Errorf("failed to start flagd: %w", err)
+	}
+	defer s.unrender()
 
 	listener, err := net.Listen("tcp", s.cfg.Address)
 	if err != nil {
@@ -114,15 +123,7 @@ func (s *Server) Serve(ctx context.Context) error {
 		defer cancel()
 		_ = server.Shutdown(timeout) // no new call can schedule a restart after this
 		s.cancelRestart()
-		s.unrender()
 	}()
-
-	s.mu.Lock()
-	err = s.start(ctx, s.cfg.DefaultConfig)
-	s.mu.Unlock()
-	if err != nil {
-		return fmt.Errorf("failed to start flagd: %w", err)
-	}
 
 	select {
 	case <-ctx.Done():
