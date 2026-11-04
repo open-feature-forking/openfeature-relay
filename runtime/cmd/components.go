@@ -141,6 +141,8 @@ var componentsCmd = &cobra.Command{
 	Short:  "List the components compiled into this distribution",
 	Args:   cobra.NoArgs,
 	Hidden: true,
+	// The root command's banner goes to stdout, where the listing must stand alone for tooling to read.
+	PersistentPreRun: func(*cobra.Command, []string) {},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		format, _ := cmd.Flags().GetString("output")
 		if format != "text" && format != "json" {
