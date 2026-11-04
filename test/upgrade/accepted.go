@@ -40,6 +40,11 @@ type AcceptedDifference struct {
 	Candidate string `yaml:"candidate"`
 }
 
+// Difference is one observation that the two flagds disagree on.
+type Difference struct {
+	Scenario, Key, Baseline, Candidate string
+}
+
 // Accepted is the content of accepted.yaml.
 type Accepted struct {
 	Entries []Entry `yaml:"accepted"`
@@ -62,7 +67,7 @@ func LoadAccepted(path string) (*Accepted, error) {
 // Allows returns the entry that accepts the difference, if any. It matches the scenario, the key and both values
 // exactly, and notes that the observation fired.
 func (a *Accepted) Allows(d Difference) (Entry, bool) {
-	got := AcceptedDifference{d.Scenario, d.Key, d.Baseline, d.Candidate}
+	got := AcceptedDifference(d)
 	for _, e := range a.Entries {
 		for _, o := range e.Observations {
 			if o == got {
