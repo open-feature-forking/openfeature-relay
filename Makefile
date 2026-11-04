@@ -5,7 +5,7 @@ ALL_GO_MOD_DIRS := $(shell find . \( -path ./test/integration -o -path ./.claude
 
 # The library modules: what embedders import. Tests, the FIPS tests and the benchmarks run on exactly
 # these (plus the binaries), and testdata/go-packages.txt pins the packages they contain.
-GO_LIB_MODULE_DIRS := ./core ./sync/file ./sync/flagd-grpc ./sync/http ./sync/openfeature-operator ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel ./evaluator/flagd ./configformat/flagd
+GO_LIB_MODULE_DIRS := ./core ./sync/file ./sync/flagd-grpc ./sync/http ./sync/openfeature-operator ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel ./eventsink/webhook ./evaluator/flagd ./configformat/flagd
 
 # The modules flagd-full is made of besides the library ones: its main module, the runtime and the service endpoints
 # (UC-001 Q7). They are tested, benchmarked and pinned like the library modules.

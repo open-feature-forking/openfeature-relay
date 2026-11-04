@@ -38,3 +38,5 @@ service/flag-sync:openfeature-relay/(runtime|service/(flag-evaluation|ofrep))
 test/configformat-example:robfig|opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|cloud.google.com|github.com/Azure|github.com/aws|open-feature/flagd/flagd|openfeature-relay/(sync|telemetry|evaluator|configformat)/
 # The Builder (UC-001 Q1) depends on no relay module: it only reads manifests and runs the go binary.
 builder:open-feature/flagd/|openfeature-relay/(core|runtime|sync|evaluator|configformat|telemetry|service|distribution)
+# The webhook event sink's module graph holds core and no other module of this repository, and no telemetry, transport or platform client.
+eventsink/webhook:robfig|opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|cloud.google.com|github.com/Azure|github.com/aws|prometheus|open-feature/flagd/flagd|openfeature-relay/((sync|telemetry|evaluator|configformat|service)/|runtime)

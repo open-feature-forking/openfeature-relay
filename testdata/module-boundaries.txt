@@ -60,3 +60,5 @@ service/ofrep:./...:go.opentelemetry.io|prometheus/client_golang|otelconnect|ope
 service/flag-sync:./...:go.opentelemetry.io|prometheus/client_golang|otelconnect|openfeature-relay/telemetry/|openfeature-relay/(runtime|service/(flag-evaluation|ofrep))
 # The Builder (UC-001 Q1) depends on no relay module: it only reads manifests and runs the go binary.
 builder:./...:open-feature/flagd/|openfeature-relay/(core|runtime|sync|evaluator|configformat|telemetry|service|distribution)
+# The webhook event sink requires the core and the standard library only: no vendor client, transport, telemetry SDK or other relay module.
+eventsink/webhook:./...:opentelemetry|google.golang.org/grpc|connectrpc|k8s.io|gocloud|prometheus|open-feature/flagd/flagd|openfeature-relay/((sync|telemetry|evaluator|configformat|service)/|runtime)
