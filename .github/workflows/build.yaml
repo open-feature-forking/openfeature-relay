@@ -320,3 +320,22 @@ jobs:
       - name: Today's flagd and the flagd-full the Builder made, side by side (UC-009)
         if: steps.gate.outputs.run == 'true'
         run: make upgrade-test
+
+  release-dry-run:
+    name: Release dry run
+    # Gated like docker-local: set the repository variable FULL_CI=true, or run the workflow manually.
+    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - name: Setup go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
+        with:
+          go-version-file: 'flagd/go.mod'
+      - name: Download cyclonedx-gomod
+        uses: CycloneDX/gh-gomod-generate-sbom@efc74245d6802c8cefd925620515442756c70d8f # v2
+        with:
+          version: v1
+      - name: The release's build steps, without publishing or signing anything (UC-009)
+        run: .github/scripts/release-dry-run.sh
