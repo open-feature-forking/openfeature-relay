@@ -2,7 +2,7 @@
 # The release dry run of the standard distributions (UC-012, Q8). Nothing is pushed, signed or tagged.
 #
 # flagd-minimal takes the full path: the 11 archives of a release, standard and FIPS images for linux/amd64 and
-# linux/arm64 as OCI layouts with attestations, the FIPS refusal and `version --verbose`. flagd-cloud, flagd-kubernetes
+# linux/arm64 as OCI layouts with attestations, the FIPS refusal and `version --verbose`. flagd-minimal-otel, flagd-cloud, flagd-kubernetes
 # and flagd-sync are checked on what differs: the archive and image names of BR-012, one linux/amd64 archive with its
 # contents, and `version --verbose`. flagd-full is released under flagd's names by the flagd checks of release-dry-run.sh.
 #
@@ -20,7 +20,7 @@ summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
 registry=ghcr.io/open-feature
 
 full_path=flagd-minimal
-others="flagd-cloud flagd-kubernetes flagd-sync"
+others="flagd-minimal-otel flagd-cloud flagd-kubernetes flagd-sync"
 
 failures=0
 note() { echo "$*" | tee -a "${summary}"; }
@@ -33,6 +33,12 @@ expect_equal() { # <what> <expected> <got>
 # the prefix.
 published_name() { # <distribution directory>
   if [ "$1" = flagd-full ]; then echo flagd; else echo "$1"; fi
+}
+
+# the size of each linux_x86_64 binary in MiB, for the step summary
+sizes_file="${out}/sizes.md"
+add_size() { # <name> <binary>
+  printf '| %s | %.1f |\n' "$1" "$(awk -v b="$(stat -c %s "$2")" "BEGIN { print b / 1048576 }")" >>"${sizes_file}"
 }
 
 note ""
@@ -90,6 +96,7 @@ dir="${out}/${d}"
 .github/scripts/release-build.sh "${name}" "${version}" "${commit}" "${date}" "${dir}" "distributions/${d}/build"
 check_archives "${name}" "${dir}" "$(archive_names "${name}" "standard fips")"
 tar -xzf "${dir}/${name}_${version}_Linux_x86_64.tar.gz" -C "${dir}" "./${name}_linux_x86_64"
+add_size "${name}" "${dir}/${name}_linux_x86_64"
 expect_equal "${name}: build info path" "github.com/open-feature-forking/openfeature-relay/distributions/${d}" \
   "$(go version -m "${dir}/${name}_linux_x86_64" | awk '$1 == "path" {print $2}')"
 check_version "${name}" "${dir}/${name}_linux_x86_64"
@@ -150,7 +157,7 @@ expect_equal "${local_tag}: version" "flagd: v${version} (${commit}), built at: 
 expect_equal "${local_tag}: distribution" "distribution: ${name} v${version}" "$(grep '^distribution:' <<<"${printed}")"
 docker rmi --force "${local_tag}" >/dev/null 2>&1 || true
 
-# the other three: only what differs from flagd-minimal
+# the other four: only what differs from flagd-minimal
 for d in ${others}; do
   name="$(published_name "${d}")"
   dir="${out}/${d}"
@@ -158,6 +165,7 @@ for d in ${others}; do
     .github/scripts/release-build.sh "${name}" "${version}" "${commit}" "${date}" "${dir}" "distributions/${d}/build"
   check_archives "${name}" "${dir}" "${name}_${version}_Linux_x86_64.tar.gz"
   tar -xzf "${dir}/${name}_${version}_Linux_x86_64.tar.gz" -C "${dir}" "./${name}_linux_x86_64"
+  add_size "${name}" "${dir}/${name}_linux_x86_64"
   check_version "${name}" "${dir}/${name}_linux_x86_64"
 done
 

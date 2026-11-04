@@ -15,7 +15,7 @@
 ## Preconditions
 
 - Every component module, the core module and flagd are registered with the release automation, each with its own version and changelog.
-- The manifest of each standard distribution (flagd-minimal, flagd-cloud, flagd-kubernetes, flagd-sync, flagd-full) is kept in the repository.
+- The manifest of each standard distribution (flagd-minimal, flagd-minimal-otel, flagd-cloud, flagd-kubernetes, flagd-sync, flagd-full) is kept in the repository.
 - All changes on main since the last release are conventional commits.
 - GitHub Actions keeps a release pull request open that proposes the next version of every module changed since its last release.
 
@@ -31,7 +31,7 @@
 8. GitHub Actions confirms that every FIPS build carries the certified Go Cryptographic Module and refuses to run with FIPS mode disabled.
 9. GitHub Actions attaches each standard distribution's manifest, binary archives and software bill of materials to the flagd release.
 10. GitHub Actions builds the standard and FIPS images of every standard distribution for `linux/amd64` and `linux/arm64`, pushes them to the Container Registry and signs them.
-11. Maintainer sees the flagd release with the manifests, binaries and images of all five standard distributions, and the new component module versions available for manifests to pin.
+11. Maintainer sees the flagd release with the manifests, binaries and images of all six standard distributions, and the new component module versions available for manifests to pin.
 
 ## Alternative Flows
 
@@ -96,7 +96,7 @@
 ### Success Postconditions
 
 - Every module released has a release tag and a GitHub release with its changelog, and manifests can pin that version.
-- With a new flagd version, all five standard distributions are published under that version: manifest, standard and FIPS binary archives for the platform matrix, software bill of materials, and signed standard and FIPS images for `linux/amd64` and `linux/arm64`.
+- With a new flagd version, all six standard distributions are published under that version: manifest, standard and FIPS binary archives for the platform matrix, software bill of materials, and signed standard and FIPS images for `linux/amd64` and `linux/arm64`.
 - Every standard distribution is published under the image and archive names of BR-012, which for flagd-full are those of flagd before the builder.
 - The release state records the new version of every released module.
 
@@ -119,7 +119,7 @@ The next version of a module is derived only from the conventional commits that 
 
 ### BR-003: Standard Distributions Follow the flagd Version
 
-All five standard distributions are released together under the flagd version. A standard distribution has no version of its own.
+All six standard distributions are released together under the flagd version. A standard distribution has no version of its own.
 
 ### BR-004: Published Manifests Pin Released Versions
 
@@ -155,7 +155,7 @@ The release pull request and its commits carry a DCO sign-off.
 
 ### BR-012: Image and Archive Names
 
-The name of a standard distribution is `flagd` for flagd-full and `flagd-<distribution>` for every other one (e.g. `flagd-minimal`, `flagd-sync`).
+The name of a standard distribution is `flagd` for flagd-full and `flagd-<distribution>` for every other one (e.g. `flagd-minimal`, `flagd-minimal-otel`, `flagd-sync`).
 
 - Image: `ghcr.io/open-feature/<name>`, tagged `latest` and `v<version>`; the FIPS image is tagged `latest-fips` and `v<version>-fips`.
 - Binary archive: `<name>_<version>_<OS>_<arch>.tar.gz`, and `.zip` for Windows; the FIPS archive is `<name>-fips_<version>_<OS>_<arch>` with the same extension.

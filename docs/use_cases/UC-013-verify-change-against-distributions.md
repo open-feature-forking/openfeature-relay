@@ -143,7 +143,7 @@
 
 ### BR-001: Every Standard Distribution on Every Code Change
 
-Every pull request that changes more than documentation builds all five standard distributions, each as standard and FIPS build, regardless of which modules it touches.
+Every pull request that changes more than documentation builds all six standard distributions, each as standard and FIPS build, regardless of which modules it touches.
 
 ### BR-002: Verify the Change, Not the Last Release
 
