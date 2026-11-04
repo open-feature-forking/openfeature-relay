@@ -75,7 +75,7 @@ class BuildDockerfiles(unittest.TestCase):
 
     PINNED = {
         "flagd/build.Dockerfile": "b95c00f2da32a69b9132c167051b8b435748029c5e732725b14a5b561604f65e",
-        "flagd-proxy/build.Dockerfile": "dbdc1298b2474bb454e13e623ae190f4c99d695d688bcdf02d849493f932a837",
+        "flagd-proxy/build.Dockerfile": "19cbf8fb4450db31b5cbad5dc15fbc29fe3f9cfcab21f5d269e8bfb214207b2a",
     }
 
     def test_dockerfiles_are_unchanged(self):
