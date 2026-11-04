@@ -46,6 +46,12 @@ func getPlatform() string {
 	}
 }
 
+// The Gherkin tag expressions of the two suites; TestTagSelectionMatchesBranchPoint pins them.
+const (
+	rpcTags       = "@rpc && ~@unixsocket && ~@targetURI && ~@sync && ~@metadata && ~@grace && ~@events && ~@customCert && ~@reconnect && ~@caching && ~@forbidden && ~@fractional-v1 && ~@fractional-v2 && ~@deprecated"
+	inProcessTags = "@in-process && ~@unixsocket && ~@metadata && ~@contextEnrichment && ~@customCert && ~@forbidden && ~@sync-port && ~@sync-payload && ~@fractional-v1 && ~@fractional-v2 && ~@deprecated"
+)
+
 func TestMain(m *testing.M) {
 	flag.Parse()
 
@@ -170,7 +176,7 @@ func TestRPC(t *testing.T) {
 	}
 
 	// Run tests with RPC-specific tags - exclude connection/event issues we won't tackle
-	tags := "@rpc && ~@unixsocket && ~@targetURI && ~@sync && ~@metadata && ~@grace && ~@events && ~@customCert && ~@reconnect && ~@caching && ~@forbidden && ~@fractional-v1 && ~@fractional-v2 && ~@deprecated"
+	tags := rpcTags
 
 	if err := runner.RunGherkinTestsWithSubtests(t, featurePaths, tags); err != nil {
 		t.Fatalf("Gherkin tests failed: %v", err)
@@ -204,7 +210,7 @@ func TestInProcess(t *testing.T) {
 	// not the local flagd evaluator code. The goal is to verify the sync.proto interface,
 	// not to fully test the go in-process provider (that happens in go-sdk-contrib).
 	// Many tags are excluded because they require a more complex testbed than what's built here.
-	tags := "@in-process && ~@unixsocket && ~@metadata && ~@contextEnrichment && ~@customCert && ~@forbidden && ~@sync-port && ~@sync-payload && ~@fractional-v1 && ~@fractional-v2 && ~@deprecated"
+	tags := inProcessTags
 
 	if err := runner.RunGherkinTestsWithSubtests(t, featurePaths, tags); err != nil {
 		t.Fatalf("Gherkin tests failed: %v", err)
