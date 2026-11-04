@@ -85,3 +85,25 @@ service/flag-evaluation:./...:openfeature-relay/testbed
 service/flag-sync:./...:openfeature-relay/testbed
 # The testbed command links the components the pinned suites use and no other: no telemetry, event sink, vendor module, OFREP, event collector or other sync provider (BR-005).
 testbed/cmd:./...:openfeature-relay/(telemetry|eventsink|contrib|service/(ofrep|event-collector)|sync/(http|flagd-grpc|openfeature-operator|gcs|azblob|s3|sse))
+# Only testbed/*, test/* and distributions/flagd-testbed may import the testbed modules (UC-022).
+core:./...:openfeature-relay/testbed
+sync/file:./...:openfeature-relay/testbed
+sync/flagd-grpc:./...:openfeature-relay/testbed
+sync/http:./...:openfeature-relay/testbed
+sync/openfeature-operator:./...:openfeature-relay/testbed
+sync/gcs:./...:openfeature-relay/testbed
+sync/azblob:./...:openfeature-relay/testbed
+sync/s3:./...:openfeature-relay/testbed
+sync/sse:./...:openfeature-relay/testbed
+sync/builder:./...:openfeature-relay/testbed
+telemetry/otel:./...:openfeature-relay/testbed
+eventsink/webhook:./...:openfeature-relay/testbed
+evaluator/flagd:./...:openfeature-relay/testbed
+configformat/flagd:./...:openfeature-relay/testbed
+contrib/flagsmith/engine:./...:openfeature-relay/testbed
+contrib/flagsmith/middleware:./...:openfeature-relay/testbed
+contrib/flagsmith/sync:./...:openfeature-relay/testbed
+service/transport:./...:openfeature-relay/testbed
+service/ofrep:./...:openfeature-relay/testbed
+service/event-collector:./...:openfeature-relay/testbed
+builder:./...:openfeature-relay/testbed

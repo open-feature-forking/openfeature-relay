@@ -173,3 +173,22 @@ func TestTriggerStopsWithContext(t *testing.T) {
 	require.NoError(t, <-done)
 	require.Empty(t, s.signals, "a stopped trigger is no longer signalled")
 }
+
+// the owner loads before the runtime starts, so the first fetch does not fail and wait for its backoff
+func TestLoadBeforeRunIsDeliveredAtOnce(t *testing.T) {
+	s := New()
+	require.NoError(t, s.Load([]byte(`{"v":1}`), "d1"))
+	start := time.Now()
+	out := run(t, s, testSource())
+	require.JSONEq(t, `{"v":1}`, receive(t, out).FlagData)
+	require.Less(t, time.Since(start), time.Second)
+}
+
+func TestFetcherRefusesOtherProviders(t *testing.T) {
+	for _, provider := range []string{"", "file"} {
+		_, err := New().Factory().CreateFetcher(sync.Settings{Source: sync.SourceConfig{URI: "file:f.json", Provider: provider}})
+		require.Error(t, err, provider)
+		_, err = New().Factory().CreateTrigger(sync.Settings{Source: sync.SourceConfig{URI: "file:f.json", Provider: provider}})
+		require.Error(t, err, provider)
+	}
+}
