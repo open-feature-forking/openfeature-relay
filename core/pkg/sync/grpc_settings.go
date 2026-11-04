@@ -30,10 +30,10 @@ type GRPCSourceSettings struct {
 
 // UnmarshalJSON decodes the object strictly.
 func (s *GRPCSourceSettings) UnmarshalJSON(data []byte) error {
-	type plain GRPCSourceSettings
+	type grpcSettings GRPCSourceSettings
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
-	var decoded plain
+	var decoded grpcSettings
 	if err := decoder.Decode(&decoded); err != nil {
 		return err
 	}

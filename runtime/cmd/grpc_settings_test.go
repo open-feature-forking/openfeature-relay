@@ -34,4 +34,16 @@ func TestConfigFileGRPCObjectIsStrict(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "up:8015")
 	require.Contains(t, strings.ToLower(err.Error()), "keepalivetimems", "viper lower-cases the keys it reads")
+
+	// a wrong type or a value that is no object is not left to the decoder of the configuration file
+	for name, grpcObject := range map[string]string{
+		"a wrong type":      "    grpc:\n      keepAliveTime: 30s\n",
+		"not an object":     "    grpc: 5\n",
+		"a wrong list type": "    grpc:\n      fatalStatusCodes: PERMISSION_DENIED\n",
+	} {
+		_, err = decode(t, "sources:\n  - uri: up:8015\n    provider: grpc\n"+grpcObject)
+		require.Error(t, err, name)
+		require.Contains(t, err.Error(), `source "up:8015"`, name)
+		require.Contains(t, err.Error(), "grpc settings", name)
+	}
 }

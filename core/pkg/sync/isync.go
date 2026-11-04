@@ -89,7 +89,7 @@ type SourceConfig struct {
 	HeadersFrom map[string]HeaderSource `json:"headersFrom,omitempty"`
 
 	// GRPC holds the opt-in settings of a gRPC sync source. Only a source of the provider "grpc" may have it.
-	GRPC *GRPCSourceSettings `json:"grpc,omitempty"`
+	GRPC *GRPCSourceSettings `json:"grpc,omitempty" mapstructure:"-"`
 
 	OAuth *OAuthCredentialHandler `json:"oauth,omitempty"`
 
