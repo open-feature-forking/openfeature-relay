@@ -123,10 +123,10 @@ func (r *webhookReceiver) stall() (release func()) {
 
 // exporting is a running flagd-full.
 type exporting struct {
-	ofrep, management, collector string // base URLs; collector is "" without a port
-	pid                          int
-	ports                        []int
-	out                          *lockedBuffer
+	ofrep, management string // base URLs
+	pid               int
+	ports             []int
+	out               *lockedBuffer
 }
 
 type exportOptions struct {
@@ -134,8 +134,6 @@ type exportOptions struct {
 	// config is the configuration file; "" starts without one
 	config string
 	env    []string
-	// collectorPort is added to the configuration as the event-collector port when set
-	collectorPort int
 }
 
 func exportEnv() []string {
