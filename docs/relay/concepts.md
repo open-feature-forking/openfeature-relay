@@ -16,10 +16,10 @@ A **component module** is a Go module that provides one component through a **fa
 | Sync provider | Reads flag configurations from a kind of source and emits them; a source's scheme (`file:`, `https://`, `s3://`, …) selects the sync provider | file, HTTP, gRPC, Kubernetes, GCS, Azure Blob, S3 |
 | Configuration format | Validates flag configurations of one format and keeps them in the store as documents, reporting each document's flag keys, flag set, version and changes | flagd's JSON schema |
 | Evaluator | Resolves one, several or all flags of a selector for an evaluation context from the documents of its paired configuration format; emits no telemetry | flagd's targeting rules |
-| Service endpoint | Serves flags to clients over a protocol | flag evaluation (gRPC/Connect), OFREP, flag sync |
-| Middleware | Wraps a service endpoint's HTTP handler with cross-cutting behaviour | h2c, CORS, HTTP metrics |
+| Service endpoint | Serves flags to clients over a protocol | flag evaluation (gRPC/Connect), OFREP, flag sync, event collector (off until configured) |
+| Middleware | Wraps a service endpoint's HTTP handler with cross-cutting behaviour | none; configured in flagd's configuration file |
 | Telemetry provider | Supplies tracing, metrics and HTTP instrumentation to service endpoints and middleware | OpenTelemetry |
-| Event sink | Delivers configuration change, evaluation and tracking events to an external system | — |
+| Event sink | Delivers configuration change, evaluation and tracking events to an external system | webhook (off until configured) |
 
 A component written outside the Maintainers' modules is an **extension**.
 A module that ships a configuration format together with its evaluator, as vendors ship their engines, is an **engine module**.
