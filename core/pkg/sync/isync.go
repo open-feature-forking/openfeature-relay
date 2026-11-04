@@ -45,6 +45,9 @@ type DataSync struct {
 	SyncContext *structpb.Struct
 	Source      string
 	Selector    string
+	// Version is the source version the fetching sync provider got this flag configuration at (FetchResult.Version);
+	// empty when the provider has none. The runtime hands it back through WaitAccepted.
+	Version string
 
 	// When true, the store scopes deletion to only the flagSetIds present in
 	// this payload rather than wiping all flags for the source. This must be

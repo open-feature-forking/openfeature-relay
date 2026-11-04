@@ -25,6 +25,10 @@ func (f ListenFunc) Or() ListenFunc {
 }
 
 // Endpoint is a service endpoint: it serves clients from when the distribution starts until it shuts down.
+//
+// An endpoint that holds a resource from the moment it is created, such as a bound listener, also implements io.Closer.
+// The runtime closes it when the distribution fails to build after the endpoint was created, so that Serve never runs;
+// Close releases what Create took and is safe to repeat. An endpoint that takes nothing at Create needs no Close.
 type Endpoint interface {
 	// Serve blocks while the endpoint serves. When ctx ends it ends its clients' connections and returns nil,
 	// within the endpoint budget of the runtime's shutdown. An error stops the distribution.

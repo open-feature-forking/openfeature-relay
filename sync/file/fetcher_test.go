@@ -138,6 +138,8 @@ func TestNewSyncProvider(t *testing.T) {
 			next := func() sync.DataSync {
 				select {
 				case d := <-deliveries:
+					require.NotEmpty(t, d.Version, "a fetched delivery carries its source version")
+					d.Version = "" // the digest is the fetching provider's own tests' business
 					return d
 				case <-time.After(8 * time.Second):
 					t.Fatal("no delivery")

@@ -277,7 +277,7 @@ func (p *Provider) fetchLocked(ctx context.Context, dataSync chan<- sync.DataSyn
 		}
 	}
 
-	if err := p.deliver(ctx, dataSync, flags); err != nil {
+	if err := p.deliver(ctx, dataSync, flags, result.Version); err != nil {
 		return err
 	}
 	p.version = result.Version
@@ -285,10 +285,11 @@ func (p *Provider) fetchLocked(ctx context.Context, dataSync chan<- sync.DataSyn
 }
 
 // deliver sends a flag configuration, unless ctx is done first.
-func (p *Provider) deliver(ctx context.Context, dataSync chan<- sync.DataSync, flags string) error {
+func (p *Provider) deliver(ctx context.Context, dataSync chan<- sync.DataSync, flags, version string) error {
 	update := sync.DataSync{
 		FlagData:           flags,
 		Source:             p.opts.Source,
+		Version:            version,
 		IncrementalUpdates: p.opts.IncrementalUpdates,
 	}
 	select {

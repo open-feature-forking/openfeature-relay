@@ -180,3 +180,12 @@ func (s Service) Start(ctx context.Context) error {
 
 	return nil
 }
+
+// Close stops what NewOfrepService started, for a service that is never started: the SSE tracker and its server. A
+// service that was started stops them itself when its context ends. Close is safe to repeat.
+func (s Service) Close() error {
+	if s.sse != nil {
+		s.sse.Close()
+	}
+	return nil
+}
