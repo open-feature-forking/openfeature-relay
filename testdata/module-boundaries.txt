@@ -23,6 +23,7 @@ configformat/flagd:./...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|jsonlogic|
 sync/file:./...:go.opentelemetry.io|openfeature-relay/(telemetry|sync/(flagd-grpc|http|openfeature-operator|gcs|azblob|s3|builder))
 sync/flagd-grpc:./...:go.opentelemetry.io|openfeature-relay/(telemetry|sync/(file|http|openfeature-operator|gcs|azblob|s3|builder))
 sync/http:./...:go.opentelemetry.io|openfeature-relay/(telemetry|sync/(file|flagd-grpc|openfeature-operator|gcs|azblob|s3|builder))
+contrib/flagsmith/middleware:./...:go.opentelemetry.io|google.golang.org/grpc|connectrpc.com|openfeature-relay/(telemetry|sync|evaluator|configformat|service|runtime|flagd)
 sync/openfeature-operator:./...:go.opentelemetry.io|openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|gcs|azblob|s3|builder))
 # Q7: each blob provider pulls only its own cloud's SDK into its package graph, and none pulls gocloud.dev.
 sync/gcs:./...:github.com/Azure|github.com/aws|gocloud|openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|openfeature-operator|azblob|s3|builder))
