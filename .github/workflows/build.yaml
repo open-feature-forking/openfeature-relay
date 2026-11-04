@@ -196,6 +196,9 @@ jobs:
       - name: Build the FIPS variant of every standard distribution
         run: make build-standard-fips
 
+      - name: The FIPS crypto closure of every standard distribution is within the recorded one
+        run: make fips-closure-standard
+
       - name: Check the cryptographic dependency closure has not drifted
         run: |
           make fips-closure

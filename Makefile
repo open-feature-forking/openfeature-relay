@@ -169,6 +169,21 @@ fips-closure:
 	  | sort -u > docs/reference/fips-crypto-closure.txt
 	@echo "wrote docs/reference/fips-crypto-closure.txt"
 
+# UC-013 A3: the FIPS crypto closure of each standard distribution is a subset of the recorded one (flagd-full's), so
+# a distribution never reaches a cryptographic package that docs/reference/fips-140-3.md has not reviewed.
+.PHONY: fips-closure-standard
+fips-closure-standard:
+	cd builder && go build -o ../bin/relay-builder ./cmd/relay-builder
+	@set -e; tr -d '\r' < docs/reference/fips-crypto-closure.txt | LC_ALL=C sort -u > bin/recorded-fips-closure.txt; \
+	for d in $(STANDARD_DISTRIBUTIONS); do \
+		GOWORK=off ./bin/relay-builder --manifest distributions/$$d/manifest.yaml --skip-compile; \
+		(cd distributions/$$d/build && GOWORK=off $(FIPS_ENV) GOOS=linux GOARCH=amd64 go list -tags $(FIPS_TAGS) -deps . \
+			| grep -E '^(crypto|golang\.org/x/crypto)($$|/)|/crypto($$|/)' | LC_ALL=C sort -u) > bin/$$d-fips-closure.txt; \
+		extra=$$(LC_ALL=C comm -23 bin/$$d-fips-closure.txt bin/recorded-fips-closure.txt); \
+		if [ -n "$$extra" ]; then echo "$$d reaches crypto packages outside the recorded closure:"; echo "$$extra"; exit 1; fi; \
+		echo "$$d: FIPS crypto closure is within the recorded one"; \
+	done
+
 flagd-benchmark-test:
 	go test -bench=Bench -short -benchtime=5s -benchmem $(addsuffix /...,$(GO_LIB_MODULE_DIRS) $(FLAGD_MODULE_DIRS)) | tee benchmark.txt
 flagd-integration-test-harness:
