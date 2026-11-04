@@ -1,10 +1,16 @@
 # Step 13 plan: the flagd testbed as a relay-builder distribution (UC-022 Run Provider Test Suites Against the Testbed)
 
-**Status: revision 3, with the project lead's second set of decisions.**
-- It applies the decisions on Q2, Q3, Q4, Q10, Q11, Q12, Q14, Q15, Q16, Q18 and Q20 to revision 2, which resolved `step-13-opposer.md` (1 blocker, 4 major, 8 minor; section 8). Every other recommendation of revision 2 is accepted as written.
+**Status: revision 3, final. Every question (Q1–Q25) is decided by the project lead.**
+- It applies the project lead's decisions to revision 2, which resolved `step-13-opposer.md` (1 blocker, 4 major, 8 minor; section 8):
+  - first set: Q2, Q3, Q4 and Q12;
+  - second set: Q10, Q11, Q14, Q15, Q16, Q18 and Q20;
+  - the clarification of Q3 and `/change`;
+  - last: Q22–Q25.
+
+  Every other recommendation of revision 2 is accepted as written.
 - **Step 13 is a pure drop-in:** no fault injection, no public fetch call.
-- It also folds in the project lead's clarification of Q3 and `/change`: `/change` alters the in-memory state, and `allFlags.json` is an output rendered from it (Q9, Q21, Q25).
-- Open: Q22–Q25 (section 0).
+- `/change` alters the in-memory state, and `allFlags.json` is an output rendered from it (Q9, Q21, Q25).
+- Open: none.
 
 **Decisions (project lead).**
 - **#110 (2026-11-04), in the PoC:** `distributions/flagd-testbed`, with a control endpoint and a listener gate in `service/transport` for stop and start. The provider test suites run against it as the testing harness. Restructuring upstream flagd-testbed is out of scope, and upstream gets nothing: no issues, PRs or comments outside this repository.
@@ -103,9 +109,9 @@ The Go suite here runs no `@file` scenario. Other languages run file mode agains
 
 ## 0. Open questions for the project lead
 
-Decided questions keep their number. Q22–Q25 are open.
+Every question is decided. Each keeps its number; the decided option is stated first.
 
-- **Q1, slicing and parallelism. (updated: F, T and B2 removed)**
+- **Q1, slicing and parallelism. (decided: accepted as written; F, T and B2 removed)**
   - **Recommendation:** nine PRs (section 7).
     - **Parallel now, all on `main`:** S (the spec), C (the contract against today's image), G1 (the listener gate), G2 (the listen seam), K (the control module) and M (the testbed source and its internal trigger).
     - **L** (runtime seams: `Run`, `Reset`, `LoadConfig`) stacks on G2.
@@ -271,28 +277,35 @@ Decided questions keep their number. Q22–Q25 are open.
   - The runtime never reads it back. Every pinned `@file` scenario sees what it sees today: the file at start, gone during the outage, rewritten on `/change`.
   - `render` set to empty turns it off, for a target with no file-mode providers.
 
-- **Q22, `/start` with another configuration. (open)** `ssl`, `sync-payload` and `metadata` change TLS, sources and endpoint settings, which a running runtime cannot change. CI's Go suites use `default` only; other languages use `ssl` (`@customCert`).
-  - **Options:**
-    - **(a) Rebuild on a switch only.** Close the gate, cancel the runtime, build one from the other file, open the gate when ready. Needs `FromConfig` reentrant with noop telemetry for a few switches per run (L: 20 cycles with leak checks).
-    - **(b) A child process on a switch.** The testbed `cmd` re-executes itself with the new configuration; the control module stays in the parent.
-    - **(c) Unsupported.** Another name answers `500 "configuration switch not supported"`; `ssl` suites keep the launchpad image.
-  - **Recommendation:** (a).
+- **Q22, `/start` with another configuration. (decided: (a), a full in-process rebuild on a switch; required, because other languages' `ssl` suites need it)**
+  - **When it rebuilds:** only when the configuration name changes. A `/start` with the name in use resets and reloads the store (Q3).
+  - **On a switch:**
+    1. close the gate and cancel the runtime;
+    2. build a new runtime from `configs/<name>.json` with `FromConfig` (noop telemetry, Q4) and run it with `Runtime.Run(ctx)`;
+    3. once it is ready, render `allFlags.json` (Q25), open the gate and answer `200`.
 
-- **Q23, how the testbed source replaces `flags/allFlags.json`. (open)** The configs stay upstream's (BR-008) and name `flags/allFlags.json` as a file source.
-  - **Options:**
-    - **(a) The loader rewrites that one source.** `runtime/cmd.LoadConfig`, given a rewrite rule by the testbed `cmd`, turns the file source `flags/allFlags.json` into `testbed:allFlags`; every other source stays.
-    - **(b) The testbed ships edited copies of the configs.** This breaks BR-008, and the copies drift.
-    - **(c) The testbed source claims the `flags/` prefix.** That clashes with the file sync provider's bare paths.
-  - **Recommendation:** (a), with a test that the rewrite touches exactly that source in each config.
+    The control module stays up throughout, with its in-memory state, so `/change` toggles survive a switch.
+  - **What a switch covers:** every setting the runtime fixes when it is built:
+    - inbound TLS (`ssl`'s `server-cert-path` and `server-key-path`);
+    - endpoint settings (`sync-payload`'s `disable-sync-metadata`);
+    - the source list (`metadata`);
+    - **outbound TLS** in the same way: a source's own certificate settings, such as a `flagd-grpc` or `http` source's `certPath` or `tls`. A switch to a configuration that names such a source builds the runtime with them. That source's sync provider must then be in the manifest. None of the four pinned configs names one, so Q15's minimal manifest has none; adding one is a manifest line plus `TestTestbedManifestIsMinimal`.
+  - **A failed switch** (not ready in 10 s) answers `500 … health check timed out` and leaves the gate closed. The last good configuration stays remembered (quirk 1 fixed), and the next `/start` builds it again.
+  - **Tests:** L's `TestFromConfigRepeatedly` (20 cycles, `goleak`, fd count); B1's `TestConfigSwitch` (`default`, `ssl` with TLS on 8013 under the custom root CA, `sync-payload`, `metadata`, back to `default`, with the toggle state kept) and `TestSameNameDoesNotRebuild`.
+  - *Rejected:* a child process on a switch; unsupported.
 
-- **Q24, the code for an unknown configuration. (open)** Quirk 2 goes, so `/start?config=nope` answers at once.
-  - **Options:**
-    - **(a) `500` with a truthful message:** `{"status":"error","message":"Failed to start flagd: unknown configuration \"nope\""}`. This is the launchpad's code for every failed start.
-    - **(b) `404`**, same JSON shape.
-    - **(c) `400`**, as for bad `seconds`.
-  - **Recommendation:** (a). A client that branches on the code sees no new value.
+- **Q23, how the testbed source replaces `flags/allFlags.json`. (decided: (a))** The configs stay upstream's (BR-007).
+  - `runtime/cmd.LoadConfig`, given a rewrite rule by the testbed `cmd`, turns the file source `flags/allFlags.json` into `testbed:allFlags`. Every other source stays as written.
+  - L's `TestLoadConfigRewriteTouchesOneSource` checks each of the four configs.
+  - *Rejected:* edited copies of the configs; the testbed source claiming the `flags/` prefix.
 
-- **Q25, where `allFlags.json` is rendered from, and by whom. (new; open)**
+- **Q24, the code for an unknown configuration. (decided: (a))**
+  - `/start?config=nope` answers **at once** with `500 {"status":"error","message":"Failed to start flagd: unknown configuration \"nope\""}`, which names the configuration.
+  - The gate and the runtime stay as they were, and the last good configuration stays remembered.
+  - K's `TestUnknownConfiguration` pins the code, the body and an answer within 100 ms.
+  - *Rejected:* `404`; `400`.
+
+- **Q25, where `allFlags.json` is rendered from, and by whom. (decided: (a), the control module after the store confirms)**
   - **The facts:**
     - The store keeps each source's document as the format's parsed value (`store.Document.Value` is opaque), not as bytes.
     - The launchpad writes the deep-merged map with `json.MarshalIndent(map, "", "  ")`: keys sorted, two-space indent, no trailing newline, numbers re-encoded from `float64`.
@@ -302,7 +315,7 @@ Decided questions keep their number. Q22–Q25 are open.
     - **(a) The control module renders, triggered by the store's confirmation.** It renders after `Target.Load` or `Target.Start` has returned, which is when the store holds that version. It writes the bytes it encoded with the launchpad's encoder, because they are the bytes the store accepted. One encoder makes both the runtime's input and the file, and nothing runs asynchronously, so `/change` and `/start` answer only once the file is in place, as today.
     - **(b) A small event sink** (UC-020) subscribed to configuration change events for `testbed:allFlags`. It fits the component model, but the pipeline is asynchronous and batched (default flush 1 s). Events carry flag keys and versions, not bodies, so the sink would have to ask for the document anyway, and `/change` would have no completion signal to wait on.
     - **(c) Re-encoding from the store's parsed flags.** It reads the "real" store, but it is not byte-compatible: it loses fields the flag model drops, and it formats numbers and ordering its own way. File-mode providers would parse a different file.
-  - **Recommendation:** (a).
+  - **Decided:** (a).
     - **Port the launchpad's code as it is:** the deep merge, `MarshalIndent` with two spaces, and an atomic write that matches `atomicWriteFile`: temp file `.tmp-*` in the target directory, mode `0644`, rename.
     - **Pin the bytes:** C3 records today's image's `allFlags.json`, byte for byte, at start and after one and two `/change` calls; K's `TestRenderMatchesLaunchpad` compares against that golden.
     - **Pin the atomicity:** K's `TestRenderIsAtomic` runs a reader loop during 1000 renders; every read parses, and every read is either the old or the new version.
@@ -491,6 +504,16 @@ In WSL from the repository root (`export GOTOOLCHAIN=go1.27.3`; in a worktree `e
 Every PR description starts with `Part of #110`.
 
 ## 8. Changelog
+
+### Revision 3, final decisions (Q22–Q25)
+
+| Decision | Change |
+|---|---|
+| Q22 (a) | A full in-process rebuild only when the configuration name changes; required for other languages' `ssl` suites. Outbound TLS of a source is covered the same way. `TestConfigSwitch` covers all four configs; `TestSameNameDoesNotRebuild` added |
+| Q23 (a) | The loader rewrites the `flags/allFlags.json` source; nothing else |
+| Q24 (a) | `500` at once, with a message naming the unknown configuration; answered within 100 ms |
+| Q25 (a) | Render in the control module after the store confirms, with the launchpad's encoder and atomic write |
+| Header | Every question decided; no open list |
 
 ### Revision 3, clarification of Q3 and `/change`
 
