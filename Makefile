@@ -64,6 +64,21 @@ build-flagd:
 build-flagd-fips:
 	$(FIPS_ENV) go build -tags $(FIPS_TAGS) -ldflags "-X main.version=dev -X main.commit=$$(git rev-parse --short HEAD) -X main.date=$$(date +%FT%TZ)" -o ./bin/flagd-fips ./flagd
 	go version -m ./bin/flagd-fips | grep -E 'GOFIPS140=|-tags='
+
+# UC-010 Q17: each standard distribution compiles as a FIPS variant too. The Builder generates the source of each
+# manifest, and the FIPS build of that source carries the certified module and the fips140 tag.
+STANDARD_DISTRIBUTIONS := flagd-minimal flagd-cloud flagd-kubernetes flagd-sync
+.PHONY: build-standard-fips
+build-standard-fips:
+	cd builder && go build -o ../bin/relay-builder ./cmd/relay-builder
+	@set -e; for d in $(STANDARD_DISTRIBUTIONS); do \
+		echo "== $$d"; \
+		GOWORK=off ./bin/relay-builder --manifest distributions/$$d/manifest.yaml --skip-compile; \
+		(cd distributions/$$d/build && GOWORK=off $(FIPS_ENV) go build -tags $(FIPS_TAGS) -o ../../../bin/$$d-fips . ); \
+		info=$$(go version -m ./bin/$$d-fips); \
+		echo "$$info" | grep -q 'GOFIPS140=v1\.0\.0' || { echo "$$d does not carry the certified module"; exit 1; }; \
+		echo "$$info" | grep -q -- '-tags=fips140' || { echo "$$d is not built with the fips140 tag"; exit 1; }; \
+	done
 .PHONY: test
 # One target per line, so parallel pull requests that add a test target merge cleanly.
 TEST_TARGETS += test-core
@@ -73,6 +88,7 @@ TEST_TARGETS += test-contrib
 TEST_TARGETS += test-builder
 TEST_TARGETS += test-distributions
 TEST_TARGETS += test-upgrade-accepted
+TEST_TARGETS += test-image-pins
 TEST_TARGETS += test-configformat-example
 TEST_TARGETS += test-service-example
 TEST_TARGETS += test-evaluator-testkit
@@ -372,9 +388,15 @@ builder-e2e: check-flagd-full-generated build-flagd-full build-flagsmith
 
 # UC-009: the differential of today's flagd against the flagd-full the Builder made. It builds two images, so it needs
 # Docker and stays out of `make test`; TestAcceptedMatchesIssue does not need Docker and runs there.
-.PHONY: upgrade-test test-upgrade-accepted refresh-issue-78
+.PHONY: upgrade-test test-upgrade-accepted refresh-issue-78 image-test test-image-pins
 upgrade-test:
 	cd test/upgrade && UPGRADE_TEST=1 go test -count=1 -timeout 60m -v ./...
+
+# The reference image's tests build images with buildx (UC-002).
+image-test:
+	cd test/image && IMAGE_TEST=1 go test -count=1 -timeout 60m -v ./...
+test-image-pins:
+	cd test/image && go test -count=1 -run TestReferenceDockerfilePins ./...
 
 test-upgrade-accepted:
 	cd test/upgrade && go test -count=1 -run 'TestAcceptedMatchesIssue|TestSurfaces|TestGuideCoversAcceptedItems' ./...
