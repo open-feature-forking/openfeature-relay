@@ -129,7 +129,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/azblob v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/file v0.1.0 // indirect
-	github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc v0.1.0 // indirect
+	github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc v0.1.0
 	github.com/open-feature-forking/openfeature-relay/sync/gcs v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/http v0.1.0 // indirect
 	github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator v0.1.0 // indirect
