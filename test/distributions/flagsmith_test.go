@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -44,8 +45,9 @@ func startFlagsmith(t *testing.T, apiBase string) string {
 		"--port", ports["port"], "--management-port", ports["management-port"],
 		"--sync-port", ports["sync-port"], "--ofrep-port", ports["ofrep-port"])
 	cmd.Env = append(os.Environ(), "FLAGSMITH_TEST_KEY="+flagsmithKey)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	var output lockedBuffer
+	stderr := &output
+	cmd.Stdout, cmd.Stderr = &output, &output
 	require.NoError(t, cmd.Start())
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
@@ -55,7 +57,10 @@ func startFlagsmith(t *testing.T, apiBase string) string {
 		case <-done:
 		case <-time.After(20 * time.Second):
 			_ = cmd.Process.Kill()
+			<-done
 		}
+		// whatever the distribution wrote while it served and while it shut down
+		require.NotContains(t, output.String(), flagsmithKey, "the key is in no output of the distribution")
 	})
 
 	ready := fmt.Sprintf("http://127.0.0.1:%s/readyz", ports["management-port"])
@@ -66,9 +71,39 @@ func startFlagsmith(t *testing.T, apiBase string) string {
 		}
 		defer resp.Body.Close()
 		return resp.StatusCode == http.StatusOK
-	}, 60*time.Second, 200*time.Millisecond, "the distribution becomes ready: %s", &stderr)
-	require.NotContains(t, stderr.String(), flagsmithKey, "the key is in no log")
+	}, 60*time.Second, 200*time.Millisecond, "the distribution becomes ready: %s", stderr.String())
 	return "http://127.0.0.1:" + ports["ofrep-port"]
+}
+
+// lockedBuffer collects the output of the distribution, which the test reads while the process still writes.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+// openFeatureReason is the reason UC-019 Q4 maps an engine reason to.
+func openFeatureReason(engineReason string) string {
+	switch {
+	case engineReason == "DEFAULT":
+		return "STATIC"
+	case strings.HasPrefix(engineReason, "TARGETING_MATCH"):
+		return "TARGETING_MATCH"
+	case strings.HasPrefix(engineReason, "SPLIT"):
+		return "SPLIT"
+	}
+	return "UNKNOWN"
 }
 
 type ofrepResult struct {
@@ -123,13 +158,14 @@ func TestFlagsmithServesAnEnvironmentDocument(t *testing.T) {
 		for _, flag := range []string{"welcome", "banner", "experiment"} {
 			got := evaluateOFREP(t, ofrep, flag, nil)
 			require.Equal(t, want[flag].Value, got.Value, flag)
-			require.Equal(t, "STATIC", got.Reason, flag)
+			require.Equal(t, openFeatureReason(want[flag].Reason), got.Reason, flag)
 			require.Empty(t, got.Variant, "an environment has no identity to split: %s", flag)
 		}
 	})
 
 	t.Run("identity", func(t *testing.T) {
 		variants := map[string]bool{}
+		reasons := map[string]bool{}
 		for i := range 40 {
 			identifier := fmt.Sprintf("user-%d", i)
 			traits := map[string]any{"plan": "beta"}
@@ -148,17 +184,25 @@ func TestFlagsmithServesAnEnvironmentDocument(t *testing.T) {
 			}
 			banner := evaluateOFREP(t, ofrep, "banner", context)
 			require.Equal(t, want["banner"].Value, banner.Value, identifier)
+			require.Equal(t, openFeatureReason(want["banner"].Reason), banner.Reason, identifier)
+			require.Equal(t, want["banner"].Variant, banner.Variant, identifier)
 			if traits["plan"] == "beta" {
 				require.Equal(t, "TARGETING_MATCH", banner.Reason, identifier)
 				require.Equal(t, "beta-banner", banner.Value)
+			} else {
+				require.Equal(t, "STATIC", banner.Reason, identifier)
 			}
 
 			experiment := evaluateOFREP(t, ofrep, "experiment", context)
 			require.Equal(t, want["experiment"].Value, experiment.Value, identifier)
 			require.Equal(t, want["experiment"].Variant, experiment.Variant, identifier)
+			require.Equal(t, openFeatureReason(want["experiment"].Reason), experiment.Reason, identifier)
+			reasons[experiment.Reason] = true
 			variants[experiment.Variant] = true
 		}
 		require.Greater(t, len(variants), 1, "the split places identities in more than one variant: %s", strings.Join(keys(variants), ", "))
+		require.Contains(t, reasons, "SPLIT", "some identity is placed by the split")
+		require.Contains(t, reasons, "STATIC", "some identity falls into the control bucket")
 	})
 }
 
