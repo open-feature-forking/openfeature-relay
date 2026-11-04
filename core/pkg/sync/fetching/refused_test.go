@@ -78,3 +78,17 @@ func TestOtherErrorsBeforeFirstDeliveryAreRetried(t *testing.T) {
 	r := start(t, Options{Fetcher: fetcher})
 	require.JSONEq(t, flagsV1, r.next(t).FlagData)
 }
+
+// A delivery carries the source version it was fetched at, so that the runtime can say which version it has accepted.
+func TestDeliveryCarriesTheSourceVersion(t *testing.T) {
+	var calls atomic.Int32
+	trigger := newManualTrigger()
+	r := start(t, Options{Fetcher: versionedFetcher(&calls), Triggers: []sync.Trigger{trigger}})
+	require.Equal(t, "v1", r.next(t).Version)
+
+	trigger.signal(t)()
+	require.Equal(t, "v2", r.next(t).Version)
+
+	require.NoError(t, r.provider.ReSync(context.Background(), r.deliveries))
+	require.Equal(t, "v3", r.next(t).Version, "a forced fetch delivers the version it was fetched at")
+}
