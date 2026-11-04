@@ -66,6 +66,7 @@ TEST_TARGETS += test-flagd
 TEST_TARGETS += test-flagd-proxy
 TEST_TARGETS += test-builder
 TEST_TARGETS += test-distributions
+TEST_TARGETS += test-upgrade-accepted
 TEST_TARGETS += test-configformat-example
 TEST_TARGETS += test-service-example
 TEST_TARGETS += test-evaluator-testkit
@@ -333,3 +334,16 @@ build-flagd-full:
 # UC-001, UC-009: the flagd module is what the Builder generates, and the Builder's binary passes the pins.
 .PHONY: builder-e2e
 builder-e2e: check-flagd-full-generated build-flagd-full
+
+# UC-009: the differential of today's flagd against the flagd-full the Builder made. It builds two images, so it needs
+# Docker and stays out of `make test`; TestAcceptedMatchesIssue does not need Docker and runs there.
+.PHONY: upgrade-test test-upgrade-accepted refresh-issue-78
+upgrade-test:
+	cd test/upgrade && UPGRADE_TEST=1 go test -count=1 -timeout 60m -v ./...
+
+test-upgrade-accepted:
+	cd test/upgrade && go test -count=1 -run TestAcceptedMatchesIssue ./...
+
+# Refreshes the list of behaviour changes that accepted.yaml has to cover.
+refresh-issue-78:
+	gh issue view 78 --repo open-feature-forking/openfeature-relay --json body --jq .body > test/upgrade/testdata/issue-78.md
