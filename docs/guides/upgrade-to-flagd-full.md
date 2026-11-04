@@ -62,6 +62,15 @@ The `Last-Modified` of the flag sync service endpoint changes when the flag conf
 The values are opaque, so clients that only send them back are not affected.
 A change in a vendor flag format now sends a refetch event on the OFREP event stream.
 
+#### Flag sync reads the `Flagd-Configuration-Format` header
+
+A flag sync request can name a configuration format in the `Flagd-Configuration-Format` header, on `SyncFlags`, `FetchAllFlags` and the `/v1/flags` route.
+A request without the header, or with `flagd`, is answered as before.
+Before, flagd ignored the header.
+Now a value that names a configuration format the distribution lacks is answered `InvalidArgument` (HTTP 400), and the message lists the formats the distribution has.
+flagd-full has flagd's own format only, so no client of flagd-full gets another format's documents.
+If a client sends this header with another value, remove it.
+
 #### Shutdown: event streams get `provider_shutdown`
 
 On `SIGTERM`, event streams receive `provider_shutdown` and end at once, and flag sync streams end cleanly in under 2 seconds.

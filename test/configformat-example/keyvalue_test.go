@@ -54,3 +54,22 @@ func TestEngineModuleExportsFormatFactory(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, factory.Type(), format.Type())
 }
+
+// TestDocumentTextIsTheDelivery pins that the flag sync endpoint can send a keyvalue document: its value offers the
+// text the source delivered, unchanged.
+func TestDocumentTextIsTheDelivery(t *testing.T) {
+	st, err := store.NewStore(logger.NewLogger(nil, false), []string{"src"})
+	require.NoError(t, err)
+	format, err := keyvalue.Factory{}.Create(configformat.Settings{Store: st})
+	require.NoError(t, err)
+	data := `{ "environment": "prod",  "flags": {"a":1,   "b":"two"} }`
+
+	_, err = format.Accept(t.Context(), configformat.Input{Source: "src", Data: data})
+	require.NoError(t, err)
+
+	docs := st.Documents(keyvalue.Type, "src")
+	require.Len(t, docs, 1)
+	text, ok := store.DocumentText(docs[0])
+	require.True(t, ok)
+	require.Equal(t, data, text)
+}

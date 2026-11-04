@@ -54,6 +54,9 @@ type SvcConfigurations struct {
 	HTTPMiddleware func(http.Handler) http.Handler
 	// Initialized, when set, ends the wait for the first delivery of every source once it is closed.
 	Initialized <-chan struct{}
+	// Formats are the configuration formats of the distribution. A request may name one other than flagd's in the
+	// FormatHeader and gets its one document.
+	Formats []string
 }
 
 type Service struct {
@@ -62,6 +65,7 @@ type Service struct {
 	logger     *logger.Logger
 	server     *http.Server
 	modTime    *modTime
+	changes    *changeSignal
 
 	startupTracker syncTracker
 	initialized    <-chan struct{}
@@ -89,11 +93,12 @@ func NewSyncService(cfg SvcConfigurations) (*Service, error) {
 	cfg.Telemetry = telemetry.OrNoop(cfg.Telemetry)
 
 	stamp := &modTime{}
+	changes := newChangeSignal()
 
 	// nil leaves the routes unregistered
 	var flagsHandler http.Handler
 	if cfg.HTTPEnabled {
-		flagsHandler = httpHandler{store: cfg.Store, log: l, modTime: stamp}
+		flagsHandler = httpHandler{store: cfg.Store, log: l, modTime: stamp, formats: cfg.Formats}
 	}
 
 	// the requests end with this context, which is cancelled when the service shuts down: an open SyncFlags stream
@@ -106,6 +111,8 @@ func NewSyncService(cfg SvcConfigurations) (*Service, error) {
 		deadline:            cfg.StreamDeadline,
 		disableSyncMetadata: cfg.DisableSyncMetadata,
 		metricsRecorder:     flagdService.NewMetrics(cfg.Telemetry.Meter(flagdService.MetricsScope)),
+		formats:             cfg.Formats,
+		changes:             changes,
 	}, flagsHandler)
 
 	server.BaseContext = func(net.Listener) context.Context { return streams }
@@ -139,6 +146,7 @@ func NewSyncService(cfg SvcConfigurations) (*Service, error) {
 		logger:      l,
 		server:      server,
 		modTime:     stamp,
+		changes:     changes,
 		initialized: cfg.Initialized,
 		startupTracker: syncTracker{
 			sources:  slices.Clone(cfg.Sources),
@@ -196,6 +204,9 @@ func (s *Service) Emit(source string) {
 	// Stamped here rather than from a store watch, which would re-marshal just to date it. This can
 	// run ahead of a real content change; the ETag stays exact.
 	s.modTime.set(time.Now())
+	if s.changes != nil {
+		s.changes.broadcast()
+	}
 }
 
 // waitForInitialSync delays serving until every known sync source has reported its first sync, so
