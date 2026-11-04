@@ -1,4 +1,4 @@
-flagd built from this repository is a drop-in replacement for today's flagd: internals change, observable behaviour does not (see `CLAUDE.md`, Conventions). The changes below were approved before that rule and were kept by the project lead's decision. They must all appear in the migration guide (UC-015) and UC-009's migration notes. Each lands in its own commit.
+flagd built from this repository is a drop-in replacement for today's flagd: internals change, observable behaviour does not (see `CLAUDE.md`, Conventions). The changes below were approved before that rule and were kept by the project lead's decision. They must all appear in the migration guide of the provider migration (#156) and UC-009's migration notes. Each lands in its own commit.
 
 **Could break a setup that works today**
 - [ ] A failed first fetch or connect no longer exits flagd: it stays up and not ready (UC-003 Q2, #54).
@@ -28,6 +28,6 @@ flagd built from this repository is a drop-in replacement for today's flagd: int
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
-UC-015 is deferred until after the proof of concept; this list stays the input for its migration guide.
+Provider migration is a follow-up (#156); this list stays the input for its migration guide.
 
 
