@@ -3,7 +3,8 @@
 
     compare-allocs.py <base> <head>
 
-Only allocs/op is compared. ns/op depends on the runner and is ignored. A benchmark that ran several times has a
+Only allocs/op decides. ns/op depends on the runner, so a benchmark whose lowest ns/op differs from the base by more
+than 5% while its allocs/op did not rise is reported as a ::notice:: and in the summary, and never fails. A benchmark that ran several times has a
 range of allocs/op. It fails when the lowest allocs/op of the head is above the highest of the base and, for a
 benchmark that is not in NOISY, above the lowest of the base at all.
 
@@ -19,12 +20,14 @@ import re
 import sys
 
 # BenchmarkName-8     1000     1234 ns/op     456 B/op     7 allocs/op
-LINE = re.compile(r"^(Benchmark\S*?)(?:-\d+)?\s+\d+\s+.*?\s(\d+) allocs/op")
+LINE = re.compile(r"^(Benchmark\S*?)(?:-\d+)?\s+\d+\s+(?:([\d.]+) ns/op\s+)?.*?\s(\d+) allocs/op")
+
+NS_DEVIATION = 0.05
 
 
 def parse(path):
-    """Returns {"<package> <benchmark>": [allocs/op of each run]}."""
-    results = {}
+    """Returns ({"<package> <benchmark>": [allocs/op of each run]}, the same with ns/op)."""
+    results, times = {}, {}
     package = ""
     with open(path, encoding="utf-8") as f:
         for raw in f:
@@ -34,8 +37,11 @@ def parse(path):
                 continue
             m = LINE.match(line)
             if m:
-                results.setdefault(f"{package} {m.group(1)}", []).append(int(m.group(2)))
-    return results
+                key = f"{package} {m.group(1)}"
+                results.setdefault(key, []).append(int(m.group(3)))
+                if m.group(2):
+                    times.setdefault(key, []).append(float(m.group(2)))
+    return results, times
 
 
 # Benchmark name (without package) -> (tolerated rise in allocs/op, extra tolerated rise in thousandths of the base's
@@ -91,7 +97,7 @@ def main(argv):
         print(__doc__, file=sys.stderr)
         return 2
     try:
-        base, head = parse(argv[1]), parse(argv[2])
+        (base, base_ns), (head, head_ns) = parse(argv[1]), parse(argv[2])
     except OSError as err:
         print(f"cannot read the benchmark output: {err}", file=sys.stderr)
         return 2
@@ -103,6 +109,11 @@ def main(argv):
     rose = [k for k in common if min(head[k]) > max(base[k]) and min(head[k]) - min(base[k]) > tolerance(k, min(base[k]))]
     fell = [k for k in common if max(head[k]) < min(base[k])]
     noise = [k for k in common if k not in rose and min(head[k]) > min(base[k])]
+    slower_or_faster = [
+        k for k in common
+        if k not in rose and k in base_ns and k in head_ns and min(base_ns[k]) > 0
+        and abs(min(head_ns[k]) - min(base_ns[k])) / min(base_ns[k]) > NS_DEVIATION
+    ]
     added = sorted(set(head) - set(base))
     removed = sorted(set(base) - set(head))
 
@@ -135,10 +146,21 @@ def main(argv):
 
     text = "\n".join(out)
     print(text)
+    timing = []
+    for k in slower_or_faster:
+        b, h = min(base_ns[k]), min(head_ns[k])
+        timing.append((short(k), b, h, (h - b) / b * 100))
+    for name, b, h, pct in timing:
+        print(f"::notice::{name}: ns/op {b:g} -> {h:g} ({pct:+.1f}%), allocs/op did not rise")
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a", encoding="utf-8") as f:
             f.write("### Benchmarks: allocs/op against the base\n\n" + text + "\n")
+            if timing:
+                f.write("\n### Benchmarks: ns/op beyond 5% of the base (does not fail)\n\n")
+                f.write("| benchmark | base ns/op | head ns/op | change |\n|---|---:|---:|---:|\n")
+                for name, b, h, pct in timing:
+                    f.write(f"| {name} | {b:g} | {h:g} | {pct:+.1f}% |\n")
     return 1 if rose else 0
 
 
