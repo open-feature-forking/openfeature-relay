@@ -44,6 +44,8 @@ func buildFlagd(t *testing.T, dir string) string {
 	cmd := exec.CommandContext(context.Background(), "go", "build", "-o", bin,
 		"-ldflags", "-X main.version=v9.9.9 -X main.commit=abc1234 -X main.date=2026-01-02T03:04:05Z",
 		"github.com/open-feature/flagd/flagd")
+	// the goldens record the standard build, which GOFIPS140 in make test-fips would turn into a FIPS-module one
+	cmd.Env = append(os.Environ(), "GOFIPS140=off")
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "building flagd: %s", out)
 	return bin
