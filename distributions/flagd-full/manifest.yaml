@@ -1,12 +1,12 @@
-# flagd-full: the distribution this repository releases as flagd. The Builder generates its components package and
-# compiles the binary (UC-001, Q12); CI checks that the generated components equal the ones flagd keeps in hand.
+# flagd-full: the distribution this repository releases as flagd. The Builder generates the main package, the components
+# package and go.mod of the flagd module from this file (UC-009), and CI fails when they differ from what is committed.
 # Every relay module of the build list is replaced by its directory (Q11, Q14): the placeholder version v0.0.0
 # resolves through the replaces, as in the OpenTelemetry Collector Builder's own manifest.
 dist:
   name: flagd-full
   version: 0.0.0
-  output_path: ./build
-  module: github.com/open-feature-forking/openfeature-relay/distributions/flagd-full
+  output_path: ../../flagd
+  module: github.com/open-feature/flagd/flagd
   binary: flagd
 sync_providers:
   - {module: github.com/open-feature-forking/openfeature-relay/sync/file, version: v0.0.0}
@@ -44,4 +44,3 @@ replaces:
   - {module: github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator, path: ../../sync/openfeature-operator}
   - {module: github.com/open-feature-forking/openfeature-relay/sync/s3, path: ../../sync/s3}
   - {module: github.com/open-feature-forking/openfeature-relay/telemetry/otel, path: ../../telemetry/otel}
-  - {module: github.com/open-feature/flagd/flagd, path: ../../flagd}

@@ -1,7 +1,7 @@
 PHONY: .docker-build .build .run .mockgen
 PREFIX=/usr/local
 PUBLIC_JSON_SCHEMA_DIR=docs/schema/v0/
-ALL_GO_MOD_DIRS := $(shell find . \( -path ./test/integration -o -path ./.claude -o -path ./test-harness -o -path ./spec -o -path ./schemas -o -path ./playground-app -o -path "./distributions/*/build" -o -path "./test/distributions/*/build" \) -prune -o -type f -name 'go.mod' -exec dirname {} \; | sort)
+ALL_GO_MOD_DIRS := $(shell find . \( -path ./test/integration -o -path ./.claude -o -path ./test-harness -o -path ./spec -o -path ./schemas -o -path ./playground-app -o -path "./distributions/*/build" -o -path "./test/distributions/*/build" -o -path ./.flagd-generated -o -path ./.flagd-full-build \) -prune -o -type f -name 'go.mod' -exec dirname {} \; | sort)
 
 # The library modules: what embedders import. Tests, the FIPS tests and the benchmarks run on exactly
 # these (plus the binaries), and testdata/go-packages.txt pins the packages they contain.
@@ -158,6 +158,7 @@ uninstall:
 	rm /etc/systemd/system/flagd.service
 	rm -f $(DESTDIR)$(PREFIX)/bin/flagd
 lint:
+	$(MAKE) check-flagd-full-generated
 	go install -v github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
 	rc=0; $(foreach module, $(ALL_GO_MOD_DIRS), ${GOPATH}/bin/golangci-lint run $(module)/... || rc=1;) exit $$rc
 lint-fix:
@@ -291,25 +292,44 @@ playground-build:
 playground-publish: playground-build
 	cp playground-app/dist/assets/index-*.js docs/playground/playground.js
 
+# UC-009: the flagd module is the Builder's output for distributions/flagd-full/manifest.yaml. The Builder generates its
+# go.mod, main.go and components/components.go; this target regenerates them into a directory beside flagd/, so that
+# the replaces come out the same, and fails when what is committed differs. A hand edit of a generated file, or a
+# manifest edit without the regenerated files, fails here.
+FLAGD_FULL_CHECK_DIR := .flagd-generated
+.PHONY: check-flagd-full-generated
+check-flagd-full-generated:
+	cd builder && go build -o ../bin/relay-builder ./cmd/relay-builder
+	rm -rf $(FLAGD_FULL_CHECK_DIR)
+	cp -r flagd $(FLAGD_FULL_CHECK_DIR)
+	GOWORK=off ./bin/relay-builder --manifest distributions/flagd-full/manifest.yaml --skip-compile --output $(FLAGD_FULL_CHECK_DIR) \
+		|| { rm -rf $(FLAGD_FULL_CHECK_DIR); exit 1; }
+	rc=0; for f in go.mod main.go components/components.go; do \
+		diff -u flagd/$$f $(FLAGD_FULL_CHECK_DIR)/$$f || rc=1; done; \
+		rm -rf $(FLAGD_FULL_CHECK_DIR); \
+		if [ $$rc -ne 0 ]; then echo "flagd/ differs from the Builder's output for distributions/flagd-full/manifest.yaml; run: make generate-flagd-full"; fi; \
+		exit $$rc
+
+# Regenerates the flagd module from the manifest of flagd-full.
+.PHONY: generate-flagd-full
+generate-flagd-full:
+	cd builder && go build -o ../bin/relay-builder ./cmd/relay-builder
+	GOWORK=off ./bin/relay-builder --manifest distributions/flagd-full/manifest.yaml --skip-compile
+
 # UC-001 7a: the Builder builds flagd-full from its manifest, the binary is named flagd, and the duration is printed
-# (NFR-008 asks for under three minutes). Run it with a warm module cache.
+# (NFR-008 asks for under three minutes). Run it with a warm module cache. The binary and the pins that run against it
+# stay out of flagd/.
+FLAGD_FULL_BUILD_DIR := .flagd-full-build
 .PHONY: build-flagd-full
 build-flagd-full:
 	cd builder && go build -o ../bin/relay-builder ./cmd/relay-builder
+	rm -rf $(FLAGD_FULL_BUILD_DIR)
 	start=$$(date +%s); \
-	GOWORK=off ./bin/relay-builder --manifest distributions/flagd-full/manifest.yaml || exit 1; \
+	GOWORK=off ./bin/relay-builder --manifest distributions/flagd-full/manifest.yaml --output $(FLAGD_FULL_BUILD_DIR) || exit 1; \
 	echo "flagd-full built in $$(( $$(date +%s) - start ))s"
-	test -x distributions/flagd-full/build/flagd
-	cd flagd && FLAGD_BINARY=$$(cd ../distributions/flagd-full/build && pwd)/flagd go test -count=1 -run "TestCLICharacterization|TestStartupLogCharacterization" ./
+	test -x $(FLAGD_FULL_BUILD_DIR)/flagd
+	cd flagd && FLAGD_BINARY=$$(cd ../$(FLAGD_FULL_BUILD_DIR) && pwd)/flagd go test -count=1 -run "TestCLICharacterization|TestStartupLogCharacterization" ./
 
-# UC-001 Q12: the source the Builder generates from the manifest of flagd-full holds the components flagd keeps in
-# hand (flagd/components): same factories, modules, schemes, evaluator format and needs.
-.PHONY: check-flagd-full-manifest
-check-flagd-full-manifest:
-	cd builder && go build -o ../bin/relay-builder ./cmd/relay-builder
-	GOWORK=off ./bin/relay-builder --manifest distributions/flagd-full/manifest.yaml --skip-compile --probe-output distributions/flagd-full/probe.json
-	cd flagd && FLAGD_FULL_PROBE=$$(cd ../distributions/flagd-full && pwd)/probe.json go test -count=1 -run TestGeneratedComponentsEqualHandWritten ./components/
-
-# UC-001: the Builder builds flagd-full from its manifest (7a), and the generated components equal flagd's.
+# UC-001, UC-009: the flagd module is what the Builder generates, and the Builder's binary passes the pins.
 .PHONY: builder-e2e
-builder-e2e: check-flagd-full-manifest build-flagd-full
+builder-e2e: check-flagd-full-generated build-flagd-full

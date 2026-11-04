@@ -61,7 +61,7 @@ func build(t *testing.T, manifestPath string) *built {
 	if b, ok := builds[manifestPath]; ok {
 		return b
 	}
-	cmd := exec.Command("go", "run", "./cmd/relay-builder", "--manifest", manifestPath)
+	cmd := exec.Command("go", "run", "./cmd/relay-builder", "--manifest", manifestPath, "--output", filepath.Join(filepath.Dir(manifestPath), "build"))
 	cmd.Dir = filepath.Join(root(t), "builder")
 	cmd.Env = append(os.Environ(), "GOWORK=off")
 	out, err := cmd.CombinedOutput()
