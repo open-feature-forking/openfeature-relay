@@ -35,7 +35,7 @@ Each phase runs plan → oppose → implement → review, one role per agent in 
 4. Module split into component modules (NFR-004, NFR-006, C-004).
 5. Builder CLI, manifest, code generation (FR-001..FR-009, FR-017, FR-018).
 6. Standard distributions, images, CI (FR-021, FR-030..FR-032, NFR-003, NFR-009, NFR-011).
-7. Contract tests, example extension, migration guide (FR-015, NFR-010).
+7. Contract tests, example extension (FR-015, NFR-010; the migration guide moves to #156).
 
 ## Issues
 
