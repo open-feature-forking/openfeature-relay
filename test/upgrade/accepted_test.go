@@ -127,3 +127,23 @@ func TestSurfaces(t *testing.T) {
 		require.NotEmpty(t, s.CoveredBy, "the surface is neither run nor covered: "+s.Surface)
 	}
 }
+
+// TestGuideCoversAcceptedItems pins that the migration guide has a section for every item of #78 that accepted.yaml
+// allows, under the item's own words, and names each known break. CI runs it with `make test`, which a change to
+// docs/ alone does not trigger: it guards changes to accepted.yaml and to #78.
+func TestGuideCoversAcceptedItems(t *testing.T) {
+	data, err := os.ReadFile("../../docs/guides/upgrade-to-flagd-full.md")
+	require.NoError(t, err)
+	guide := strings.ReplaceAll(string(data), "\r\n", "\n")
+	a, err := LoadAccepted("accepted.yaml")
+	require.NoError(t, err)
+	for _, e := range a.Entries {
+		switch e.Kind {
+		case KindIssue78:
+			require.Contains(t, guide, "\n#### "+e.Item+"\n", "the guide has no section for #78's item")
+		case KindKnownBreak:
+			require.NotEmpty(t, e.Guide, "the known break names no text of the guide: "+e.Item)
+			require.Contains(t, guide, e.Guide, "the guide does not name the known break: "+e.Item)
+		}
+	}
+}

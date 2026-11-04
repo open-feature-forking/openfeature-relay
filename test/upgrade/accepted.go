@@ -28,7 +28,9 @@ type Entry struct {
 	Observations []AcceptedDifference `yaml:"observations,omitempty"`
 	// CoveredBy names the tests that pin an item the black-box differential cannot observe.
 	CoveredBy []string `yaml:"covered_by,omitempty"`
-	Note      string   `yaml:"note,omitempty"`
+	// Guide is text of the migration guide that names a known break.
+	Guide string `yaml:"guide,omitempty"`
+	Note  string `yaml:"note,omitempty"`
 }
 
 // AcceptedDifference is one difference an entry accepts: the observation of a scenario, and what each flagd shows. A
