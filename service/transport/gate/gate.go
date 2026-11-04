@@ -36,6 +36,14 @@ func New() *Gate {
 // keeps the port it first got, also after the gate was closed and opened again. It fails if the address is already
 // registered by a listener that has not been closed.
 func (g *Gate) Listen(network, address string) (net.Listener, error) {
+	g.mu.Lock()
+	for other := range g.listeners {
+		if other.addr.Network() == network && other.addr.String() == address {
+			g.mu.Unlock()
+			return nil, fmt.Errorf("gate: %s %s is already registered", network, address)
+		}
+	}
+	g.mu.Unlock()
 	nl, err := net.Listen(network, address)
 	if err != nil {
 		return nil, err

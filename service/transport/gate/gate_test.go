@@ -1,6 +1,7 @@
 package gate_test
 
 import (
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -199,5 +200,52 @@ func TestReopenCycles(t *testing.T) {
 		require.Error(t, err, "cycle %d", i)
 		require.NoError(t, g.Open(), "cycle %d", i)
 		roundTrip(t, addr)
+	}
+}
+
+// Listen neither replaces a registered listener nor waits for it: it fails and names the address.
+func TestListenOnRegisteredAddressFails(t *testing.T) {
+	for name, tg := range targets(t) {
+		for _, closed := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/closed=%v", name, closed), func(t *testing.T) {
+				g := gate.New()
+				first, err := g.Listen(tg.network, tg.address)
+				require.NoError(t, err)
+				defer first.Close()
+				echo(first)
+				addr := first.Addr()
+				if closed {
+					g.Close()
+				}
+
+				start := time.Now()
+				second, err := g.Listen(addr.Network(), addr.String())
+				require.Error(t, err)
+				require.Nil(t, second)
+				require.Contains(t, err.Error(), addr.String())
+				require.Less(t, time.Since(start), time.Second, "Listen does not wait")
+
+				require.NoError(t, g.Open())
+				roundTrip(t, addr) // the first listener is still the registered one
+			})
+		}
+	}
+}
+
+func TestListenAfterReleaseSucceeds(t *testing.T) {
+	for name, tg := range targets(t) {
+		t.Run(name, func(t *testing.T) {
+			g := gate.New()
+			first, err := g.Listen(tg.network, tg.address)
+			require.NoError(t, err)
+			addr := first.Addr()
+			require.NoError(t, first.Close())
+
+			second, err := g.Listen(addr.Network(), addr.String())
+			require.NoError(t, err, "a closed listener has released its address")
+			defer second.Close()
+			echo(second)
+			roundTrip(t, addr)
+		})
 	}
 }
