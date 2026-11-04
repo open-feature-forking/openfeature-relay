@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/secret"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 )
 
@@ -59,6 +60,15 @@ func NewPipeline(bus *events.Bus, f Factory, settings Settings, opts ...Option) 
 	if err != nil {
 		return nil, fmt.Errorf("event sink %q: %w", f.Type(), err)
 	}
+	kinds, err := NarrowKinds(f.Kinds(), settings.Config)
+	if err != nil {
+		return nil, fmt.Errorf("event sink %q: %w", f.Type(), err)
+	}
+	// A setting may name its value, a credential, in an environment variable or a file. The sink gets the value, and
+	// neither this package nor any error that follows from it holds one.
+	if settings.Config, err = secret.ResolveSettings(settings.Config); err != nil {
+		return nil, fmt.Errorf("event sink %q: %w", f.Type(), err)
+	}
 	if settings.Telemetry == nil {
 		settings.Telemetry = telemetry.Noop()
 	}
@@ -80,7 +90,7 @@ func NewPipeline(bus *events.Bus, f Factory, settings Settings, opts ...Option) 
 	}
 	p.deliverCtx, p.cancel = context.WithCancel(context.Background())
 	p.sub = bus.Subscribe(events.SubscribeOptions{
-		Kinds: f.Kinds(), Buffer: o.BufferSize,
+		Kinds: kinds, Buffer: o.BufferSize,
 		OnDrop: func(k events.Kind) { p.drop(k, ReasonBufferFull, 1) },
 	})
 	go p.run()
