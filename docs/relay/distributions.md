@@ -24,7 +24,7 @@ Each standard distribution's manifest is kept in this repository and accepts fla
 ## Sizes
 
 Binary sizes of upstream flagd at b23f82ec and of the distributions built from this repository, in MiB.
-Method: Go 1.27.3, `linux/amd64`, `CGO_ENABLED=0`, the release ldflags, not stripped.
+Method: Go 1.27.3, `linux/amd64`, `CGO_ENABLED=0`, the release ldflags, not stripped. The sizes come from two runs, at relay `326a8e2c` and `c1e0c3bc`.
 
 | Build | MiB | vs upstream | Go modules |
 |-------|----:|------------:|-----------:|
@@ -55,7 +55,7 @@ OpenTelemetry with all three clouds is 75.3 MiB, the size of flagd-cloud; with t
 
 Percentages come from the unrounded sizes; flagd-kubernetes reads −36.9% when computed from the rounded values.
 flagd-full measures smaller than upstream while linking 7 more modules.
-This is not attributed to a change and is not a goal: a toolchain or dependency bump moves it by this much.
+This is not attributed to a change and is not a goal: a toolchain or dependency bump can move it by this much.
 
 The release dry run writes the size of each `linux_x86_64` binary it builds to the job summary.
 
