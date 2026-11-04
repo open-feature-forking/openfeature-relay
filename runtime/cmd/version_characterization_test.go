@@ -37,6 +37,9 @@ func captureStdout(t *testing.T, f func()) string {
 func TestVersionOutputCharacterization(t *testing.T) {
 	version, commit, date := Version, Commit, Date
 	variant := "build variant: " + fips.Variant + "\nFIPS 140-3 mode: " + fips.Current().String() + "\n"
+	if fips.Variant == "standard" && !fips.Current().Enabled && fips.Current().BuildSetting == "" {
+		variant = "build variant: standard\nFIPS 140-3 mode: disabled (binary not built with GOFIPS140)\n"
+	}
 	t.Cleanup(func() { Version, Commit, Date = version, commit, date })
 
 	tests := map[string]struct {
