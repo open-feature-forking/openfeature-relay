@@ -103,7 +103,7 @@ The control API keeps the Launchpad API of flagd-testbed v3.11.0: endpoints, pat
 - a failed start no longer replaces the remembered configuration;
 - an unknown configuration is answered at once (A9) and not after the readiness timeout;
 - `/change` rewrites no file; it alters the in-memory state;
-- an unknown configuration takes no port down: flagd-testbed stops flagd before it starts the new configuration, so a `/start` with an unknown configuration takes 8013 to 8015 down, and the testbed leaves the gate and the runtime as they were (A9).
+- an unknown configuration takes no port down and cancels no pending restart: flagd-testbed stops flagd before it starts the new configuration, so a `/start` with an unknown configuration takes 8013 to 8015 down, and the testbed leaves the gate, the runtime and a pending restart as they were (A9).
 
 `/restart` answers at once and a later call cancels a pending restart; `/stop` cancels a pending restart; the start timeout is 10 seconds and the change timeout 5 seconds.
 
