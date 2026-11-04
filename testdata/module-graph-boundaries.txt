@@ -47,3 +47,27 @@ test/configformat-example:robfig|opentelemetry|google.golang.org/grpc|connectrpc
 builder:open-feature/flagd/|openfeature-relay/(core|runtime|sync|evaluator|configformat|telemetry|service|distribution)
 # The webhook event sink's module graph holds core and no other module of this repository, and no telemetry, transport or platform client.
 eventsink/webhook:robfig|opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|cloud.google.com|github.com/Azure|github.com/aws|prometheus|open-feature/flagd/flagd|openfeature-relay/((sync|telemetry|evaluator|configformat|service)/|runtime)
+# Only testbed/*, test/* and distributions/flagd-testbed may require the testbed modules (UC-022).
+core:openfeature-relay/testbed
+sync/file:openfeature-relay/testbed
+sync/flagd-grpc:openfeature-relay/testbed
+sync/http:openfeature-relay/testbed
+sync/openfeature-operator:openfeature-relay/testbed
+sync/gcs:openfeature-relay/testbed
+sync/azblob:openfeature-relay/testbed
+sync/s3:openfeature-relay/testbed
+sync/sse:openfeature-relay/testbed
+sync/builder:openfeature-relay/testbed
+telemetry/otel:openfeature-relay/testbed
+eventsink/webhook:openfeature-relay/testbed
+evaluator/flagd:openfeature-relay/testbed
+configformat/flagd:openfeature-relay/testbed
+contrib/flagsmith/engine:openfeature-relay/testbed
+contrib/flagsmith/sync:openfeature-relay/testbed
+runtime:openfeature-relay/testbed
+service/transport:openfeature-relay/testbed
+service/flag-evaluation:openfeature-relay/testbed
+service/ofrep:openfeature-relay/testbed
+service/flag-sync:openfeature-relay/testbed
+service/event-collector:openfeature-relay/testbed
+builder:openfeature-relay/testbed

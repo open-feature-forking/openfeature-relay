@@ -107,3 +107,31 @@ func TestTriggersReplaceTheDefaults(t *testing.T) {
 		started.requireDelivery(t, sync.DataSync{FlagData: flagsB, Source: "example://flags"})
 	})
 }
+
+// ownerTriggerFactory is a fetcher factory whose own trigger is its only fetch trigger, such as a source whose owner
+// tells it when to fetch. It is both the fetcher's and the trigger's factory.
+type ownerTriggerFactory struct{ exampleFactory }
+
+func (ownerTriggerFactory) DefaultTriggers(sync.SourceConfig) []sync.TriggerConfig {
+	return []sync.TriggerConfig{{Type: "example"}}
+}
+
+func (ownerTriggerFactory) CreateTrigger(sync.Settings) (sync.Trigger, error) {
+	return signalTrigger{make(chan struct{})}, nil
+}
+
+// TestDefaultTriggersReplaceThePoller: a factory that names default triggers gets exactly those, and no poller; a
+// source that lists `triggers` still replaces them.
+func TestDefaultTriggersReplaceThePoller(t *testing.T) {
+	sb := NewSyncBuilder(ownerTriggerFactory{exampleFactory{&exampleSource{}}})
+	res, err := sb.Resolve(sync.SourceConfig{URI: "example://flags", Provider: "example", Interval: 7}, loggerForTests())
+	require.NoError(t, err)
+	require.Equal(t, []sync.TriggerConfig{{Type: "example"}}, res.Triggers)
+	require.Zero(t, res.Interval, "no poller, so no polling interval")
+
+	res, err = sb.Resolve(sync.SourceConfig{
+		URI: "example://flags", Provider: "example", Triggers: []sync.TriggerConfig{{Type: "poller"}},
+	}, loggerForTests())
+	require.NoError(t, err)
+	require.Equal(t, []sync.TriggerConfig{{Type: "poller"}}, res.Triggers)
+}

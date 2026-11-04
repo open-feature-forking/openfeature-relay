@@ -75,3 +75,28 @@ eventsink/webhook:./...:opentelemetry|google.golang.org/grpc|connectrpc|k8s.io|g
 # The Flagsmith engine module (UC-019, FR-048): no telemetry, transport, HTTP client or relay component module in its packages.
 # The core logger links net/http through zap, so the direct-import rule is depguard's.
 contrib/flagsmith/engine:./...:opentelemetry|grpc|connectrpc|k8s.io|gocloud|resty|openfeature-relay/(sync|telemetry|service|runtime|evaluator|configformat)/
+# Only testbed/*, test/* and distributions/flagd-testbed may import the testbed modules (UC-022).
+core:./...:openfeature-relay/testbed
+sync/file:./...:openfeature-relay/testbed
+sync/flagd-grpc:./...:openfeature-relay/testbed
+sync/http:./...:openfeature-relay/testbed
+sync/openfeature-operator:./...:openfeature-relay/testbed
+sync/gcs:./...:openfeature-relay/testbed
+sync/azblob:./...:openfeature-relay/testbed
+sync/s3:./...:openfeature-relay/testbed
+sync/sse:./...:openfeature-relay/testbed
+sync/builder:./...:openfeature-relay/testbed
+telemetry/otel:./...:openfeature-relay/testbed
+eventsink/webhook:./...:openfeature-relay/testbed
+evaluator/flagd:./...:openfeature-relay/testbed
+configformat/flagd:./...:openfeature-relay/testbed
+contrib/flagsmith/engine:./...:openfeature-relay/testbed
+contrib/flagsmith/middleware:./...:openfeature-relay/testbed
+contrib/flagsmith/sync:./...:openfeature-relay/testbed
+runtime:./...:openfeature-relay/testbed
+service/transport:./...:openfeature-relay/testbed
+service/flag-evaluation:./...:openfeature-relay/testbed
+service/ofrep:./...:openfeature-relay/testbed
+service/flag-sync:./...:openfeature-relay/testbed
+service/event-collector:./...:openfeature-relay/testbed
+builder:./...:openfeature-relay/testbed

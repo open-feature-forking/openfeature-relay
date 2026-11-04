@@ -6,7 +6,13 @@
 // owner's version, which lets the owner tell which delivery carries its load. The source has no endpoint of its own and
 // reads nothing from disk or network.
 //
-// The trigger is the source's default and is created only for a source of this provider. It is not a trigger a
+// The owner loads before the runtime starts. A fetch before the first load fails and the fetching sync provider retries
+// it only after its backoff (about 5 s), without reading the trigger, so a first load that comes later is delivered late.
+// The owner also waits for the delivery of each load before the next: loads that arrive while a fetch runs are coalesced
+// into one fetch, and the intermediate versions are never delivered.
+//
+// The trigger is the source's default and is created only for a source of this provider (the type "testbed" is a
+// registered trigger type, so a distribution lists it, but every other provider's source is refused). It is not a trigger a
 // source of another provider can use.
 package source
 
@@ -149,7 +155,7 @@ func (*Factory) ParseURI(uri string) (sync.SourceConfig, bool) {
 
 // CreateFetcher creates the fetcher of a source.
 func (f *Factory) CreateFetcher(settings sync.Settings) (sync.Fetcher, error) {
-	if settings.Source.Provider != "" && settings.Source.Provider != Provider {
+	if settings.Source.Provider != Provider {
 		return nil, fmt.Errorf("source %q: the testbed fetcher serves testbed sources only", settings.Source.URI)
 	}
 	return fetcher{f.source}, nil
