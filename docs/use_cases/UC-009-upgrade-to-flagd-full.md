@@ -129,4 +129,4 @@ This use case is `Implemented`: flagd-full is the committed output of the Builde
 |-----|--------------|
 | Publishing the release: tagging, pushing the images and archives, signing and the SBOM attestations (the release build steps and their dry run exist) | UC-012 |
 | `go install github.com/open-feature/flagd/flagd@<version>`, which needs published component modules without `replace` directives (a known break since UC-014, listed in the migration notes) | UC-012 |
-| Readiness that fails past a configured staleness limit (BR-008 holds, because flagd offers no limit today) | UC-003, UC-019 |
+| Readiness that fails past a configured staleness limit (BR-008 holds, because flagd offers no limit today) | UC-019 |

@@ -35,9 +35,11 @@ If you relied on the exit to restart a container, use the readiness probe instea
 
 #### An unbuildable telemetry configuration stops startup
 
-When the telemetry configuration cannot be built, for example an unreachable or malformed OTLP setting, flagd stops at startup.
+When the telemetry configuration cannot be built, flagd stops at startup.
+From flagd's command line that is an unknown value of `OTEL_TRACES_EXPORTER` or `OTEL_METRICS_EXPORTER`.
 Before, flagd logged the error and ran without telemetry.
-Correct the telemetry settings, or remove them.
+An unreachable collector does not stop startup, today or before, because the exporters connect lazily.
+Correct the exporter variables, or remove them.
 
 #### Invalid blob URL options or Azure variables stop startup
 
@@ -80,7 +82,7 @@ Before, it replaced them with an empty configuration.
 #### A closed file watch reconnects
 
 When the watch on a `file:` source closes, flagd reconnects.
-Before, it stopped.
+Before, flagd exited.
 
 #### Unchanged file content is not delivered again
 
@@ -89,7 +91,7 @@ The file metrics count an empty file's `{}` and skip unchanged content.
 
 #### Every fetch has a default deadline
 
-Every fetch of an `http://`, `https://` or blob source has a deadline of the larger of the polling interval and 30 seconds.
+Every fetch of a `file:`, `http://`, `https://` or blob source has a deadline of the larger of the polling interval and 30 seconds.
 Polling backs off after two failures.
 
 #### `incrementalUpdates`, which is experimental and opt-in
@@ -110,7 +112,7 @@ Spans and metrics that are still buffered are exported before flagd exits.
 
 ## Rolling back
 
-Nothing in your configuration changes in an upgrade, so a rollback needs no configuration change.
+An upgrade changes your configuration only where an item above asks for it (an `awssdk=v1` option, an exporter variable that flagd could not build), so a rollback needs no change beyond undoing those.
 Start the previous flagd release with the same command, configuration file and environment variables.
 If the behaviour you saw is not listed above, report it to the maintainers as a compatibility defect.
 
