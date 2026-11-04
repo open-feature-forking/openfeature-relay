@@ -74,7 +74,7 @@ curl -X POST localhost:8016/ofrep/v1/evaluate/flags/banner \
 ## What it does not do
 
 - **It does not check who calls it.**
-    The credential middleware for Flagsmith keys exists as a module, but flagd's command line cannot configure middleware yet, so the distribution lists none.
+    The credential middleware for Flagsmith keys exists as a module, and the `middleware` key of flagd's configuration file can configure middleware, but the distribution's manifest lists none and no test runs the two together.
     Any client that can reach the relay can read every environment by sending the selector of that environment.
     Run it only behind something that authenticates its clients.
 - **It is not compared with the Edge Proxy.**
