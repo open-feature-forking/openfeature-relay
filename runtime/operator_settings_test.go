@@ -3,13 +3,18 @@
 package runtime
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/eventsink"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/middleware"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 // TestEventSinksNeedMetricsTelemetry pins Q21 (UC-021 A5): event sinks that the operator's event-sinks setting names
@@ -76,4 +81,52 @@ func TestMiddlewareCredentialReference(t *testing.T) {
 	require.ErrorContains(t, err, `middleware "api-key"`)
 	require.ErrorContains(t, err, `setting "keys"`)
 	require.ErrorContains(t, err, `"RELAY_TEST_MW_UNSET"`)
+}
+
+// TestNoEventSinksConfiguredNothingSubscribes pins NFR-013's no-cost path: a distribution that lists no event sink,
+// as flagd-full does, has no subscriber on the event bus for any kind.
+func TestNoEventSinksConfiguredNothingSubscribes(t *testing.T) {
+	rt, err := FromConfig(logger.NewLogger(nil, false), "test", Config{SyncProviders: oneFileSource(t)}, withFlagd(Components{
+		EventSinkFactories: []eventsink.Factory{recordingSinkFactory{sink: &recordingSink{}}},
+	}))
+	require.NoError(t, err)
+	for _, kind := range []events.Kind{events.KindConfigurationChange, events.KindEvaluation, events.KindTracking} {
+		require.False(t, rt.Bus.HasSubscribers(kind), "kind %s", kind)
+	}
+}
+
+// TestCredentialNeverLogged pins UC-021 BR-006: the value of a credential reference reaches the factory and nothing
+// the runtime logs, at any level, while the event sinks and the middleware are created and started.
+func TestCredentialNeverLogged(t *testing.T) {
+	const secret = "s3cr3t-credential-value"
+	t.Setenv("RELAY_TEST_CREDENTIAL", secret)
+	core, logs := observer.New(zapcore.DebugLevel)
+	log := logger.NewLogger(zap.New(core), false)
+
+	var sinkSettings eventsink.Settings
+	var mwSettings middleware.Settings
+	reference := map[string]any{"env": "RELAY_TEST_CREDENTIAL"}
+	_, err := FromConfig(log, "test", Config{SyncProviders: oneFileSource(t), EventSinksNeedMetrics: true}, withFlagd(Components{
+		MetricsHandler: http.NotFoundHandler(),
+		EventSinks: []eventsink.Configured{{
+			Factory: recordingSinkFactory{sink: &recordingSink{}, settings: &sinkSettings},
+			Config:  map[string]any{"headers": map[string]any{"Authorization": reference}},
+		}},
+		Middleware: []middleware.Configured{{
+			Factory: taggingFactory{name: "api-key", settings: &mwSettings},
+			Config:  map[string]any{"tag": "x", "key": reference},
+		}},
+	}))
+	require.NoError(t, err)
+
+	require.Equal(t, map[string]any{"Authorization": secret}, sinkSettings.Config["headers"], "the sink gets the value")
+	require.Equal(t, secret, mwSettings.Config["key"], "the middleware gets the value")
+	require.NotZero(t, logs.Len(), "the runtime logged nothing, so the test shows nothing")
+	for _, entry := range logs.All() {
+		require.NotContains(t, entry.Message, secret)
+		for _, field := range entry.Context {
+			require.NotContains(t, field.String, secret)
+			require.NotContains(t, fmt.Sprint(field.Interface), secret)
+		}
+	}
 }
