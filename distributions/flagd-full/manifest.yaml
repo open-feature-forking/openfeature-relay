@@ -26,13 +26,18 @@ service_endpoints:
   - {module: github.com/open-feature-forking/openfeature-relay/service/flag-evaluation, version: v0.0.0}
   - {module: github.com/open-feature-forking/openfeature-relay/service/ofrep, version: v0.0.0}
   - {module: github.com/open-feature-forking/openfeature-relay/service/flag-sync, version: v0.0.0}
+  - {module: github.com/open-feature-forking/openfeature-relay/service/event-collector, version: v0.0.0}
+event_sinks:
+  - {module: github.com/open-feature-forking/openfeature-relay/eventsink/webhook, version: v0.0.0}
 telemetry: {module: github.com/open-feature-forking/openfeature-relay/telemetry/otel, version: v0.0.0}
 runtime: {module: github.com/open-feature-forking/openfeature-relay/runtime, version: v0.0.0}
 replaces:
   - {module: github.com/open-feature-forking/openfeature-relay/configformat/flagd, path: ../../configformat/flagd}
   - {module: github.com/open-feature-forking/openfeature-relay/core, path: ../../core}
   - {module: github.com/open-feature-forking/openfeature-relay/evaluator/flagd, path: ../../evaluator/flagd}
+  - {module: github.com/open-feature-forking/openfeature-relay/eventsink/webhook, path: ../../eventsink/webhook}
   - {module: github.com/open-feature-forking/openfeature-relay/runtime, path: ../../runtime}
+  - {module: github.com/open-feature-forking/openfeature-relay/service/event-collector, path: ../../service/event-collector}
   - {module: github.com/open-feature-forking/openfeature-relay/service/flag-evaluation, path: ../../service/flag-evaluation}
   - {module: github.com/open-feature-forking/openfeature-relay/service/flag-sync, path: ../../service/flag-sync}
   - {module: github.com/open-feature-forking/openfeature-relay/service/ofrep, path: ../../service/ofrep}
