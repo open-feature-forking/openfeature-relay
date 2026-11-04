@@ -3,6 +3,8 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -152,6 +154,25 @@ func TestComponentsIdentityMatchesVersionVerbose(t *testing.T) {
 func TestComponentsOpensNoPortAndReadsNoConfig(t *testing.T) {
 	withDistribution(t)
 	want := runComponents(t)
+
+	t.Run("initConfig reads no file and needs no home directory", func(t *testing.T) {
+		file := filepath.Join(t.TempDir(), "flagd.yaml")
+		require.NoError(t, os.WriteFile(file, []byte("management-port: 1234\n"), 0o600))
+		t.Setenv("HOME", "")
+		t.Setenv("USERPROFILE", "")
+		old := cfgFile
+		usedBefore := viper.ConfigFileUsed()
+		t.Cleanup(func() { cfgFile = old; viper.SetConfigFile(usedBefore) })
+		cfgFile = file
+		require.True(t, invokesComponents([]string{"--config", file, "components"}))
+		require.False(t, invokesComponents([]string{"version"}))
+
+		args := os.Args
+		t.Cleanup(func() { os.Args = args })
+		os.Args = []string{"flagd", "--config", file, "components"}
+		initConfig()
+		require.NotEqual(t, file, viper.ConfigFileUsed(), "the configuration file was not read")
+	})
 
 	viper.Set(managementPortFlagName, "not-a-port")
 	viper.Set(sourcesFlagName, "unknown://x")

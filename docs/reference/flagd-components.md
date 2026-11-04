@@ -30,6 +30,7 @@ sync providers:
 `--output json` prints the same content as one document.
 The keys under `components` are `sync_providers`, `configuration_formats`, `evaluators`, `service_endpoints`, `telemetry`, `middleware` and `event_sinks`, and an empty group is an empty list.
 Each entry has `type`, `module` and `version`, and sync providers add `schemes`.
+A fetch trigger has no `schemes` key, which means it handles no schemes.
 
 ```json
 {

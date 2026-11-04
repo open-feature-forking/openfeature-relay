@@ -131,6 +131,13 @@ func (l *listing) text(w io.Writer) {
 	}
 }
 
+// invokesComponents reports whether the arguments run the components command, which reads no configuration file and
+// needs no home directory.
+func invokesComponents(args []string) bool {
+	c, _, err := rootCmd.Find(args)
+	return err == nil && c == componentsCmd
+}
+
 // resolveInventory fills in the versions of the running binary; tests replace it.
 var resolveInventory = func(i distribution.Inventory) distribution.Inventory { return i.Resolved() }
 
