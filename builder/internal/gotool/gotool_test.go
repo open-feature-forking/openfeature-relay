@@ -308,7 +308,7 @@ func TestCrossBuildRunsProbeOnHost(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, err := tool.Probe(ctx, dir, components)
+	out, err := tool.Probe(ctx, filepath.Join(dir, "probe"), components)
 
 	if err != nil || !strings.Contains(string(out), "probe ran for host") {
 		t.Fatalf("the probe runs for the host although GOOS and GOARCH name another platform: %q, %v", out, err)

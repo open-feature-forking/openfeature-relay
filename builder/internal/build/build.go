@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -27,8 +28,12 @@ type Options struct {
 	Tool                                                            gotool.Tool
 	// Commit is the source revision to stamp; empty means the short revision of the manifest's directory, or "unknown".
 	Commit string
-	// Date is the build date to stamp; the zero value means now.
-	Date time.Time
+	// DistVersion is the version to stamp; empty means the manifest's dist.version.
+	DistVersion string
+	// Date is the build date to stamp, verbatim; empty means now, as an RFC 3339 time in UTC.
+	Date string
+	// ProbeOutput, when set, is a file the output of the probe is written to.
+	ProbeOutput string
 	// Warn receives the warnings; nil discards them.
 	Warn io.Writer
 }
@@ -51,7 +56,7 @@ func (e *NoSourceError) Error() string {
 // Run builds the distribution of the manifest.
 func Run(ctx context.Context, m *manifest.Manifest, opts Options) (Result, error) {
 	// the Go Toolchain runs in the source directory, so the paths handed to it are absolute
-	sourceDir, err := filepath.Abs(generate.OutputDir(m))
+	sourceDir, err := filepath.Abs(generate.OutputDirOf(m, opts.Generate))
 	if err != nil {
 		return Result{}, err
 	}
@@ -113,9 +118,14 @@ func Run(ctx context.Context, m *manifest.Manifest, opts Options) (Result, error
 		warn(warnings...)
 	}
 
-	out, err := tool.Probe(ctx, res.SourceDir, components)
+	out, err := probe(ctx, m, opts, tool, res.SourceDir, components)
 	if err != nil {
 		return res, err
+	}
+	if opts.ProbeOutput != "" {
+		if err := os.WriteFile(opts.ProbeOutput, out, 0o644); err != nil { //nolint:gosec // a report to read
+			return res, err
+		}
 	}
 	probed, err := needs.ParseProbe(out)
 	if err != nil {
@@ -153,19 +163,34 @@ func hasSource(dir string) bool {
 	return true
 }
 
-// ldflags stamps what flagd version prints today: the distribution's version, the short source revision and the
-// build date (Q10).
+// ldflags stamps what flagd version prints: the distribution's version, the source revision and the build date, each
+// as given, or as the Builder defaults them (UC-001 Q10, UC-009 Q3).
 func ldflags(m *manifest.Manifest, opts Options) string {
 	commit := opts.Commit
 	if commit == "" {
 		commit = revision(m.Dir())
 	}
 	date := opts.Date
-	if date.IsZero() {
-		date = time.Now()
+	if date == "" {
+		date = time.Now().UTC().Format(time.RFC3339)
 	}
-	return fmt.Sprintf("-X main.version=%s -X main.commit=%s -X main.date=%s",
-		m.Dist.Version, commit, date.UTC().Format(time.RFC3339))
+	version := opts.DistVersion
+	if version == "" {
+		version = m.Dist.Version
+	}
+	return "-X " + quoteFlag("main.version="+version) + " -X " + quoteFlag("main.commit="+commit) + " -X " + quoteFlag("main.date="+date)
+}
+
+// quoteFlag quotes an argument of -ldflags that the Go Toolchain splits on spaces, with the quote the value lacks.
+func quoteFlag(arg string) string {
+	switch {
+	case !strings.ContainsAny(arg, " 	'\""):
+		return arg
+	case !strings.Contains(arg, "'"):
+		return "'" + arg + "'"
+	default:
+		return "\"" + arg + "\""
+	}
 }
 
 // revision returns the short revision of the repository that holds dir, or "unknown".
@@ -181,4 +206,36 @@ func revision(dir string) string {
 		return rev
 	}
 	return "unknown"
+}
+
+// probe runs the probe of the source in a temporary module of its own, so that the source holds only what the Builder
+// generates for the distribution.
+func probe(ctx context.Context, m *manifest.Manifest, opts Options, tool gotool.Tool, sourceDir string, components []gotool.Component) ([]byte, error) {
+	dir, err := os.MkdirTemp("", "relay-probe-")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(dir)
+	if err := generate.WriteProbe(m, opts.Generate, sourceDir, dir); err != nil {
+		return nil, err
+	}
+	// the checksums of the source cover what the probe imports
+	if sums, err := os.ReadFile(filepath.Join(sourceDir, "go.sum")); err == nil {
+		if err := os.WriteFile(filepath.Join(dir, "go.sum"), sums, 0o600); err != nil {
+			return nil, err
+		}
+	}
+	if !opts.SkipGetModules {
+		if err := tool.Tidy(ctx, dir, components); err != nil {
+			return nil, err
+		}
+	} else {
+		// the dependencies recorded with the source stand; the probe's own go.mod is written from them
+		base := tool.Env
+		if base == nil {
+			base = os.Environ()
+		}
+		tool.Env = append(slices.Clone(base), "GOFLAGS=-mod=mod")
+	}
+	return tool.Probe(ctx, dir, components)
 }

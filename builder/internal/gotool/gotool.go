@@ -343,10 +343,10 @@ func concerns(output string, c Component) bool {
 	return false
 }
 
-// Probe runs ./probe in dir for the host: GOOS, GOARCH and GOFIPS140 are unset, so a cross-build still runs it. It
+// Probe runs the main package of dir, the probe module, for the host: GOOS, GOARCH and GOFIPS140 are unset, so a cross-build still runs it. It
 // returns what the probe printed.
 func (t Tool) Probe(ctx context.Context, dir string, components []Component) ([]byte, error) {
-	stdout, stderr, err := t.run(ctx, dir, t.env("GOOS", "GOARCH", "GOFIPS140"), "run", "./probe")
+	stdout, stderr, err := t.run(ctx, dir, t.env("GOOS", "GOARCH", "GOFIPS140"), "run", ".")
 	if err != nil {
 		return nil, mapRun(string(stderr), components)
 	}

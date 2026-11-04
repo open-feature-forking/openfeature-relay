@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -106,4 +107,25 @@ func TestCLIBuildWithoutSource(t *testing.T) {
 	require.Equal(t, 4, code)
 	require.Empty(t, stdout)
 	require.Contains(t, stderr, "holds no distribution source to build")
+}
+
+// TestReleaseFlagsReachTheBuild pins that --dist-version, --commit, --date and --output reach the build as given, and
+// that without them nothing is overridden.
+func TestReleaseFlagsReachTheBuild(t *testing.T) {
+	o, err := parseFlags([]string{"--manifest", "m.yaml", "--dist-version", "v1.2.3", "--commit", "0123456789abcdef",
+		"--date", "2026-01-02T03:04:05Z", "--output", "/tmp/out"}, io.Discard)
+	require.NoError(t, err)
+	b := buildOptions(o, io.Discard)
+	require.Equal(t, "v1.2.3", b.DistVersion)
+	require.Equal(t, "0123456789abcdef", b.Commit)
+	require.Equal(t, "2026-01-02T03:04:05Z", b.Date)
+	require.Equal(t, "/tmp/out", b.Generate.OutputDir)
+
+	o, err = parseFlags([]string{"--manifest", "m.yaml"}, io.Discard)
+	require.NoError(t, err)
+	b = buildOptions(o, io.Discard)
+	require.Empty(t, b.DistVersion)
+	require.Empty(t, b.Commit)
+	require.Empty(t, b.Date)
+	require.Empty(t, b.Generate.OutputDir)
 }
