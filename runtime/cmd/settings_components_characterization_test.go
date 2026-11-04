@@ -31,6 +31,9 @@ type setting struct {
 	endpoints []string
 	// own names the setting's owner when no endpoint is the whole of it: the runtime, or the telemetry provider.
 	own string
+	// routed marks a setting of the evaluation router, which the endpoints that evaluate share: flag evaluation and
+	// OFREP. Config carries it, but no endpoint's settings do.
+	routed bool
 }
 
 // flagdFullSettings is every flag of flagd start with the components it belongs to. A new flag has no entry here and
@@ -55,7 +58,7 @@ var flagdFullSettings = map[string]setting{
 	"disable-sync-metadata":            {field: "DisableSyncMetadata", endpoints: []string{flagSync}},
 	"max-request-body":                 {field: "MaxRequestBodyBytes", endpoints: allEndpoints},
 	"max-request-header":               {field: "MaxRequestHeaderBytes", endpoints: allEndpoints},
-	"strict-numeric-range":             {field: "StrictNumericRange", own: "runtime"},
+	"strict-numeric-range":             {field: "StrictNumericRange", routed: true},
 	"keep-alive-min-time":              {field: "KeepAliveMinTime", own: "runtime"},
 	"keep-alive-permit-without-stream": {field: "KeepAlivePermitWithoutStream", own: "runtime"},
 	"uri":                              {field: "SyncProviders", own: "runtime"},
@@ -169,12 +172,14 @@ func TestEveryFlagdFullSettingHasAComponent(t *testing.T) {
 			want := append([]string(nil), s.endpoints...)
 			sort.Strings(want)
 			require.Equal(t, want, derived, "the endpoint types that receive %s", name)
-			require.True(t, len(want) > 0 || s.own != "", fmt.Sprintf("%s belongs to no component and to no owner", name))
+			require.True(t, len(want) > 0 || s.own != "" || s.routed, fmt.Sprintf("%s belongs to no component and to no owner", name))
 
 			// the table that stops startup holds the same set: the endpoints, or the telemetry provider, and none for the
 			// runtime's own settings
 			var components []string
-			if s.own == "" {
+			if s.routed {
+				components = []string{componentFlagEvaluation, componentOFREP}
+			} else if s.own == "" {
 				components = want
 			} else if s.own == "telemetry" {
 				components = []string{componentTelemetry}
