@@ -72,6 +72,7 @@ func (Factory) Create(s service.Settings) (service.Endpoint, error) {
 	cfg.Logger = s.Logger.WithFields(zap.String("component", "FlagSyncService"))
 	cfg.Store = s.Store
 	cfg.Initialized = s.Initialized
+	cfg.Formats = slices.Clone(s.Formats)
 	cfg.HTTPMiddleware = s.HTTPMiddleware
 	cfg.Telemetry = s.Telemetry
 	if p, ok := s.Telemetry.(connectInstrumentation); ok {
