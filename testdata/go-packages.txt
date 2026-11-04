@@ -35,6 +35,7 @@ github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry
 github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry/telemetrytest
 github.com/open-feature-forking/openfeature-relay/core/pkg/utils
 github.com/open-feature-forking/openfeature-relay/evaluator/flagd
+github.com/open-feature-forking/openfeature-relay/eventsink/webhook
 github.com/open-feature-forking/openfeature-relay/runtime
 github.com/open-feature-forking/openfeature-relay/runtime/cmd
 github.com/open-feature-forking/openfeature-relay/runtime/fromconfig_test
