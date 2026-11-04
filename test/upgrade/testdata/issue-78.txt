@@ -1,0 +1,26 @@
+flagd built from this repository is a drop-in replacement for today's flagd: internals change, observable behaviour does not (see `CLAUDE.md`, Conventions). The changes below were approved before that rule and were kept by the project lead's decision. They must all appear in the migration guide (UC-015) and UC-009's migration notes. Each lands in its own commit.
+
+**Could break a setup that works today**
+- [ ] A failed first fetch or connect no longer exits flagd: it stays up and not ready (UC-003 Q2, #54).
+- [ ] An unbuildable telemetry configuration stops startup instead of being logged (step 6 Q6, T4).
+- [ ] Invalid blob URL options or Azure variables stop startup, where flagd used to start and never become ready (#57).
+- [ ] `awssdk=v1` on an `s3://` source stops startup; the native client is AWS SDK v2 only (#57).
+
+**Visible to clients, unlikely to break them**
+- [ ] Flag sync's `Last-Modified` moves only on a configuration change (UC-004 Q10, #71).
+- [ ] OFREP `flagConfigEtag` values change (still opaque), and vendor-format changes send refetch events (Q8, #75).
+- [ ] Shutdown: event streams get `provider_shutdown` and end at once; flag sync streams end cleanly in under 2 s (#71, #76). With step 6's hooks, shutdown takes up to 10 s.
+- [ ] The operator source delivers `spec.flagSpec` as written (UC-003 Q5, #54).
+
+**Fixes for failure cases**
+- [ ] A file read or decode error keeps the current flags instead of wiping them (Q4, #54).
+- [ ] A closed file watch reconnects instead of stopping flagd (#54).
+- [ ] Unchanged file content is not delivered again. File metrics count an empty file's `{}` and skip unchanged content (#54).
+- [ ] Every fetch has a default deadline of `max(interval, 30 s)`, and polling backs off after two failures (Q3, #54).
+- [ ] `incrementalUpdates`, which is experimental and opt-in, is honoured for http, file and blob sources (#54).
+- [ ] Telemetry is flushed on shutdown (step 6 T3).
+
+**Unchanged and pinned by tests:** CLI flags, ports, endpoints, management paths and status codes, payloads, metric and span names. Tick an item once the migration guide covers it.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+

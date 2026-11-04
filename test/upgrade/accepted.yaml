@@ -1,0 +1,58 @@
+# The differences between today's flagd and the flagd-full that the Builder made that the project lead accepts
+# (UC-009 Q5). The differential in upgrade_test.go fails on any other difference. An entry of kind #78 names an item
+# of issue 78 (testdata/issue-78.txt; make refresh-issue-78); every item needs an entry, and every entry an item.
+# `observations` are the differences of the differential that the entry allows: the scenario, the key and the values
+# both flagds show ("<not observed>" for a key one of them lacks). A difference with other values fails, and an
+# observation that no difference matched fails the run. `covered_by` names the tests that pin an item the black-box
+# differential cannot see. A known-break names the use case that removes it.
+accepted:
+  - kind: "#78"
+    item: "A failed first fetch or connect no longer exits flagd"
+    observations:
+      - {scenario: unreachable-source, key: exited, baseline: "true", candidate: "false"}
+      - {scenario: unreachable-source, key: exit-code, baseline: "1", candidate: "<not observed>"}
+      - {scenario: unreachable-source, key: ready, baseline: "<not observed>", candidate: "false"}
+  - kind: "#78"
+    item: "An unbuildable telemetry configuration stops startup"
+    covered_by: ["runtime TestTelemetryProviderIsShutDownWhenFromConfigFails", "runtime/telemetrystartup_test"]
+  - kind: "#78"
+    item: "Invalid blob URL options or Azure variables stop startup"
+    covered_by: ["sync/builder blob_sources_test.go", "sync/azblob, sync/gcs and sync/s3 tests"]
+  - kind: "#78"
+    item: "`awssdk=v1` on an `s3://` source stops startup"
+    covered_by: ["sync/builder blob_sources_test.go"]
+  - kind: "#78"
+    item: "Flag sync's `Last-Modified` moves only on a configuration change"
+    covered_by: ["service/flag-sync contract_test.go"]
+  - kind: "#78"
+    item: "OFREP `flagConfigEtag` values change"
+    note: "the values are opaque; normalize.go masks them in bodies and headers"
+    covered_by: ["runtime ofrep_stream_test.go TestOFREPEventStreamAnnouncesAVendorChange"]
+  - kind: "#78"
+    item: "Shutdown: event streams get `provider_shutdown`"
+    covered_by: ["runtime shutdown_characterization_test.go"]
+  - kind: "#78"
+    item: "The operator source delivers `spec.flagSpec` as written"
+    covered_by: ["sync/openfeature-operator tests"]
+  - kind: "#78"
+    item: "A file read or decode error keeps the current flags"
+    covered_by: ["sync/file tests"]
+  - kind: "#78"
+    item: "A closed file watch reconnects"
+    covered_by: ["sync/file tests"]
+  - kind: "#78"
+    item: "Unchanged file content is not delivered again"
+    covered_by: ["sync/file tests"]
+  - kind: "#78"
+    item: "Every fetch has a default deadline"
+    covered_by: ["core/pkg/sync/fetching tests"]
+  - kind: "#78"
+    item: "`incrementalUpdates`, which is experimental and opt-in"
+    covered_by: ["sync/http and sync/file tests"]
+  - kind: "#78"
+    item: "Telemetry is flushed on shutdown"
+    covered_by: ["runtime shutdown_order_test.go"]
+  - kind: known-break
+    item: "go install github.com/open-feature/flagd/flagd@<version> fails: flagd/go.mod carries local replace directives"
+    owner: UC-012
+    note: "since UC-014; restoring it needs published component modules without replaces. The binary archives and images are the supported install paths."
