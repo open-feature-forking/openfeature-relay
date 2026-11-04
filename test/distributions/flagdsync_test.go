@@ -341,11 +341,11 @@ func TestAbsentComponentSettingStopsStartup(t *testing.T) {
 // startOnFile starts the distribution on a source whose content is given and returns whether it became ready and the
 // warnings and errors it logged, without clocks and paths. A source that is expected to be accepted is waited for;
 // one that is expected to be rejected is given the time to deliver, and the process is stopped after it.
-func startOnFile(t *testing.T, name string, portFlags []string, content string, expectReady bool) (ready bool, problems string) {
+func startOnFile(t *testing.T, name string, portFlags []string, content, ext string, expectReady bool) (ready bool, problems string) {
 	t.Helper()
 	bin := builtBinary(t, name)
 	dir := t.TempDir()
-	path := filepath.Join(dir, "flags.json")
+	path := filepath.Join(dir, "flags"+ext)
 	writeFile(t, path, content)
 
 	args := []string{"start", "--log-format", "json", "--uri", "file:" + path}
@@ -370,35 +370,67 @@ func startOnFile(t *testing.T, name string, portFlags []string, content string, 
 		if strings.Contains(line, `"level":"warn"`) || strings.Contains(line, `"level":"error"`) {
 			line = regexp.MustCompile(`"ts":[^,]+,`).ReplaceAllString(line, "")
 			line = regexp.MustCompile(`"caller":"[^"]+",?`).ReplaceAllString(line, "")
-			lines = append(lines, strings.ReplaceAll(line, dir, "<dir>"))
+			lines = append(lines, orderless(strings.ReplaceAll(line, dir, "<dir>")))
 		}
 	}
 	return ready, strings.Join(lines, "\n")
 }
 
-// TestProxyRejectsWhatFlagdFullRejects pins UC-017 A3, BR-002 and BR-003 over the flag configurations of
-// testdata/flag-configurations: flagd-full decides which directory a sample belongs to. The ones in valid/ it accepts
-// (it logs a schema warning for some and keeps going), the ones in invalid/ it rejects. flagd-sync does the same with
-// the same log, and never becomes ready on a rejected one. A distribution that carries another configuration format
-// adds its samples as files of the two directories.
+// orderless sorts the lines inside a log entry. The schema validation lists its errors in the order of a map, which
+// differs between two runs of the same flagd.
+func orderless(entry string) string {
+	parts := strings.Split(entry, `\n`)
+	sort.Strings(parts)
+	return strings.Join(parts, `\n`)
+}
+
+// verdict names whether a distribution accepted a flag configuration.
+func verdict(ready bool) string {
+	if ready {
+		return "accepts"
+	}
+	return "rejects"
+}
+
+// flagConfigurations returns the files of the set of flag configurations, valid and invalid, in a stable order.
+func flagConfigurations(t *testing.T, kind string) []string {
+	t.Helper()
+	var files []string
+	for _, pattern := range []string{"*.json", "*.yaml", "*.yml"} {
+		found, err := filepath.Glob(filepath.Join("testdata", "flag-configurations", kind, pattern))
+		require.NoError(t, err)
+		files = append(files, found...)
+	}
+	require.NotEmpty(t, files, "the %s flag configurations", kind)
+	sort.Strings(files)
+	return files
+}
+
+// TestProxyRejectsWhatFlagdFullRejects pins UC-017 A3, BR-002 and BR-003, and UC-013 main step 6, A8 and BR-008, over
+// the set of flag configurations in testdata/flag-configurations. flagd-full's verdict is the reference: a file in
+// valid/ is one flagd-full accepts (it logs a schema warning for some and keeps going), a file in invalid/ one it
+// rejects. flagd-sync gives the same verdict with the same log, and never becomes ready on a rejected one. A mismatch
+// names the file with the verdict it is recorded under, flagd-full's and flagd-sync's.
+//
+// The set is seeded from the flag files of the test-harness and the samples of this repository (valid/), and from the
+// invalid sample of the flagd configuration format's contract and the shapes the schema refuses (invalid/). A
+// distribution that carries another configuration format adds its samples to the two directories.
 func TestProxyRejectsWhatFlagdFullRejects(t *testing.T) {
 	for _, kind := range []string{"valid", "invalid"} {
-		files, err := filepath.Glob(filepath.Join("testdata", "flag-configurations", kind, "*.json"))
-		require.NoError(t, err)
-		require.NotEmpty(t, files, "the %s flag configurations", kind)
-		sort.Strings(files)
-		for _, file := range files {
-			t.Run(kind+"/"+strings.TrimSuffix(filepath.Base(file), ".json"), func(t *testing.T) {
+		for _, file := range flagConfigurations(t, kind) {
+			t.Run(kind+"/"+filepath.Base(file), func(t *testing.T) {
 				content, err := os.ReadFile(file)
 				require.NoError(t, err)
 				expectReady := kind == "valid"
 
-				fullReady, fullProblems := startOnFile(t, "flagd-full", allPortFlags, string(content), expectReady)
-				require.Equal(t, expectReady, fullReady, "flagd-full on a %s flag configuration: %s", kind, fullProblems)
+				fullReady, fullProblems := startOnFile(t, "flagd-full", allPortFlags, string(content), filepath.Ext(file), expectReady)
+				syncReady, syncProblems := startOnFile(t, "flagd-sync", syncPortFlags, string(content), filepath.Ext(file), expectReady)
 
-				ready, problems := startOnFile(t, "flagd-sync", syncPortFlags, string(content), expectReady)
-				require.Equal(t, expectReady, ready, "flagd-sync on a %s flag configuration: %s", kind, problems)
-				require.Equal(t, fullProblems, problems, "what the two log")
+				summary := fmt.Sprintf("%s is recorded under %s/: flagd-full %s it, flagd-sync %s it",
+					file, kind, verdict(fullReady), verdict(syncReady))
+				require.Equal(t, expectReady, fullReady, "the recorded verdict differs from flagd-full's: %s\n%s", summary, fullProblems)
+				require.Equal(t, fullReady, syncReady, "flagd-sync differs from flagd-full: %s\n%s", summary, syncProblems)
+				require.Equal(t, fullProblems, syncProblems, "what the two log: %s", summary)
 			})
 		}
 	}
