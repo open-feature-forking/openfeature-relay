@@ -16,7 +16,8 @@ import (
 //   - Text: clocks (a date and time of day) and the host ports the containers are published on.
 //   - JSON: key order, and the value of flagConfigEtag and etag (opaque validators; #78). Numbers keep their literal.
 //   - Headers: the Date header, and the values of ETag and Last-Modified (opaque validators and a clock).
-//   - MetricSeries: the sample values and nothing else of a series.
+//   - MetricSeries: the sample values, the values of the labels listed in variableLabels, and the host name inside
+//     os_description.
 //   - the span attributes in otlp_test.go: the keys listed in volatile, by exact name.
 
 var (
@@ -51,8 +52,8 @@ func JSON(body []byte) string {
 }
 
 // MetricSeries returns the sorted, de-duplicated series a Prometheus exposition lists: the # HELP and # TYPE lines, and
-// for each sample its name, its label names and, for a histogram bucket, the le boundary. The values and the other label
-// values are left out.
+// for each sample its name and its labels with their values. The sample values are left out, and so are the values of
+// the labels in variableLabels.
 func MetricSeries(exposition string) []string {
 	seen := map[string]bool{}
 	for _, line := range strings.Split(exposition, "\n") {
@@ -73,7 +74,7 @@ func MetricSeries(exposition string) []string {
 				}
 			}
 		}
-		seen[name+"{"+strings.Join(labelNames(labels), ",")+"}"] = true
+		seen[name+"{"+strings.Join(labelPairs(labels), ",")+"}"] = true
 	}
 	series := make([]string, 0, len(seen))
 	for s := range seen {
@@ -85,18 +86,33 @@ func MetricSeries(exposition string) []string {
 
 var label = regexp.MustCompile(`([a-zA-Z_][a-zA-Z0-9_]*)="((?:[^"\\]|\\.)*)"`)
 
-// labelNames returns the sorted label names of a sample, with the value of le.
-func labelNames(labels string) []string {
-	var names []string
-	for _, m := range label.FindAllStringSubmatch(labels, -1) {
-		if m[1] == "le" {
-			names = append(names, "le="+m[2])
-			continue
+// variableLabels are the metric labels whose value differs between two runs of the same flagd: the identity of the
+// process and of the container that the telemetry resource carries. The host name also appears inside os_description,
+// where it is replaced by <host>; the rest of the description is compared.
+var variableLabels = map[string]bool{"service_instance_id": true, "host_name": true}
+
+// labelPairs returns the sorted name="value" pairs of a sample's labels.
+func labelPairs(labels string) []string {
+	matches := label.FindAllStringSubmatch(labels, -1)
+	host := ""
+	for _, m := range matches {
+		if m[1] == "host_name" {
+			host = m[2]
 		}
-		names = append(names, m[1])
 	}
-	sort.Strings(names)
-	return names
+	var pairs []string
+	for _, m := range matches {
+		value := m[2]
+		switch {
+		case variableLabels[m[1]]:
+			value = "<varies>"
+		case m[1] == "os_description" && host != "":
+			value = strings.ReplaceAll(value, host, "<host>")
+		}
+		pairs = append(pairs, m[1]+`="`+value+`"`)
+	}
+	sort.Strings(pairs)
+	return pairs
 }
 
 // Headers renders the response headers, one sorted line each, without the Date header and with the values of ETag and
