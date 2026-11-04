@@ -7,7 +7,7 @@
 **Primary Actor:** Operator  
 **Goal:** Run the smallest standard distribution that contains every component the deployment uses, without running the builder, so that the deployment carries fewer dependencies and less code.  
 **Trigger:** Operator decides to replace flagd-full with a smaller standard distribution for a deployment  
-**Status:** Draft  
+**Status:** Implemented  
 
 **Requirements:** [FR-021, FR-022, FR-023, FR-024, FR-034, FR-052, NFR-003, NFR-004, NFR-011, C-009](../requirements.md)
 
@@ -111,7 +111,7 @@ A distribution with the noop telemetry provider contains no observability code a
 
 ### BR-004: Minimal Distribution Bounds
 
-flagd-minimal is at most 50% of the size of flagd-full for the same OS and architecture (NFR-003), and its module graph contains no module under `k8s.io`, `cloud.google.com`, `github.com/aws`, `github.com/Azure` or `go.opentelemetry.io/otel/sdk` (NFR-004).
+flagd-minimal is at most 50% of the size of flagd-full for the same OS and architecture (NFR-003), and its binary links no module under `k8s.io`, `cloud.google.com`, `github.com/aws`, `github.com/Azure` or `go.opentelemetry.io/otel/sdk`, and the packages of the distribution import none (NFR-004). What the binary links is what `go version -m` lists, which is what scanners of a release read; the build list of the generated module may hold more, because the modules of the runtime and the sync builder require their tests' dependencies.
 
 ### BR-005: Release Names
 
@@ -123,4 +123,14 @@ A standard distribution evaluates with the same configuration format and evaluat
 
 ### BR-007: flagd-sync Is the Configuration Proxy
 
-flagd-sync contains sync providers, a configuration format and the flag sync endpoint but no evaluator, and its module graph contains no evaluator module and no `github.com/diegoholiveira/jsonlogic` module (NFR-011). It rejects invalid flag configurations the same way flagd-full does (FR-026). Today's flagd-proxy stays a separate program with its own CLI and image and is not affected by adopting a standard distribution.
+flagd-sync contains sync providers, a configuration format and the flag sync endpoint but no evaluator, and its binary links no evaluator module and no `github.com/diegoholiveira/jsonlogic` module, and the packages of the distribution import none (NFR-011). It rejects invalid flag configurations the same way flagd-full does (FR-026). Today's flagd-proxy stays a separate program with its own CLI and image and is not affected by adopting a standard distribution.
+
+
+## Delivered by Later Use Cases
+
+This use case is `Implemented`: the manifests of flagd-minimal, flagd-cloud, flagd-kubernetes and flagd-sync, built by the Builder in CI; the bounds of flagd-minimal and flagd-sync, measured on the binaries and the packages they import (`test/distributions`); the stop at startup for a setting of an absent component and for a scheme the distribution cannot read, both naming what is missing and, with `dist.components_hint` on, pointing to `flagd components`; and the evaluation parity with flagd-full, byte for byte for flagd-sync's flag configurations. These parts are delivered by the use cases named here, and are accepted gaps of this one:
+
+| Gap | Delivered by |
+|-----|--------------|
+| A1: the FIPS image of a standard distribution with the `-fips` tag. The FIPS compile of every manifest is checked by `make build-standard-fips`, in the FIPS job | UC-002 |
+| BR-005: the image names, the binary archives and the release names of the standard distributions, and their platform matrix (NFR-009) | UC-012 |

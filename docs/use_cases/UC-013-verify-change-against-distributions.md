@@ -24,7 +24,7 @@
 1. Maintainer opens or updates a pull request with a change to main.
 2. GitHub Actions runs the linters, including the dependency rules, and the unit tests of every module.
 3. GitHub Actions builds every standard distribution from its manifest, with the modules of the change in place of their released versions, as a standard build and a FIPS build.
-4. GitHub Actions checks that the module graph of flagd-minimal contains no module listed in NFR-004, that the module graph of flagd-sync contains no evaluator module and no JsonLogic module, and that neither the evaluator module nor the flagd configuration format module depends on a package listed in NFR-005.
+4. GitHub Actions checks that the binary of flagd-minimal links no module listed in NFR-004 and its packages import none, that the binary of flagd-sync links no evaluator module and no JsonLogic module and its packages import none, and that neither the evaluator module nor the flagd configuration format module depends on a package listed in NFR-005.
 5. GitHub Actions builds the flagd-full image of the change and runs the flagd Test Harness RPC and in-process suites against it with the tag selection of today's flagd.
 6. GitHub Actions gives flagd-sync and flagd-full each flag configuration of the set and checks that flagd-sync rejects every flag configuration flagd-full rejects and accepts every one flagd-full accepts.
 7. GitHub Actions runs the evaluator benchmarks on the change and on its merge base and compares allocations and time per operation of each benchmark.
