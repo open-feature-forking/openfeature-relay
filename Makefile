@@ -14,7 +14,7 @@ FLAGD_MODULE_DIRS := ./flagd ./runtime ./service/transport ./service/flag-evalua
 # The contrib component modules (vendor integrations). They are tested and pinned like the library modules, but stay
 # out of GO_LIB_MODULE_DIRS: they are not what embedders import, and an engine that hashes with MD5 cannot run under
 # test-fips.
-CONTRIB_MODULE_DIRS := ./contrib/flagsmith/middleware
+CONTRIB_MODULE_DIRS := ./contrib/flagsmith/engine ./contrib/flagsmith/middleware ./contrib/flagsmith/sync
 
 # The FIPS variant builds against the CMVP-certified Go Cryptographic Module
 # v1.0.0 (certificate #5247). The literal version is required; the
@@ -78,12 +78,10 @@ TEST_TARGETS += test-service-example
 TEST_TARGETS += test-evaluator-testkit
 TEST_TARGETS += test-inprocess-example
 TEST_TARGETS += test-sync-example
-TEST_TARGETS += test-contrib-flagsmith-sync
 TEST_TARGETS += test-telemetry-example
 TEST_TARGETS += test-eventsink-example
 TEST_TARGETS += test-contract-external
 TEST_TARGETS += test-middleware-example
-TEST_TARGETS += test-contrib-flagsmith
 test: $(TEST_TARGETS)
 test-core: test-modules
 test-modules:
@@ -96,9 +94,6 @@ test-flagd:
 	go test -race -covermode=atomic -cover -short $(addsuffix /...,$(FLAGD_MODULE_DIRS)) -coverprofile=flagd-coverage.out
 test-sync-example:
 	go test -race -short -count=1 ./test/sync-example/...
-# The Flagsmith sync provider is a vendor module (UC-019 BR-009): outside GO_LIB_MODULE_DIRS and test-fips, with its own target.
-test-contrib-flagsmith-sync:
-	go test -race -short -count=1 ./contrib/flagsmith/sync/...
 test-telemetry-example:
 	go test -race -short -count=1 ./test/telemetry-example/... ./test/telemetry-example/distribution/...
 test-contract-external:
@@ -109,10 +104,6 @@ test-eventsink-example:
 	go test -race -short -count=1 ./test/eventsink-example/... ./test/eventsink-example/distribution/...
 test-configformat-example:
 	go test -race -short -count=1 ./test/configformat-example/... ./test/configformat-example/distribution/...
-# The Flagsmith components are vendor modules (UC-019 BR-009). They stay out of GO_LIB_MODULE_DIRS and test-fips: the engine
-# hashes with MD5, so the Flagsmith distribution has no FIPS variant.
-test-contrib-flagsmith:
-	go test -race -short -count=1 ./contrib/flagsmith/engine/...
 # Opt-in, not part of `make test`: the shared engine test data of Flagsmith has no licence, so it is read from a clone
 # outside this repository, at the commit that flagsmith-go-client v5.3.0 records for it.
 FLAGSMITH_ENGINE_DATA_COMMIT := 2e710ea7c6994110d17d1adb40b2ec2e90e7cf44

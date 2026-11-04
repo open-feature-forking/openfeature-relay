@@ -1,6 +1,8 @@
 github.com/open-feature-forking/openfeature-relay/configformat/flagd
 github.com/open-feature-forking/openfeature-relay/configformat/flagd/flagdtest
+github.com/open-feature-forking/openfeature-relay/contrib/flagsmith/engine
 github.com/open-feature-forking/openfeature-relay/contrib/flagsmith/middleware
+github.com/open-feature-forking/openfeature-relay/contrib/flagsmith/sync
 github.com/open-feature-forking/openfeature-relay/core/pkg/certreloader
 github.com/open-feature-forking/openfeature-relay/core/pkg/configformat
 github.com/open-feature-forking/openfeature-relay/core/pkg/configformat/formattest
