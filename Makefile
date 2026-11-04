@@ -82,6 +82,7 @@ TEST_TARGETS += test-telemetry-example
 TEST_TARGETS += test-eventsink-example
 TEST_TARGETS += test-contract-external
 TEST_TARGETS += test-middleware-example
+TEST_TARGETS += test-release
 test: $(TEST_TARGETS)
 test-core: test-modules
 test-modules:
@@ -100,6 +101,9 @@ test-contract-external:
 	./test/contract-external.sh
 test-middleware-example:
 	go test -race -short -count=1 ./test/middleware-example/... ./test/middleware-example/distribution/...
+# The release tests read the module paths of the repository, not a binary.
+test-release:
+	go test -race -short -count=1 ./test/release/...
 test-eventsink-example:
 	go test -race -short -count=1 ./test/eventsink-example/... ./test/eventsink-example/distribution/...
 test-configformat-example:
