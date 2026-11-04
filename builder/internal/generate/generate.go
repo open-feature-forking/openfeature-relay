@@ -279,16 +279,6 @@ func relativeTo(dir, target string) string {
 
 type moduleVersion struct{ Module, Version string }
 
-// Has reports whether the manifest lists a component of the kind (see Item.Kind).
-func (d templateData) Has(kind string) bool {
-	for _, it := range d.Items {
-		if it.Kind() == kind {
-			return true
-		}
-	}
-	return false
-}
-
 type templateData struct {
 	Module, Name, GoVersion   string
 	// ComponentsHint is the manifest's components_hint as a Go boolean.

@@ -114,12 +114,6 @@ package components
 
 import (
 	"{{.CoreModule}}/pkg/distribution"
-{{- if .Has "eventsink"}}
-	"{{.CoreModule}}/pkg/eventsink"
-{{- end}}
-{{- if .Has "middleware"}}
-	"{{.CoreModule}}/pkg/middleware"
-{{- end}}
 {{- range .Items}}
 {{- if .Kind}}
 	{{.Alias}} "{{.Import}}"
@@ -147,9 +141,9 @@ func Components() distribution.Components {
 {{- else if eq .Kind "telemetry"}}
 	c.Telemetry = {{.Alias}}.NewFactory()
 {{- else if eq .Kind "middleware"}}
-	c.Middleware = append(c.Middleware, middleware.Configured{Factory: {{.Alias}}.NewFactory()})
+	c.MiddlewareFactories = append(c.MiddlewareFactories, {{.Alias}}.NewFactory())
 {{- else if eq .Kind "eventsink"}}
-	c.EventSinks = append(c.EventSinks, eventsink.Configured{Factory: {{.Alias}}.NewFactory()})
+	c.EventSinkFactories = append(c.EventSinkFactories, {{.Alias}}.NewFactory())
 {{- end}}
 {{- end}}
 	return c
