@@ -21,6 +21,40 @@ The builder builds flagd-full and the five smaller standard distributions from t
 Today's flagd-proxy stays a separate program.
 Each standard distribution's manifest is kept in this repository and accepts flagd-full's settings for the components it contains; see the use cases ([UC-010](../use_cases/UC-010-adopt-standard-distribution.md), [UC-012](../use_cases/UC-012-release-distributions-and-component-modules.md)).
 
+## Sizes
+
+Binary sizes of upstream flagd at b23f82ec and of the distributions built from this repository, in MiB.
+Method: Go 1.27.3, `linux/amd64`, `CGO_ENABLED=0`, the release ldflags, not stripped.
+
+| Build | MiB | vs upstream | Go modules |
+|-------|----:|------------:|-----------:|
+| upstream flagd | 115.3 | baseline | 190 |
+| flagd-full | 110.1 | −4.5% | 197 |
+| flagd-sync | 107.7 | −6.6% | 184 |
+| flagd-cloud | 75.3 | −34.7% | 154 |
+| flagd-kubernetes | 72.8 | −36.8% | 142 |
+| flagd-minimal-otel | 37.2 | −67.7% | 101 |
+| flagd-minimal | 28.5 | −75.3% | 61 |
+
+What each addition costs flagd-minimal:
+
+| Added to flagd-minimal | Added MiB | Go modules |
+|------------------------|----------:|-----------:|
+| OpenTelemetry | +8.6 | 101 |
+| S3 | +10.5 | 80 |
+| Google Cloud Storage | +27.3 | 100 |
+| Azure Blob Storage | +3.6 | 71 |
+| OpenFeature Operator | +35.8 | 104 |
+
+OpenTelemetry with S3 is 47.6 MiB, with Google Cloud Storage 62.0 MiB and with Azure Blob Storage 40.8 MiB.
+OpenTelemetry with all three clouds is 75.3 MiB, the size of flagd-cloud; with the operator it is 72.8 MiB, the size of flagd-kubernetes.
+
+- Google Cloud Storage and the operator are the heavy dependencies.
+- OpenTelemetry costs 8.6 MiB.
+- A distribution for one cloud would save 13 to 35 MiB against flagd-cloud.
+
+The release dry run writes the size of each `linux_x86_64` binary it builds to the job summary.
+
 ## Custom distributions
 
 A Distribution Builder writes a manifest that lists official and third-party component modules, and the builder compiles it ([UC-001](../use_cases/UC-001-build-custom-distribution.md)).

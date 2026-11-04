@@ -35,6 +35,12 @@ published_name() { # <distribution directory>
   if [ "$1" = flagd-full ]; then echo flagd; else echo "$1"; fi
 }
 
+# the size of each linux_x86_64 binary in MiB, for the step summary
+sizes_file="${out}/sizes.md"
+add_size() { # <name> <binary>
+  printf '| %s | %.1f |\n' "$1" "$(awk -v b="$(stat -c %s "$2")" "BEGIN { print b / 1048576 }")" >>"${sizes_file}"
+}
+
 note ""
 note "#### Standard distributions"
 
@@ -90,6 +96,7 @@ dir="${out}/${d}"
 .github/scripts/release-build.sh "${name}" "${version}" "${commit}" "${date}" "${dir}" "distributions/${d}/build"
 check_archives "${name}" "${dir}" "$(archive_names "${name}" "standard fips")"
 tar -xzf "${dir}/${name}_${version}_Linux_x86_64.tar.gz" -C "${dir}" "./${name}_linux_x86_64"
+add_size "${name}" "${dir}/${name}_linux_x86_64"
 expect_equal "${name}: build info path" "github.com/open-feature-forking/openfeature-relay/distributions/${d}" \
   "$(go version -m "${dir}/${name}_linux_x86_64" | awk '$1 == "path" {print $2}')"
 check_version "${name}" "${dir}/${name}_linux_x86_64"
@@ -158,6 +165,7 @@ for d in ${others}; do
     .github/scripts/release-build.sh "${name}" "${version}" "${commit}" "${date}" "${dir}" "distributions/${d}/build"
   check_archives "${name}" "${dir}" "${name}_${version}_Linux_x86_64.tar.gz"
   tar -xzf "${dir}/${name}_${version}_Linux_x86_64.tar.gz" -C "${dir}" "./${name}_linux_x86_64"
+  add_size "${name}" "${dir}/${name}_linux_x86_64"
   check_version "${name}" "${dir}/${name}_linux_x86_64"
 done
 
@@ -182,4 +190,10 @@ for d in ${full_path} ${others}; do
     "$(image_tags "${name}" | tr '\n' ' ' | sed 's/ $//')"
 done
 
+note ""
+note "#### Binary sizes (linux_x86_64)"
+note ""
+note "| Binary | MiB |"
+note "|---|---|"
+cat "${sizes_file}" | tee -a "${summary}"
 if [ "${failures}" -gt 0 ]; then exit 1; fi
