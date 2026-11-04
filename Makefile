@@ -359,7 +359,7 @@ build-flagsmith:
 	rm -rf $(FLAGSMITH_BUILD_DIR)
 	GOWORK=off ./bin/relay-builder --manifest distributions/flagsmith/manifest.yaml --output $(FLAGSMITH_BUILD_DIR)
 	test -x $(FLAGSMITH_BUILD_DIR)/flagsmith
-	$(FLAGSMITH_BUILD_DIR)/flagsmith components --output json | grep -q '"flagsmith-credential"'
+	$(FLAGSMITH_BUILD_DIR)/flagsmith components --output json | grep -q 'contrib/flagsmith/engine"'
 
 # UC-001, UC-009, UC-019: the flagd module is what the Builder generates, and the Builder's binary passes the pins; the
 # vendor distribution builds too.

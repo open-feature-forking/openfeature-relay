@@ -395,7 +395,7 @@ func TestComponentsMatchesManifest(t *testing.T) {
 }
 
 // TestFlagsmithDistribution (UC-019 PR 6) pins the vendor distribution: it lists the Flagsmith engine next to flagd's
-// format and evaluator (BR-001), the Flagsmith sync provider with the SSE and file ones, the credential middleware and
+// format and evaluator (BR-001), the Flagsmith sync provider with the SSE and file ones, and
 // OFREP alone; it links the Flagsmith engine, only the relay modules it selects, and no platform SDK or HTTP client of
 // the Flagsmith client module.
 func TestFlagsmithDistribution(t *testing.T) {
@@ -424,7 +424,7 @@ func TestFlagsmithDistribution(t *testing.T) {
 	require.ElementsMatch(t, []string{"flagd", "flagsmith"}, types("configuration_formats"))
 	require.ElementsMatch(t, []string{"jsonlogic", "flagsmith"}, types("evaluators"))
 	require.Equal(t, []string{"ofrep"}, types("service_endpoints"))
-	require.Equal(t, []string{"flagsmith-credential"}, types("middleware"))
+	require.Empty(t, types("middleware"), "the command line of flagd configures no middleware")
 	require.Subset(t, types("sync_providers"), []string{"flagsmith", "sse", "file"})
 	for _, c := range listing.Components["configuration_formats"] {
 		if c.Type == "flagsmith" {

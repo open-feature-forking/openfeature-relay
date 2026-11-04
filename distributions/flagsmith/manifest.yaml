@@ -2,6 +2,8 @@
 # OFREP, evaluated with Flagsmith's own Go engine (UC-019). Its sources name the format "flagsmith"; flagd's format and
 # evaluator stay in the build, so flagd flags can be served next to them (BR-001). It has no cmd entry, so it keeps flagd's
 # command line and configuration (Q9). The engine hashes with MD5, so there is no FIPS variant of it (G10).
+# It lists no middleware: flagd's command line has no setting for one, and the credential middleware refuses to start without its
+# environments, so a request picks its environment with the Flagd-Selector header.
 # Every relay module of the build list is replaced by its directory, as in flagd-full: the placeholder version v0.0.0
 # resolves through the replaces. Flagsmith's own client module resolves from the module proxy.
 dist:
@@ -22,14 +24,11 @@ engines:
   - {module: github.com/open-feature-forking/openfeature-relay/contrib/flagsmith/engine, version: v0.0.0}
 service_endpoints:
   - {module: github.com/open-feature-forking/openfeature-relay/service/ofrep, version: v0.0.0}
-middleware:
-  - {module: github.com/open-feature-forking/openfeature-relay/contrib/flagsmith/middleware, version: v0.0.0}
 telemetry: {module: github.com/open-feature-forking/openfeature-relay/telemetry/otel, version: v0.0.0}
 runtime: {module: github.com/open-feature-forking/openfeature-relay/runtime, version: v0.0.0}
 replaces:
   - {module: github.com/open-feature-forking/openfeature-relay/configformat/flagd, path: ../../configformat/flagd}
   - {module: github.com/open-feature-forking/openfeature-relay/contrib/flagsmith/engine, path: ../../contrib/flagsmith/engine}
-  - {module: github.com/open-feature-forking/openfeature-relay/contrib/flagsmith/middleware, path: ../../contrib/flagsmith/middleware}
   - {module: github.com/open-feature-forking/openfeature-relay/contrib/flagsmith/sync, path: ../../contrib/flagsmith/sync}
   - {module: github.com/open-feature-forking/openfeature-relay/core, path: ../../core}
   - {module: github.com/open-feature-forking/openfeature-relay/evaluator/flagd, path: ../../evaluator/flagd}
