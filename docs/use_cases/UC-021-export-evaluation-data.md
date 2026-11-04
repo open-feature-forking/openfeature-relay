@@ -155,8 +155,5 @@ No in-process provider sends these events yet; the provider side of A3 is outsid
 
 ## Delivered by Later Use Cases
 
-This use case is `Implemented`: the webhook event sink and the event collector in flagd-full, the operator settings of BR-008 for event sinks, middleware and extension service endpoints, credentials from the environment or files, the event kinds an event sink subscribes to, and an end-to-end test on the built flagd-full that exports to a webhook. One part is delivered by another use case and is an accepted gap of this one:
-
-| Gap | Delivered by |
-|-----|--------------|
-| Main step 1: the listing that shows an Operator the event sinks of a distribution (`flagd components` exists; its use case is still open) | UC-011 |
+This use case is `Implemented` with no accepted gap: the webhook event sink and the event collector in flagd-full, the operator settings of BR-008 for event sinks, middleware and extension service endpoints, credentials from the environment or files, the event kinds an event sink subscribes to, the listing of the event sinks of a distribution by `flagd components` (UC-011), and an end-to-end test on the built flagd-full that exports to a webhook.
+What lies outside this repository is the provider side of A3: no in-process provider sends events to the collector yet (BR-009).
