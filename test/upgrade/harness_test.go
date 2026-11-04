@@ -98,6 +98,15 @@ func images(t *testing.T) (baseline, candidate string) {
 	return "flagd-upgrade-baseline", "flagd-upgrade-candidate"
 }
 
+// TestMain removes the two images the run built, so that they do not stay on the machine.
+func TestMain(m *testing.M) {
+	code := m.Run()
+	if os.Getenv("UPGRADE_TEST") != "" {
+		_, _ = docker(context.Background(), "rmi", "-f", "flagd-upgrade-baseline", "flagd-upgrade-candidate")
+	}
+	os.Exit(code)
+}
+
 // run is a flagd container.
 type run struct {
 	t     *testing.T
@@ -311,4 +320,32 @@ func diff(scenario string, baseline, candidate Transcript) []Difference {
 		}
 	}
 	return out
+}
+
+// describe renders what the two flagds showed. Of a value with several lines it shows only the lines that the other
+// flagd's value lacks.
+func (d Difference) describe() string {
+	if !strings.Contains(d.Baseline, "\n") && !strings.Contains(d.Candidate, "\n") {
+		return fmt.Sprintf("  baseline:  %s\n  candidate: %s", d.Baseline, d.Candidate)
+	}
+	lines := func(s string) map[string]bool {
+		set := map[string]bool{}
+		for _, l := range strings.Split(s, "\n") {
+			set[l] = true
+		}
+		return set
+	}
+	b, c := lines(d.Baseline), lines(d.Candidate)
+	var out []string
+	for _, l := range strings.Split(d.Baseline, "\n") {
+		if !c[l] {
+			out = append(out, "  - baseline:  "+l)
+		}
+	}
+	for _, l := range strings.Split(d.Candidate, "\n") {
+		if !b[l] {
+			out = append(out, "  + candidate: "+l)
+		}
+	}
+	return strings.Join(out, "\n")
 }

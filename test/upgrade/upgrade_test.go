@@ -321,7 +321,7 @@ func TestUpgrade(t *testing.T) {
 					t.Logf("accepted (%s %q): %s/%s\n  baseline:  %s\n  candidate: %s", entry.Kind, entry.Item, d.Scenario, d.Key, d.Baseline, d.Candidate)
 					continue
 				}
-				t.Errorf("%s/%s differs\n  baseline:  %s\n  candidate: %s", d.Scenario, d.Key, d.Baseline, d.Candidate)
+				t.Errorf("%s/%s differs\n%s", d.Scenario, d.Key, d.describe())
 			}
 		})
 	}
