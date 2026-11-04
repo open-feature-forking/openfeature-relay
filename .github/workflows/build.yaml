@@ -331,19 +331,53 @@ jobs:
 
   release-dry-run:
     name: Release dry run
-    # Gated like docker-local: set the repository variable FULL_CI=true, or run the workflow manually.
-    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'
+    # Runs when the release's inputs change (the pattern in the gate step), or with FULL_CI=true, or when the workflow is
+    # run manually. Otherwise only the gate step runs.
     runs-on: ubuntu-latest
+    timeout-minutes: 75
     steps:
       - name: Checkout repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+        with:
+          fetch-depth: 0
+      - name: Does the release dry run apply to this change?
+        id: gate
+        env:
+          FULL_CI: ${{ vars.FULL_CI }}
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.sha }}
+        run: |
+          # the release scripts, the reference Dockerfile, the distributions and every Dockerfile
+          pattern='^\.github/scripts/release-|^\.github/scripts/render-|^builder/reference/|^distributions/|Dockerfile$'
+          run=false
+          if [ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]; then
+            run=true
+            echo "::notice::The release dry run runs: FULL_CI or a manual run."
+          elif [ -z "$BASE" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ]; then
+            echo "::notice::No base to compare with (a new branch): the release dry run is skipped. Run the workflow manually or set FULL_CI."
+          else
+            changed=$(git diff --name-only "$BASE" "$HEAD")
+            hits=$(printf '%s\n' "$changed" | grep -E "$pattern" || true)
+            if [ -n "$hits" ]; then
+              run=true
+              echo "::notice::The release dry run runs: this change touches the release or what it builds."
+              printf '%s\n' "$hits" | head -10
+            else
+              echo "::notice::The release dry run is skipped: no release input changed. Set FULL_CI or run the workflow manually to run it."
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
       - name: Setup go
+        if: steps.gate.outputs.run == 'true'
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
         with:
           go-version-file: 'flagd/go.mod'
       - name: Download cyclonedx-gomod
+        if: steps.gate.outputs.run == 'true'
         uses: CycloneDX/gh-gomod-generate-sbom@efc74245d6802c8cefd925620515442756c70d8f # v2
         with:
           version: v1
-      - name: The release's build steps, without publishing or signing anything (UC-009)
+      - name: The release's build steps, without publishing or signing anything (UC-009, UC-012)
+        if: steps.gate.outputs.run == 'true'
         run: .github/scripts/release-dry-run.sh
