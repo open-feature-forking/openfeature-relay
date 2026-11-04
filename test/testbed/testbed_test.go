@@ -387,7 +387,10 @@ func testAPI(t *testing.T) {
 			failed := b.call(http.MethodGet, "/start?config=nope")
 			require.Equal(t, 500, failed.code)
 			require.Equal(t, typ, failed.ctype)
-			require.Contains(t, failed.body, `Failed to start flagd: unknown configuration "nope"`)
+			var answer struct{ Status, Message string }
+			require.NoError(t, json.Unmarshal([]byte(failed.body), &answer))
+			require.Equal(t, "error", answer.Status)
+			require.Contains(t, answer.Message, `Failed to start flagd: unknown configuration "nope"`)
 			require.Less(t, time.Since(started), 100*time.Millisecond, "an unknown configuration answers at once")
 
 			// quirk 4 fixed: the running flagd is not touched
