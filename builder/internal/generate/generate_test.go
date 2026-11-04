@@ -56,7 +56,7 @@ func TestGoldenFiles(t *testing.T) {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	require.Equal(t, []string{"components/components.go", "go.mod", "main.go", "probe/main.go"}, names)
+	require.Equal(t, []string{"components/components.go", "go.mod", "main.go"}, names)
 
 	for _, name := range names {
 		golden := filepath.Join("testdata", "golden", filepath.FromSlash(name)+".golden")
@@ -116,7 +116,7 @@ func TestForeignFilesUntouched(t *testing.T) {
 	sort.Strings(present)
 	require.Equal(t, []string{
 		"README.md", "components/components.go", "components/extra.go", "extra.go", "go.mod", "main.go",
-		"nested/deeper/file.txt", "probe/main.go",
+		"nested/deeper/file.txt",
 	}, present)
 	for name, content := range foreign {
 		got, err := os.ReadFile(filepath.Join(out, filepath.FromSlash(name)))
@@ -163,4 +163,60 @@ func TestCustomCmdGolden(t *testing.T) {
 	}
 	require.Contains(t, string(files["main.go"]), `runtimecmd "example.com/edge/cli"`)
 	require.NotContains(t, string(files["go.mod"]), "openfeature-relay/runtime ", "the runtime is not required when the distribution brings its command line")
+}
+
+// TestProbeGolden pins the probe module. It is rendered apart from the source and imports it by an absolute replace.
+func TestProbeGolden(t *testing.T) {
+	files, err := RenderProbe(parse(t, "/work/dist/manifest.yaml", sample), Options{}, "/work/dist/build")
+	require.NoError(t, err)
+	require.Len(t, files, 2)
+	for _, name := range []string{"go.mod", "main.go"} {
+		golden := filepath.Join("testdata", "golden-probe", name+".golden")
+		if *update {
+			require.NoError(t, os.MkdirAll(filepath.Dir(golden), 0o755))
+			require.NoError(t, os.WriteFile(golden, files[name], 0o644))
+		}
+		want, err := os.ReadFile(golden)
+		require.NoError(t, err)
+		require.Equal(t, string(want), string(files[name]), name)
+	}
+}
+
+// TestRefusesHandWrittenFile pins that a file of the generated set that the Builder did not generate is never
+// overwritten, and that nothing is written when one is refused.
+func TestRefusesHandWrittenFile(t *testing.T) {
+	dir := t.TempDir()
+	m := parse(t, filepath.Join(dir, "manifest.yaml"), sample)
+	out := OutputDir(m)
+	require.NoError(t, os.MkdirAll(filepath.Join(out, "components"), 0o755))
+	handWritten := filepath.Join(out, "main.go")
+	require.NoError(t, os.WriteFile(handWritten, []byte("package main\n\nfunc main() {}\n"), 0o644))
+
+	_, err := Write(m, Options{})
+
+	require.ErrorContains(t, err, "refusing to overwrite")
+	require.ErrorContains(t, err, handWritten)
+	got, err := os.ReadFile(handWritten)
+	require.NoError(t, err)
+	require.Equal(t, "package main\n\nfunc main() {}\n", string(got))
+	require.NoFileExists(t, filepath.Join(out, "go.mod"), "a refusal writes nothing")
+	require.NoFileExists(t, filepath.Join(out, "components", "components.go"))
+
+	// the Builder's own earlier output is overwritten
+	require.NoError(t, os.Remove(handWritten))
+	_, err = Write(m, Options{})
+	require.NoError(t, err)
+	_, err = Write(m, Options{})
+	require.NoError(t, err)
+}
+
+// TestOutputDirOption pins that the options' output directory replaces the manifest's, and that the replaces are
+// written relative to it.
+func TestOutputDirOption(t *testing.T) {
+	m := parse(t, "/work/dist/manifest.yaml", sample)
+	files, err := Render(m, Options{OutputDir: "/work/dist/deeper/still"})
+	require.NoError(t, err)
+	require.Contains(t, string(files["go.mod"]), "openfeature-relay/core => ../../../core")
+	require.Equal(t, "/work/dist/deeper/still", OutputDirOf(m, Options{OutputDir: "/work/dist/deeper/still"}))
+	require.Equal(t, "/work/dist/build", OutputDirOf(m, Options{}))
 }

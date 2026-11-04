@@ -34,6 +34,11 @@ type options struct {
 	verbose                                                         bool
 	// validateOnly stops after the manifest is checked.
 	validateOnly bool
+	// What the build stamps into the binary, and where the source goes, when they are not the manifest's and the
+	// Builder's own defaults. Each is passed on as given.
+	distVersion, commit, date, output string
+	// probeOutput is a file the output of the probe is written to.
+	probeOutput string
 }
 
 func parseFlags(args []string, stderr io.Writer) (options, error) {
@@ -48,6 +53,11 @@ func parseFlags(args []string, stderr io.Writer) (options, error) {
 	fs.StringVar(&o.goBinary, "go", "go", "the go `binary` to run")
 	fs.BoolVar(&o.verbose, "verbose", false, "print what the Builder does")
 	fs.BoolVar(&o.validateOnly, "validate-only", false, "check the manifest and stop")
+	fs.StringVar(&o.distVersion, "dist-version", "", "stamp this `version` into the binary instead of the manifest's dist.version")
+	fs.StringVar(&o.commit, "commit", "", "stamp this source `revision` into the binary instead of the short revision of the manifest's directory")
+	fs.StringVar(&o.date, "date", "", "stamp this build `date` into the binary instead of the current time (RFC 3339, UTC)")
+	fs.StringVar(&o.output, "output", "", "write the source to this `directory` instead of the manifest's output_path")
+	fs.StringVar(&o.probeOutput, "probe-output", "", "write what the probe printed, the factories of the components with their schemes and needs, to this `file`")
 	fs.Usage = func() {
 		fmt.Fprintln(stderr, "Usage: relay-builder --manifest <file> [flags]")
 		fs.PrintDefaults()
@@ -98,8 +108,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 // version of the core and runtime modules that a manifest does not pin.
 var version = "dev"
 
-func buildDistribution(m *manifest.Manifest, o options, stdout, stderr io.Writer) int {
-	generateOptions := generate.Options{}
+// buildOptions turns the flags into the options of the build.
+func buildOptions(o options, stderr io.Writer) build.Options {
+	generateOptions := generate.Options{OutputDir: o.output}
 	if version != "dev" {
 		generateOptions.RuntimeVersion, generateOptions.CoreVersion = version, version
 	}
@@ -107,10 +118,15 @@ func buildDistribution(m *manifest.Manifest, o options, stdout, stderr io.Writer
 	if o.verbose {
 		tool.Log = stderr
 	}
-	res, err := build.Run(context.Background(), m, build.Options{
+	return build.Options{
 		SkipGenerate: o.skipGenerate, SkipGetModules: o.skipGetModules, SkipCompile: o.skipCompile,
 		SkipStrictVersioning: o.skipStrictVersioning, Generate: generateOptions, Tool: tool, Warn: stderr,
-	})
+		DistVersion: o.distVersion, Commit: o.commit, Date: o.date, ProbeOutput: o.probeOutput,
+	}
+}
+
+func buildDistribution(m *manifest.Manifest, o options, stdout, stderr io.Writer) int {
+	res, err := build.Run(context.Background(), m, buildOptions(o, stderr))
 	if err != nil {
 		fmt.Fprintf(stderr, "relay-builder: %v\n", err)
 		return exitFailed

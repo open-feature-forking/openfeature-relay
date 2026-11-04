@@ -8,9 +8,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/open-feature-forking/openfeature-relay/builder/internal/generate"
 	"github.com/open-feature-forking/openfeature-relay/builder/internal/gotool"
@@ -178,7 +178,7 @@ func options(t *testing.T) (Options, *bytes.Buffer) {
 	env := append(os.Environ(), "GOPROXY=off", "GOSUMDB=off", "GOFLAGS=-modcacherw", "GOTOOLCHAIN=local", "GOMODCACHE="+t.TempDir())
 	return Options{
 		Tool: gotool.Tool{Go: filepath.Join(runtime.GOROOT(), "bin", "go"), Env: env, Log: log},
-		Date: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+		Date: "2026-01-02T03:04:05Z",
 	}, log
 }
 
@@ -370,4 +370,46 @@ func TestRelativeManifestPath(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, filepath.Join(f.dir, "out", "relay"), res.Binary, "the binary is where the output location says, whatever the working directory")
 	require.FileExists(t, res.Binary)
+}
+
+// TestProbeNotInOutput pins that the source holds only the files the Builder generates for the distribution: the probe
+// runs from a temporary module and leaves nothing behind.
+func TestProbeNotInOutput(t *testing.T) {
+	f := setup(t, "file", "flagdformat", "flagdeval", "ofrep")
+	opts, _ := options(t)
+	opts.SkipCompile = true
+
+	_, err := Run(ctx, f.load(t), opts)
+
+	require.NoError(t, err)
+	out := filepath.Join(f.dir, "out")
+	require.NoDirExists(t, filepath.Join(out, "probe"))
+	var files []string
+	require.NoError(t, filepath.WalkDir(out, func(path string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			rel, _ := filepath.Rel(out, path)
+			files = append(files, filepath.ToSlash(rel))
+		}
+		return err
+	}))
+	files = slices.DeleteFunc(files, func(f string) bool { return f == "go.sum" }) // present when a module has checksums
+	require.ElementsMatch(t, []string{"components/components.go", "go.mod", "main.go"}, files)
+}
+
+// TestReleaseOptionsReachTheBinary pins that the version, commit and date a caller gives are stamped verbatim, and
+// that the source goes to the output directory when one is given.
+func TestReleaseOptionsReachTheBinary(t *testing.T) {
+	f := setup(t, "file", "flagdformat", "flagdeval", "ofrep")
+	opts, _ := options(t)
+	opts.DistVersion, opts.Commit, opts.Date = "v9.9.9", "0123456789abcdef", "Mon Jan  2 03:04:05 UTC 2026"
+	opts.Generate.OutputDir = filepath.Join(f.dir, "elsewhere")
+
+	res, err := Run(ctx, f.load(t), opts)
+
+	require.NoError(t, err)
+	require.Equal(t, filepath.Join(f.dir, "elsewhere", "relay"), res.Binary)
+	out, err := exec.Command(res.Binary).Output()
+	require.NoError(t, err)
+	require.Equal(t, "custom v9.9.9 0123456789abcdef Mon Jan  2 03:04:05 UTC 2026 4\n", string(out), "each is stamped as given")
+	require.NoDirExists(t, filepath.Join(f.dir, "out"), "the manifest's output_path is not used")
 }
