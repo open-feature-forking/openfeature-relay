@@ -193,6 +193,9 @@ jobs:
             echo "::error::a mislabelled FIPS build started"; exit 1
           fi
 
+      - name: Build the FIPS variant of every standard distribution
+        run: make build-standard-fips
+
       - name: Check the cryptographic dependency closure has not drifted
         run: |
           make fips-closure
