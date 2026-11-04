@@ -12,7 +12,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -59,6 +61,30 @@ func (p *process) stop(within time.Duration) {
 		_ = p.cmd.Process.Kill()
 		<-p.done
 	}
+}
+
+// settle waits until the process has logged something and then nothing more for a while, which is when a source it
+// rejects has been read and reported.
+func (p *process) settle(t *testing.T, within time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(within)
+	last, since := -1, time.Now()
+	for time.Now().Before(deadline) {
+		if n := len(p.out.String()); n != last {
+			last, since = n, time.Now()
+		} else if last > 0 && time.Since(since) > 1500*time.Millisecond && strings.Contains(p.out.String(), `"level":"`) {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatalf("the process did not settle: %s", p.out.String())
+}
+
+// waitLogged waits until the process has logged the text.
+func (p *process) waitLogged(t *testing.T, text string, within time.Duration) {
+	t.Helper()
+	require.Eventually(t, func() bool { return strings.Contains(p.out.String(), text) }, within, 100*time.Millisecond,
+		"the process logs %q: %s", text, p.out.String())
 }
 
 func (p *process) running() bool {
@@ -218,27 +244,73 @@ func TestFlagSyncProxyServesInProcessProvider(t *testing.T) {
 			break
 		}
 	}
+
+	writeFile(t, filepath.Join(dir, "b.json"), `{"metadata":{"flagSetId":"set-b","owner":"team-b"},"flags":{
+  "flag-b": {"state":"ENABLED","defaultVariant":"one","variants":{"zero":0,"one":1}}}}`)
+	require.Eventually(t, func() bool {
+		_, body := fetchAll(t, base, nil)
+		return strings.Contains(body, `"defaultVariant":"one"`)
+	}, 30*time.Second, 200*time.Millisecond, "the change of b.json is taken in")
+	unexpected, ok := stream.next(3 * time.Second)
+	require.False(t, ok, "a change of set-b reaches no subscriber of set-a: %s", unexpected)
+}
+
+// listeningPorts returns the TCP ports the process listens on, read from the sockets it holds open: no other process
+// on the machine can change the answer.
+func listeningPorts(t *testing.T, pid int) []int {
+	t.Helper()
+	inodes := map[string]bool{}
+	fds, err := os.ReadDir(fmt.Sprintf("/proc/%d/fd", pid))
+	require.NoError(t, err)
+	for _, fd := range fds {
+		target, err := os.Readlink(fmt.Sprintf("/proc/%d/fd/%s", pid, fd.Name()))
+		if err == nil && strings.HasPrefix(target, "socket:[") {
+			inodes[strings.TrimSuffix(strings.TrimPrefix(target, "socket:["), "]")] = true
+		}
+	}
+	var ports []int
+	for _, table := range []string{"tcp", "tcp6"} {
+		data, err := os.ReadFile("/proc/net/" + table)
+		require.NoError(t, err)
+		for _, line := range strings.Split(string(data), "\n")[1:] {
+			fields := strings.Fields(line)
+			// local_address is host:port in hexadecimal, st 0A is LISTEN, and the inode names the socket
+			if len(fields) < 10 || fields[3] != "0A" || !inodes[fields[9]] {
+				continue
+			}
+			_, hexPort, ok := strings.Cut(fields[1], ":")
+			require.True(t, ok, line)
+			port, err := strconv.ParseUint(hexPort, 16, 16)
+			require.NoError(t, err)
+			ports = append(ports, int(port))
+		}
+	}
+	sort.Ints(ports)
+	return slices.Compact(ports)
 }
 
 // TestNoEvaluationEndpoint pins UC-017 A8: flagd-sync serves no flag evaluation. The evaluation and OFREP paths find no
-// service endpoint on any of its ports, and the default ports of those endpoints are not opened.
+// service endpoint on any of its ports, and the process listens on the two ports it was given and on no other: an
+// evaluation or OFREP endpoint would open its own.
 func TestNoEvaluationEndpoint(t *testing.T) {
 	_, paths := writeSyncSources(t)
-	ports := startDistribution(t, "flagd-sync", syncPortFlags, nil, paths...)
+	ports := map[string]int{"management-port": freePort(t), "sync-port": freePort(t)}
+	args := append([]string{"start"}, portArgs(ports)...)
+	for _, path := range paths {
+		args = append(args, "--uri", "file:"+path)
+	}
+	p := launch(t, builtBinary(t, "flagd-sync"), args...)
+	waitReady(t, p, ports["management-port"])
 
-	for _, name := range syncPortFlags {
+	for name, port := range ports {
 		for _, path := range []string{"/flagd.evaluation.v1.Service/ResolveBoolean", "/flagd.evaluation.v2.Service/ResolveBoolean", "/ofrep/v1/evaluate/flags"} {
-			resp, _ := post(t, fmt.Sprintf("http://127.0.0.1:%d%s", ports[name], path), "application/json", []byte(`{"flagKey":"flag-a"}`))
+			resp, _ := post(t, fmt.Sprintf("http://127.0.0.1:%d%s", port, path), "application/json", []byte(`{"flagKey":"flag-a"}`))
 			require.Equal(t, http.StatusNotFound, resp.StatusCode, "%s on %s", path, name)
 		}
 	}
-	for _, port := range []int{8013, 8016} {
-		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), time.Second)
-		if err == nil {
-			conn.Close()
-			t.Skipf("something else listens on %d", port)
-		}
-	}
+	want := []int{ports["management-port"], ports["sync-port"]}
+	sort.Ints(want)
+	require.Equal(t, want, listeningPorts(t, p.cmd.Process.Pid), "flagd-sync listens on its management and flag sync ports only")
 }
 
 // TestUnknownSchemeListsSchemesOnFlagdSync pins UC-017 A1: a source whose scheme flagd-sync has no sync provider for
@@ -288,7 +360,7 @@ func startOnFile(t *testing.T, name string, portFlags []string, content string, 
 			ready = isReady(ports["management-port"])
 		}
 	} else {
-		time.Sleep(4 * time.Second)
+		p.settle(t, 30*time.Second)
 		ready = isReady(ports["management-port"])
 	}
 	p.stop(20 * time.Second)
@@ -371,10 +443,9 @@ func TestUnavailableSourceNotReady(t *testing.T) {
 	args := append([]string{"start", "--uri", fmt.Sprintf("http://127.0.0.1:%d/flags.json", sourcePort), "--log-format", "json"}, portArgs(ports)...)
 	p := launch(t, builtBinary(t, "flagd-sync"), args...)
 
-	time.Sleep(4 * time.Second)
+	p.waitLogged(t, fmt.Sprintf("127.0.0.1:%d", sourcePort), 30*time.Second) // the log names the source
 	require.True(t, p.running(), "flagd-sync keeps retrying: %s", p.out.String())
 	require.False(t, isReady(ports["management-port"]), "not ready while the source is unavailable")
-	require.Contains(t, p.out.String(), fmt.Sprintf("127.0.0.1:%d", sourcePort), "the log names the source")
 
 	listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", sourcePort))
 	require.NoError(t, err)
