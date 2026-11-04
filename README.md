@@ -80,7 +80,7 @@ Proof of concept. The specification is complete enough to build against, and the
 |---|---|
 | **Done** | Steps 1 to 11 of the plan, and most of step 12: the component factories and contract tests, the builder and manifest, flagd-full and the standard distributions, event export, a Flagsmith distribution behind OFREP, the reference image and the CI checks. |
 | **In progress** | The release of the distributions and component modules ([UC-012](docs/use_cases/UC-012-release-distributions-and-component-modules.md)), and the flagd testbed as a distribution. |
-| **Deferred** | Recovering from a snapshot ([UC-016](docs/use_cases/UC-016-recover-from-snapshot.md)). |
+| **Deferred** | Recovering from a snapshot ([UC-016](docs/use_cases/UC-016-recover-from-snapshot.md)). Provider migration (formerly UC-015) is a follow-up after the proof of concept, [#156](https://github.com/open-feature-forking/openfeature-relay/issues/156). |
 
 The full order and what each check verifies are in [Status and roadmap](docs/relay/status.md); each use case's `Status` line in [docs/use_cases/](docs/use_cases/) says where it stands.
 
