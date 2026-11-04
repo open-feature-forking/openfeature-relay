@@ -33,6 +33,8 @@ sync/s3:./...:cloud.google.com|github.com/Azure|gocloud|openfeature-relay/(telem
 sync/sse:./...:go.opentelemetry.io|openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|openfeature-operator|gcs|azblob|s3|builder))
 # The Flagsmith sync provider (UC-019): no telemetry, no other sync module and no gRPC; the API is read with net/http.
 contrib/flagsmith/sync:./...:go.opentelemetry.io|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud|openfeature-relay/(telemetry|sync/|evaluator|configformat|service|runtime)
+# The testbed sync provider (UC-022): the core only, like the Flagsmith one.
+testbed/source:./...:go.opentelemetry.io|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud|openfeature-relay/(telemetry|sync/|evaluator|configformat|service|runtime)
 # The sync builder dispatches to the sync modules and knows no telemetry module.
 sync/builder:./...:openfeature-relay/telemetry/
 # The telemetry module imports core only: no sync module and no platform client.

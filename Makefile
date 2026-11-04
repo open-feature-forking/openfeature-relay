@@ -18,7 +18,7 @@ CONTRIB_MODULE_DIRS := ./contrib/flagsmith/engine ./contrib/flagsmith/middleware
 
 # The testbed modules (UC-022): libraries for the test suites of providers, which no distribution links. They are tested
 # and pinned like the library modules.
-TESTBED_MODULE_DIRS := ./testbed/control
+TESTBED_MODULE_DIRS := ./testbed/control ./testbed/source
 
 # The FIPS variant builds against the CMVP-certified Go Cryptographic Module
 # v1.0.0 (certificate #5247). The literal version is required; the
@@ -111,7 +111,7 @@ test-modules:
 		go test -race -covermode=atomic -cover -short $$m/... -coverprofile=$$(echo $$m | sed 's#^\./##; s#/#-#g')-coverage.out || rc=1; \
 	done; exit $$rc
 test-contrib:
-	go test -race -covermode=atomic -cover -short $(addsuffix /...,$(CONTRIB_MODULE_DIRS))
+	go test -race -covermode=atomic -cover -short $(addsuffix /...,$(CONTRIB_MODULE_DIRS) $(TESTBED_MODULE_DIRS))
 test-flagd:
 	go test -race -covermode=atomic -cover -short $(addsuffix /...,$(FLAGD_MODULE_DIRS)) -coverprofile=flagd-coverage.out
 test-sync-example:
