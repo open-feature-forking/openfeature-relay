@@ -175,13 +175,19 @@ func (b *bed) client() *http.Client {
 }
 
 // variant resolves changing-flag over the flag evaluation endpoint, plain or TLS.
-func (b *bed) variant(scheme string) (string, error) {
+func (b *bed) variant(scheme string) (string, error) { return b.variantWith(scheme, "") }
+
+// variantWith resolves changing-flag under a selector.
+func (b *bed) variantWith(scheme, selector string) (string, error) {
 	body := bytes.NewReader([]byte(`{"flagKey":"changing-flag","context":{}}`))
 	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s://localhost:%d/flagd.evaluation.v1.Service/ResolveString", scheme, b.ports.rpc), body)
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if selector != "" {
+		req.Header.Set("Flagd-Selector", selector)
+	}
 	resp, err := b.client().Do(req)
 	if err != nil {
 		return "", err
@@ -457,12 +463,27 @@ func TestRuntimeNeverReadsRenderedFile(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, configs, 4)
 	for _, path := range configs {
-		cfg, _, err := loadForTest(b, path)
+		sources, err := loadForTest(b, path)
 		require.NoError(t, err, path)
-		for _, s := range cfg {
-			require.NotContains(t, s, "allFlags.json", "%s reads the rendered file", filepath.Base(path))
+		for _, s := range sources {
+			if s.URI == combinedFile {
+				require.Equal(t, "testbed", s.Provider, "%s reads the rendered file", filepath.Base(path))
+			}
 		}
 	}
+}
+
+// TestSelectorAddressesTheCombinedSource: the source of the combined flags keeps its URI, so a selector that names it
+// resolves to the testbed source's flags, and a selector that names another source does not.
+func TestSelectorAddressesTheCombinedSource(t *testing.T) {
+	b := newBed(t, 10*time.Second, nil)
+
+	got, err := b.variantWith("http", "source=flags/allFlags.json")
+	require.NoError(t, err)
+	require.Equal(t, "foo", got)
+
+	_, err = b.variantWith("http", "source=rawflags/selector-flags.json")
+	require.Error(t, err, "the other source does not hold changing-flag")
 }
 
 func TestUnknownConfigurationLeavesTheRuntimeServing(t *testing.T) {
@@ -499,4 +520,27 @@ func TestChangeAfterTimedOutSwitch(t *testing.T) {
 
 	b.mustGet("/start?config=default")
 	b.requireServing()
+}
+
+// TestCrossFlagSetFlagByTestbedSource: the scenario "flag disabled in one flag set, enabled in another": the selector
+// flags/allFlags.json reaches the testbed source's copy of the flag, which is disabled, and the other selector reaches
+// the enabled one.
+func TestCrossFlagSetFlagByTestbedSource(t *testing.T) {
+	b := newBed(t, 10*time.Second, nil)
+	resolve := func(selector string) string {
+		req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://localhost:%d/flagd.evaluation.v1.Service/ResolveBoolean", b.ports.rpc),
+			strings.NewReader(`{"flagKey":"cross-flagset-flag","context":{}}`))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Flagd-Selector", selector)
+		resp, err := b.client().Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		return string(body)
+	}
+
+	require.Contains(t, resolve("flags/allFlags.json"), "DISABLED")
+	require.Contains(t, resolve("rawflags/selector-flags.json"), "STATIC")
 }
