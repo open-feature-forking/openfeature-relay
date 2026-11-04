@@ -217,6 +217,17 @@ The recommendation comes first.
   - **Recommendation:** not in step 13. No pinned scenario asserts on recorded evaluations; it becomes a follow-up once a scenario needs it.
   - *Alternative:* add it now with a `GET /evaluations` control call.
 
+- **Q19, the fractional scenarios of #47 ("Evaluator: pass the testbed's fractional scenarios", Backlog).**
+  - **The facts:**
+    - The suites run with feature path `./` under `test-harness`, so godog reads every `.feature` file: the provider files in `gherkin/` (`targeting.feature`'s fractional outlines) and the evaluator files in `evaluator/gherkin/fractional.feature`.
+    - Both tag sets exclude `@fractional-v1` and `@fractional-v2`, the 21 scenarios #47 is about. The remaining fractional scenarios (`@fractional-v3` examples, `@fractional-nested`, the shared-seed outline) run today and pass in today's `integration-test` job.
+    - Step 13 keeps the tag sets unchanged (Q14), and the pass-set comparison runs both images with the same tags. Under both images the fractional exclusions are therefore the same, and #47's failures cannot show up as a difference between them.
+  - **Recommendation:** #47 does not have to land first.
+    - The `@fractional-v1` and `@fractional-v2` exclusions stay in `test/integration`'s tag sets, owned by #47.
+    - #47's definition of done gains one line: remove the two exclusions from `TestRPC` and `TestInProcess` too, not only from `test/evaluator-testkit`. The orchestrating session edits the issue; this plan changes nothing in it.
+    - Step 13 adds no new fractional exclusion. If the relay testbed failed a fractional scenario the launchpad image passes, I's comparison would fail, which is a step 13 defect, not #47's.
+  - *Alternative:* land #47 first and run the full fractional set in step 13. That couples step 13 to an evaluator change that alters bucketing, which is a C-003 question of its own.
+
 ## 1. Scope
 
 ### UC-022: Run Provider Test Suites Against the Testbed (draft for PR S)
@@ -286,6 +297,7 @@ The recommendation comes first.
 - Java, Python and JavaScript suites in CI (Q14);
 - an evaluation-recording sink (Q18);
 - tracing scenarios (#59, Q4);
+- the `@fractional-v1` and `@fractional-v2` scenarios, excluded as today and owned by #47 (Q19);
 - publishing the image.
 
 ## 2. Characterization (PR C, base `main`, parallel now)
