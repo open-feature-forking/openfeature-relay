@@ -70,5 +70,19 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIn("if: github.event_name == 'pull_request'", self.job("benchmark"))
 
 
+class BuildDockerfiles(unittest.TestCase):
+    """K3: the Dockerfiles of flagd and flagd-proxy. A new hash for flagd-proxy means re-recording its image configuration."""
+
+    PINNED = {
+        "flagd/build.Dockerfile": "6215615613a2a9e7615b16bdaa731b20a8dc58d67c98baaade550bcf51e4f055",
+        "flagd-proxy/build.Dockerfile": "dbdc1298b2474bb454e13e623ae190f4c99d695d688bcdf02d849493f932a837",
+    }
+
+    def test_dockerfiles_are_unchanged(self):
+        for path, want in self.PINNED.items():
+            with self.subTest(path=path):
+                self.assertEqual(want, sha256(path))
+
+
 if __name__ == "__main__":
     unittest.main()
