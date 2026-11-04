@@ -125,6 +125,7 @@ nav:
       - 'Migrating to Flag Sets': 'guides/migrating-to-flag-sets.md'
       - 'Running A/B Experiments': 'guides/experimentation.md'
       - 'Upgrading to flagd-full': 'guides/upgrade-to-flagd-full.md'
+      - 'Serving Flagsmith flags': 'guides/serve-flagsmith-flags.md'
     - 'OpenFeature Providers':
       - 'providers/index.md'
       - 'Go': 'providers/go.md'
