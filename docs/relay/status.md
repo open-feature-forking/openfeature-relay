@@ -18,6 +18,20 @@ What runs today is flagd-full, which is flagd built from this repository.
 
 - [UC-018 Develop Configuration Format Extension](../use_cases/UC-018-develop-configuration-format-extension.md): the configuration format is split out of the evaluator, with document versions.
 
+## How a change is verified
+
+[UC-013](../use_cases/UC-013-verify-change-against-distributions.md) maps to these checks of the `build` workflow:
+
+| Check | Job | Covers |
+|-------|-----|--------|
+| linters, dependency rules, module and evaluator boundaries | `lint` | NFR-004, NFR-005 |
+| unit tests of every module, and the standard distributions' bounds and verdicts against flagd-full | `test` (`make test`, with `test/distributions`) | NFR-004, NFR-011, FR-026 |
+| RPC and in-process Test Harness suites against flagd, with the tag selection pinned to today's flagd | `integration-test` (`TestTagSelectionMatchesBranchPoint`) | NFR-007, C-010 |
+| allocs/op against the pull request's base commit; time deviations beyond 5% are reported, never failing | `benchmark` | NFR-001 |
+| FIPS compile and crypto closure of every standard distribution | `fips`, gated by `FULL_CI` or a manual run | C-009 |
+
+Branch protection is not set: the project lead decides which of these checks are required for merging. NFR-001 against the upstream commit the work branched from is not compared yet (`compare-allocs.py` would need a mapping of the old package paths to the new ones), so NFR-001 stays `In Progress`.
+
 ## Next
 
 The proof of concept proceeds one use case at a time:
