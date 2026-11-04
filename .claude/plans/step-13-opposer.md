@@ -171,3 +171,120 @@ A permanent job that "reports the difference" but never fails costs runner time 
 | Q16 | Manual only, not a job on every matching PR | 10 |
 
 Q2, Q4, Q7, Q8, Q9 (with finding 7's wait condition), Q11, Q13 (with finding 9), Q14 (with finding 11's filter), Q15, Q17, Q18 and Q19 stand as recommended.
+
+## Revision 3
+
+Plan: `.claude/plans/step-13.md` revision 3, final (`main` @ dd44d8fc). Scope: Q3, Q9, Q12, Q22, Q23, Q25 and PRs L, K, M and B1, after the project lead's decisions.
+
+Checked against:
+- on `main`: `runtime/runtime.go` (`isReady`, `updateAndEmit`, `versions`, `initializedOnce`), `runtime/events.go` (`publishChange`), `configformat/flagd/flagd.go` (`Accept`), `core/pkg/sync/fetching/fetching.go` (`ReSync`), `sync/builder/resolve.go` (default triggers), `runtime/cmd/settings.go` (#124's absent-settings check);
+- flagd-testbed v3.11.0 (`launchpad/pkg/*.go`, `flags/changing-flag.json`, `launchpad/configs/`, `docker-compose.yaml`);
+- the Go suite `tests/flagd/v2` v2.3.0 (`testcontainer.go`, `provider_steps.go`).
+
+Counts: **0 blockers, 3 major, 4 minor.**
+
+S, C, G1 and G2: no reason to stop them. G1 gets one extra test, from finding R3-3.
+
+### What holds (verified)
+
+- **Revision 2's blocker is gone at the root.** The combined flags come from the testbed source (Q23), and the testbed writes no file the runtime reads. `rawflags/selector-flags.json` and the `metadata` source never change, so their `fileinfo` watches never lose their path.
+- **`ReSync` already does what Q3 needs.** `fetching.Provider.ReSync` is `p.fetch(ctx, dataSync, true)`, which always delivers. `Reset` adds no new provider behaviour.
+  - flagd-full never calls `Reset`, so `Run`, `Reset` and `LoadConfig` are additive.
+  - The only `ReSync` callers today are flagd-proxy's subscription manager and `synctest`.
+- **A cleaned store re-accepts unchanged content.** The flagd format computes Added, Updated and Removed from `f.store.Documents(Type, in.Source)` (`flagd.go:265-269`). On an empty store every flag is Added and a new document is written, so an unchanged source is loaded again rather than taken for a redelivery.
+- **The minimal manifest covers every pinned path.**
+  - flag evaluation on 8013 (`TestRPC`, envoy's `rpc.service` and catch-all routes);
+  - flag sync on 8015 (`TestInProcess`, envoy's `sync.service` route for `@targetURI`);
+  - the management port on 8014 (the compose healthcheck, the suite's `/readyz`);
+  - `sync/file` for `selector-flags.json` and `metadata`'s source, and the flagd format and evaluator.
+
+  The Go suite maps 8013, 8014, 8015 and 8080 plus envoy's 9211 and 9212, never 8016, and no gherkin file at v3.11.0 names OFREP or 8016. Under #124's absent-settings check, every setting the four configs set belongs to a component the manifest has:
+  - `context-value`: every endpoint;
+  - `strict-numeric-range`: flag evaluation and OFREP;
+  - `server-cert-path` and `server-key-path`: flag evaluation and flag sync;
+  - `disable-sync-metadata`: flag sync.
+
+  So no config stops startup.
+- **No pinned suite depends on Q12's three quirks.**
+  1. v2.3.0 names only `default`, `ssl` and `socket`, and `socket` is `@unixsocket`, excluded in both tag sets.
+  2. Every caller checks `200` only, and `/start`'s HTTP client gives up at 10 s, so a 10 s `500` and an immediate one fail the same way.
+  3. `flags/changing-flag.json` has exactly `state`, `variants` and `defaultVariant`, so the narrow struct drops nothing. The launchpad's rewrite reorders `variants` inside `changing-flag.json`, but `allFlags.json` comes from a map encoded with sorted keys, so its bytes are the same either way. That supports C3's golden.
+- **The order for `/change` gives the stated property:** `Target.Load` returns only once the store has accepted, then K renders. A file-mode provider can't see a value that RPC doesn't serve yet. On a start, the file is rendered before the gate opens, as the launchpad writes it before it execs flagd.
+
+### Major
+
+#### R3-1. `Target.Load` has nothing to wait on: the store's versions aren't the control module's (Q9, Q25, L, M, B1)
+
+- **Evidence:**
+  - Q2's `Target.Load(ctx, document, version)` "returns once the store has accepted that version", and Q9 step 3 says the flagd target returns "once the store holds that version". The version is K's digest of the encoded bytes.
+  - The store holds the flagd format's document versions instead: a SHA-256 over metadata and per-flag fingerprints, **one document per flag set** of the source (`flagd.go:246-300`).
+  - `allFlags.json` merges every `rawflags` file except `selector-*`, so its flags can fall into several flag sets. No store document carries K's digest.
+  - The configuration change event (`publishChange`) carries those document versions too, and only fires when a document changed.
+  - L's row lists `Run`, `Reset` and `LoadConfig`; M's lists the fetcher and its trigger. Neither provides "the delivery with fetch version V of source S was accepted".
+- **Fix:**
+  - L adds one seam: the runtime records, per source, the fetch version of the last delivery it accepted (M's fetcher returns K's digest as `FetchResult.Version`). L exposes a wait on it, for example `Runtime.WaitAccepted(ctx, source, version) error`, signalled from `updateAndEmit` after `accept` succeeds.
+  - A rejection makes the wait return the format's error, so `/change` answers the plain-text `500` and K doesn't render.
+  - Tests:
+    - L's `TestWaitAcceptedAfterAccept`;
+    - B1's `TestLoadReturnsAfterAccept`: an RPC evaluation of `changing-flag` gives the new variant the moment `Load` returns;
+    - B1's `TestLoadRejectedRendersNothing`.
+
+#### R3-2. `Reset` must clear the runtime's one-shot readiness, not only the store (Q3, L)
+
+- **Evidence:**
+  - Readiness is `initialized && every provider IsReady && !anyStale()` (`runtime.go:156-166`).
+  - `updateAndEmit` marks `sourceReadiness` only `if !r.initialized.Load()`, and `initialized` is set once.
+  - `initializedOnce` closes `initializedCh` once, so nothing can wait on it for a second start.
+  - `versions` (`events.go:39-46`) also keeps the old document versions.
+  - "Clears per-source readiness" (R1) is therefore not enough. If `initialized` stays true, `isReady()` is true at once after the wipe: the fetching providers' `IsReady` stays true across a reset. The gate would then open on an empty or half-loaded store, which is the "never expose a half-loaded store" risk R1 names.
+- **Fix:**
+  - In one critical section under `r.mu`, `Reset`:
+    - wipes the store;
+    - sets `initialized` to false;
+    - sets every configured `sourceReadiness` entry to false;
+    - clears `versions` (so the reload publishes a configuration change event like a first start);
+    - creates a new per-reset completion signal, since the one-shot `initializedCh` can't be reused.
+  - It then calls `ReSync` on every provider, and returns when that signal fires or the start timeout passes. Past the timeout it names the sources still not accepted, as R1 says.
+  - Tests:
+    - `TestResetClearsReadiness`: `isReady()` is false from the wipe until the last source is accepted again, for a two-source config;
+    - `TestResetTwice`;
+    - `TestResetDoesNotPublishBeforeWipe`: a delivery that arrives during `Reset` lands after the wipe or not at all.
+
+#### R3-3. A rebuild must wait for the old runtime to release its addresses (Q22, G1, B1)
+
+- **Evidence:**
+  - Q22's switch is "close the gate and cancel the runtime; build a new runtime … and run it".
+  - Cancelling `Run` starts the endpoints' graceful shutdowns and the management port's `Shutdown` (`management.go`, budget 5 s). The old runtime's virtual listeners stay registered on the gate until those `Close` them.
+  - If the new runtime's `Listen` runs before that, it meets addresses that are still registered. G1's row ("address release") doesn't say what `Listen` does then.
+  - The whole switch has to fit in Q12's 10 s start limit.
+- **Fix:**
+  - B1 waits for the old `Run` to return before `FromConfig` builds the new runtime. With the gate already closed there are no connections, so the shutdowns return quickly; bound the wait with the start timeout anyway.
+  - G1 makes `Listen` on an address still registered fail with an error naming the address. It neither replaces the old listener nor waits.
+  - Tests:
+    - G1's `TestListenOnRegisteredAddressFails` and `TestListenAfterReleaseSucceeds`;
+    - B1's `TestConfigSwitch` asserts that the old runtime's `Run` had returned before the new runtime's first `Listen`, and that the switch from `default` to `ssl` and back stays under 10 s.
+
+### Minor
+
+#### R3-4. An unknown configuration is an outage today, and Q24 makes it none
+
+`StartFlagd` kills flagd **before** it tries the configuration (`flagd.go:91-97`), so today `/start?config=nope` also takes 8013–8015 down. Q24 leaves the gate and the runtime as they were. That is a fourth changed behaviour, missing from Q12's table and BR-001. No pinned suite depends on it, because `socket` is excluded and callers check `200` only. List it in Q12 as quirk 4, and add a launchpad-only C1 case: 8013 refused after `/start?config=nope`.
+
+#### R3-5. `/change` during an outage, and after a failed switch
+
+- **During an outage:** after `/stop`, or during `/restart`'s delay, the runtime still runs behind the closed gate. `Load` succeeds and K renders, so `allFlags.json` reappears while the ports refuse. The launchpad does the same: its `rawflags/` watcher regenerates the file. So keep it, but state it in Q9 and pin it in K's tests, so it isn't "fixed" by accident.
+- **After a failed switch** (Q22) there is no runtime. `Load` must return an error at once, a plain-text `500`, and not wait out the 5 s.
+
+#### R3-6. One lock for every control call
+
+The launchpad has two locks, `changeLock` and `flagdLock`, so `/change` and `/start` interleave. With an in-memory state, `Reset` and `Load`, K should run the four calls and `/restart`'s delayed start under one mutex. A `Load` then never overlaps a `Reset` or a rebuild. Add `TestChangeDuringStartIsSerialized` to K.
+
+#### R3-7. M's source would get the core's poller
+
+For a fetcher whose factory isn't a `sync.DefaultTriggerer`, the sync builder attaches the core's poller (`sync/builder/resolve.go:56-70`). M's internal trigger isn't selectable, so unless M's factory declares it as its default trigger, `testbed:allFlags` is also polled on the default interval. That is harmless, because unchanged content isn't delivered, but it isn't what M describes. M's factory implements `DefaultTriggers` with its internal trigger, and `TestNoPollerAttached` pins it.
+
+### L, K, M and B1
+
+- **K and M:** they can start now. Fold in R3-5 and R3-6 (K), and R3-7 and the fetch version of R3-1 (M).
+- **L:** it can start on G2's branch, with R3-1's `WaitAccepted` seam and R3-2's full reset in its scope and tests.
+- **B1:** it can start once its parents' branches exist, with R3-1's tests and R3-3's ordering. G1 adds R3-3's two tests.
