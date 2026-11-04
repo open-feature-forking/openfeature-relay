@@ -1,12 +1,14 @@
 package gate_test
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"path/filepath"
 	"runtime"
+	"syscall"
 	"testing"
 	"time"
 
@@ -248,4 +250,54 @@ func TestListenAfterReleaseSucceeds(t *testing.T) {
 			roundTrip(t, addr)
 		})
 	}
+}
+
+// The runtime passes ":8013", which the registry holds as "[::]:8013". With the gate closed the OS does not reject
+// the duplicate either, so only the check after the bind catches it.
+func TestListenOnRegisteredWildcardAddressFailsWhileClosed(t *testing.T) {
+	g := gate.New()
+	first, err := g.Listen("tcp", ":0")
+	require.NoError(t, err)
+	defer first.Close()
+	port := first.Addr().(*net.TCPAddr).Port
+	g.Close()
+
+	second, err := g.Listen("tcp", fmt.Sprintf(":%d", port))
+	require.Error(t, err)
+	require.Nil(t, second)
+	require.Contains(t, err.Error(), "already registered")
+}
+
+// A killed process leaves its socket file: clients get ECONNREFUSED, not ENOENT.
+func TestUnixOutageRefusesConnections(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no unix sockets")
+	}
+	g := gate.New()
+	l, err := g.Listen("unix", filepath.Join(t.TempDir(), "gate.sock"))
+	require.NoError(t, err)
+	defer l.Close()
+	echo(l)
+	addr := l.Addr()
+
+	g.Close()
+	_, err = net.Dial("unix", addr.String())
+	require.ErrorIs(t, err, syscall.ECONNREFUSED)
+	require.False(t, errors.Is(err, syscall.ENOENT))
+
+	require.NoError(t, g.Open(), "Open removes the stale file before it binds")
+	roundTrip(t, addr)
+}
+
+func TestUnixListenWhileClosedRefusesConnections(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no unix sockets")
+	}
+	g := gate.New()
+	g.Close()
+	l, err := g.Listen("unix", filepath.Join(t.TempDir(), "gate.sock"))
+	require.NoError(t, err)
+	defer l.Close()
+	_, err = net.Dial("unix", l.Addr().String())
+	require.ErrorIs(t, err, syscall.ECONNREFUSED)
 }

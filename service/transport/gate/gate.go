@@ -11,6 +11,7 @@ package gate
 import (
 	"fmt"
 	"net"
+	"os"
 	"sync"
 )
 
@@ -61,7 +62,8 @@ func (g *Gate) Listen(network, address string) (net.Listener, error) {
 	if g.open {
 		l.os = nl
 	} else {
-		_ = nl.Close() // the address is only resolved: a closed gate refuses connections
+		unlinkOnClose(nl, false) // the address is only resolved: a closed gate refuses connections
+		_ = nl.Close()
 	}
 	g.listeners[l] = struct{}{}
 	return l, nil
@@ -77,6 +79,7 @@ func (g *Gate) Open() error {
 	}
 	bound := map[*listener]net.Listener{}
 	for l := range g.listeners {
+		removeSocketFile(l.addr) // a closed gate leaves the file of a unix socket behind, as a killed process does
 		nl, err := net.Listen(l.addr.Network(), l.addr.String())
 		if err != nil {
 			for _, b := range bound {
@@ -118,6 +121,7 @@ func (g *Gate) Close() {
 	g.mu.Unlock()
 
 	for _, s := range sockets {
+		unlinkOnClose(s, false) // a killed process leaves its socket file: clients get ECONNREFUSED, not ENOENT
 		_ = s.Close()
 	}
 	for _, c := range conns {
@@ -203,9 +207,22 @@ func (l *listener) Close() error {
 	g.signal()
 	g.mu.Unlock()
 	if sock == nil {
+		removeSocketFile(l.addr) // the listener goes away behind a closed gate: free the path for the next registration
 		return nil
 	}
 	return sock.Close()
+}
+
+func unlinkOnClose(l net.Listener, unlink bool) {
+	if u, ok := l.(*net.UnixListener); ok {
+		u.SetUnlinkOnClose(unlink)
+	}
+}
+
+func removeSocketFile(addr net.Addr) {
+	if addr.Network() == "unix" {
+		_ = os.Remove(addr.String())
+	}
 }
 
 func (l *listener) Addr() net.Addr { return l.addr }
