@@ -116,7 +116,7 @@ func TestPreflightBeforeAnyMiddleware(t *testing.T) {
 	p := newPorts(t)
 	cfg := characterizedConfig(t, p)
 	cfg.CORS = []string{"*"}
-	components := flagdcomponents.Official()
+	components := flagdcomponents.Components()
 	components.Middleware = []middleware.Configured{{Factory: keyRequiredFactory{seen: &seen}}}
 	startRuntimeWith(t, cfg, components)
 

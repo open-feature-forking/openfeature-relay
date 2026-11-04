@@ -69,7 +69,11 @@ func characterizedConfig(t *testing.T, p ports) Config {
 // startRuntime runs the runtime on a context the test cancels, and returns once it reports ready.
 func startRuntime(t *testing.T, cfg Config) (cancel func(), done <-chan error) {
 	t.Helper()
-	return startRuntimeWith(t, cfg, flagdcomponents.Official())
+	// the runtime's pins run without a telemetry provider, as they did when the components were hand-written and the
+	// command chose the provider; the tests that need one set it
+	components := flagdcomponents.Components()
+	components.Telemetry = nil
+	return startRuntimeWith(t, cfg, components)
 }
 
 // startRuntimeWith is startRuntime for a distribution with these components.

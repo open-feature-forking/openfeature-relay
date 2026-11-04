@@ -47,7 +47,7 @@ func TestExtensionTelemetryProvider(t *testing.T) {
 	require.NoError(t, os.WriteFile(source, []byte(flags), 0o600))
 	out := filepath.Join(dir, "telemetry.jsonl")
 
-	components := flagdcomponents.Official()
+	components := flagdcomponents.Components()
 	components.Telemetry = telemetryexample.Factory{}
 	components.TelemetryConfig = map[string]any{telemetryexample.SettingPath: out}
 	ofrepPort := freePort(t)

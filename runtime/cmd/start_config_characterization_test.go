@@ -53,7 +53,7 @@ func TestStartConfigHelper(_ *testing.T) {
 	}
 	rootCmd.SetArgs(args)
 	Execute(distribution.Info{Name: "flagd-full", Version: "v9.9.9", Commit: "abc1234", Date: "2026-01-02T03:04:05Z"},
-		components.Official(), distribution.Inventory{})
+		components.Components(), distribution.Inventory{})
 }
 
 // renderTelemetryConfig prints the settings of the telemetry provider that the telemetry flags map to. They were

@@ -45,7 +45,7 @@ func TestSinkReceivesOneEntryPerFlag(t *testing.T) {
 	cfg.SyncProviders = []coresync.SourceConfig{{URI: source, Provider: "file"}}
 	sink := &recordingSink{}
 	startRuntimeWith(t, cfg, withFlagd(Components{
-		Endpoints:  flagdcomponents.Endpoints(),
+		Endpoints:  flagdcomponents.Components().Endpoints,
 		EventSinks: []eventsink.Configured{{Factory: recordingSinkFactory{sink: sink}, Config: sinkSettings()}},
 	}))
 

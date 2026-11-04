@@ -50,7 +50,7 @@ func TestExtensionMiddlewareBindsSelector(t *testing.T) {
 	source := filepath.Join(dir, "flags.json")
 	require.NoError(t, os.WriteFile(source, []byte(flags), 0o600))
 
-	components := flagdcomponents.Official()
+	components := flagdcomponents.Components()
 	components.Middleware = []middleware.Configured{{
 		Factory: middlewareexample.Factory{},
 		Config: map[string]any{middlewareexample.SettingKeys: map[string]any{

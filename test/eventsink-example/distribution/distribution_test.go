@@ -86,7 +86,7 @@ func TestExtensionEventSink(t *testing.T) {
 	webhook := httptest.NewServer(rcv)
 	t.Cleanup(webhook.Close)
 
-	components := flagdcomponents.Official()
+	components := flagdcomponents.Components()
 	components.EventSinks = []eventsink.Configured{{
 		Factory: eventsinkexample.Factory{},
 		Config: map[string]any{

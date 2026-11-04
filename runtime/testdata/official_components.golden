@@ -36,4 +36,4 @@ service endpoints
   flag-sync
     needs: router=false format=""
 metrics handler override: false
-telemetry provider: false
+telemetry provider: true

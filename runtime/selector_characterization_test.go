@@ -48,7 +48,7 @@ func selectorSettings(t *testing.T, factory service.Factory) service.Settings {
 		})
 		require.NoError(t, err)
 	}
-	inputs, err := newEndpointInputs(log, st, events.NewBus(), []service.Factory{factory}, []string{"flagd"}, flagdcomponents.Official().Evaluators, nil, false)
+	inputs, err := newEndpointInputs(log, st, events.NewBus(), []service.Factory{factory}, []string{"flagd"}, flagdcomponents.Components().Evaluators, nil, false)
 	require.NoError(t, err)
 	settings := inputs.settings(factory)
 	initialized := make(chan struct{})

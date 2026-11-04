@@ -61,7 +61,7 @@ func TestTracingOffCharacterization(t *testing.T) {
 		KeepAliveMinTime:             runtime.KeepAliveMinTimeDefault,
 		KeepAlivePermitWithoutStream: runtime.KeepAlivePermitWithoutStreamDefault,
 		SyncProviders:                []coresync.SourceConfig{{URI: file, Provider: "file"}},
-	}, withOpenTelemetry(flagdcomponents.Official()))
+	}, withOpenTelemetry(flagdcomponents.Components()))
 	require.NoError(t, err)
 
 	require.Empty(t, otel.GetTextMapPropagator().Fields(), "no propagator is installed")
