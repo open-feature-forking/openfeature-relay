@@ -46,6 +46,15 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIsNotNone(match, f"job {name} is missing")
         return match.group(1)
 
+    def test_parses_as_yaml(self):
+        # GitHub drops every trigger of a workflow it cannot parse, without failing any check.
+        try:
+            import yaml
+        except ImportError:
+            self.skipTest("PyYAML is not installed")
+        jobs = yaml.safe_load(self.text)["jobs"]
+        self.assertIn("test", jobs)
+
     def test_paths_ignore_docs_on_push_and_pull_request(self):
         block = '    paths-ignore:\n      - "README.md"\n      - "docs/**"\n'
         self.assertEqual(2, self.text.count(block))

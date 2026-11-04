@@ -420,13 +420,11 @@ jobs:
             echo "::notice::No base to compare with (a new branch): the relay testbed is skipped. Run the workflow manually or set FULL_CI."
           else
             changed=$(git diff --name-only "$BASE" "$HEAD" | grep -Ev '^(docs|\.claude)/' || true)
-            hits=$(printf '%s
-' "$changed" | grep -E "$pattern" || true)
+            hits=$(printf '%s\n' "$changed" | grep -E "$pattern" || true)
             if [ -n "$hits" ]; then
               run=true
               echo "::notice::The relay testbed runs: this change touches Go code or the testbed."
-              printf '%s
-' "$hits" | head -10
+              printf '%s\n' "$hits" | head -10
             else
               echo "::notice::The relay testbed is skipped: no Go code or testbed file changed. Set FULL_CI or run the workflow manually to run it."
             fi
