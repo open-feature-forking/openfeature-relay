@@ -89,6 +89,7 @@ linters:
             - "**/service/flag-evaluation/**"
             - "**/service/ofrep/**"
             - "**/service/flag-sync/**"
+            - "**/service/event-collector/**"
             - "**/runtime/**"
           deny:
             - pkg: go.opentelemetry.io
@@ -129,6 +130,8 @@ linters:
             - pkg: github.com/open-feature-forking/openfeature-relay/service/flag-evaluation
               desc: the runtime holds no service endpoint; the distribution passes Components.Endpoints
             - pkg: github.com/open-feature-forking/openfeature-relay/service/flag-sync
+              desc: the runtime holds no service endpoint; the distribution passes Components.Endpoints
+            - pkg: github.com/open-feature-forking/openfeature-relay/service/event-collector
               desc: the runtime holds no service endpoint; the distribution passes Components.Endpoints
         stable-dependencies:
           deny:
