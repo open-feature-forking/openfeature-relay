@@ -2,20 +2,24 @@
   "modules": {
     "builder": {
       "test": "make test-module MODULE=builder",
-      "always": true
+      "always": true,
+      "coverage": true
     },
     "configformat/flagd": {
       "test": "make test-module MODULE=configformat/flagd",
       "coverage": true
     },
     "contrib/flagsmith/engine": {
-      "test": "make test-module MODULE=contrib/flagsmith/engine"
+      "test": "make test-module MODULE=contrib/flagsmith/engine",
+      "coverage": true
     },
     "contrib/flagsmith/middleware": {
-      "test": "make test-module MODULE=contrib/flagsmith/middleware"
+      "test": "make test-module MODULE=contrib/flagsmith/middleware",
+      "coverage": true
     },
     "contrib/flagsmith/sync": {
-      "test": "make test-module MODULE=contrib/flagsmith/sync"
+      "test": "make test-module MODULE=contrib/flagsmith/sync",
+      "coverage": true
     },
     "core": {
       "test": "make test-module MODULE=core",
@@ -106,10 +110,12 @@
       "coverage": true
     },
     "test/configformat-example": {
-      "test": "make test-module MODULE=test/configformat-example"
+      "test": "make test-module MODULE=test/configformat-example",
+      "coverage": true
     },
     "test/configformat-example/distribution": {
-      "test": "make test-module MODULE=test/configformat-example/distribution"
+      "test": "make test-module MODULE=test/configformat-example/distribution",
+      "coverage": true
     },
     "test/distributions": {
       "test": "make test-module MODULE=test/distributions"
@@ -123,52 +129,65 @@
       "reason": "built by test/distributions from its manifests; no tests of its own"
     },
     "test/evaluator-testkit": {
-      "test": "make test-module MODULE=test/evaluator-testkit"
+      "test": "make test-module MODULE=test/evaluator-testkit",
+      "coverage": true
     },
     "test/eventsink-example": {
-      "test": "make test-module MODULE=test/eventsink-example"
+      "test": "make test-module MODULE=test/eventsink-example",
+      "coverage": true
     },
     "test/eventsink-example/distribution": {
-      "test": "make test-module MODULE=test/eventsink-example/distribution"
+      "test": "make test-module MODULE=test/eventsink-example/distribution",
+      "coverage": true
     },
     "test/image": {
       "test": "make test-module MODULE=test/image",
       "always": true
     },
     "test/inprocess-example/engine": {
-      "test": "make test-module MODULE=test/inprocess-example/engine"
+      "test": "make test-module MODULE=test/inprocess-example/engine",
+      "coverage": true
     },
     "test/inprocess-example/file": {
-      "test": "make test-module MODULE=test/inprocess-example/file"
+      "test": "make test-module MODULE=test/inprocess-example/file",
+      "coverage": true
     },
     "test/inprocess-example/filegrpc": {
-      "test": "make test-module MODULE=test/inprocess-example/filegrpc"
+      "test": "make test-module MODULE=test/inprocess-example/filegrpc",
+      "coverage": true
     },
     "test/loadtest": {
       "test": null,
       "reason": "a load test, run by hand; make test does not run it"
     },
     "test/middleware-example": {
-      "test": "make test-module MODULE=test/middleware-example"
+      "test": "make test-module MODULE=test/middleware-example",
+      "coverage": true
     },
     "test/middleware-example/distribution": {
-      "test": "make test-module MODULE=test/middleware-example/distribution"
+      "test": "make test-module MODULE=test/middleware-example/distribution",
+      "coverage": true
     },
     "test/release": {
       "test": "make test-module MODULE=test/release",
-      "always": true
+      "always": true,
+      "coverage": true
     },
     "test/service-example": {
-      "test": "make test-module MODULE=test/service-example"
+      "test": "make test-module MODULE=test/service-example",
+      "coverage": true
     },
     "test/sync-example": {
-      "test": "make test-module MODULE=test/sync-example"
+      "test": "make test-module MODULE=test/sync-example",
+      "coverage": true
     },
     "test/telemetry-example": {
-      "test": "make test-module MODULE=test/telemetry-example"
+      "test": "make test-module MODULE=test/telemetry-example",
+      "coverage": true
     },
     "test/telemetry-example/distribution": {
-      "test": "make test-module MODULE=test/telemetry-example/distribution"
+      "test": "make test-module MODULE=test/telemetry-example/distribution",
+      "coverage": true
     },
     "test/testbed": {
       "test": null,
@@ -183,13 +202,16 @@
       "reason": "a Kubernetes test (make run-flagd-proxy-zd-test); make test does not run it"
     },
     "testbed/cmd": {
-      "test": "make test-module MODULE=testbed/cmd"
+      "test": "make test-module MODULE=testbed/cmd",
+      "coverage": true
     },
     "testbed/control": {
-      "test": "make test-module MODULE=testbed/control"
+      "test": "make test-module MODULE=testbed/control",
+      "coverage": true
     },
     "testbed/source": {
-      "test": "make test-module MODULE=testbed/source"
+      "test": "make test-module MODULE=testbed/source",
+      "coverage": true
     }
   },
   "pseudo": {

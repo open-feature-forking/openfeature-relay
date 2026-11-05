@@ -83,7 +83,7 @@ class BuildWorkflow(unittest.TestCase):
     def test_jobs(self):
         names = re.findall(r"^  ([a-z][a-z0-9-]*):[ \t]*(?:#.*)?\n", self.text.split("\njobs:\n", 1)[1], re.M)
         self.assertEqual(
-            ["changes", "lint", "benchmark", "docs-check", "test", "miss-report", "builder-e2e", "fips", "docker-local", "integration-test",
+            ["changes", "lint", "benchmark", "docs-check", "test", "miss-report", "coverage", "builder-e2e", "fips", "docker-local", "integration-test",
              "upgrade-test", "release-dry-run", "testbed", "testbed-rpc-outages", "testbed-grpc-sync"], names)
 
     def test_changes_is_report_only(self):
@@ -256,6 +256,24 @@ class BuildWorkflow(unittest.TestCase):
                 self.assertIn("github.event_name == 'schedule'", self.job(name))
         # nothing else is gated on the schedule: the pull-request-only and push-only jobs skip it
         self.assertIn("if: github.event_name == 'pull_request'", self.job("benchmark"))
+
+    def test_coverage_is_kept_and_compared_with_the_base(self):
+        """#208: the profiles are an artifact, a pull request's per-package totals are compared with its first parent's,
+        and the Codecov step that failed on every run for want of a token is gone."""
+        self.assertNotIn("codecov", self.text.lower())
+        test = self.job("test")
+        self.assertIn('name: coverage-profiles' + chr(10) + '          path: "*-coverage.out"', test)
+        job = self.job("coverage")
+        self.assertIn("if: github.event_name == 'pull_request'", job)
+        self.assertIn("needs: test", job)
+        self.assertIn('git worktree add "$RUNNER_TEMP/base" "HEAD^1"', job)
+        self.assertNotIn("base.sha", job)
+        self.assertIn("name: coverage-profiles\n          path: head-coverage", job)
+        self.assertIn('run-coverage.sh "$RUNNER_TEMP/base" "$RUNNER_TEMP/base-coverage"', job)
+        self.assertIn('compare-coverage.py "$RUNNER_TEMP/base-coverage" head-coverage', job)
+        self.assertNotIn("continue-on-error", job)
+        self.assertNotIn("cache/save", job)
+        self.assertIn("run: python3 .github/scripts/test_compare_coverage.py", self.job("lint"))
 
     def test_outage_job_compares_both_images(self):
         """UC-022 Q16: the gated job runs the RPC suite with the outage scenarios against both images."""

@@ -51,7 +51,7 @@ def cover(module):
 
 
 def plain(module):
-    return f"go test -race -short -count=1 ./{module}/..."
+    return f"go test -race -covermode=atomic -cover -short -count=1 ./{module}/... -coverprofile={module.replace('/', '-')}-coverage.out"
 
 
 def tests(lines):
@@ -100,7 +100,8 @@ class TestTableCoversModules(unittest.TestCase):
         self.assertEqual({"builder", "test/release", "test/upgrade", "test/image"},
                          {d for d, e in TABLE["modules"].items() if e.get("always")})
         self.assertEqual({"contract-external": {"test": "make test-contract-external", "always": True}}, TABLE["pseudo"])
-        self.assertEqual(set(self.LIB + self.FLAGD + ["flagd-proxy"]),
+        # every module with a go test recipe leaves a profile, which the coverage job compares with the base (#208)
+        self.assertEqual({d for d, e in TABLE["modules"].items() if e["test"]} - {"test/distributions", "test/upgrade", "test/image"},
                          {d for d, e in TABLE["modules"].items() if e.get("coverage")})
 
     def test_module_recipes_exist_exactly_for_the_entries_with_a_command(self):
@@ -123,8 +124,7 @@ class TestTableCoversModules(unittest.TestCase):
         self.assertEqual([cover(m) for m in self.FLAGD], tests(make_dry_run("test-flagd")[1]))
 
     def test_test_contrib_loops_over_the_contrib_and_testbed_modules(self):
-        self.assertEqual([f"go test -race -covermode=atomic -cover -short ./{m}/..." for m in self.CONTRIB],
-                         tests(make_dry_run("test-contrib")[1]))
+        self.assertEqual([cover(m) for m in self.CONTRIB], tests(make_dry_run("test-contrib")[1]))
 
     def test_the_other_modules_keep_their_flags(self):
         want = {
