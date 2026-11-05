@@ -29,12 +29,21 @@ func TestDeadlineElapsedBeforeTheContextReportsIt(t *testing.T) {
 
 	require.True(t, s.deadlineElapsed(parent, passed, eof), "the stream ended after its deadline")
 	require.False(t, s.deadlineElapsed(parent, coming, eof), "the stream ended long before its deadline")
-	require.True(t, s.deadlineElapsed(parent, coming, status.Error(codes.DeadlineExceeded, "")), "the server reported the deadline")
+	deadlineExceeded := status.Error(codes.DeadlineExceeded, "")
+	require.False(t, s.deadlineElapsed(parent, coming, deadlineExceeded), "DEADLINE_EXCEEDED long before the deadline is a failure")
+
+	// the server ends the stream a little earlier than the client's deadline: within the slack of 100 ms it is a recycle
+	near := pastDeadline{context.Background(), time.Now().Add(50 * time.Millisecond)}
+	require.True(t, s.deadlineElapsed(parent, near, deadlineExceeded), "DEADLINE_EXCEEDED just before the deadline")
+	require.False(t, s.deadlineElapsed(parent, near, eof), "another error just before the deadline is a failure")
+	short := &Sync{Options: Options{StreamDeadline: 10 * time.Second}} // 5% of it, 500 ms, is the slack
+	nearer := pastDeadline{context.Background(), time.Now().Add(400 * time.Millisecond)}
+	require.True(t, short.deadlineElapsed(parent, nearer, deadlineExceeded), "the slack is 5% of a long deadline")
 
 	cancelled, cancel := context.WithCancel(context.Background())
 	cancel()
 	require.False(t, s.deadlineElapsed(cancelled, passed, eof), "a shutdown is not a recycle")
 
 	s.Options = Options{}
-	require.False(t, s.deadlineElapsed(parent, passed, status.Error(codes.DeadlineExceeded, "")), "without the setting nothing is recycled")
+	require.False(t, s.deadlineElapsed(parent, passed, deadlineExceeded), "without the setting nothing is recycled")
 }

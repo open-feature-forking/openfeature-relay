@@ -444,27 +444,27 @@ func TestStatusNameIsWhatTheOperatorWrites(t *testing.T) {
 	require.Equal(t, "PERMISSION_DENIED", statusName(codes.PermissionDenied))
 }
 
-// deadlineServer ends every stream itself with err, as the server does when the deadline that gRPC sent along runs
-// out before the client's own timer reports it.
+// deadlineServer ends every stream with err once after has passed, as the server does when the deadline that gRPC
+// sent along runs out.
 type deadlineServer struct {
 	syncv1grpc.UnimplementedFlagSyncServiceServer
 	opened *atomic.Int32
 	err    error
+	after  time.Duration
 }
 
 func (s *deadlineServer) SyncFlags(*v1.SyncFlagsRequest, syncv1grpc.FlagSyncService_SyncFlagsServer) error {
 	s.opened.Add(1)
+	time.Sleep(s.after)
 	return s.err
 }
 
-// The server can end a stream with DEADLINE_EXCEEDED before the client's context says that the deadline passed. It is
-// a recycle, not an error to back off from.
-func TestStreamEndedByTheServerAtItsDeadlineIsRecycled(t *testing.T) {
-	var opened atomic.Int32
-	err := status.Error(codes.DeadlineExceeded, "context deadline exceeded")
-	s := defaultSync(loopback(t, &deadlineServer{opened: &opened, err: err}))
-	// the deadline is an hour away: only what the server said can tell that the stream was at its deadline
-	s.Options = Options{StreamDeadline: time.Hour}
+// runDeadlineServer returns the delays of the schedule recorded while the server opened four streams.
+func runDeadlineServer(t *testing.T, srv *deadlineServer, deadline time.Duration) []time.Duration {
+	t.Helper()
+	srv.opened = new(atomic.Int32)
+	s := defaultSync(loopback(t, srv))
+	s.Options = Options{StreamDeadline: deadline}
 	require.NoError(t, s.Init(context.Background()))
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -474,11 +474,32 @@ func TestStreamEndedByTheServerAtItsDeadlineIsRecycled(t *testing.T) {
 	stopped := make(chan error, 1)
 	go func() { stopped <- s.Sync(ctx, make(chan sync.DataSync, 8)) }()
 
-	require.Eventually(t, func() bool { return opened.Load() >= 4 }, 10*time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool { return srv.opened.Load() >= 4 }, 10*time.Second, 5*time.Millisecond)
 	clock.mu.Lock()
 	delays := slices.Clone(clock.delays)
 	clock.mu.Unlock()
 	cancel()
 	require.NoError(t, <-stopped)
-	require.Empty(t, delays, "no delay after a stream that the server ended with DEADLINE_EXCEEDED")
+	return delays
+}
+
+// The server can end a stream with DEADLINE_EXCEEDED a little before the client's timer has run: it is a recycle,
+// not an error to back off from.
+func TestStreamEndedByTheServerAtItsDeadlineIsRecycled(t *testing.T) {
+	// the server ends the stream 30 ms before the client's deadline, so the context of the client says nothing yet
+	delays := runDeadlineServer(t, &deadlineServer{
+		err:   status.Error(codes.DeadlineExceeded, "context deadline exceeded"),
+		after: 120 * time.Millisecond,
+	}, 150*time.Millisecond)
+	require.Empty(t, delays, "no delay after a stream that the server ended with DEADLINE_EXCEEDED at its deadline")
+}
+
+// An upstream that answers DEADLINE_EXCEEDED at once is failing, whatever the stream deadline is: it is backed off
+// from, not re-opened in a loop.
+func TestDeadlineExceededLongBeforeTheDeadlineBacksOff(t *testing.T) {
+	delays := runDeadlineServer(t, &deadlineServer{
+		err: status.Error(codes.DeadlineExceeded, "the backend timed out"),
+	}, time.Hour)
+	require.NotEmpty(t, delays)
+	require.Equal(t, 4*time.Second, delays[0], "the first reopen waits the first step of the schedule")
 }
