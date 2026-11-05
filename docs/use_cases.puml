@@ -14,6 +14,7 @@ actor "flagd Test Harness" as harness <<system>>
 actor "Image Build Environment" as imagebuild <<system>>
 actor "In-Process Provider" as inproc <<system>>
 actor "Vendor Flag Service" as vendor <<system>>
+actor "Upstream Flag Sync Endpoint" as upstream <<system>>
 
 rectangle "OpenFeature Relay" {
     usecase "UC-001\nBuild Custom Distribution" as UC001
@@ -34,7 +35,6 @@ rectangle "OpenFeature Relay" {
     usecase "UC-013\nVerify Change Against Distributions" as UC013
 
     usecase "UC-014\nEmbed Evaluator in In-Process Provider" as UC014
-    usecase "UC-015\nMigrate Provider to Component Modules" as UC015
 
     usecase "UC-016\nRecover From Snapshot" as UC016
 
@@ -44,6 +44,7 @@ rectangle "OpenFeature Relay" {
     usecase "UC-020\nDevelop Event Sink Extension" as UC020
     usecase "UC-021\nExport Evaluation Data" as UC021
     usecase "UC-022\nRun Provider Test Suites Against the Testbed" as UC022
+    usecase "UC-023\nSync From an Upstream Flag Sync Endpoint" as UC023
 }
 
 builder --> UC001
@@ -72,12 +73,12 @@ operator --> UC016
 operator --> UC017
 operator --> UC019
 operator --> UC021
+operator --> UC023
 
 maintainer --> UC012
 maintainer --> UC013
 
 provider --> UC014
-provider --> UC015
 provider --> UC022
 
 UC001 --> go
@@ -88,12 +89,11 @@ UC012 --> registry
 UC013 --> ci
 UC013 --> harness
 UC014 --> harness
-UC015 --> harness
-UC015 --> maintainer
 UC017 --> inproc
 UC019 --> vendor
 UC022 --> ci
 UC022 --> harness
+UC023 --> upstream
 
 note right of UC016
   Deferred: FR-050, FR-051
