@@ -223,3 +223,15 @@ telemetry.keyPath: ""
 telemetry.metricsExporter: ""
 telemetry.reloadInterval: 0
 
+== a Kubernetes service link as FLAGD_PORT
+exit: non-zero
+stderr: invalid port value for 'port': "tcp://10.0.0.1:8015" (this can be caused by Kubernetes service links, set enableServiceLinks: false on the pod)
+
+== a non-numeric FLAGD_SYNC_PORT
+exit: non-zero
+stderr: invalid port value for 'sync-port': strconv.ParseUint: parsing "abc": invalid syntax
+
+== a port out of range in the configuration file
+exit: non-zero
+stderr: invalid port value for 'ofrep-port': value out of range
+

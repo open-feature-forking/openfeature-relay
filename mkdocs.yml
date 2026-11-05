@@ -119,6 +119,8 @@ nav:
       - 'TC-005 Upgrade, Then Slim Down': 'test_cases/TC-005-upgrade-then-slim-down.md'
       - 'TC-006 In-Process Providers Behind a Configuration Proxy': 'test_cases/TC-006-in-process-providers-behind-a-configuration-proxy.md'
       - 'TC-007 Change to Release': 'test_cases/TC-007-change-to-release.md'
+      - 'TC-008 Provider Suites Against the Relay Testbed': 'test_cases/TC-008-provider-suites-against-the-relay-testbed.md'
+      - 'TC-009 gRPC Source From an Upstream Flag Sync Endpoint': 'test_cases/TC-009-grpc-source-from-an-upstream-flag-sync-endpoint.md'
     - 'Research: cross-vendor evaluation': 'research/cross-vendor-evaluation.md'
     - 'How it''s built': 'relay/how-its-built.md'
   - 'flagd (reference distribution)':

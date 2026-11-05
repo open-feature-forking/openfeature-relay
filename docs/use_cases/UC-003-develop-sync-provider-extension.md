@@ -7,7 +7,7 @@
 **Primary Actor:** Extension Author  
 **Goal:** Publish a fetcher, a fetch trigger or a streaming sync provider in the Extension Author's own component module, verified against its contract, so that a distribution obtains flags from a kind of source, or reacts to a kind of change signal, that no official component supports.  
 **Trigger:** Extension Author decides to make flagd read flags from a kind of source, or refetch on a kind of change signal, that no official component supports  
-**Status:** Implemented  
+**Status:** Tested  
 
 **Requirements:** [FR-010, FR-045, FR-053, FR-054, FR-055, FR-015, FR-003, FR-008, FR-025, FR-029, FR-049, FR-052, C-001](../requirements.md)
 
@@ -150,7 +150,7 @@ A deleted file is an empty flag configuration: the sync provider delivers `{}`, 
 
 This use case is `Implemented` for the sync provider side: the factory interfaces, the fetching sync provider, the fetch triggers and the contract tests are in the core module, the official sync providers are created through their factories, and `test/sync-example` shows an Extension Author's module. These parts are delivered by the use cases named here, and are accepted gaps of this one:
 
-- Steps 7–8 (publishing, and selecting the extension in a manifest), A5, BR-011 and the scheme clash of BR-002 at build time: UC-001.
+- Steps 7–8 (publishing, and selecting the extension in a manifest): the `test/release` simulation serves the component modules from a module proxy and builds a distribution that selects them by module path and version (`TestPublishedComponentModulesBuildADistribution`); only real tags remain, with UC-012. A5, BR-011 and the scheme clash of BR-002 at build time: UC-001.
 - Telemetry injected generically: the gRPC dial options and the stream recorder stay fields of the `flagd-grpc` factory until UC-006 supplies them through the telemetry provider.
 - Fetch triggers that need an inbound endpoint or a vendor: a webhook, server-sent events and vendor change events (UC-019). Notifying a system of a change is an event sink (UC-020).
 - The official `http` fetcher answers conditionally with the ETag and the body digest only; sources that answer `If-Modified-Since`, such as the Flagsmith environment document, need their own fetcher (UC-019).

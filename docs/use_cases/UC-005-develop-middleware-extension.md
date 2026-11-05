@@ -7,7 +7,7 @@
 **Primary Actor:** Extension Author  
 **Goal:** Publish a middleware in the Extension Author's own component module, verified against the middleware contract, so that a distribution adds cross-cutting behaviour such as authentication, rate limits or binding a credential to a selector to its HTTP service endpoints.  
 **Trigger:** Extension Author decides that flagd needs a cross-cutting behaviour flagd's service endpoints do not provide  
-**Status:** Implemented  
+**Status:** Tested  
 
 **Requirements:** [FR-012, FR-015, FR-047, FR-003, FR-008, FR-018](../requirements.md)
 

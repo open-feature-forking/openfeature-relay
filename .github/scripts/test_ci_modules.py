@@ -101,7 +101,7 @@ class TestTableCoversModules(unittest.TestCase):
                          {d for d, e in TABLE["modules"].items() if e.get("always")})
         self.assertEqual({"contract-external": {"test": "make test-contract-external", "always": True}}, TABLE["pseudo"])
         # every module with a go test recipe leaves a profile, which the coverage job compares with the base (#208)
-        self.assertEqual({d for d, e in TABLE["modules"].items() if e["test"]} - {"test/distributions", "test/upgrade", "test/image"},
+        self.assertEqual({d for d, e in TABLE["modules"].items() if e["test"]} - {"test/distributions", "test/upgrade", "test/image", "test/concurrency"},
                          {d for d, e in TABLE["modules"].items() if e.get("coverage")})
 
     def test_module_recipes_exist_exactly_for_the_entries_with_a_command(self):
@@ -172,7 +172,8 @@ class TestTableCoversModules(unittest.TestCase):
             ["test-core", "test-flagd", "test-flagd-proxy", "test-contrib", "test-builder", "test-distributions",
              "test-upgrade-accepted", "test-image-pins", "test-configformat-example", "test-service-example",
              "test-evaluator-testkit", "test-inprocess-example", "test-sync-example", "test-telemetry-example",
-             "test-eventsink-example", "test-contract-external", "test-middleware-example", "test-release"],
+             "test-eventsink-example", "test-contract-external", "test-middleware-example", "test-release",
+             "test-concurrency"],
             re.findall(r"^TEST_TARGETS \+= (\S+)", MAKEFILE, re.M))
 
 

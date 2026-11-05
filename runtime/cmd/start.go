@@ -3,7 +3,9 @@ package cmd
 import (
 	"fmt"
 	"log"
+	"math"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature-forking/openfeature-relay/runtime"
 	syncbuilder "github.com/open-feature-forking/openfeature-relay/sync/builder"
+	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -248,7 +251,11 @@ var startCmd = &cobra.Command{
 			rtLogger.Fatal(err.Error())
 		}
 		components := withTelemetryConfig(extensions.components)
-		rt, err := fromConfig(logger, Version, runtimeConfig(viper.GetViper(), syncProviders, extensions), components)
+		cfg, err := runtimeConfig(viper.GetViper(), syncProviders, extensions)
+		if err != nil {
+			log.Fatal(err)
+		}
+		rt, err := fromConfig(logger, Version, cfg, components)
 		if err != nil {
 			rtLogger.Fatal(err.Error())
 		}
@@ -302,7 +309,16 @@ func decodeGRPCSettings(raw any, sources []sync.SourceConfig) error {
 
 // runtimeConfig is the runtime.Config that flagd start builds from the settings v holds, with the sources and the
 // extension settings it has read. flagd start reads the global viper through it, LoadConfig a viper of its own.
-func runtimeConfig(v *viper.Viper, syncProviders []sync.SourceConfig, extensions extensionSettings) runtime.Config {
+func runtimeConfig(v *viper.Viper, syncProviders []sync.SourceConfig, extensions extensionSettings) (runtime.Config, error) {
+	ports := map[string]uint16{}
+	for _, name := range []string{managementPortFlagName, ofrepPortFlagName, portFlagName, syncPortFlagName} {
+		port, err := getPort(v, name)
+		if err != nil {
+			return runtime.Config{}, err
+		}
+		ports[name] = port
+	}
+
 	contextValuesToMap := make(map[string]any)
 	for k, value := range v.GetStringMapString(contextValueFlagName) {
 		contextValuesToMap[k] = value
@@ -317,16 +333,16 @@ func runtimeConfig(v *viper.Viper, syncProviders []sync.SourceConfig, extensions
 		EndpointSettings:       extensions.endpointSettings,
 		EventSinksNeedMetrics:  extensions.eventSinks,
 		CORS:                   v.GetStringSlice(corsFlagName),
-		ManagementPort:         v.GetUint16(managementPortFlagName),
-		OfrepServicePort:       v.GetUint16(ofrepPortFlagName),
+		ManagementPort:         ports[managementPortFlagName],
+		OfrepServicePort:       ports[ofrepPortFlagName],
 		OfrepSSEEnabled:        v.GetBool(ofrepSSEEnabledFlagName),
 		OfrepSSEInactivityDel:  v.GetInt(ofrepSSEInactivityFlagName),
 		OfrepSSEPublicURL:      v.GetString(ofrepSSEPublicURLFlagName),
 		ServiceCertPath:        v.GetString(serverCertPathFlagName),
 		ServiceKeyPath:         v.GetString(serverKeyPathFlagName),
-		ServicePort:            v.GetUint16(portFlagName),
+		ServicePort:            ports[portFlagName],
 		ServiceSocketPath:      v.GetString(socketPathFlagName),
-		SyncServicePort:        v.GetUint16(syncPortFlagName),
+		SyncServicePort:        ports[syncPortFlagName],
 		SyncServiceHTTPEnabled: v.GetBool(syncHTTPFlagName),
 		SyncServiceSocketPath:  v.GetString(syncSocketPathFlagName),
 		StreamDeadline:         v.GetDuration(streamDeadlineFlagName),
@@ -341,5 +357,44 @@ func runtimeConfig(v *viper.Viper, syncProviders []sync.SourceConfig, extensions
 		HeaderToContextKeyMappings:   headerToContextKeyMappings,
 		MaxRequestBodyBytes:          v.GetInt64(maxRequestBodyFlagName),
 		MaxRequestHeaderBytes:        v.GetInt64(maxRequestHeaderFlagName),
+	}, nil
+}
+
+// getPort reads the port setting flagName from v. A value that is not an integer within [0, 65535] is an error:
+// viper's GetUint16 turns it into port 0, an ephemeral port.
+func getPort(v *viper.Viper, flagName string) (uint16, error) {
+	val := v.Get(flagName)
+	if val == nil {
+		return 0, nil
 	}
+	if str, ok := val.(string); ok {
+		if strings.HasPrefix(str, "tcp://") {
+			return 0, fmt.Errorf("invalid port value for '%s': %q (this can be caused by Kubernetes service links, set enableServiceLinks: false on the pod)", flagName, str)
+		}
+		p, err := strconv.ParseUint(str, 10, 16)
+		if err != nil {
+			return 0, fmt.Errorf("invalid port value for '%s': %w", flagName, err)
+		}
+		return uint16(p), nil
+	}
+	switch n := val.(type) {
+	case bool:
+		return 0, fmt.Errorf("invalid port value for '%s': must be an integer", flagName)
+	case float32:
+		if math.Trunc(float64(n)) != float64(n) {
+			return 0, fmt.Errorf("invalid port value for '%s': must be an integer", flagName)
+		}
+	case float64:
+		if math.Trunc(n) != n {
+			return 0, fmt.Errorf("invalid port value for '%s': must be an integer", flagName)
+		}
+	}
+	p, err := cast.ToUint16E(val)
+	if err != nil {
+		return 0, fmt.Errorf("invalid port value for '%s': %w", flagName, err)
+	}
+	if i, err := cast.ToInt64E(val); err == nil && (i < 0 || i > math.MaxUint16) {
+		return 0, fmt.Errorf("invalid port value for '%s': value out of range", flagName)
+	}
+	return p, nil
 }

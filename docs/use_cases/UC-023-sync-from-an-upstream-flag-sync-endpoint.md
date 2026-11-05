@@ -8,7 +8,7 @@
 **Secondary Actors:** Upstream Flag Sync Endpoint
 **Goal:** Configure a `grpc` source to survive the outages and misconfigurations of the upstream flag sync endpoint as the flagd providers do, with nothing changing for sources that do not opt in.
 **Trigger:** Operator wants a `grpc` source to reconnect on the provider's schedule, end flagd on a fatal status code, recycle its stream, keep its connection alive, send its selector as a header or report readiness on its first payload
-**Status:** Implemented
+**Status:** Tested
 
 **Requirements:** [FR-058, FR-059, FR-060, FR-061, FR-062, NFR-016](../requirements.md)
 

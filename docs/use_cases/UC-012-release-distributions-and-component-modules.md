@@ -177,5 +177,5 @@ This use case is `Implemented` as a dry run: `.github/scripts/release-dry-run.sh
 | flagd-full: the FIPS image for both platforms, the provenance and SBOM attestations, and its rendered published manifest (steps 9-10, BR-004, BR-009) | after the incubator |
 | Wiring the standard distributions into the release workflow, creating tags and pushing images (steps 5, 9, 10, 11, A3, A5, A6, BR-008 in the workflow) | after the incubator |
 | Registering component modules with release-please, and the release pull request: proposed versions, changelogs, wrong-version corrections (steps 1-4, A1, BR-002, BR-010, BR-011) | after the incubator |
-| Building against real released component versions (steps 6-7, BR-004, BR-005, A2); the dry run renders manifests at the placeholder `v0.0.0-dryrun` and builds from the tree | after the incubator |
+| Building against real released component versions (steps 6-7, BR-004, BR-005, A2); the dry run renders manifests at the placeholder `v0.0.0-dryrun` and builds from the tree. `test/release` builds a manifest with no replaces against a `file://` proxy of the tree at `v0.0.1-test`, which leaves only real tags | after the incubator |
 | Signing images with cosign (BR-009); provenance and software bill of materials attestations are checked | after the incubator |

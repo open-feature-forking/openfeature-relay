@@ -7,7 +7,7 @@
 **Primary Actor:** Extension Author  
 **Goal:** Publish an evaluator in the Extension Author's own component module, verified against the evaluator contract, so that a distribution evaluates flags with another vendor's evaluation logic, such as Flagsmith's or GO Feature Flag's, from the documents of its paired configuration format.  
 **Trigger:** Extension Author needs flags evaluated in a way the JsonLogic evaluator does not support  
-**Status:** Implemented  
+**Status:** Tested  
 
 **Requirements:** [FR-014, FR-015, FR-018, FR-027, FR-033, FR-035, FR-040, FR-047, FR-048, FR-003, FR-008, NFR-005](../requirements.md)
 

@@ -7,7 +7,7 @@
 **Primary Actor:** Extension Author  
 **Goal:** Publish a service endpoint in the Extension Author's own component module, verified against the service endpoint contract, so that a distribution serves flag evaluations or flag configurations to clients over a protocol no official service endpoint supports.  
 **Trigger:** Extension Author decides to make flagd serve flags over a protocol that no official service endpoint supports  
-**Status:** Implemented  
+**Status:** Tested  
 
 **Requirements:** [FR-011, FR-015, FR-016, FR-017, FR-018, FR-025, FR-029, FR-035, FR-037, FR-038, FR-039, FR-044, FR-046, FR-047, FR-003, FR-008, NFR-013, C-001](../requirements.md)
 

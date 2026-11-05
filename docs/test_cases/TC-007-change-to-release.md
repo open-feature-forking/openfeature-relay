@@ -31,12 +31,12 @@
 | 7 | Compare benchmarks | GitHub Actions runs the evaluator benchmarks on the change and on the pull request's base and compares allocs/op | `.github/scripts/run-benchmarks.sh` | [UC-013](../use_cases/UC-013-verify-change-against-distributions.md) | `benchmark` job (pull requests only) with `compare-allocs.py`; its logic in `test_compare_allocs.py` (`lint` job) |
 | 8 | Verify checks reported | Each check shows its result on the pull request, and all pass | - | - | job status per check; `test_workflows.py` (`test_jobs`, `test_gated_jobs`) pins the job list and its gating |
 | 9 | Merge release pull request | The Maintainer reviews the proposed module versions and changelogs and merges the release pull request | `release-please-config.json` | [UC-012](../use_cases/UC-012-release-distributions-and-component-modules.md) | gap |
-| 10 | Tag modules | GitHub Actions tags each released module and creates its GitHub release; each tag resolves as a version of its module | `sync/file/v0.1.0` | [UC-012](../use_cases/UC-012-release-distributions-and-component-modules.md) | `TestModulePathsMatchTagDirectories`, `TestModulePathMismatchNamesTheModule` (`test/release`, `test` job) check the tag shape only; tagging is a gap |
+| 10 | Tag modules | GitHub Actions tags each released module and creates its GitHub release; each tag resolves as a version of its module | `sync/file/v0.1.0` | [UC-012](../use_cases/UC-012-release-distributions-and-component-modules.md) | `TestModulePathsMatchTagDirectories`, `TestModulePathMismatchNamesTheModule` (`test/release`, `test` job) check the tag shape; `TestPublishedComponentModulesBuildADistribution`, `TestUnresolvableModulesAreReported` resolve a simulated release (`test/release`); pushing a real tag is a gap |
 | 11 | Build release artifacts | GitHub Actions builds every standard distribution, standard and FIPS, over the platform matrix, checks FIPS refuses to run with FIPS mode off, and adds manifest, archives and SBOM | `GODEBUG=fips140=off` | [UC-012](../use_cases/UC-012-release-distributions-and-component-modules.md) | `release-dry-run` job (`release-dry-run.sh`, `release-dry-run-distributions.sh`; gated by path, `FULL_CI` or manual run); `TestRenderedManifestHasNoReplaces`, `TestRenderedManifestNamesAModuleOutsideTheRepository` (`test/release`); partial, see Gaps |
 | 12 | Publish images | GitHub Actions builds the standard and FIPS images for `linux/amd64` and `linux/arm64`, pushes and signs them | `ghcr.io/open-feature/flagd` | [UC-012](../use_cases/UC-012-release-distributions-and-component-modules.md) | dry run builds the flagd and flagd-minimal images; `image-test` in the `upgrade-test` job (gated); push and signing are a gap |
 | 13 | Verify release visible | The flagd release carries the manifests, binaries and images of all six standard distributions | - | - | gap |
 
-Steps 1–8 are covered. The FIPS build of step 3 runs in the `fips` job, which runs only with `FULL_CI` or a manual run, not on every pull request (UC-013 gap table).
+Steps 1–8 are covered on every pull request except the FIPS build of step 3 (see Gaps).
 
 ## Validation
 
@@ -54,8 +54,9 @@ Steps 1–8 are covered. The FIPS build of step 3 runs in the `fips` job, which 
 
 | Step | Gap |
 |------|-----|
+| 3 | The FIPS build runs in the `fips` job only with `FULL_CI` or a manual run, not on every pull request (UC-013 gap table); #212 runs it on every Go pull request. |
 | 9 | Component modules are not registered with release-please and its workflow runs only in `open-feature/flagd`; no release pull request exists in this repository. |
-| 10 | Nothing is tagged; the tests check that module paths match tag directories, not that a real tag resolves. |
+| 10 | Nothing is tagged; `TestPublishedComponentModulesBuildADistribution` (`test/release`) resolves the modules from a simulated release with a `file://` proxy, so a real tag resolving remains the gap. |
 | 11 | The dry run builds every archive of flagd, flagd-proxy and flagd-minimal, but only one `linux/amd64` archive of the other four distributions and none of their FIPS archives, from the tree rather than released versions; nothing is attached to a release. |
 | 12 | No image is pushed or signed; the dry run builds no image of the four other distributions and no FIPS image of flagd-full. |
 | 13 | No release workflow produces the flagd release. |

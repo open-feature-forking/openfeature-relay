@@ -117,6 +117,9 @@
       "test": "make test-module MODULE=test/configformat-example/distribution",
       "coverage": true
     },
+    "test/concurrency": {
+      "test": "make test-module MODULE=test/concurrency"
+    },
     "test/distributions": {
       "test": "make test-module MODULE=test/distributions"
     },

@@ -15,6 +15,11 @@ mode="${1:-standard}"
 out="${TESTBED_OUT:-$(mktemp -d)}"
 mkdir -p "${out}"
 
+# Scenarios switched on for both images, on top of the tags test/integration excludes (see TESTBED_ENABLE_TAGS there).
+# Each is a flagd behaviour the relay testbed serves; one tag is added per change, after a run of both suites with it.
+enabled_tags=(@contextEnrichment @sync-port @sync-payload)
+enabled="$(IFS=,; echo "${enabled_tags[*]-}")"
+
 run='TestRPC|TestInProcess'
 env_extra=()
 if [ "${mode}" = outages ]; then
@@ -28,7 +33,7 @@ for side in launchpad relay; do
     relay) image=flagd-testbed:local ;;
   esac
   # a failing scenario is compared, not fatal here: the suites may fail the same scenarios on both images
-  (cd test/integration && env GOWORK=off FLAGD_TESTBED_IMAGE="${image}" ${env_extra[@]+"${env_extra[@]}"} go test -count=1 -json -timeout 60m -run "^(${run})\$" .) \
+  (cd test/integration && env GOWORK=off FLAGD_TESTBED_IMAGE="${image}" TESTBED_ENABLE_TAGS="${enabled}" ${env_extra[@]+"${env_extra[@]}"} go test -count=1 -json -timeout 60m -run "^(${run})\$" .) \
     >"${out}/${side}.json" || echo "::notice::the ${side} run reported failures; the pass sets decide"
 done
 

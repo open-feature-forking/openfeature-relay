@@ -103,6 +103,8 @@ type startConfigCase struct {
 	env  map[string]string
 	// files are written into the case's home directory before the run, keyed by their path relative to it.
 	files map[string]string
+	// fails marks a case where flagd start exits non-zero before it builds the runtime, with a message that contains this.
+	fails string
 }
 
 // The values differ per source and per setting, so that a setting read from the wrong flag, the wrong source or not
@@ -231,6 +233,26 @@ debug: true
 		env:   map[string]string{"FLAGD_PORT": "14013", "FLAGD_MANAGEMENT_PORT": "14014"},
 		files: map[string]string{"flagd.yaml": "port: 15013\nmanagement-port: 15014\nsync-port: 15015\n"},
 	},
+	// Upstream flagd 3fa8064e (#2107): a port setting that is no integer in [0, 65535] stops flagd start, where it
+	// used to become port 0. flagd-full follows flagd.
+	{
+		name:  "a Kubernetes service link as FLAGD_PORT",
+		args:  []string{"start"},
+		env:   map[string]string{"FLAGD_PORT": "tcp://10.0.0.1:8015"},
+		fails: `invalid port value for 'port': "tcp://10.0.0.1:8015" (this can be caused by Kubernetes service links, set enableServiceLinks: false on the pod)`,
+	},
+	{
+		name:  "a non-numeric FLAGD_SYNC_PORT",
+		args:  []string{"start"},
+		env:   map[string]string{"FLAGD_SYNC_PORT": "abc"},
+		fails: "invalid port value for 'sync-port'",
+	},
+	{
+		name:  "a port out of range in the configuration file",
+		args:  []string{"start", "--config", "$HOME/flagd.yaml"},
+		files: map[string]string{"flagd.yaml": "ofrep-port: 70000\n"},
+		fails: "invalid port value for 'ofrep-port'",
+	},
 }
 
 // runStartConfigCase runs the helper with only the case's environment and an empty home directory, and returns what
@@ -262,6 +284,19 @@ func runStartConfigCase(t *testing.T, c startConfigCase) string {
 	}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
+	if c.fails != "" {
+		var exitErr *exec.ExitError
+		require.ErrorAs(t, cmd.Run(), &exitErr, "case %q must stop flagd start: %s", c.name, stderr.String())
+		require.NotZero(t, exitErr.ExitCode())
+		require.NoFileExists(t, out, "case %q reached the runtime", c.name)
+		for _, line := range strings.Split(stderr.String(), "\n") {
+			if i := strings.Index(line, "invalid port value"); i >= 0 {
+				require.Contains(t, line[i:], c.fails)
+				return fmt.Sprintf("exit: non-zero\nstderr: %s\n", line[i:])
+			}
+		}
+		require.FailNow(t, "no port error on stderr", stderr.String())
+	}
 	require.NoError(t, cmd.Run(), "start command of case %q: %s", c.name, stderr.String())
 
 	var b strings.Builder

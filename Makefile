@@ -103,6 +103,7 @@ TEST_TARGETS += test-eventsink-example
 TEST_TARGETS += test-contract-external
 TEST_TARGETS += test-middleware-example
 TEST_TARGETS += test-release
+TEST_TARGETS += test-concurrency
 test: $(TEST_TARGETS)
 test-core: test-modules
 # The loops below and CI's matrix (.github/scripts/ci-modules.json) run the same recipe, test-module.
@@ -132,6 +133,8 @@ else ifeq ($(TEST_MODULE),flagd-proxy)
 	go test -race -covermode=atomic -cover -short ./flagd-proxy/... -coverprofile=flagd-proxy-coverage.out
 else ifneq ($(filter $(TEST_MODULE),$(PLAIN_TEST_MODULES)),)
 	go test -race -covermode=atomic -cover -short -count=1 ./$(TEST_MODULE)/... -coverprofile=$(subst /,-,$(TEST_MODULE))-coverage.out
+else ifeq ($(TEST_MODULE),test/concurrency)
+	go test -race -count=1 ./test/concurrency/...
 else ifeq ($(TEST_MODULE),test/distributions)
 	cd test/distributions && go test -count=1 -timeout 30m ./...
 else ifeq ($(TEST_MODULE),test/upgrade)
@@ -149,7 +152,7 @@ test-contract-external:
 	./test/contract-external.sh
 test-middleware-example:
 	@rc=0; for m in test/middleware-example test/middleware-example/distribution; do $(MAKE) --no-print-directory test-module MODULE=$$m || rc=1; done; exit $$rc
-# The release tests read the module paths of the repository, not a binary.
+# The release tests read the module paths of the repository and build a distribution from a file:// module proxy of it.
 test-release:
 	@$(MAKE) --no-print-directory test-module MODULE=test/release
 test-eventsink-example:
@@ -177,6 +180,9 @@ test-inprocess-example:
 # The Builder is a tool of its own: it imports no relay module (UC-001 Q1).
 test-builder:
 	@$(MAKE) --no-print-directory test-module MODULE=builder
+# The concurrency module's Docker-free tests; its load tests run only when RELAY_LOAD is set (NFR-017).
+test-concurrency:
+	go test -race -count=1 ./test/concurrency/...
 test-distributions:
 	cd test/distributions && go test -count=1 -timeout 30m ./...
 test-flagd-proxy:

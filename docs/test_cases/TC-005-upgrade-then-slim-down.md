@@ -14,7 +14,7 @@
 
 ## Preconditions
 
-- The baseline flagd is today's flagd at commit `b23f82ec`, built as the image `flagd-upgrade-baseline` by `test/upgrade`.
+- The baseline flagd is today's flagd at commit `90255568`, built as the image `flagd-upgrade-baseline` by `test/upgrade`.
 - flagd-full built from this repository (`flagd-upgrade-candidate`, from `flagd/build.Dockerfile`) stands in for the flagd-full release, whose publication UC-012 delivers.
 - The flag configuration `/data/flags.json` with the flags `bool-flag`, `string-flag`, `int-flag`, `float-flag`, `object-flag` and `disabled-flag` is written by the test (`test/upgrade`, `test/distributions/parity_test.go`).
 - The standard distribution manifests exist under `distributions/` and are built by the Builder in `test/distributions`.

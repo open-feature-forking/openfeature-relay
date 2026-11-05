@@ -7,7 +7,7 @@
 **Primary Actor:** Extension Author  
 **Goal:** Publish an event sink in the Extension Author's own component module, verified against the event sink contract, so that a distribution delivers configuration change, evaluation or tracking events to an external system flagd does not support, such as a vendor's analytics API, GO Feature Flag's exporters or a change notification channel.  
 **Trigger:** Extension Author needs flagd's events delivered to a system no official event sink supports  
-**Status:** Implemented  
+**Status:** Tested  
 
 **Requirements:** [FR-036, FR-015, FR-037, FR-038, FR-039, FR-003, FR-008, NFR-013](../requirements.md)
 

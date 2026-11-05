@@ -199,9 +199,9 @@ func TestRPC(t *testing.T) {
 	}
 
 	// Run tests with RPC-specific tags - exclude connection/event issues we won't tackle
-	tags := rpcTags
+	tags := suiteTags(rpcTags)
 	if os.Getenv("TESTBED_RPC_OUTAGES") == "true" {
-		tags = rpcOutageTags
+		tags = suiteTags(rpcOutageTags)
 	}
 
 	if err := runner.RunGherkinTestsWithSubtests(t, featurePaths, tags); err != nil {
@@ -237,7 +237,7 @@ func TestInProcess(t *testing.T) {
 	// not the local flagd evaluator code. The goal is to verify the sync.proto interface,
 	// not to fully test the go in-process provider (that happens in go-sdk-contrib).
 	// Many tags are excluded because they require a more complex testbed than what's built here.
-	tags := inProcessTags
+	tags := suiteTags(inProcessTags)
 
 	if err := runner.RunGherkinTestsWithSubtests(t, featurePaths, tags); err != nil {
 		t.Fatalf("Gherkin tests failed: %v", err)
