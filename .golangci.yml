@@ -91,6 +91,7 @@ linters:
             - "**/service/flag-sync/**"
             - "**/service/event-collector/**"
             - "**/runtime/**"
+            - "!**/runtime/internal/officialset/**"
           deny:
             - pkg: go.opentelemetry.io
               desc: record spans and metrics through the injected telemetry provider
@@ -102,10 +103,19 @@ linters:
               desc: only the distribution's command selects a telemetry provider
         # The runtime serves the components it is given and imports none of them (UC-001, Q6 and Q15): flagd-full's list is
         # the flagd/components package. The module boundaries cover the packages transitively.
+        # runtime/internal/officialset assembles flagd-full's components for the runtime's tests, so it is exempt from the two
+        # rules above and below; only test files may import it.
+        officialset-for-tests:
+          files:
+            - "!$test"
+          deny:
+            - pkg: github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset
+              desc: officialset holds components for the runtime's tests; production code receives its components
         runtime-holds-no-component:
           files:
             - "!$test"
             - "**/runtime/**"
+            - "!**/runtime/internal/officialset/**"
           deny:
             - pkg: github.com/open-feature-forking/openfeature-relay/sync/file
               desc: the runtime holds no sync provider; the distribution passes Components.Sync

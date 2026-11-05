@@ -15,7 +15,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/eventsink"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/runtime"
-	"github.com/open-feature/flagd/flagd/components"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
 	"github.com/stretchr/testify/require"
 )
 
@@ -44,7 +44,7 @@ func TestExtensionStartHelper(_ *testing.T) {
 		os.Exit(0)
 		return nil, nil
 	}
-	c := components.Components()
+	c := officialset.Components()
 	c.EventSinkFactories = []eventsink.Factory{sinkFactory{"webhook"}}
 	c.MiddlewareFactories = nil
 	rootCmd.SetArgs(args)

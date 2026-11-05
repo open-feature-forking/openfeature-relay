@@ -8,7 +8,7 @@ package syncmetrics_test
 import (
 	"context"
 	"fmt"
-	flagdcomponents "github.com/open-feature/flagd/flagd/components"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -136,7 +136,7 @@ func TestSyncMetricsCharacterization(t *testing.T) {
 			{URI: addr, Provider: "grpc"},
 			{URI: addr, Provider: "grpc", Selector: "source=a"},
 		},
-	}, withOpenTelemetry(flagdcomponents.Components()))
+	}, withOpenTelemetry(officialset.Components()))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())

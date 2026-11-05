@@ -35,7 +35,5 @@ service endpoints
     needs: router=true format=""
   flag-sync
     needs: router=false format=""
-  event-collector
-    needs: router=false format=""
 metrics handler override: false
 telemetry provider: true

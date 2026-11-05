@@ -8,7 +8,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	flagdcomponents "github.com/open-feature/flagd/flagd/components"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
 	"net"
 	"net/http"
 	"os"
@@ -38,7 +38,7 @@ func TestMiddlewareSeesH2CRequests(t *testing.T) {
 			if useTLS {
 				cfg.ServiceCertPath, cfg.ServiceKeyPath = certDir+"server-cert.pem", certDir+"server-key.pem"
 			}
-			components := flagdcomponents.Components()
+			components := officialset.Components()
 			components.Middleware = []middleware.Configured{{Factory: keyRequiredFactory{seen: &seen}}}
 			startRuntimeWith(t, cfg, components)
 

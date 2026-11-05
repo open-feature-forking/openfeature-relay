@@ -58,7 +58,9 @@ test/eventsink-example:./...:opentelemetry|google.golang.org/grpc|connectrpc|k8s
 # Q6, Q15: the runtime holds no component. Its package graph, which go list -deps reads without the tests, contains no
 # sync provider module, evaluator, configuration format, telemetry provider or SDK, or service endpoint package; the
 # distribution's components package passes them in.
-runtime:./...:go.opentelemetry.io|prometheus|openfeature-relay/(sync/(file|http|flagd-grpc|openfeature-operator|gcs|azblob|s3)|evaluator/|configformat/|telemetry/|service/(flag-evaluation|ofrep|flag-sync|event-collector))
+# The packages are listed, not ./..., to leave out internal/officialset, which holds components for the runtime's tests: a new
+# package of the runtime has to be added here.
+runtime:. ./cmd:go.opentelemetry.io|prometheus|openfeature-relay/(sync/(file|http|flagd-grpc|openfeature-operator|gcs|azblob|s3)|evaluator/|configformat/|telemetry/|service/(flag-evaluation|ofrep|flag-sync|event-collector))
 # UC-001 Q7: the service endpoints share their helpers through the transport module and know neither the runtime
 # nor one another.
 service/transport:./...:go.opentelemetry.io|prometheus/client_golang|otelconnect|openfeature-relay/telemetry/|openfeature-relay/(runtime|service/(flag-evaluation|ofrep|flag-sync))
