@@ -348,3 +348,7 @@ K2 gains a row per flag: a `tools/ci/internal/<other>/x.go` change sets nothing 
 **Planner defaults (the lead can overrule):** the names `tools/ci` and `relay-ci`; `GOWORK=off` builds; `textio` and
 `ghactions` as the only places for reads and workflow commands; flag names and every kept output line unchanged; the
 shadow window of 20 PRs or 7 days.
+
+## Decisions of the project lead
+
+2026-11-06: approved with every recommended answer, Q1 to Q8.
