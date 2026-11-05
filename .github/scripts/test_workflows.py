@@ -59,11 +59,18 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIn("test", jobs)
 
     def test_paths_ignore_docs_on_push_and_pull_request(self):
-        block = '    paths-ignore:\n      - "README.md"\n      - "docs/**"\n'
+        block = '    paths-ignore:\n      - "**/*.md"\n      - "docs/**"\n      - ".claude/**"\n'
         self.assertEqual(2, self.text.count(block))
         head = self.text.split("\njobs:\n", 1)[0]
         self.assertIn("  push:\n    branches:", head)
         self.assertIn("  pull_request:\n    branches:", head)
+
+    def test_concurrency_group(self):
+        """QD: a superseded pull request run is cancelled; a run on main never is."""
+        head = self.text.split("\njobs:\n", 1)[0]
+        self.assertIn(
+            "concurrency:\n  group: build-${{ github.ref }}\n"
+            "  cancel-in-progress: ${{ github.event_name == 'pull_request' }}\n", head)
 
     def test_nothing_is_pushed_or_logged_in(self):
         self.assertNotRegex(self.text, r"push:\s*true")
@@ -163,6 +170,44 @@ class SpecLintWorkflow(unittest.TestCase):
         for pattern in ("*use-case-spec/scripts/validate_use_case.py", "*test-case/scripts/bpmn_paths.py"):
             with self.subTest(pattern=pattern):
                 self.assertEqual(1, len(list(skills.glob(pattern))))
+
+
+class DocsCheckWorkflow(unittest.TestCase):
+    """QD: markdown-only changes skip the build and run docs-check and the upgrade-guide test instead."""
+
+    @classmethod
+    def setUpClass(cls):
+        text = (ROOT / ".github" / "workflows" / "docs-check.yaml").read_text(encoding="utf-8")
+        cls.text = text.replace("\r\n", "\n")
+
+    def test_paths(self):
+        paths = '    paths:\n      - "**/*.md"\n      - "docs/**"\n      - "!.claude/**"\n      - "!CLAUDE.md"\n'
+        self.assertEqual(2, self.text.count(paths))
+        head = self.text.split("\njobs:\n", 1)[0]
+        self.assertIn("  push:\n    branches:\n      - main\n" + paths, head)
+        self.assertIn("  pull_request:\n    branches:\n      - main\n" + paths, head)
+
+    def test_jobs(self):
+        names = re.findall(r"^  ([a-z][a-z-]*):\n", self.text.split("\njobs:\n", 1)[1], re.M)
+        self.assertEqual(["docs-check", "upgrade-guide"], names)
+
+    def test_commands(self):
+        self.assertIn("      - run: make generate-docs\n", self.text)
+        self.assertIn("      - run: make test-upgrade-accepted\n", self.text)
+
+
+class NoEmbeddedMarkdown(unittest.TestCase):
+    """R7: a go:embed of a markdown file would be read by a build that markdown-only changes skip."""
+
+    def test_no_go_embed_matches_markdown(self):
+        found = []
+        for path in ROOT.rglob("*.go"):
+            if any(part in (".git", "node_modules", "worktrees") for part in path.relative_to(ROOT).parts):
+                continue
+            for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+                if re.match(r"\s*//go:embed\b", line) and re.search(r"\.md\b", line):
+                    found.append(f"{path.relative_to(ROOT)}: {line.strip()}")
+        self.assertEqual([], found)
 
 
 class BuildDockerfiles(unittest.TestCase):
