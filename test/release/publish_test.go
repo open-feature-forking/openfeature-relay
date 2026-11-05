@@ -25,7 +25,7 @@ import (
 // <module directory>/<testVersion> (UC-012 BR-001); nothing is tagged, the module proxy below serves what the tag would.
 const testVersion = "v0.0.1-test"
 
-// flagdModule is the module of the flagd binary, which keeps the upstream module path. no tag of this repository resolves to it,
+// flagdModule is the module of the flagd binary, which keeps the upstream module path. No tag of this repository resolves to it,
 // so no module may require it but the binary itself (see TestRuntimeDoesNotRequireTheFlagdModule).
 const flagdModule = "github.com/open-feature/flagd/flagd"
 
@@ -162,14 +162,8 @@ func publish(t *testing.T, lists bool, mutate map[string]func(gomod string) stri
 	for dir, src := range componentDirs(t) {
 		dirs[dir] = src
 	}
-	flagd, err := os.ReadFile(filepath.Join(root(t), "flagd", "go.mod"))
-	require.NoError(t, err)
-	dirs["flagd"] = string(flagd)
 	for dir, src := range dirs {
 		module := path.Join(repositoryPath, dir)
-		if dir == "flagd" {
-			module = flagdModule
-		}
 		gomod := releasedGoMod(src)
 		if f := mutate[dir]; f != nil {
 			gomod = f(gomod)
@@ -258,6 +252,9 @@ func thirdPartyProxy(t *testing.T, download string) string {
 	view := t.TempDir()
 	link := func(from, to string) {
 		if err := os.Symlink(from, to); err != nil {
+			if os.Getenv("CI") != "" {
+				t.Fatalf("no symbolic links to build a view of the module cache: %v", err)
+			}
 			t.Skipf("no symbolic links to build a view of the module cache: %v", err)
 		}
 	}
