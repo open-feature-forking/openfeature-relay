@@ -111,6 +111,9 @@
     "test/configformat-example/distribution": {
       "test": "make test-module MODULE=test/configformat-example/distribution"
     },
+    "test/concurrency": {
+      "test": "make test-module MODULE=test/concurrency"
+    },
     "test/distributions": {
       "test": "make test-module MODULE=test/distributions"
     },

@@ -163,7 +163,7 @@ func startFlagd(t *testing.T) *flagdProc {
 	p.cmd.Stderr = p.stderr
 	require.NoError(t, p.cmd.Start())
 	go func() { p.done <- p.cmd.Wait() }()
-	t.Cleanup(func() { p.stop(t) })
+	t.Cleanup(func() { _ = p.stop(t) }) // the tests that care about the exit read it from stop themselves
 
 	require.Eventually(t, func() bool {
 		resp, err := http.Get(p.ReadyURL()) //nolint:noctx // a local probe
