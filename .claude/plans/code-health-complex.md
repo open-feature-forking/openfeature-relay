@@ -19,7 +19,7 @@ findings (`code-health-complex-opposer.md`, 0 blockers, 4 major, 6 minor) and th
 | m9 equal allocs/op is a review rule | Said so in the Gates table |
 | m10 escape diff is noisy | Criterion is no new heap allocation site on the request path, judged by the reviewer |
 
-Q1 (a) and Q2 (a) are decided (see the end).
+**Final.** Q1 (a), Q2 (a) and Q3 (a) are decided (see the end); no question is open.
 
 ## Scope
 
@@ -319,10 +319,6 @@ PR are compared in CI (~10 s more per run).
 pin single-fault texts exactly, and pin that both texts of a two-fault input still occur. A deterministic order can
 follow as its own PR.
 
-## Open question
-
 **Q3. Hold #239 until A2 has merged?** #239 changes both evaluation paths, which CI does not measure today (the
-router's multi-route path has no benchmark, the engine is not in the set). (a) #239 waits for A2, merges `main` in
-and merges on a green allocs comparison; (b) #239 merges now with a local before/after of the engine benchmark in its
-description, and the router's multi-route path stays unmeasured for that change. **Default: (a)**; A2 is tests and
-benchmarks only, so the wait is short.
+router's multi-route path has no benchmark, the engine is not in the set). **Decided (a):** #239 waits for A2, then
+merges `main` in and merges on a green allocs comparison.
