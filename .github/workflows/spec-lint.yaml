@@ -1,0 +1,46 @@
+name: spec-lint
+
+# Runs the vendored aiup-core spec lint on the specification files. Fails on errors only.
+# build.yaml ignores these paths, so this workflow is their only gate.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/vision.md"
+      - "docs/requirements.md"
+      - "docs/glossary.md"
+      - "docs/use_cases.puml"
+      - "docs/use_cases/**"
+      - "docs/test_cases/**"
+      - "docs/.spec-lint-baseline.json"
+      - ".github/scripts/aiup/**"
+      - ".github/workflows/spec-lint.yaml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "docs/vision.md"
+      - "docs/requirements.md"
+      - "docs/glossary.md"
+      - "docs/use_cases.puml"
+      - "docs/use_cases/**"
+      - "docs/test_cases/**"
+      - "docs/.spec-lint-baseline.json"
+      - ".github/scripts/aiup/**"
+      - ".github/workflows/spec-lint.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  spec-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - name: Self-test
+        run: python3 -I .github/scripts/aiup/spec-review/scripts/spec_lint.py --self-test
+      - name: Lint the specification
+        run: python3 -I .github/scripts/aiup/spec-review/scripts/spec_lint.py --docs docs
