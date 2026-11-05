@@ -29,7 +29,7 @@ concurrency:
   group: build-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# The default token reads. A job that needs more asks for it at job level (coverage, docker-local).
+# The default token reads. A job that needs more asks for it at job level (docker-local).
 permissions:
   contents: read
 
@@ -204,8 +204,7 @@ jobs:
         env:
           # test/contract-external.sh fetches core at this commit; a pull request's merge commit is on no branch
           CONTRACT_EXTERNAL_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
-      # One profile per module (<module>-coverage.out, written by make test-module). The hosted upload that stood here needed
-      # a token this repository does not have and failed on every run. The coverage job compares these with the base.
+      # One profile per module (<module>-coverage.out, written by make test-module), kept for a coverage tracker.
       - name: Keep the coverage profiles
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

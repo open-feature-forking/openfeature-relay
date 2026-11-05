@@ -211,6 +211,11 @@ class BuildWorkflow(unittest.TestCase):
                 self.assertIn("RELAY_LOAD_LOGS:", self.job(name))
                 self.assertIn("if: failure()", self.job(name))
 
+    def test_markdown_checks_push_only_on_main_and_the_inert_pages_workflow_is_gone(self):
+        text = (ROOT / ".github" / "workflows" / "markdown-checks.yaml").read_text(encoding="utf-8").replace("\r\n", "\n")
+        self.assertIn("  push:\n    branches:\n      - main\n    paths:\n", text)
+        self.assertFalse((ROOT / ".github" / "workflows" / "dev-benches-page.yml").exists())
+
     def test_load_image_pinned(self):
         """W: the k6 image is pulled by digest; no workflow or script names a grafana/k6 tag without one."""
         makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
@@ -335,6 +340,7 @@ class BuildWorkflow(unittest.TestCase):
     def test_coverage_profiles_are_kept(self):
         """#208: the profiles are an artifact for a coverage tracker; the comparison with the base was dropped by the
         project lead, and the Codecov step that failed on every run for want of a token is gone."""
+        self.assertNotIn("coverage job", self.text)
         self.assertNotIn("codecov", self.text.lower())
         test = self.job("test")
         self.assertIn('name: coverage-profiles' + chr(10) + '          path: "*-coverage.out"', test)
@@ -419,8 +425,7 @@ class WorkflowPermissions(unittest.TestCase):
 
     def test_the_top_level_block_only_reads_unless_a_deploy_workflow_says_why(self):
         # the Pages deploy workflows are upstream flagd's, gated to open-feature/flagd
-        deploy = {"dev-benches-page.yml": {"contents": "read", "pages": "write", "id-token": "write"},
-                  "docs.yaml": {"contents": "read"}}
+        deploy = {"docs.yaml": {"contents": "read"}}
         for name, doc in self.docs.items():
             with self.subTest(workflow=name):
                 want = {"lint-pr.yaml": {"pull-requests": "write"}}.get(name) or deploy.get(name) or {"contents": "read"}
