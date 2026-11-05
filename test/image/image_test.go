@@ -204,6 +204,16 @@ func TestReferenceDockerfilePins(t *testing.T) {
 	require.NotContains(t, string(data), "ghcr.io/open-feature")
 }
 
+// TestTestbedDockerfilePins (step 17): every FROM of the testbed image, which is published, carries a digest.
+func TestTestbedDockerfilePins(t *testing.T) {
+	root := repoRoot(t)
+	from := fromLines(t, filepath.Join(root, "distributions", "flagd-testbed", "Dockerfile"))
+	require.Len(t, from, 3)
+	for _, line := range from {
+		require.Regexp(t, regexp.MustCompile(`@sha256:[0-9a-f]{64}( |$)`), line, "pinned by digest")
+	}
+}
+
 // TestReferenceImageMultiPlatform (UC-002 main 2-6, BR-001, A1): the image's index lists every target platform, the
 // default ones and a further one.
 func TestReferenceImageMultiPlatform(t *testing.T) {
