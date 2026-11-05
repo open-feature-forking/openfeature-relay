@@ -16,6 +16,10 @@ FLAGD_MODULE_DIRS := ./flagd ./runtime ./service/transport ./service/flag-evalua
 # test-fips.
 CONTRIB_MODULE_DIRS := ./contrib/flagsmith/engine ./contrib/flagsmith/middleware ./contrib/flagsmith/sync
 
+# The testbed's modules (UC-022): runtime pieces of the test harness. Tested and pinned like the contrib modules, and in
+# no standard distribution.
+TESTBED_MODULE_DIRS := ./testbed/source
+
 # The FIPS variant builds against the CMVP-certified Go Cryptographic Module
 # v1.0.0 (certificate #5247). The literal version is required; the
 # "certified"/"inprocess" aliases vary by toolchain. The fips140 tag makes the
@@ -106,7 +110,7 @@ test-modules:
 		go test -race -covermode=atomic -cover -short $$m/... -coverprofile=$$(echo $$m | sed 's#^\./##; s#/#-#g')-coverage.out || rc=1; \
 	done; exit $$rc
 test-contrib:
-	go test -race -covermode=atomic -cover -short $(addsuffix /...,$(CONTRIB_MODULE_DIRS))
+	go test -race -covermode=atomic -cover -short $(addsuffix /...,$(CONTRIB_MODULE_DIRS) $(TESTBED_MODULE_DIRS))
 test-flagd:
 	go test -race -covermode=atomic -cover -short $(addsuffix /...,$(FLAGD_MODULE_DIRS)) -coverprofile=flagd-coverage.out
 test-sync-example:
@@ -222,7 +226,7 @@ lint-fix:
 # The packages of the library modules and of flagd-full's modules must not change unnoticed, so that a move cannot drop a package from the test run.
 .PHONY: check-package-coverage
 check-package-coverage:
-	@for m in $(GO_LIB_MODULE_DIRS) $(FLAGD_MODULE_DIRS) $(CONTRIB_MODULE_DIRS); do (cd $$m && go list ./...) || exit 1; done | LC_ALL=C sort > .go-packages.tmp; \
+	@for m in $(GO_LIB_MODULE_DIRS) $(FLAGD_MODULE_DIRS) $(CONTRIB_MODULE_DIRS) $(TESTBED_MODULE_DIRS); do (cd $$m && go list ./...) || exit 1; done | LC_ALL=C sort > .go-packages.tmp; \
 	tr -d '\r' < testdata/go-packages.txt > .go-packages.want; \
 	if ! diff -u .go-packages.want .go-packages.tmp; then rm -f .go-packages.tmp .go-packages.want; \
 		echo "the packages of the library modules differ from testdata/go-packages.txt"; exit 1; fi; \
