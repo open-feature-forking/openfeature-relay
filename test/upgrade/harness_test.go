@@ -117,13 +117,28 @@ func buildPair(t *testing.T, module, baselineTag, candidateTag string) error {
 			for _, a := range buildArgs {
 				args = append(args, "--build-arg", a)
 			}
-			if out, err := docker(ctx, append(args, dir)...); err != nil {
-				buildErr = fmt.Errorf("building %s: %w: %s", tag, err, out)
+			if err := buildWithRetry(ctx, append(args, dir)); err != nil {
+				buildErr = fmt.Errorf("building %s: %w", tag, err)
 				return
 			}
 		}
 	}()
 	return buildErr
+}
+
+// buildWithRetry runs docker build up to three times: the build downloads modules, and the module proxy fails a
+// request now and then. The baseline's Dockerfile is upstream's and has no retry of its own.
+func buildWithRetry(ctx context.Context, args []string) error {
+	var err error
+	for attempt := 1; attempt <= 3; attempt++ {
+		var out string
+		if out, err = docker(ctx, args...); err == nil {
+			return nil
+		}
+		err = fmt.Errorf("%w: %s", err, out)
+		fmt.Printf("docker build, attempt %d of 3: %v\n", attempt, err)
+	}
+	return err
 }
 
 // TestMain removes the images the run built, so that they do not stay on the machine.

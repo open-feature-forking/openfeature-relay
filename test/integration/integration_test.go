@@ -117,27 +117,33 @@ func setupFlagdTestbed(ctx context.Context) error {
 func buildFlagdImage(ctx context.Context, buildContext string) (string, error) {
 	imageName := "flagd:test-local"
 
-	// Execute the docker buildx command
-	cmd := exec.Command("docker", "buildx", "build",
-		"--platform="+getPlatform(),
-		"-t", imageName,
-		"-f", "flagd/build.Dockerfile",
-		".")
+	// The build downloads modules; it is retried because the module proxy fails a request now and then.
+	var err error
+	for attempt := 1; attempt <= 3; attempt++ {
+		// Execute the docker buildx command
+		cmd := exec.Command("docker", "buildx", "build",
+			"--platform="+getPlatform(),
+			"-t", imageName,
+			"-f", "flagd/build.Dockerfile",
+			".")
 
-	cmd.Dir = buildContext
+		cmd.Dir = buildContext
 
-	// Suppress docker build output by redirecting stderr to /dev/null
-	cmd.Stderr = nil
+		// Suppress docker build output by redirecting stderr to /dev/null
+		cmd.Stderr = nil
 
-	// Print the exact command being run
-	fmt.Printf("Running command: %s\n", strings.Join(cmd.Args, " "))
+		// Print the exact command being run
+		fmt.Printf("Running command: %s\n", strings.Join(cmd.Args, " "))
 
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return imageName, fmt.Errorf("docker buildx failed: %v\nOutput: %s", err, output)
+		output, buildErr := cmd.CombinedOutput()
+		if buildErr == nil {
+			return imageName, nil
+		}
+		err = fmt.Errorf("docker buildx failed: %v\nOutput: %s", buildErr, output)
+		fmt.Printf("attempt %d of 3: %v\n", attempt, err)
 	}
 
-	return imageName, nil
+	return imageName, err
 }
 
 func buildTestbedImage(ctx context.Context, buildContext, flagdImage string) error {
