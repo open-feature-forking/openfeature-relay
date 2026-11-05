@@ -27,7 +27,7 @@
 | 2 | Implement delivery | The event sink delivers a batch to the external system and reports whether the delivery succeeded | - | [UC-020](../use_cases/UC-020-develop-event-sink-extension.md) | `TestPostsEveryKindAsJSON`, `TestStatusMapping`, `TestUnreachableWebhookIsRetried`, `TestTimeoutBoundsADelivery` (`test/eventsink-example`) |
 | 3 | Run contract tests | The Extension Author runs the event sink contract tests | `eventsinktest.Run` | [UC-008](../use_cases/UC-008-run-contract-tests.md) | `TestContract`, `TestContractAsNotifier` (`test/eventsink-example`); `TestDrops`, `TestContractInventory` (`core/pkg/eventsink/eventsinktest`) |
 | 4 | Verify contract met | The event sink receives events in batches, a full buffer drops and counts events without blocking, and a shutdown delivers the events still buffered | - | - | as step 3 |
-| 5 | Publish module | The Extension Author tags and publishes the event sink's component module | `github.com/open-feature/flagd/test/eventsink-example` | [UC-020](../use_cases/UC-020-develop-event-sink-extension.md) | gap |
+| 5 | Publish module | The Extension Author tags and publishes the event sink's component module | `github.com/open-feature/flagd/test/eventsink-example` | [UC-020](../use_cases/UC-020-develop-event-sink-extension.md) | `TestPublishedComponentModulesBuildADistribution`, `TestEveryPublishedModuleResolvesAlone`, `TestUnresolvableModulesAreReported` (`test/release`) serve the modules of the working tree from a `file://` module proxy at `<directory>/v0.0.1-test`, build a manifest that pins them with no replaces and check `components`; no real tag is pushed |
 | 6 | Run in a distribution | The event sink runs in a distribution next to the official components | - | [UC-020](../use_cases/UC-020-develop-event-sink-extension.md) | `TestExtensionEventSink` (`test/eventsink-example/distribution`); composed in Go, not built from a manifest |
 | 7 | Check event sinks compiled in | The Operator runs `flagd components` and finds an event sink for the external system | `flagd-full components --output json` | [UC-011](../use_cases/UC-011-inspect-distribution-components.md) | `TestComponentsMatchesManifest` (`test/distributions`), `TestComponentsListsInventory` (`runtime/cmd`) |
 | 8 | Configure event sink | The Operator configures the event sink with its destination, its event kinds and a credential from an environment variable, and starts flagd-full | `event-sinks: [{type: webhook}]`, `Authorization: {env: WEBHOOK_TOKEN}`, `flushInterval: 100ms` | [UC-021](../use_cases/UC-021-export-evaluation-data.md) | `TestExportToWebhook`, `TestKindsNarrowWhatTheWebhookReceives` (`test/distributions`); a credential from a file: `TestResolveFromFileTrimsSurroundingWhitespace` (`core/pkg/secret`) |
@@ -52,6 +52,6 @@ All tests above run in the `test` job (`make test`) on every pull request.
 ## Gaps
 
 | Step | Gap |
-|------|-----|
+| 5 | No real tag is pushed; `test/release` simulates the release with a `file://` proxy (see TC-002 gap 8). |
 | 5 | No test tags or publishes a component module. |
 | 6 | No manifest lists the example event sink, so it is not selected through a manifest and built by the Builder. |

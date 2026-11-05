@@ -150,7 +150,7 @@ test-contract-external:
 	./test/contract-external.sh
 test-middleware-example:
 	go test -race -short -count=1 ./test/middleware-example/... ./test/middleware-example/distribution/...
-# The release tests read the module paths of the repository, not a binary.
+# The release tests read the module paths of the repository and build a distribution from a file:// module proxy of it.
 test-release:
 	go test -race -short -count=1 ./test/release/...
 test-eventsink-example:
