@@ -14,6 +14,7 @@ import (
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	flagdcomponents "github.com/open-feature/flagd/flagd/components"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/porttest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -27,7 +28,7 @@ func (r *recordingListen) listen(network, address string) (net.Listener, error) 
 	r.mu.Lock()
 	r.calls = append(r.calls, network+" "+address)
 	r.mu.Unlock()
-	return net.Listen(network, address)
+	return porttest.Listen(network, address)
 }
 
 func (r *recordingListen) opened() []string {
@@ -91,7 +92,7 @@ func TestListenSeamRefusalStopsTheRuntime(t *testing.T) {
 		if strings.HasSuffix(address, fmt.Sprintf(":%d", p.sync)) {
 			return nil, fmt.Errorf("listen refused: %s %s", network, address)
 		}
-		return net.Listen(network, address)
+		return porttest.Listen(network, address)
 	}
 	rt, err := FromConfig(logger.NewLogger(nil, false), "test", characterizedConfig(t, p), components)
 	require.Error(t, err, "flag sync listens when the endpoint is created")

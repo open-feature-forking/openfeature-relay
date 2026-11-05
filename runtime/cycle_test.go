@@ -119,7 +119,7 @@ func build(t *testing.T, cfg Config) (*Runtime, func()) {
 // buildWith is build for these components.
 func buildWith(t *testing.T, cfg Config, components Components) (*Runtime, func()) {
 	t.Helper()
-	rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, components)
+	rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, listening(components))
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)

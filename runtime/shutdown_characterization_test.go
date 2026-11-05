@@ -7,7 +7,6 @@ import (
 	"fmt"
 	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -22,6 +21,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/porttest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -31,30 +31,18 @@ const characterizedFlags = `{"flags":{"f1":{"state":"ENABLED","defaultVariant":"
 
 type ports struct{ management, service, ofrep, sync uint16 }
 
-// issuedPorts are the ports freePort has handed out in this process. A port is free again the moment it is closed, so
-// the next call can get the same one, and one start would listen twice on it.
-var issuedPorts sync.Map
-
+// freePort reserves a port the runtime is later handed through Components.Listen: see porttest.
 func freePort(t *testing.T) uint16 {
 	t.Helper()
-	// a port the kernel hands out again stays open until a new one comes, so the next listen cannot get it
-	var held []net.Listener
-	defer func() {
-		for _, h := range held {
-			_ = h.Close()
-		}
-	}()
-	for {
-		l, err := net.Listen("tcp", "127.0.0.1:0")
-		require.NoError(t, err)
-		port := l.Addr().(*net.TCPAddr).Port
-		if _, taken := issuedPorts.LoadOrStore(port, true); taken {
-			held = append(held, l)
-			continue
-		}
-		_ = l.Close()
-		return uint16(port)
+	return porttest.Port(t)
+}
+
+// listening makes the runtime open its listeners through porttest, which hands it the ports the test reserved.
+func listening(c Components) Components {
+	if c.Listen == nil {
+		c.Listen = porttest.Listen
 	}
+	return c
 }
 
 func newPorts(t *testing.T) ports {
@@ -97,7 +85,7 @@ func startRuntime(t *testing.T, cfg Config) (cancel func(), done <-chan error) {
 // startRuntimeWith is startRuntime for a distribution with these components.
 func startRuntimeWith(t *testing.T, cfg Config, components Components) (cancel func(), done <-chan error) {
 	t.Helper()
-	rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, components)
+	rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, listening(components))
 	require.NoError(t, err)
 	ctx, stop := context.WithCancel(context.Background())
 	result := make(chan error, 1)
@@ -123,6 +111,8 @@ func startRuntimeWith(t *testing.T, cfg Config, components Components) (cancel f
 		defer resp.Body.Close()
 		return resp.StatusCode == http.StatusOK
 	}, 20*time.Second, 50*time.Millisecond, "the runtime becomes ready")
+	// a port nothing asked for stays closed to clients, as it is when the endpoint is off
+	porttest.Release(cfg.ManagementPort, cfg.ServicePort, cfg.OfrepServicePort, cfg.SyncServicePort)
 	return stop, result
 }
 

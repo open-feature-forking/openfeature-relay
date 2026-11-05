@@ -358,10 +358,10 @@ func TestRuntimeStartsAnyEndpointSet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			p := newPorts(t)
 			cfg := characterizedConfig(t, p)
-			rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, Components{
+			rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, listening(Components{
 				Sync:                 flagdcomponents.Components().Sync,
 				ConfigurationFormats: flagdcomponents.Components().ConfigurationFormats, Evaluators: flagdcomponents.Components().Evaluators, Endpoints: tt.endpoints,
-			})
+			}))
 			require.NoError(t, err)
 			require.Equal(t, tt.evaluator, rt.Evaluator != nil, "an evaluator is built only for an endpoint that needs one")
 			require.Len(t, rt.Endpoints, len(tt.endpoints))

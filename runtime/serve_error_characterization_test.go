@@ -6,11 +6,11 @@ import (
 	"context"
 	"fmt"
 	flagdcomponents "github.com/open-feature/flagd/flagd/components"
-	"net"
 	"testing"
 	"time"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/porttest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -49,11 +49,11 @@ func TestPortInUse(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := characterizedConfig(t, newPorts(t))
 			busy := tt.port(&cfg)
-			l, err := net.Listen("tcp", fmt.Sprintf(":%d", *busy))
+			l, err := porttest.Listen("tcp", fmt.Sprintf(":%d", *busy))
 			require.NoError(t, err)
 			defer l.Close()
 
-			rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, flagdcomponents.Components())
+			rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, listening(flagdcomponents.Components()))
 			if tt.fromConfig != "" {
 				require.EqualError(t, err, fmt.Sprintf(tt.fromConfig, *busy))
 				return
