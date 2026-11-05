@@ -185,7 +185,7 @@ test-builder:
 test-concurrency:
 	go test -race -count=1 ./test/concurrency/...
 # The k6 image of the concurrency load, pinned by digest. A k6 upgrade re-records the digest and re-checks the stream
-# behaviour of TestStreamSpike. Images are pulled, never pushed.
+# behaviour of TestStreamCloseEvents. Images are pulled, never pushed.
 K6_IMAGE ?= grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34
 # The load against the race build of flagd-minimal (NFR-017): the smoke runs about 60 seconds of load, the full run 10 minutes.
 .PHONY: print-k6-image
