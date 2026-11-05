@@ -44,18 +44,15 @@ note ""
 
 for item in ${DRY_RUN_ITEMS:-flagd flagd-proxy}; do
   want "${item}-standard" || continue
-  variants="standard"
   dir="${out}/${item}"
-  RELEASE_PLATFORMS="${platforms}" RELEASE_VARIANTS="${variants}"     .github/scripts/release-build.sh "${item}" "${version}" "${commit}" "${date}" "${dir}"
+  RELEASE_PLATFORMS="${platforms}" .github/scripts/release-build.sh "${item}" "${version}" "${commit}" "${date}" "${dir}"
 
   expected="$(
-    if [[ " ${variants} " == *" standard "* ]]; then
-      if [ -n "${platforms}" ]; then
-        echo "${item}_${version}_Linux_x86_64.tar.gz"
-      else
-        for label in Darwin_arm64 Darwin_x86_64 Linux_arm64 Linux_x86_64; do echo "${item}_${version}_${label}.tar.gz"; done
-        for label in Windows_x86_64 Windows_i386; do echo "${item}_${version}_${label}.zip"; done
-      fi
+    if [ -n "${platforms}" ]; then
+      echo "${item}_${version}_Linux_x86_64.tar.gz"
+    else
+      for label in Darwin_arm64 Darwin_x86_64 Linux_arm64 Linux_x86_64; do echo "${item}_${version}_${label}.tar.gz"; done
+      for label in Windows_x86_64 Windows_i386; do echo "${item}_${version}_${label}.zip"; done
     fi
   )"
   got="$(cd "${dir}" && find . -maxdepth 1 \( -name '*.tar.gz' -o -name '*.zip' \) -printf '%f\n')"
@@ -72,18 +69,16 @@ for item in ${DRY_RUN_ITEMS:-flagd flagd-proxy}; do
 '/ }', not a binary and four files"
   done
 
-  if [[ " ${variants} " == *" standard "* ]]; then
-    # the release builds ./<item>/main.go, a file, so the build info path is command-line-arguments, as it is today
-    tar -xzf "${dir}/${item}_${version}_Linux_x86_64.tar.gz" -C "${dir}" "./${item}_linux_x86_64"
-    add_size "${item}" "${dir}/${item}_linux_x86_64"
-    info="$(go version -m "${dir}/${item}_linux_x86_64")"
-    expect_equal "${item}: build info path" "command-line-arguments" "$(awk '$1 == "path" {print $2}' <<<"${info}")"
-    # flagd prints the stamped version line
-    if [ "${item}" = flagd ]; then
-      expect_equal "flagd version" "flagd: v${version} (${commit}), built at: ${date}"         "$("${dir}/flagd_linux_x86_64" version | grep '^flagd:')"
-    fi
+  # the release builds ./<item>/main.go, a file, so the build info path is command-line-arguments, as it is today
+  tar -xzf "${dir}/${item}_${version}_Linux_x86_64.tar.gz" -C "${dir}" "./${item}_linux_x86_64"
+  add_size "${item}" "${dir}/${item}_linux_x86_64"
+  info="$(go version -m "${dir}/${item}_linux_x86_64")"
+  expect_equal "${item}: build info path" "command-line-arguments" "$(awk '$1 == "path" {print $2}' <<<"${info}")"
+  # flagd prints the stamped version line
+  if [ "${item}" = flagd ]; then
+    expect_equal "flagd version" "flagd: v${version} (${commit}), built at: ${date}"         "$("${dir}/flagd_linux_x86_64" version | grep '^flagd:')"
   fi
-  note "- built ${item} (${variants}): $(wc -l <<<"${got}") archives"
+  note "- built ${item}: $(wc -l <<<"${got}") archives"
 done
 
 if want images; then

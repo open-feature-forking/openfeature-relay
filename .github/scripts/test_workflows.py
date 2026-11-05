@@ -31,7 +31,7 @@ class ReleaseConfiguration(unittest.TestCase):
     """K2: flagd and flagd-proxy release exactly as today."""
 
     PINNED = {
-        ".github/workflows/release-please.yaml": "cd54450c1a91ea13a0a224f837eca5240d1b812492bd3c19b3dcfd1192ed1f3c",
+        ".github/workflows/release-please.yaml": "7bd0c065fbc00d294c5988aa83b31389f8fa5b3baf1f673f1b8be02bd08b4f0d",
         "release-please-config.json": "f7f5af2d67434c7a7565fa88cd1cd09b5ad29e7f6bf93dbb3fd57e54afc24c97",
         ".release-please-manifest.json": "4617b2ca55b05124c5c270d1e66184912125b461d6c24ee0d90ec5da142ec6ee",
     }
@@ -183,6 +183,11 @@ class BuildWorkflow(unittest.TestCase):
         self.assertNotIn("fips", FLAGS)
         self.assertNotIn("fips", self.text.lower())
         self.assertNotIn("fips", RELEASE_CHECK.read_text(encoding="utf-8").lower())
+        # the release builds the standard variant only: no FIPS step, archives or image tags, and no variant to choose
+        self.assertNotIn("fips", (ROOT / ".github" / "workflows" / "release-please.yaml").read_text(encoding="utf-8").lower())
+        build = (ROOT / ".github" / "scripts" / "release-build.sh").read_text(encoding="utf-8")
+        self.assertNotIn("fips", build.lower())
+        self.assertNotIn("RELEASE_VARIANTS", build)
         for script in ("release-dry-run.sh", "release-dry-run-distributions.sh"):
             with self.subTest(script=script):
                 lines = [l for l in (ROOT / ".github" / "scripts" / script).read_text(encoding="utf-8").splitlines()

@@ -92,7 +92,7 @@ if chosen "${full_path}"; then
 d="${full_path}"
 name="$(published_name "${d}")"
 dir="${out}/${d}"
-RELEASE_PLATFORMS="${platforms}" RELEASE_VARIANTS=standard .github/scripts/release-build.sh "${name}" "${version}" "${commit}" "${date}" "${dir}" "distributions/${d}/build"
+RELEASE_PLATFORMS="${platforms}" .github/scripts/release-build.sh "${name}" "${version}" "${commit}" "${date}" "${dir}" "distributions/${d}/build"
 if [ -n "${platforms}" ]; then
   expected="${name}_${version}_Linux_x86_64.tar.gz"
 else
@@ -156,7 +156,7 @@ for d in ${others}; do
   chosen "${d}" || continue
   name="$(published_name "${d}")"
   dir="${out}/${d}"
-  RELEASE_PLATFORMS=linux/amd64 RELEASE_VARIANTS=standard \
+  RELEASE_PLATFORMS=linux/amd64 \
     .github/scripts/release-build.sh "${name}" "${version}" "${commit}" "${date}" "${dir}" "distributions/${d}/build"
   check_archives "${name}" "${dir}" "${name}_${version}_Linux_x86_64.tar.gz"
   tar -xzf "${dir}/${name}_${version}_Linux_x86_64.tar.gz" -C "${dir}" "./${name}_linux_x86_64"
