@@ -4,3 +4,4 @@ testdata/*.txt text eol=lf
 flagd/go.mod text eol=lf
 flagd/main.go text eol=lf
 flagd/components/components.go text eol=lf
+.github/scripts/aiup/** text eol=lf
