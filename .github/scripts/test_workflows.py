@@ -105,6 +105,35 @@ class BuildWorkflow(unittest.TestCase):
         """UC-022 Q16: the gated job runs the RPC suite with the outage scenarios against both images."""
         self.assertIn("make testbed-rpc-outages", self.job("testbed-rpc-outages"))
 
+    def test_release_dry_run_parts(self):
+        """Slice R: the dry run is a matrix of parts; a pull request builds the reduced set, `main`, FULL_CI and a manual run the full one."""
+        job = self.job("release-dry-run")
+        self.assertIn(
+            "part: [flagd-standard, flagd-fips, flagd-proxy-standard, flagd-proxy-fips, images, distributions]", job)
+        self.assertIn("fail-fast: false", job)
+        self.assertIn("DRY_RUN_PART: ${{ matrix.part }}", job)
+        self.assertIn("DRY_RUN_SCOPE: ${{ steps.gate.outputs.scope }}", job)
+        self.assertIn('[ "$REF" = refs/heads/main ]', job)
+        self.assertIn('echo "scope=$scope" >> "$GITHUB_OUTPUT"', job)
+
+    def test_release_dry_run_full_covers_todays_set(self):
+        """Slice R: the parts together build the 11 archives of flagd and flagd-proxy, the images and the five distributions."""
+        script = (ROOT / ".github" / "scripts" / "release-dry-run.sh").read_text(encoding="utf-8")
+        parts = re.search(r"part: \[(.*)\]", self.job("release-dry-run")).group(1)
+        for item in ("flagd", "flagd-proxy"):
+            for variant in ("standard", "fips"):
+                self.assertIn(f"{item}-{variant}", parts)
+        # the default part runs everything, and release-build.sh is told only the platforms the scope narrows
+        self.assertIn('part="${DRY_RUN_PART:-all}"', script)
+        self.assertIn('[ "${scope}" != reduced ] || platforms="linux/amd64"', script)
+        for label in ("Darwin_arm64 Darwin_x86_64 Linux_arm64 Linux_x86_64", "Windows_x86_64 Windows_i386"):
+            self.assertIn(label, script)
+        for tag in (":latest", ":${{ env.VERSION }}", ":latest-fips", ":${{ env.VERSION }}-fips"):
+            self.assertIn(tag, script)
+        dists = (ROOT / ".github" / "scripts" / "release-dry-run-distributions.sh").read_text(encoding="utf-8")
+        self.assertIn('others="flagd-minimal-otel flagd-cloud flagd-kubernetes flagd-sync"', dists)
+        self.assertIn('platforms="linux/amd64"', dists)
+
 
 class BuildDockerfiles(unittest.TestCase):
     """K3: the Dockerfiles of flagd and flagd-proxy. A new hash for flagd-proxy means re-recording its image configuration."""

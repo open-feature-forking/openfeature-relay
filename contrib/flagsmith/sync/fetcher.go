@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -223,7 +224,7 @@ func (f *Fetcher) nextPage(current *url.URL, link []string) (*url.URL, error) {
 	for _, header := range link {
 		for _, entry := range linkEntry.FindAllStringSubmatch(header, -1) {
 			rel := relParam.FindStringSubmatch(entry[2])
-			if rel == nil || !contains(strings.Fields(strings.ToLower(rel[1])), "next") {
+			if rel == nil || !slices.Contains(strings.Fields(strings.ToLower(rel[1])), "next") {
 				continue
 			}
 			target, err := url.Parse(strings.TrimSpace(entry[1]))
@@ -238,15 +239,6 @@ func (f *Fetcher) nextPage(current *url.URL, link []string) (*url.URL, error) {
 		}
 	}
 	return nil, nil
-}
-
-func contains(list []string, want string) bool {
-	for _, s := range list {
-		if s == want {
-			return true
-		}
-	}
-	return false
 }
 
 // Close releases the connections of the fetcher.

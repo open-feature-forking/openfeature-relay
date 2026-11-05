@@ -7,7 +7,7 @@
 **Primary Actor:** Operator  
 **Goal:** Deliver every evaluation flagd serves or collects, and every configuration change it accepts, to the analytics, experimentation and audit systems the Operator chooses, without slowing or failing evaluation.  
 **Trigger:** Operator decides that a deployment's evaluation and configuration change events must reach external systems  
-**Status:** Implemented  
+**Status:** Tested  
 
 **Requirements:** [FR-037, FR-038, FR-039, FR-028, NFR-013](../requirements.md)
 

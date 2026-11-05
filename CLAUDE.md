@@ -68,6 +68,8 @@ UC-016 stays Deferred. Provider migration (formerly UC-015) is out of scope: #15
 
 A use case is done when its main success scenario and every alternative flow have an automated test, the reviewer's verdict is `ready`, the PR is merged, and its `**Status:**` line moves to `Implemented` (to `Tested` once a test case under `docs/test_cases/` covers it). This is a proof of concept: upstream reviewability (C-006) is a preference, not a gate. When a later use case delivers part of it, the use case still moves to `Implemented` once its own scope is done, provided every such step and rule is listed as an accepted gap naming the use case that delivers it, and the requirements it shares move to `In Progress` so the spec lint shows no drift.
 
+Every step's closing PR runs the full spec review (`/spec-review`, lint and semantic review) and fixes its findings in the same PR; a finding it does not fix becomes an issue.
+
 ## Gates
 
 On Windows, Go and Docker work only inside WSL Ubuntu. The system Go there is 1.22 and cannot resolve `go 1.27` on its own, so pin the toolchain. Run Go gates from the repository root; `wsl` starts in the translated Windows working directory:

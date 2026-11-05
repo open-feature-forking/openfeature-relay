@@ -7,7 +7,7 @@
 **Primary Actor:** Operator  
 **Goal:** Learn which components a flagd binary or image contains, so that the Operator knows whether it supports the deployment's sources, service endpoints and telemetry before or after starting it.  
 **Trigger:** Operator asks a flagd binary or image which components it contains  
-**Status:** Implemented  
+**Status:** Tested  
 
 **Requirements:** [FR-023, FR-034](../requirements.md)
 
