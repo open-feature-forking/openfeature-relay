@@ -192,11 +192,16 @@ func buildReported(t *testing.T, cfg Config, components Components) (*Runtime, f
 // Building, running and stopping a runtime over and over in one process leaves nothing behind: no goroutine, no file
 // descriptor, no port. The testbed switches configurations this way.
 func TestFromConfigRepeatedly(t *testing.T) {
-	p := newPorts(t)
-	cfg := twoSourceConfig(t, p)
-	check := newProbe(p.management)
+	base := twoSourceConfig(t, ports{})
+	var check probe
 
+	// Each cycle reserves its own ports. A port the runtime has released is free to every other process, which may
+	// take it before the next cycle binds it again.
 	cycle := func(i int) time.Duration {
+		p := newPorts(t)
+		cfg := base
+		cfg.ManagementPort, cfg.ServicePort, cfg.OfrepServicePort, cfg.SyncServicePort = p.management, p.service, p.ofrep, p.sync
+		check = newProbe(p.management)
 		start := time.Now()
 		rt, stop, report := buildReported(t, cfg, officialComponents())
 		elapsed := check.waitReady(t, start, func() string { return fmt.Sprintf("cycle %d\n%s", i, report) })

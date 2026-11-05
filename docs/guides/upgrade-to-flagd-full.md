@@ -160,6 +160,13 @@ When an endpoint cannot open its port, or another step of the startup fails, fla
 Before, the flag sync service held the exit for up to 5 seconds and logged `timeout while waiting for all sync sources to complete their initial sync` first.
 The exit code and the error are the same.
 
+#### A SyncFlags stream sends no empty configuration at its end
+
+When a SyncFlags stream ends, by its server-side deadline or because the client ends it, flag sync no longer sends an empty flag configuration (`{"flags":{}}`) first.
+A client still connected at the deadline could receive it and drop its flags until the next stream delivered them again.
+The `reason` of `feature_flag_flagd_sync_server_stream_duration_seconds` is now always `normal_close` for a stream the client ends, where it was sometimes `client_disconnect`.
+When the store cannot read the flags, the stream ends with `DataLoss` instead of sending empty configurations in a loop.
+
 ## Known breaks
 
 - **`go install github.com/open-feature/flagd/flagd@<version>` fails.**
