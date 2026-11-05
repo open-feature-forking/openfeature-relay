@@ -79,7 +79,7 @@ The table shows the order; the sections above say which rows are done.
 | 11 | [UC-019](../use_cases/UC-019-serve-vendor-flags.md) | a Flagsmith engine module as the cross-vendor proof |
 | 12 | [UC-002](../use_cases/UC-002-package-distribution-as-image.md), [UC-012](../use_cases/UC-012-release-distributions-and-component-modules.md), [UC-013](../use_cases/UC-013-verify-change-against-distributions.md) | image, release, CI verification |
 | 13 | UC-022 (in progress, [#110](https://github.com/open-feature-forking/openfeature-relay/issues/110)) | the flagd testbed as a `relay-builder` distribution |
-| 14 | planned, [#158](https://github.com/open-feature-forking/openfeature-relay/issues/158) | the Go flagd provider's gRPC sync features in `sync/flagd-grpc`, opt-in |
+| 14 | UC-023 (in progress, [#158](https://github.com/open-feature-forking/openfeature-relay/issues/158)) | the Go flagd provider's gRPC sync features in `sync/flagd-grpc`, opt-in |
 
 [UC-016 Recover from Snapshot](../use_cases/UC-016-recover-from-snapshot.md) is deferred to a later release.
 Provider migration (formerly UC-015) is a follow-up after the proof of concept, [#156](https://github.com/open-feature-forking/openfeature-relay/issues/156).
