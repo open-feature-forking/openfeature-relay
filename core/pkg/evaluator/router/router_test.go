@@ -331,3 +331,59 @@ func TestRouterMergesTheEvaluatorsMetadata(t *testing.T) {
 	require.Equal(t, "a", meta["shared"], "the first route's value stands")
 	require.Contains(t, meta, "flagSetId", "the selector's metadata stays")
 }
+
+// stub answers from results it built once, so that a benchmark shows the router's own allocations: it returns
+// them for a sub-request, which has no dst, and appends one to a dst that has room.
+type stub struct{ results []evaluator.Result }
+
+func (s stub) Evaluate(_ context.Context, _ evaluator.Request, dst []evaluator.Result) ([]evaluator.Result, model.Metadata, error) {
+	if dst == nil {
+		return s.results, nil, nil
+	}
+	return append(dst, s.results[0]), nil, nil
+}
+
+func stubOf(keys ...string) stub {
+	s := stub{}
+	for _, key := range keys {
+		s.results = append(s.results, evaluator.Result{FlagKey: key, Value: true, HasValue: true, Reason: model.StaticReason})
+	}
+	return s
+}
+
+func BenchmarkRouterEvaluate(b *testing.B) {
+	st, err := store.NewStore(logger.NewLogger(nil, false), []string{"low", "high"})
+	require.NoError(b, err)
+	require.NoError(b, st.Apply(store.ApplyRequest{Format: "a", Source: "low", Documents: []store.Document{
+		{Format: "a", Source: "low", FlagKeys: []string{"a1", "a2", "a3", "shared"}},
+	}}))
+	require.NoError(b, st.Apply(store.ApplyRequest{Format: "b", Source: "high", Documents: []store.Document{
+		{Format: "b", Source: "high", FlagKeys: []string{"b1", "b2", "shared"}},
+	}}))
+	one, err := New(nil, Route{"a", stubOf("a1")})
+	require.NoError(b, err)
+	two, err := New(st, Route{"a", stubOf("a1", "a2", "a3")}, Route{"b", stubOf("b1", "b2", "shared")})
+	require.NoError(b, err)
+	source, err := store.NewSelector("source=low")
+	require.NoError(b, err)
+
+	for _, bc := range []struct {
+		name   string
+		router *Router
+		req    evaluator.Request
+	}{
+		{"one-route", one, evaluator.Request{FlagKey: "a1"}},
+		{"two-routes/single", two, evaluator.Request{FlagKey: "a1"}},
+		{"two-routes/bulk", two, evaluator.Request{Bulk: true}},
+		{"two-routes/keys", two, evaluator.Request{FlagKeys: []string{"a1", "b1", "shared", "missing"}}},
+		{"two-routes/selector", two, evaluator.Request{Bulk: true, Selector: source}},
+	} {
+		b.Run(bc.name, func(b *testing.B) {
+			ctx, dst := context.Background(), make([]evaluator.Result, 0, 16)
+			b.ReportAllocs()
+			for b.Loop() {
+				_, _, _ = bc.router.Evaluate(ctx, bc.req, dst[:0])
+			}
+		})
+	}
+}

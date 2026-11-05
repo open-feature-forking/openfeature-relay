@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -113,17 +114,52 @@ func buildPair(t *testing.T, module, baselineTag, candidateTag string) error {
 			}
 		}
 		for tag, dir := range map[string]string{baselineTag: context, candidateTag: root} {
-			args := []string{"build", "-q", "-f", filepath.Join(dir, module, "build.Dockerfile"), "-t", tag}
+			args := []string{"build", "--progress=plain", "-f", filepath.Join(dir, module, "build.Dockerfile"), "-t", tag}
 			for _, a := range buildArgs {
 				args = append(args, "--build-arg", a)
 			}
-			if out, err := docker(ctx, append(args, dir)...); err != nil {
-				buildErr = fmt.Errorf("building %s: %w: %s", tag, err, out)
+			if err := buildWithRetry(ctx, append(args, dir)); err != nil {
+				buildErr = fmt.Errorf("building %s: %w", tag, err)
 				return
 			}
 		}
 	}()
 	return buildErr
+}
+
+// transient matches the output of a build that failed because the module proxy or the network dropped a request.
+var transient = regexp.MustCompile(`stream error|INTERNAL_ERROR|i/o timeout|TLS handshake|connection reset|error reading from server: EOF|no such host|proxy\.golang\.org\S*: 5\d\d `)
+
+// buildLogLines is how much of a failed build's --progress=plain output its error keeps: the failing step and its
+// error are at the end.
+const buildLogLines = 40
+
+// tail returns the last n lines of s.
+func tail(s string, n int) string {
+	lines := strings.Split(s, "\n")
+	if len(lines) <= n {
+		return s
+	}
+	return fmt.Sprintf("[%d earlier lines of the build log left out]\n%s", len(lines)-n, strings.Join(lines[len(lines)-n:], "\n"))
+}
+
+// buildWithRetry runs docker build, up to three times when a build fails on the network (see transient): the build
+// downloads modules, and the baseline's Dockerfile is upstream's, with no retry of its own. Another failure, such as a
+// compile error, returns at once. Only the error keeps the build's output, its last buildLogLines lines.
+func buildWithRetry(ctx context.Context, args []string) error {
+	var err error
+	for attempt := 1; attempt <= 3; attempt++ {
+		out, buildErr := docker(ctx, args...)
+		if buildErr == nil {
+			return nil
+		}
+		err = fmt.Errorf("%w: %s", buildErr, tail(out, buildLogLines))
+		if !transient.MatchString(out) {
+			return err
+		}
+		fmt.Printf("docker build failed on the network, attempt %d of 3: %v\n", attempt, err)
+	}
+	return err
 }
 
 // TestMain removes the images the run built, so that they do not stay on the machine.

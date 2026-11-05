@@ -4,6 +4,7 @@ The hashes are of the files with line endings normalised to LF. A change to a pi
 new hash in the same commit.
 """
 import hashlib
+import importlib.util
 import os
 import pathlib
 import re
@@ -15,6 +16,11 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 BUILD = ROOT / ".github" / "workflows" / "build.yaml"
 RELEASE_CHECK = ROOT / ".github" / "workflows" / "release-check.yaml"
 
+_spec = importlib.util.spec_from_file_location("ci_modules", ROOT / ".github" / "scripts" / "ci-modules.py")
+cm = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(cm)
+FLAGS = cm.FLAG_PATTERNS
+
 
 def sha256(relative):
     data = (ROOT / relative).read_bytes().replace(b"\r\n", b"\n")
@@ -25,7 +31,7 @@ class ReleaseConfiguration(unittest.TestCase):
     """K2: flagd and flagd-proxy release exactly as today."""
 
     PINNED = {
-        ".github/workflows/release-please.yaml": "e0de2bfa567c335e74db5bb1a8cee66fd5911fd80350c20ba1ae61f3bd257c45",
+        ".github/workflows/release-please.yaml": "cd54450c1a91ea13a0a224f837eca5240d1b812492bd3c19b3dcfd1192ed1f3c",
         "release-please-config.json": "f7f5af2d67434c7a7565fa88cd1cd09b5ad29e7f6bf93dbb3fd57e54afc24c97",
         ".release-please-manifest.json": "4617b2ca55b05124c5c270d1e66184912125b461d6c24ee0d90ec5da142ec6ee",
     }
@@ -89,29 +95,93 @@ class BuildWorkflow(unittest.TestCase):
     def test_jobs(self):
         names = re.findall(r"^  ([a-z][a-z0-9-]*):[ \t]*(?:#.*)?\n", self.text.split("\njobs:\n", 1)[1], re.M)
         self.assertEqual(
-            ["changes", "lint", "benchmark", "docs-check", "test", "miss-report", "coverage", "builder-e2e", "fips", "docker-local", "integration-test",
-             "upgrade-test", "release-dry-run", "testbed", "testbed-rpc-outages", "testbed-grpc-sync", "load-smoke", "load-test"], names)
+            ["changes", "lint", "benchmark", "test", "fips", "docker-local", "integration-test", "upgrade-test", "release-dry-run",
+             "testbed", "testbed-rpc-outages", "testbed-grpc-sync", "load-smoke", "load-test"], names)
 
-    def test_changes_is_report_only(self):
-        """P1: the affected-module report runs beside today's jobs; nothing but the miss report waits on it."""
-        self.assertEqual([], [n for n in ("lint", "test", "builder-e2e", "integration-test", "upgrade-test", "release-dry-run", "load-smoke", "load-test")
-                              if re.search(r"needs:.*\bchanges\b", self.job(n))])
-        self.assertIn("fetch-depth: 2", self.job("changes"))
-        self.assertIn("python3 .github/scripts/ci-modules.py changes", self.job("changes"))
-        report = self.job("miss-report")
-        self.assertIn("needs: [changes, test]", report)
-        self.assertIn("if: always() && needs.changes.result == 'success'", report)
-        self.assertIn("continue-on-error: true", report)
+    GATED = {
+        "benchmark": "github.event_name == 'pull_request' && needs.changes.outputs.benchmark == 'true'",
+        "fips": "needs.changes.outputs.fips == 'true'",
+        "docker-local": "needs.changes.outputs.image == 'true'",
+        "upgrade-test": "needs.changes.outputs.upgrade == 'true'",
+        "testbed": "needs.changes.outputs.testbed == 'true'",
+    }
 
-    def test_test_still_runs_make_test_and_keeps_its_log(self):
+    def test_changes_is_the_single_gate(self):
+        """The jobs that cost a runner for a change that cannot break them wait for a flag of `changes` and take no runner
+        without it; there is no gate step in a job, and no miss report."""
+        self.assertNotIn("miss-report", self.text)
+        for name, condition in self.GATED.items():
+            with self.subTest(job=name):
+                job = self.all_jobs()[name]
+                self.assertIn("    needs: changes\n", job)
+                self.assertIn(f"    if: {condition}\n", job)
+                for gone in ("steps.gate", "git diff --name-only", "vars.FULL_CI", "github.event.before"):
+                    self.assertNotIn(gone, job)
+        self.assertEqual([], [n for n in ("lint", "test", "integration-test", "release-dry-run", "load-smoke", "load-test")
+                              if re.search(r"needs:.*\bchanges\b", self.all_jobs()[n])])
+        changes = self.job("changes")
+        self.assertIn("fetch-depth: 2", changes)
+        self.assertIn("python3 .github/scripts/ci-modules.py changes", changes)
+        for flag in FLAGS:
+            self.assertIn(f"      {flag}: ${{{{ steps.affected.outputs.{flag} }}}}\n", changes)
+
+    def test_test_runs_make_test(self):
         job = self.job("test")
         self.assertIn("- run: make test 2>&1 | tee test.log\n        shell: bash", job)
         self.assertIn("CONTRACT_EXTERNAL_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}", job)
-        self.assertIn("path: test.log", job)
+        # the log stays for a failure summary; there is no artifact of it and no miss report to read one
+        self.assertNotIn("path: test.log", job)
+
+    def test_docs_check_and_builder_e2e_are_folded_into_other_jobs(self):
+        """docs-check runs first in lint, while the tree is clean; builder-e2e is integration-test's flagd-full build."""
+        names = re.findall(r"^  ([a-z][a-z0-9-]*):", self.text.split("\njobs:\n", 1)[1], re.M)
+        self.assertNotIn("docs-check", names)
+        self.assertNotIn("builder-e2e", names)
+        lint = self.job("lint")
+        self.assertLess(lint.index("make workspace-init"), lint.index("- run: make generate-docs"))
+        self.assertLess(lint.index("- run: make generate-docs"), lint.index("git status --porcelain"))
+        self.assertLess(lint.index("git status --porcelain"), lint.index("- run: make lint"))
+        integration = self.all_jobs()["integration-test"]
+        self.assertIn("run: make build-flagd-full", integration)
+        self.assertNotIn("check-flagd-full-generated", integration)
+        self.assertLess(integration.index("make workspace-init"), integration.index("make build-flagd-full"))
+        self.assertIn("run: make build-flagsmith", integration)
+        self.assertLess(integration.index("make build-flagd-full"), integration.index("make build-flagsmith"))
+        self.assertLess(integration.index("make build-flagsmith"), integration.index("make workspace-clean"))
+
+    def test_flags_follow_the_diff(self):
+        """The flag patterns are the conditions the gate steps of the jobs used to hold."""
+        def on(flag, path):
+            return bool(cm.flags([path])[flag])
+
+        for path in ("core/pkg/evaluator/x.go", "service/ofrep/x.go", "sync/http/go.mod", "runtime/go.sum", "go.sum",
+                     "flagd/build.Dockerfile", "distributions/flagd-full/manifest.yaml", "builder/main.go"):
+            self.assertTrue(on("upgrade", path), path)
+        for path in ("README.md", "docs/vision.md", "Makefile"):
+            self.assertFalse(on("upgrade", path), path)
+        for path in ("core/pkg/x.go", "sync/http/go.sum", "Makefile", ".github/workflows/build.yaml"):
+            self.assertTrue(on("fips", path), path)
+        self.assertFalse(on("fips", "README.md"))
+        for path in ("go.sum", "core/go.mod", "flagd/build.Dockerfile", "distributions/flagd-full/Dockerfile"):
+            self.assertTrue(on("image", path), path)
+        for path in ("core/pkg/x.go", "README.md"):
+            self.assertFalse(on("image", path), path)
+        for path in ("testbed/cmd/main.go", "test/testbed/x.go", ".github/scripts/compare-pass-sets.py"):
+            self.assertTrue(on("testbed", path), path)
+        self.assertFalse(on("testbed", "docs/vision.md"))
+        self.assertTrue(on("benchmark", "core/pkg/evaluator/x.go"))
+        self.assertFalse(on("benchmark", "docs/guides/x.md"))
+
+    def test_every_flag_is_true_without_a_diff_and_a_push_to_main_forces_two(self):
+        self.assertEqual({n: True for n in FLAGS}, cm.flags(None))
+        pushed = cm.flags([], "push", "refs/heads/main")
+        self.assertEqual(sorted(cm.FORCED_ON_MAIN), sorted(n for n, v in pushed.items() if v))
+        self.assertFalse(any(cm.flags([], "pull_request", "refs/pull/1/merge").values()))
 
     def test_lint_runs_the_module_table_tests(self):
         """C1 and C2 are the parity gate for make test and make lint: CI has to run them."""
         self.assertIn("run: python3 .github/scripts/test_ci_modules.py\n", self.job("lint"))
+        self.assertIn("run: python3 .github/scripts/test_ci_modules_affected.py\n", self.job("lint"))
 
     def test_gated_jobs(self):
         gate = "if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'"
@@ -167,8 +237,8 @@ class BuildWorkflow(unittest.TestCase):
         parts = re.split(r"(?m)^(?=  [a-z][a-z0-9-]*:[^\n]*\n)", jobs)
         return {m.group(1): part for part in parts if (m := re.match(r"  ([a-z0-9-]+):", part))}
 
-    CACHED_JOBS = ("lint", "docs-check", "test", "builder-e2e", "fips", "integration-test", "upgrade-test", "release-dry-run", "load-smoke", "load-test")
-    GATED_CACHED_JOBS = ("fips", "upgrade-test", "release-dry-run")
+    CACHED_JOBS = ("lint", "test", "fips", "integration-test", "upgrade-test", "release-dry-run", "load-smoke", "load-test")
+    GATED_CACHED_JOBS = ("release-dry-run",)
     ON_MAIN = "github.ref == 'refs/heads/main' && github.event_name == 'push'"
 
     def test_go_caches_are_saved_only_on_main(self):
@@ -203,78 +273,27 @@ class BuildWorkflow(unittest.TestCase):
 
     def test_gates_diff_the_first_parent(self):
         """P0: a pull request's change set is its merge commit against the first parent. base.sha is where the pull
-        request was opened and holds what the base gained since."""
-        jobs = self.all_jobs()
-        for name in ("upgrade-test", "testbed", "fips", "docker-local"):
+        request was opened and holds what the base gained since. The gated jobs get theirs from `changes`."""
+        for name in self.GATED:
             with self.subTest(job=name):
-                job = jobs[name]
-                self.assertIn("BASE: ${{ github.event.before }}\n", job)
-                self.assertNotIn("base.sha", job)
-                self.assertIn('if [ "$EVENT" = pull_request ]; then BASE=$(git rev-parse "$HEAD^1"); fi', job)
-                self.assertIn('git diff --name-only "$BASE" "$HEAD"', job)
+                job = self.all_jobs()[name]
+                self.assertNotIn("git diff --name-only", job)
+                if name != "benchmark":  # the benchmark checks the base out to measure it
+                    self.assertNotIn("base.sha", job)
         check = RELEASE_CHECK.read_text(encoding="utf-8")
         self.assertIn('BASE=$(git rev-parse "$HEAD^1")', check)
         self.assertNotIn("base.sha", check)
 
-    def test_testbed_runs_when_go_code_or_the_testbed_changes(self):
-        """UC-022 Q14: the relay testbed has a gate step: FULL_CI, a manual run, or a change outside docs/ and .claude/."""
-        job = self.job("testbed")
-        self.assertNotIn("\n    if:", job)
-        self.assertIn('[ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]', job)
-        self.assertIn(r"grep -Ev '^(docs|\.claude)/'", job)
-        self.assertIn(r"\.go$|(^|/)go\.(mod|sum)$", job)
-        self.assertIn("if: steps.gate.outputs.run == 'true'", job)
-        self.assertIn("make testbed-contract-both", job)
-        self.assertIn("make testbed-suites", job)
-
-    def test_upgrade_differential_runs_on_any_go_change(self):
-        """Coverage gap 1: a change under core/, service/, sync/ or runtime/ changes flagd-full, so it runs the differential."""
-        job = self.all_jobs()["upgrade-test"]
-        pattern = re.search(r"pattern='([^']*)'", job).group(1)
-        for path in ("core/pkg/evaluator/x.go", "service/ofrep/x.go", "sync/http/go.mod", "runtime/go.sum", "go.sum",
-                     "flagd/build.Dockerfile", "distributions/flagd-full/manifest.yaml", "builder/main.go"):
-            with self.subTest(path=path):
-                self.assertTrue(re.search(pattern, path), path)
-        for path in ("README.md", "docs/vision.md", "Makefile"):
-            with self.subTest(path=path):
-                self.assertFalse(re.search(pattern, path), path)
-
-    def test_fips_runs_on_go_changes_with_the_submodule(self):
-        """Coverage gap 2: runtime/cmd's tests need the test-harness submodule; the job runs on a push to main, FULL_CI,
-        a manual run and a pull request that changes Go code, and every step after the checkout waits for the gate."""
-        job = self.all_jobs()["fips"]
-        self.assertNotRegex(job, r"\n    if:")
-        self.assertIn("git submodule update --init test-harness", job)
-        self.assertLess(job.index("git submodule update --init test-harness"), job.index("make test-fips"))
-        pattern = re.search(r"pattern='([^']*)'", job).group(1)
-        self.assertTrue(re.search(pattern, "core/pkg/x.go"))
-        self.assertTrue(re.search(pattern, "sync/http/go.sum"))
-        self.assertFalse(re.search(pattern, "README.md"))
-        self.assertIn('[ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]', job)
-        steps = re.split(r"(?m)^      - ", job.split("\n    steps:\n", 1)[1])[1:]
-        ungated = [s.splitlines()[0] for s in steps if "steps.gate.outputs.run == 'true'" not in s]
-        self.assertEqual(["name: Checkout repository", "name: Fetch the commit before the push",
-                          "name: Does the FIPS job apply to this change?"], ungated)
-
-    def test_image_build_and_scan_run_on_dependency_and_dockerfile_changes(self):
-        """Coverage gap 6: docker-local and Trivy run on a push to main, FULL_CI, a manual run, and a pull request that
-        changes go.mod, go.sum or a Dockerfile; every step after the checkout waits for the gate."""
-        job = self.all_jobs()["docker-local"]
-        self.assertNotRegex(job, r"\n    if:")
-        pattern = re.search(r"pattern='([^']*)'", job).group(1)
-        for path in ("go.sum", "core/go.mod", "flagd/build.Dockerfile", "distributions/flagd-full/Dockerfile"):
-            with self.subTest(path=path):
-                self.assertTrue(re.search(pattern, path), path)
-        for path in ("core/pkg/x.go", "README.md"):
-            with self.subTest(path=path):
-                self.assertFalse(re.search(pattern, path), path)
-        self.assertIn('[ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]', job)
-        self.assertIn("security-events: write", job)
-        steps = re.split(r"(?m)^      - ", job.split("\n    steps:\n", 1)[1])[1:]
-        ungated = [s.splitlines()[0] for s in steps if "steps.gate.outputs.run == 'true'" not in s]
-        self.assertEqual(["name: Checkout", "name: Fetch the commit before the push",
-                          "name: Does the image build and scan apply to this change?"], ungated)
-        self.assertIn("aquasecurity/trivy-action", job)
+    def test_the_jobs_after_the_gate_keep_their_steps(self):
+        testbed = self.all_jobs()["testbed"]
+        self.assertIn("make testbed-contract-both", testbed)
+        self.assertIn("make testbed-suites", testbed)
+        fips = self.all_jobs()["fips"]
+        # runtime/cmd's tests read the evaluator suite from the test-harness submodule
+        self.assertLess(fips.index("git submodule update --init test-harness"), fips.index("make test-fips"))
+        docker = self.all_jobs()["docker-local"]
+        self.assertIn("security-events: write", docker)
+        self.assertIn("aquasecurity/trivy-action", docker)
 
     def test_outage_and_grpc_source_suites_run_nightly_on_main(self):
         """Coverage gap 7: a cron schedule (which GitHub runs on the default branch only) starts both suites."""
@@ -286,28 +305,13 @@ class BuildWorkflow(unittest.TestCase):
         # nothing else is gated on the schedule: the pull-request-only and push-only jobs skip it
         self.assertIn("if: github.event_name == 'pull_request'", self.job("benchmark"))
 
-    def test_coverage_is_kept_and_compared_with_the_base(self):
-        """#208: the profiles are an artifact, a pull request's per-package totals are compared with its first parent's,
-        and the Codecov step that failed on every run for want of a token is gone."""
+    def test_coverage_profiles_are_kept(self):
+        """#208: the profiles are an artifact for a coverage tracker; the comparison with the base was dropped by the
+        project lead, and the Codecov step that failed on every run for want of a token is gone."""
         self.assertNotIn("codecov", self.text.lower())
         test = self.job("test")
         self.assertIn('name: coverage-profiles' + chr(10) + '          path: "*-coverage.out"', test)
-        job = self.job("coverage")
-        self.assertIn("if: github.event_name == 'pull_request'", job)
-        self.assertIn("needs: test", job)
-        self.assertIn('git worktree add "$RUNNER_TEMP/base" "HEAD^1"', job)
-        self.assertNotIn("base.sha", job)
-        # the base's profiles come from main's run for that commit; testing the base is the fallback
-        self.assertIn("gh run list --workflow build.yaml --branch main --event push --commit", job)
-        self.assertIn("gh run download", job)
-        self.assertIn("actions: read", job)
-        self.assertEqual(4, job.count("if: steps.base-profiles.outputs.found != 'true'"))
-        self.assertIn("name: coverage-profiles\n          path: head-coverage", job)
-        self.assertIn('run-coverage.sh "$RUNNER_TEMP/base" "$RUNNER_TEMP/base-coverage"', job)
-        self.assertIn('compare-coverage.py --base-root "$RUNNER_TEMP/base" --head-root . "$RUNNER_TEMP/base-coverage" head-coverage', job)
-        self.assertNotIn("continue-on-error", job)
-        self.assertNotIn("cache/save", job)
-        self.assertIn("run: python3 .github/scripts/test_compare_coverage.py", self.job("lint"))
+        self.assertNotIn("compare-coverage", self.text)
 
     def test_outage_job_compares_both_images(self):
         """UC-022 Q16: the gated job runs the RPC suite with the outage scenarios against both images."""
@@ -365,6 +369,56 @@ class BuildWorkflow(unittest.TestCase):
         """UC-023 Q14: the gated job runs flagd-full with a grpc source against the relay testbed."""
         self.assertIn("make testbed-grpc-sync", self.job("testbed-grpc-sync"))
 
+class WorkflowPermissions(unittest.TestCase):
+    """The repository's default token may write, so every workflow narrows it: a top-level block that reads, and job-level
+    grants only where a job calls an API that needs them. Nothing grants packages: write."""
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            import yaml
+        except ImportError:
+            if os.environ.get("GITHUB_ACTIONS") == "true":
+                raise
+            raise unittest.SkipTest("PyYAML is not installed")
+        cls.files = sorted((ROOT / ".github" / "workflows").glob("*.y*ml"))
+        cls.docs = {f.name: yaml.safe_load(f.read_text(encoding="utf-8")) for f in cls.files}
+
+    def test_every_workflow_parses_and_has_a_top_level_permissions_block(self):
+        self.assertIn("build.yaml", self.docs)
+        for name, doc in self.docs.items():
+            with self.subTest(workflow=name):
+                self.assertIsInstance(doc.get("permissions"), dict, "a top-level permissions block narrows the default token")
+                self.assertIn("jobs", doc)
+
+    def test_the_top_level_block_only_reads_unless_a_deploy_workflow_says_why(self):
+        # the Pages deploy workflows are upstream flagd's, gated to open-feature/flagd
+        deploy = {"dev-benches-page.yml": {"contents": "read", "pages": "write", "id-token": "write"},
+                  "docs.yaml": {"contents": "read"}}
+        for name, doc in self.docs.items():
+            with self.subTest(workflow=name):
+                want = {"lint-pr.yaml": {"pull-requests": "write"}}.get(name) or deploy.get(name) or {"contents": "read"}
+                self.assertEqual(want, doc["permissions"])
+
+    def test_nothing_grants_packages_write(self):
+        for f in self.files:
+            with self.subTest(workflow=f.name):
+                self.assertNotRegex(f.read_text(encoding="utf-8"), r"packages:\s*write")
+
+    def test_the_only_registry_login_is_the_pinned_release_workflow(self):
+        """docker/login-action appears in release-please.yaml only (gated to open-feature/flagd, never enabled here); the
+        hash in ReleaseConfiguration pins that file, so a second login or a change to this one fails a test."""
+        with_login = [f.name for f in self.files if "docker/login-action" in f.read_text(encoding="utf-8")]
+        self.assertEqual(["release-please.yaml"], with_login)
+        self.assertIn(".github/workflows/release-please.yaml", ReleaseConfiguration.PINNED)
+
+    def test_lint_pr_runs_on_pull_request_target_without_the_pull_requests_code(self):
+        text = (ROOT / ".github" / "workflows" / "lint-pr.yaml").read_text(encoding="utf-8")
+        self.assertIn("pull_request_target:", text)
+        for gone in ("actions/checkout", "github.event.pull_request.head", "run:"):
+            self.assertNotIn(gone, text)
+
+
 class SpecLintWorkflow(unittest.TestCase):
     """The spec lint gates spec changes on errors only, and its sibling scripts sit where load_sibling looks."""
 
@@ -412,17 +466,17 @@ class DocsCheckWorkflow(unittest.TestCase):
 
     def test_jobs(self):
         names = re.findall(r"^  ([a-z][a-z-]*):\n", self.text.split("\njobs:\n", 1)[1], re.M)
-        self.assertEqual(["docs-check", "upgrade-guide"], names)
+        self.assertEqual(["docs-check"], names)
 
-    def test_the_job_names_differ_from_the_build_workflows(self):
+    def test_the_check_is_not_one_of_the_build_workflows(self):
+        """build.yaml folded its docs-check job into lint, so the name is the light workflow's alone."""
         build = BUILD.read_text(encoding="utf-8")
+        self.assertNotRegex(build, r"(?m)^  docs-check:")
         self.assertNotIn("name: docs-check\n", self.text.split("\njobs:\n", 1)[1])
-        self.assertIn("    name: docs-check (markdown run)\n", self.text)
-        self.assertNotIn("name: docs-check (markdown run)", build)
 
     def test_commands(self):
         self.assertIn("      - run: make generate-docs\n", self.text)
-        self.assertIn("      - run: make test-upgrade-accepted\n", self.text)
+        self.assertIn("      - run: make test-upgrade-accepted\n        if: ${{ !cancelled() }}\n", self.text)
 
 
 class NoEmbeddedMarkdown(unittest.TestCase):

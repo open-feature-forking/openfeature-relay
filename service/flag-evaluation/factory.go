@@ -37,16 +37,17 @@ type EndpointConfig struct {
 func decodeConfig(config map[string]any) (EndpointConfig, error) {
 	cfg, _ := config[ConfigKey].(EndpointConfig)
 	c := &cfg.Configuration
-	err := service.ConfigDecoder{
-		"port": service.Set(&c.Port, service.Uint16), "management-port": service.Set(&c.ManagementPort, service.Uint16),
-		"service-name": service.Set(&c.ServiceName, service.String), "cert-path": service.Set(&c.CertPath, service.String),
-		"key-path": service.Set(&c.KeyPath, service.String), "socket-path": service.Set(&c.SocketPath, service.String),
-		"cors": service.Set(&c.CORS, service.Strings), "context-values": service.Set(&c.ContextValues, service.Map),
-		"header-to-context-key-mappings": service.Set(&c.HeaderToContextKeyMappings, service.StringMap),
+	err := service.EndpointKeys{
+		Port: &c.Port, ServiceName: &c.ServiceName, CORS: &c.CORS, ContextValues: &c.ContextValues,
+		MaxRequestHeaderBytes: &c.MaxRequestHeaderBytes, MaxRequestBodyBytes: &c.MaxRequestBodyBytes,
+	}.Decoder(service.ConfigDecoder{
+		"management-port":                service.Set(&c.ManagementPort, service.Uint16),
+		"cert-path":                      service.Set(&c.CertPath, service.String),
+		"key-path":                       service.Set(&c.KeyPath, service.String),
+		"socket-path":                    service.Set(&c.SocketPath, service.String),
 		"stream-deadline":                service.Set(&c.StreamDeadline, service.Duration),
-		"max-request-header-bytes":       service.Set(&c.MaxRequestHeaderBytes, service.Int64),
-		"max-request-body-bytes":         service.Set(&c.MaxRequestBodyBytes, service.Int64),
-	}.Decode(config, ConfigKey)
+		"header-to-context-key-mappings": service.Set(&c.HeaderToContextKeyMappings, service.StringMap),
+	}).Decode(config, ConfigKey)
 	return cfg, err
 }
 
