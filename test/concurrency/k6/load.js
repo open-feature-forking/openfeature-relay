@@ -34,8 +34,17 @@ const answers = new Counter('answers_checked');
 const scriptError = new Counter('script_error');
 
 // A profile sets each scenario's VUs and arrival rate. "one" is the harness's own: one VU per scenario at a low rate.
-// The smoke and full profiles are set where the rates are measured.
+// The rates of smoke and full sit below saturation: about 75 requests a second per flagd core under -race (see the PR
+// description); the goal is concurrency, not saturation.
 const PROFILES = {
+  smoke: {
+    ofrepSingle: { rate: 10, vus: 2 }, ofrepBulk: { rate: 2, vus: 2 }, rpcUnary: { rate: 10, vus: 3 },
+    rpcEvents: { vus: 1 }, syncHeld: { vus: 2 }, syncChurn: { vus: 2 },
+  },
+  full: {
+    ofrepSingle: { rate: 100, vus: 30 }, ofrepBulk: { rate: 10, vus: 10 }, rpcUnary: { rate: 100, vus: 30 },
+    rpcEvents: { vus: 4 }, syncHeld: { vus: 40 }, syncChurn: { vus: 10 },
+  },
   one: {
     ofrepSingle: { rate: 20, vus: 1 }, ofrepBulk: { rate: 5, vus: 1 }, rpcUnary: { rate: 20, vus: 1 },
     rpcEvents: { vus: 1 }, syncHeld: { vus: 1 }, syncChurn: { vus: 1 },
@@ -52,7 +61,7 @@ const profile = PROFILES[__ENV.PROFILE || 'one'];
 const seconds = Math.max(1, Math.ceil((END - Date.now()) / 1000));
 const arrival = (p, name) => ({
   executor: 'constant-arrival-rate', rate: p.rate, timeUnit: '1s', duration: `${seconds}s`,
-  preAllocatedVUs: p.vus, maxVUs: p.vus, exec: name,
+  preAllocatedVUs: p.vus, maxVUs: 2 * p.vus, exec: name,
 });
 const held = (p, name) => ({
   executor: 'per-vu-iterations', vus: p.vus, iterations: 1, maxDuration: `${seconds + 30}s`, exec: name,
