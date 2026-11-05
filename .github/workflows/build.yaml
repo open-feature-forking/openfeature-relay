@@ -104,6 +104,8 @@ jobs:
         run: python3 .github/scripts/test_compare_pass_sets.py
       - name: Test the publish gate
         run: python3 .github/scripts/test_publish_gate.py
+      - name: Rehearse publish-images against an in-process registry
+        run: python3 .github/scripts/test_publish_images.py
       # The module boundary tables include the evaluator boundary (NFR-005), which check-evaluator-boundary names.
       - run: make check-module-boundary check-evaluator-boundary
       # NFR-012: golang.org/x/exp is gone from the sources and from the direct requirements.
@@ -949,6 +951,165 @@ jobs:
           path: ${{ runner.temp }}/layouts/flagd-testbed.tar
           retention-days: 1
           if-no-files-found: error
+
+  # Step 17: the only job that pushes. It builds nothing: it takes the layouts the build jobs checked and pushes them by
+  # digest under their sha- tags, then attests each digest. Only a push or a manual run on the main branch of this repository
+  # gets here, and only after publish-gate said so and every build job passed (a skipped testbed does not hold the rest back).
+  # The script holds the destinations: the seven images of #216 under ghcr.io/open-feature-forking/ and no other.
+  publish-images:
+    name: Publish images
+    needs: [publish-gate, release-dry-run, image-build, testbed]
+    if: >-
+      ${{ always() && needs.publish-gate.outputs.publish == 'true'
+      && github.ref == 'refs/heads/main' && github.repository == 'open-feature-forking/openfeature-relay'
+      && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && needs.release-dry-run.result == 'success' && needs.image-build.result == 'success'
+      && (needs.testbed.result == 'success' || needs.testbed.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - name: Download the layouts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: layouts-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/layouts
+      - name: Log in to ghcr.io
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push the layouts by digest, under their sha- tags
+        id: push
+        env:
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          .github/scripts/publish-images.sh push "$RUNNER_TEMP/layouts" --short "${GITHUB_SHA::7}" --outputs "$GITHUB_OUTPUT" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Attest flagd-full
+        if: steps.push.outputs.flagd_full != ''
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ghcr.io/open-feature-forking/flagd-full
+          subject-digest: ${{ steps.push.outputs.flagd_full }}
+          push-to-registry: true
+      - name: Attest flagd-full-fips
+        if: steps.push.outputs.flagd_full_fips != ''
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ghcr.io/open-feature-forking/flagd-full
+          subject-digest: ${{ steps.push.outputs.flagd_full_fips }}
+          push-to-registry: true
+      - name: Attest flagd-minimal
+        if: steps.push.outputs.flagd_minimal != ''
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ghcr.io/open-feature-forking/flagd-minimal
+          subject-digest: ${{ steps.push.outputs.flagd_minimal }}
+          push-to-registry: true
+      - name: Attest flagd-minimal-fips
+        if: steps.push.outputs.flagd_minimal_fips != ''
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ghcr.io/open-feature-forking/flagd-minimal
+          subject-digest: ${{ steps.push.outputs.flagd_minimal_fips }}
+          push-to-registry: true
+      - name: Attest flagd-minimal-otel
+        if: steps.push.outputs.flagd_minimal_otel != ''
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ghcr.io/open-feature-forking/flagd-minimal-otel
+          subject-digest: ${{ steps.push.outputs.flagd_minimal_otel }}
+          push-to-registry: true
+      - name: Attest flagd-minimal-otel-fips
+        if: steps.push.outputs.flagd_minimal_otel_fips != ''
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ghcr.io/open-feature-forking/flagd-minimal-otel
+          subject-digest: ${{ steps.push.outputs.flagd_minimal_otel_fips }}
+          push-to-registry: true
+      - name: Attest flagd-cloud
+        if: steps.push.outputs.flagd_cloud != ''
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ghcr.io/open-feature-forking/flagd-cloud
+          subject-digest: ${{ steps.push.outputs.flagd_cloud }}
+          push-to-registry: true
+      - name: Attest flagd-cloud-fips
+        if: steps.push.outputs.flagd_cloud_fips != ''
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ghcr.io/open-feature-forking/flagd-cloud
+          subject-digest: ${{ steps.push.outputs.flagd_cloud_fips }}
+          push-to-registry: true
+      - name: Attest flagd-kubernetes
+        if: steps.push.outputs.flagd_kubernetes != ''
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ghcr.io/open-feature-forking/flagd-kubernetes
+          subject-digest: ${{ steps.push.outputs.flagd_kubernetes }}
+          push-to-registry: true
+      - name: Attest flagd-kubernetes-fips
+        if: steps.push.outputs.flagd_kubernetes_fips != ''
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ghcr.io/open-feature-forking/flagd-kubernetes
+          subject-digest: ${{ steps.push.outputs.flagd_kubernetes_fips }}
+          push-to-registry: true
+      - name: Attest flagd-sync
+        if: steps.push.outputs.flagd_sync != ''
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ghcr.io/open-feature-forking/flagd-sync
+          subject-digest: ${{ steps.push.outputs.flagd_sync }}
+          push-to-registry: true
+      - name: Attest flagd-sync-fips
+        if: steps.push.outputs.flagd_sync_fips != ''
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ghcr.io/open-feature-forking/flagd-sync
+          subject-digest: ${{ steps.push.outputs.flagd_sync_fips }}
+          push-to-registry: true
+      - name: Attest flagd-testbed
+        if: steps.push.outputs.flagd_testbed != ''
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ghcr.io/open-feature-forking/flagd-testbed
+          subject-digest: ${{ steps.push.outputs.flagd_testbed }}
+          push-to-registry: true
+
+  # :main moves by compare-and-set: only forward. A move-main that was cancelled while pending is harmless, because the
+  # next one makes the same check against the commit :main points at.
+  move-main:
+    name: Move :main
+    needs: publish-images
+    concurrency:
+      group: move-main
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+        with:
+          fetch-depth: 0
+      - name: Move the main tags forward
+        env:
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: .github/scripts/publish-images.sh move-main --short "${GITHUB_SHA::7}" --sha "$GITHUB_SHA" | tee -a "$GITHUB_STEP_SUMMARY"
 
   testbed-rpc-outages:
     name: Testbed RPC outages
