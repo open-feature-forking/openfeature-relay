@@ -55,6 +55,9 @@ type Sync struct {
 	IncrementalUpdates      bool
 	Headers                 map[string]string
 
+	// Options are the opt-in settings of the source (the `grpc` object); the zero value is today's behaviour.
+	Options Options
+
 	// SyncMetricsRecorder, when non-nil, is used to record the source-agnostic
 	// client-side sync metrics (feature_flag.flagd.sync.client.flag_config.*). Nil is
 	// safe — the recorder's methods tolerate nil receivers.
@@ -68,6 +71,7 @@ type Sync struct {
 	DialOptions []grpc.DialOption
 
 	client FlagSyncServiceClient
+	conn   *grpc.ClientConn // closed when Sync returns
 	ready  atomic.Bool
 
 	// after returns the channel that fires once the delay is over; time.After when nil. Tests replace it.
@@ -119,6 +123,7 @@ func (g *Sync) Init(_ context.Context) error {
 	}
 
 	// Setup service client
+	g.conn = rpcCon
 	g.client = syncv1grpc.NewFlagSyncServiceClient(rpcCon)
 
 	return nil
@@ -178,7 +183,16 @@ func (g *Sync) LastContact() time.Time {
 	return time.Time{}
 }
 
+// closeConn closes the client connection, once.
+func (g *Sync) closeConn() {
+	if conn := g.conn; conn != nil {
+		g.conn = nil
+		_ = conn.Close()
+	}
+}
+
 func (g *Sync) Sync(ctx context.Context, dataSync chan<- sync.DataSync) error {
+	defer g.closeConn()
 	g.Logger.Info(fmt.Sprintf("starting sync from %s", g.URI))
 
 	// Initialize SyncFlags client. A failure to open the stream, such as an unreachable server, is retried with a

@@ -48,6 +48,9 @@ func LoadConfig(path string, components distribution.Components, rewrites []Sour
 	if err := v.UnmarshalKey(sourcesFlagName, &fromFile); err != nil {
 		return runtime.Config{}, components, fmt.Errorf("reading the sources of %s: %w", path, err)
 	}
+	if err := decodeGRPCSettings(v.Get(sourcesFlagName), fromFile); err != nil {
+		return runtime.Config{}, components, fmt.Errorf("reading the sources of %s: %w", path, err)
+	}
 	sources = append(sources, fromFile...)
 	for i := range sources {
 		for _, rewrite := range rewrites {
