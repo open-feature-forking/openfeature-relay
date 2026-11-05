@@ -208,7 +208,7 @@ func (g *Sync) Sync(ctx context.Context, dataSync chan<- sync.DataSync) error {
 	syncClient, err := g.openStream(streamCtx)
 	recycled := false
 	if err != nil {
-		recycled = g.deadlineElapsed(ctx, streamCtx)
+		recycled = g.deadlineElapsed(ctx, streamCtx, err)
 		cancel()
 		if fatal := g.fatalError(ctx, err, recycled); fatal != nil {
 			return fatal
@@ -222,7 +222,7 @@ func (g *Sync) Sync(ctx context.Context, dataSync chan<- sync.DataSync) error {
 		// Initial stream listening. Error will be logged and continue and retry connection establishment
 		err = g.handleFlagSync(ctx, syncClient, dataSync, false)
 		g.streamClosed(ctx)
-		recycled = g.deadlineElapsed(ctx, streamCtx)
+		recycled = g.deadlineElapsed(ctx, streamCtx, err)
 		cancel()
 		if err == nil {
 			// This should not happen as handleFlagSync expects to return with an error
@@ -248,7 +248,7 @@ func (g *Sync) Sync(ctx context.Context, dataSync chan<- sync.DataSync) error {
 
 		err = g.handleFlagSync(ctx, opened.client, dataSync, !recycled)
 		g.streamClosed(ctx)
-		recycled = g.deadlineElapsed(ctx, opened.ctx)
+		recycled = g.deadlineElapsed(ctx, opened.ctx, err)
 		opened.cancel()
 		if err != nil {
 			if fatal := g.fatalError(ctx, err, recycled); fatal != nil {
@@ -318,7 +318,7 @@ func (g *Sync) reconnect(ctx context.Context, immediate bool) (*openedStream, er
 		streamCtx, cancel := g.streamContext(ctx)
 		syncClient, err := g.openStream(streamCtx)
 		if err != nil {
-			recycled := g.deadlineElapsed(ctx, streamCtx)
+			recycled := g.deadlineElapsed(ctx, streamCtx, err)
 			cancel()
 			if fatal := g.fatalError(ctx, err, recycled); fatal != nil {
 				return nil, fatal

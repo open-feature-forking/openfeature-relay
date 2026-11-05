@@ -10,7 +10,7 @@ What runs by default is flagd-full, which is flagd built from this repository by
 
 ## Done
 
-Steps 1 to 14 of the proof of concept are done; step 12's release runs as a dry run.
+Steps 1 to 16 of the proof of concept are done; step 12's release runs as a dry run.
 A use case counts as done when its **Status** line reads `Implemented`, or `Tested` once a test case under `docs/test_cases/` covers it.
 
 - **Evaluator without telemetry, with a boundary**: the evaluator no longer imports OpenTelemetry, and `depguard` rules and a CI check keep OpenTelemetry, gRPC, ConnectRPC, Kubernetes and cloud SDKs out of its dependencies (FR-040, NFR-005).
@@ -32,11 +32,15 @@ A use case counts as done when its **Status** line reads `Implemented`, or `Test
 - **A release dry run**: the release's build steps run in CI without publishing or signing anything ([UC-012](../use_cases/UC-012-release-distributions-and-component-modules.md), part of it).
 - **The flagd testbed as a distribution**: the testbed the provider suites run against is built by the relay builder, with a control module, a listener gate and a runtime reset, and CI runs the RPC and in-process suites against it and against the flagd-testbed image ([UC-022](../use_cases/UC-022-run-provider-test-suites-against-the-testbed.md), [the testbed](testbed.md)).
 - **Syncing from an upstream flag sync endpoint**: a `grpc` source opts into the Go flagd provider's gRPC sync features with a `grpc` object: its retry policy, fatal status codes, a stream deadline, keepalive, the selector header and readiness on the first payload; without the object it behaves as before ([UC-023](../use_cases/UC-023-sync-from-an-upstream-flag-sync-endpoint.md), [the settings](grpc-source.md)).
+- **Faster CI**: the release dry run in parallel parts, a per-job cache, cancelled superseded runs and a light run for markdown-only changes ([#176](https://github.com/open-feature-forking/openfeature-relay/issues/176)).
+- **A load test**: flagd-minimal, built with `-race`, answers every OFREP, RPC and flag sync client from the current flags while they change, and every stream sees every change (NFR-017, [the load test](load-test.md)).
 
 ## How a change is verified
 
 [UC-013](../use_cases/UC-013-verify-change-against-distributions.md) maps to these checks of the `build` workflow.
-The workflow does not run for a change that touches only `README.md` or `docs/**`; the `docs` and `Markdown checks` workflows run for those.
+The workflow does not run for a change that touches only markdown, `docs/**` or `.claude/**`; the light `docs-check` workflow and `Markdown checks` run for those.
+A newer push to a pull request cancels its running build.
+`FULL_CI=true` or a manual run of `build` runs every gated job.
 
 | Check | Job | Covers |
 |-------|-----|--------|
@@ -46,10 +50,12 @@ The workflow does not run for a change that touches only `README.md` or `docs/**
 | flagd-full built from its manifest by the builder, its components checked, the CLI pins and the flagsmith distribution built | `builder-e2e` | FR-005, FR-006, FR-027, NFR-008 |
 | RPC and in-process Test Harness suites against flagd, with the tag selection pinned to today's flagd | `integration-test` | NFR-007, C-010 |
 | allocs/op against the pull request's base commit; time deviations beyond 5% are reported, never failing | `benchmark` (pull requests) | NFR-001 |
-| today's flagd and flagd-full side by side, and the reference Dockerfile's images | `upgrade-test`, when a Dockerfile or the build changes | FR-009, NFR-007 |
-| the release's build steps without publishing | `release-dry-run`, when a release input changes | FR-030, FR-031 |
-| FIPS compile and crypto closure of every standard distribution | `fips`, gated by `FULL_CI` or a manual run | C-009 |
-| the local Docker build and its vulnerability scan | `docker-local`, gated by `FULL_CI` or a manual run | NFR-009 |
+| today's flagd and flagd-full side by side, and the reference Dockerfile's images | `upgrade-test`, on a pull request that changes Go code, a Dockerfile or the build | FR-009, NFR-007 |
+| the release's build steps without publishing | `release-dry-run` on a push to `main`, with `FULL_CI` or a manual run; a reduced set on a pull request labelled `release-check` (`release-check.yaml`) | FR-030, FR-031 |
+| FIPS compile and crypto closure of every standard distribution | `fips` on a push to `main` and on a pull request that changes Go code or the Makefile | C-009 |
+| the local Docker build and its Trivy vulnerability scan | `docker-local` on a push to `main` and on a pull request that changes `go.mod`, `go.sum` or a Dockerfile | NFR-009 |
+| 60 s of concurrent OFREP, RPC and flag sync clients against a race build of flagd-minimal while its flags change | `load-smoke`, every build | NFR-017 |
+| the same for 10 min with more clients | `load-test`, with `FULL_CI` or a manual run | NFR-017 |
 
 Branch protection is not set: the project lead decides which of these checks are required for merging.
 NFR-001 against the upstream commit the work branched from is not compared yet (`compare-allocs.py` would need a mapping of the old package paths to the new ones), so NFR-001 stays `In Progress`.
@@ -76,7 +82,7 @@ The table shows the order; the sections above say which rows are done.
 | 13 | [UC-022](../use_cases/UC-022-run-provider-test-suites-against-the-testbed.md) | the flagd testbed as a `relay-builder` distribution |
 | 14 | [UC-023](../use_cases/UC-023-sync-from-an-upstream-flag-sync-endpoint.md) | the Go flagd provider's gRPC sync features in `sync/flagd-grpc`, opt-in |
 | 15 | [#176](https://github.com/open-feature-forking/openfeature-relay/issues/176) | faster CI: the release dry run in parallel parts on `main` and on demand, a per-job cache, the spec lint in CI, cancelled superseded runs and a markdown-only light run; the per-module test matrix was dropped as slower on full runs |
-| 16 | [#183](https://github.com/open-feature-forking/openfeature-relay/issues/183) (planned) | a load test that flagd-minimal stays correct under concurrent OFREP, RPC and sync clients |
+| 16 | [#183](https://github.com/open-feature-forking/openfeature-relay/issues/183) | a load test that flagd-minimal stays correct under concurrent OFREP, RPC and sync clients |
 
 [UC-016 Recover from Snapshot](../use_cases/UC-016-recover-from-snapshot.md) is deferred to a later release.
 Provider migration (formerly UC-015) is a follow-up after the proof of concept, [#156](https://github.com/open-feature-forking/openfeature-relay/issues/156).

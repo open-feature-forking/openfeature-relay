@@ -80,3 +80,6 @@
 | Launchpad API | The control API of flagd-testbed v3.11.0 on port 8080: `/start`, `/stop`, `/restart` and `/change`, with their texts and codes. | |
 | Listener Gate | The layer through which the runtime opens its listeners; closing it closes every listener and connection with a plain close, opening it binds them again. | |
 | Control Target | The interface through which the control module drives a runtime: start, stop, load a document and report readiness. | |
+| Flag Generation | One version of the flags the load test writes to flagd-minimal's flag file; each generation has its own expected answers (NFR-017). | |
+| Apply Bound | The longest time a flag generation may take from being written to answering requests and reaching streams; a later arrival fails the load test as slow (NFR-017). | |
+| Change Interval | The time between two flag generations in the load test; longer than the apply bound, so at most two generations are correct at once (NFR-017). | |
