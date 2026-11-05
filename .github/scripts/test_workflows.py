@@ -108,7 +108,7 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIn("run: python3 .github/scripts/test_ci_modules.py\n", self.job("lint"))
 
     def test_gated_jobs(self):
-        gate = "if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'"
+        gate = "if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'"
         for name in ("testbed-rpc-outages", "testbed-grpc-sync"):
             with self.subTest(job=name):
                 self.assertIn(gate, self.job(name))
@@ -246,6 +246,16 @@ class BuildWorkflow(unittest.TestCase):
         self.assertEqual(["name: Checkout", "name: Fetch the commit before the push",
                           "name: Does the image build and scan apply to this change?"], ungated)
         self.assertIn("aquasecurity/trivy-action", job)
+
+    def test_outage_and_grpc_source_suites_run_nightly_on_main(self):
+        """Coverage gap 7: a cron schedule (which GitHub runs on the default branch only) starts both suites."""
+        head = self.text.split("\njobs:\n", 1)[0]
+        self.assertRegex(head, r'  schedule:\n    - cron: "[0-9*/, ]+ [0-9*/, ]+ \* \* \*"\n')
+        for name in ("testbed-rpc-outages", "testbed-grpc-sync"):
+            with self.subTest(job=name):
+                self.assertIn("github.event_name == 'schedule'", self.job(name))
+        # nothing else is gated on the schedule: the pull-request-only and push-only jobs skip it
+        self.assertIn("if: github.event_name == 'pull_request'", self.job("benchmark"))
 
     def test_outage_job_compares_both_images(self):
         """UC-022 Q16: the gated job runs the RPC suite with the outage scenarios against both images."""

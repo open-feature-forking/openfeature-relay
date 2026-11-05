@@ -18,6 +18,9 @@ on:
       - ".claude/**"
   # Full run including the gated jobs below.
   workflow_dispatch:
+  # Nightly, on the default branch: the outage and gRPC source suites run only here, with FULL_CI and manually.
+  schedule:
+    - cron: "17 3 * * *"
 
 # A newer push to a pull request's branch cancels the superseded run. Every other event gets a group of its own (the
 # commit), so a run on main is never cancelled or replaced by the one that queues behind it.
@@ -786,8 +789,8 @@ jobs:
 
   testbed-rpc-outages:
     name: Testbed RPC outages
-    # Gated during the proof of concept: set the repository variable FULL_CI=true, or run the workflow manually.
-    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'
+    # Nightly on main (schedule), with FULL_CI=true, and when the workflow is run manually; not on pull requests.
+    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -804,8 +807,8 @@ jobs:
 
   testbed-grpc-sync:
     name: Testbed gRPC source
-    # Gated during the proof of concept: set the repository variable FULL_CI=true, or run the workflow manually.
-    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'
+    # Nightly on main (schedule), with FULL_CI=true, and when the workflow is run manually; not on pull requests.
+    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
