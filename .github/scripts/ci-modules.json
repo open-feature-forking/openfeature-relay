@@ -45,6 +45,10 @@
       "test": "make test-module MODULE=runtime",
       "coverage": true
     },
+    "runtime/runtimetest": {
+      "test": null,
+      "reason": "a helper for the runtime's tests with none of its own; the runtime's tests run it"
+    },
     "service/event-collector": {
       "test": "make test-module MODULE=service/event-collector",
       "coverage": true

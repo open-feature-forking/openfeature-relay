@@ -8,7 +8,7 @@ package syncmetrics_test
 import (
 	"context"
 	"fmt"
-	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
+	"github.com/open-feature-forking/openfeature-relay/runtime/runtimetest"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -136,7 +136,7 @@ func TestSyncMetricsCharacterization(t *testing.T) {
 			{URI: addr, Provider: "grpc"},
 			{URI: addr, Provider: "grpc", Selector: "source=a"},
 		},
-	}, withOpenTelemetry(officialset.Components()))
+	}, withOpenTelemetry(runtimetest.Components()))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())

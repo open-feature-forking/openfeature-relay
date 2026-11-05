@@ -7,7 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
+	"github.com/open-feature-forking/openfeature-relay/runtime/runtimetest"
 	"io"
 	"net/http"
 	"net/url"
@@ -48,7 +48,7 @@ func selectorSettings(t *testing.T, factory service.Factory) service.Settings {
 		})
 		require.NoError(t, err)
 	}
-	inputs, err := newEndpointInputs(log, st, events.NewBus(), []service.Factory{factory}, []string{"flagd"}, officialset.Components().Evaluators, nil, false)
+	inputs, err := newEndpointInputs(log, st, events.NewBus(), []service.Factory{factory}, []string{"flagd"}, runtimetest.Components().Evaluators, nil, false)
 	require.NoError(t, err)
 	settings := inputs.settings(factory)
 	initialized := make(chan struct{})

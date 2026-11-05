@@ -4,7 +4,7 @@ package runtime
 
 import (
 	"context"
-	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
+	"github.com/open-feature-forking/openfeature-relay/runtime/runtimetest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -37,9 +37,9 @@ func acceptRuntime(t *testing.T) (rt *Runtime, changes *events.Subscription, fla
 	}
 	var err error
 	rt, err = FromConfig(logger.NewLogger(nil, false), "test", cfg, Components{
-		Sync:                 officialset.Components().Sync,
-		ConfigurationFormats: append(officialset.Components().ConfigurationFormats, versionedFactory{}),
-		Evaluators:           officialset.Components().Evaluators,
+		Sync:                 runtimetest.Components().Sync,
+		ConfigurationFormats: append(runtimetest.Components().ConfigurationFormats, versionedFactory{}),
+		Evaluators:           runtimetest.Components().Evaluators,
 	})
 	require.NoError(t, err)
 	changes = rt.Bus.Subscribe(events.SubscribeOptions{Kinds: []events.Kind{events.KindConfigurationChange}, Buffer: 16})

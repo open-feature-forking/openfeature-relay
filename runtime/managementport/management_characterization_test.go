@@ -9,7 +9,7 @@ package managementport
 
 import (
 	"fmt"
-	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
+	"github.com/open-feature-forking/openfeature-relay/runtime/runtimetest"
 	"io"
 	"net"
 	"net/http"
@@ -84,7 +84,7 @@ func TestManagementPort(t *testing.T) {
 			{URI: file, Provider: "file"},
 			{URI: remote.URL, Provider: "http", Interval: 60},
 		},
-	}, withOpenTelemetry(officialset.Components()))
+	}, withOpenTelemetry(runtimetest.Components()))
 	require.NoError(t, err)
 	// with OTEL_TRACES_EXPORTER unset, autoexport selects the OTLP span exporter, so FromConfig installs the trace
 	// provider and the W3C propagators; only OTEL_TRACES_EXPORTER=none leaves both noop

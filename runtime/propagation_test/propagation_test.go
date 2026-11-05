@@ -14,7 +14,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
+	"github.com/open-feature-forking/openfeature-relay/runtime/runtimetest"
 	"io"
 	"maps"
 	"net"
@@ -129,7 +129,7 @@ func TestTracePropagationCharacterization(t *testing.T) {
 		KeepAliveMinTime:             runtime.KeepAliveMinTimeDefault,
 		KeepAlivePermitWithoutStream: runtime.KeepAlivePermitWithoutStreamDefault,
 		SyncProviders:                []coresync.SourceConfig{{URI: file, Provider: "file"}},
-	}, withOpenTelemetry(officialset.Components()))
+	}, withOpenTelemetry(runtimetest.Components()))
 	require.NoError(t, err)
 
 	done := make(chan error, 1)

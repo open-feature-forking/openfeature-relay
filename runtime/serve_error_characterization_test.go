@@ -5,7 +5,7 @@ package runtime
 import (
 	"context"
 	"fmt"
-	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
+	"github.com/open-feature-forking/openfeature-relay/runtime/runtimetest"
 	"net"
 	"testing"
 	"time"
@@ -53,7 +53,7 @@ func TestPortInUse(t *testing.T) {
 			require.NoError(t, err)
 			defer l.Close()
 
-			rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, officialset.Components())
+			rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, runtimetest.Components())
 			if tt.fromConfig != "" {
 				require.EqualError(t, err, fmt.Sprintf(tt.fromConfig, *busy))
 				return

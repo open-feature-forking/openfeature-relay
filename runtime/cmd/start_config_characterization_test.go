@@ -18,7 +18,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/distribution"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/runtime"
-	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
+	"github.com/open-feature-forking/openfeature-relay/runtime/runtimetest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -53,7 +53,7 @@ func TestStartConfigHelper(_ *testing.T) {
 	}
 	rootCmd.SetArgs(args)
 	Execute(distribution.Info{Name: "flagd-full", Version: "v9.9.9", Commit: "abc1234", Date: "2026-01-02T03:04:05Z"},
-		officialset.Components(), distribution.Inventory{})
+		runtimetest.Components(), distribution.Inventory{})
 }
 
 // renderTelemetryConfig prints the settings of the telemetry provider that the telemetry flags map to. They were

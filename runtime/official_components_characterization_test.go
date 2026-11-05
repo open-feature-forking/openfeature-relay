@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
+	"github.com/open-feature-forking/openfeature-relay/runtime/runtimetest"
 	"os"
 	"strings"
 	"testing"
@@ -46,14 +46,14 @@ func TestOfficialComponentsCharacterization(t *testing.T) {
 	fmt.Fprintf(&out, "  %s for the configuration format %s (built in)\n", ev.Type(), ev.ConfigurationFormat())
 
 	out.WriteString("service endpoints\n")
-	for _, f := range officialset.Components().Endpoints {
+	for _, f := range runtimetest.Components().Endpoints {
 		needs := f.Needs()
 		fmt.Fprintf(&out, "  %s\n    needs: router=%v format=%q\n", f.Type(), needs.Router, needs.Format)
 	}
 	// /metrics is served by the telemetry provider's MetricsHandler; flagd start adds the OpenTelemetry provider
 	// (TestStartSelectsOpenTelemetry), and the management port characterization pins what it serves.
-	fmt.Fprintf(&out, "metrics handler override: %v\n", officialset.Components().MetricsHandler != nil)
-	fmt.Fprintf(&out, "telemetry provider: %v\n", officialset.Components().Telemetry != nil)
+	fmt.Fprintf(&out, "metrics handler override: %v\n", runtimetest.Components().MetricsHandler != nil)
+	fmt.Fprintf(&out, "telemetry provider: %v\n", runtimetest.Components().Telemetry != nil)
 
 	if *updateOfficialComponents {
 		require.NoError(t, os.MkdirAll("testdata", 0o755))

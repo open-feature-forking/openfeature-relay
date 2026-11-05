@@ -5,7 +5,7 @@ package runtime
 import (
 	"errors"
 	"fmt"
-	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
+	"github.com/open-feature-forking/openfeature-relay/runtime/runtimetest"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -116,7 +116,7 @@ func TestPreflightBeforeAnyMiddleware(t *testing.T) {
 	p := newPorts(t)
 	cfg := characterizedConfig(t, p)
 	cfg.CORS = []string{"*"}
-	components := officialset.Components()
+	components := runtimetest.Components()
 	components.Middleware = []middleware.Configured{{Factory: keyRequiredFactory{seen: &seen}}}
 	startRuntimeWith(t, cfg, components)
 

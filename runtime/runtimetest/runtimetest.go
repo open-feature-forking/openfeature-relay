@@ -1,8 +1,8 @@
-// Package officialset assembles the components of flagd-full that the runtime module can reach without importing the
+// Package runtimetest assembles the components of flagd-full that the runtime module can reach without importing the
 // flagd module: that module requires the runtime, so a runtime that required it back could not be released. It is for
 // the runtime's tests. The event collector requires the runtime and is left out; flagd's generated components test
 // pins the full list.
-package officialset
+package runtimetest
 
 import (
 	flagdformat "github.com/open-feature-forking/openfeature-relay/configformat/flagd"

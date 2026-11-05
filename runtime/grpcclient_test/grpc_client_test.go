@@ -11,7 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
+	"github.com/open-feature-forking/openfeature-relay/runtime/runtimetest"
 	"io"
 	"net"
 	"os"
@@ -153,7 +153,7 @@ func TestGRPCSyncClientInstrumentationCharacterization(t *testing.T) {
 		KeepAliveMinTime:             runtime.KeepAliveMinTimeDefault,
 		KeepAlivePermitWithoutStream: runtime.KeepAlivePermitWithoutStreamDefault,
 		SyncProviders:                []coresync.SourceConfig{{URI: l.Addr().String(), Provider: "grpc"}},
-	}, withOpenTelemetry(officialset.Components()))
+	}, withOpenTelemetry(runtimetest.Components()))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())

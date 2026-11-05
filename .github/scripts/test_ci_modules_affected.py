@@ -86,7 +86,7 @@ class TestAffectedModules(unittest.TestCase):
         self.assertEqual(set(REQUIRES) - {"test/loadtest"} | {"contract-external"}, got)
         self.assertIn("test/loadtest", r.why)
 
-    def test_the_runtime_flagd_cycle(self):
+    def test_a_runtime_change_reaches_flagd(self):
         self.check(["runtime/x_test.go"], {"runtime", "flagd", "service/flag-sync"} | ALWAYS)
 
     def test_the_builder_runs_the_distribution_tests_and_flagd(self):
@@ -195,9 +195,9 @@ class TestRealRepository(unittest.TestCase):
     def test_cores_closure_holds_at_least_forty_modules(self):
         self.assertGreaterEqual(len(self.graph.affected({"core": "x"})), 40)
 
-    def test_the_runtime_flagd_cycle_is_there(self):
+    def test_the_runtime_flagd_cycle_is_gone(self):
         self.assertIn("flagd", self.graph.affected({"runtime": "x"}))
-        self.assertIn("runtime", self.graph.affected({"flagd": "x"}))
+        self.assertNotIn("runtime", self.graph.affected({"flagd": "x"}))
 
     def test_the_extra_edges_name_modules_that_exist(self):
         for src, targets in cm.EXTRA_EDGES.items():
