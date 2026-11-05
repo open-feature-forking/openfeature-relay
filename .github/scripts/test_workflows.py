@@ -94,7 +94,7 @@ class BuildWorkflow(unittest.TestCase):
 
     def test_changes_is_report_only(self):
         """P1: the affected-module report runs beside today's jobs; nothing but the miss report waits on it."""
-        self.assertEqual([], [n for n in ("lint", "test", "builder-e2e", "integration-test", "upgrade-test", "release-dry-run")
+        self.assertEqual([], [n for n in ("lint", "test", "builder-e2e", "integration-test", "upgrade-test", "release-dry-run", "load-smoke", "load-test")
                               if re.search(r"needs:.*\bchanges\b", self.job(n))])
         self.assertIn("fetch-depth: 2", self.job("changes"))
         self.assertIn("python3 .github/scripts/ci-modules.py changes", self.job("changes"))
@@ -167,7 +167,7 @@ class BuildWorkflow(unittest.TestCase):
         parts = re.split(r"(?m)^(?=  [a-z][a-z0-9-]*:[^\n]*\n)", jobs)
         return {m.group(1): part for part in parts if (m := re.match(r"  ([a-z0-9-]+):", part))}
 
-    CACHED_JOBS = ("lint", "docs-check", "test", "builder-e2e", "fips", "integration-test", "upgrade-test", "release-dry-run")
+    CACHED_JOBS = ("lint", "docs-check", "test", "builder-e2e", "fips", "integration-test", "upgrade-test", "release-dry-run", "load-smoke", "load-test")
     GATED_CACHED_JOBS = ("fips", "upgrade-test", "release-dry-run")
     ON_MAIN = "github.ref == 'refs/heads/main' && github.event_name == 'push'"
 
