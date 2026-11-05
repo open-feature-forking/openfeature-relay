@@ -199,7 +199,9 @@ jobs:
       - name: Fetch the testbed's evaluator suite
         run: git submodule update --init test-harness
       - run: make workspace-init
-      - run: make test
+      # shell: bash makes the pipe fail with make; the log is what a failure summary reads
+      - run: make test 2>&1 | tee test.log
+        shell: bash
         env:
           # test/contract-external.sh fetches core at this commit; a pull request's merge commit is on no branch
           CONTRACT_EXTERNAL_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -399,6 +401,9 @@ jobs:
       - run: make workspace-init
       - name: Build flagd-full from its manifest, check its components and run the CLI pins against it
         run: make build-flagd-full
+      # UC-019: the vendor distribution (Flagsmith engine) builds and links its engine module; builder-e2e ran this
+      - name: Build the Flagsmith distribution
+        run: make build-flagsmith
 
       - name: Run test suite
         run: make workspace-clean && cd test/integration && go clean -testcache && go test -cover
