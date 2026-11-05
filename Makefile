@@ -119,7 +119,10 @@ TEST_MODULE := $(patsubst ./%,%,$(MODULE))
 COVERED_MODULES := $(patsubst ./%,%,$(GO_LIB_MODULE_DIRS) $(FLAGD_MODULE_DIRS))
 UNCOVERED_MODULES := $(patsubst ./%,%,$(CONTRIB_MODULE_DIRS) $(TESTBED_MODULE_DIRS))
 # Modules whose tests run as `go test -race -short -count=1 ./<module>/...`.
-PLAIN_TEST_MODULES := builder test/release test/service-example test/sync-example test/evaluator-testkit 	test/configformat-example test/configformat-example/distribution test/eventsink-example test/eventsink-example/distribution 	test/middleware-example test/middleware-example/distribution test/telemetry-example test/telemetry-example/distribution 	test/inprocess-example/file test/inprocess-example/filegrpc test/inprocess-example/engine
+PLAIN_TEST_MODULES := builder test/release test/service-example test/sync-example test/evaluator-testkit \
+    test/configformat-example test/configformat-example/distribution test/eventsink-example test/eventsink-example/distribution \
+    test/middleware-example test/middleware-example/distribution test/telemetry-example test/telemetry-example/distribution \
+    test/inprocess-example/file test/inprocess-example/filegrpc test/inprocess-example/engine
 .PHONY: test-module
 test-module:
 ifneq ($(filter $(TEST_MODULE),$(COVERED_MODULES)),)

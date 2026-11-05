@@ -72,6 +72,10 @@ class BuildWorkflow(unittest.TestCase):
             ["lint", "benchmark", "docs-check", "test", "builder-e2e", "fips", "docker-local", "integration-test",
              "upgrade-test", "release-dry-run"], names)
 
+    def test_lint_runs_the_module_table_tests(self):
+        """C1 and C2 are the parity gate for make test and make lint: CI has to run them."""
+        self.assertIn("run: python3 .github/scripts/test_ci_modules.py\n", self.job("lint"))
+
     def test_gated_jobs(self):
         gate = "if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'"
         for name in ("fips", "docker-local"):

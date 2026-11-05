@@ -50,6 +50,9 @@ jobs:
         run: python3 .github/scripts/test_workflows.py
       - name: Test the benchmark comparison
         run: python3 .github/scripts/test_compare_allocs.py
+      # C1 and C2: the module table and the Makefile targets that `make test` and `make lint` run.
+      - name: Test the module table against the Makefile
+        run: python3 .github/scripts/test_ci_modules.py
       # The module boundary tables include the evaluator boundary (NFR-005), which check-evaluator-boundary names.
       - run: make check-module-boundary check-evaluator-boundary
       # NFR-012: golang.org/x/exp is gone from the sources and from the direct requirements.
