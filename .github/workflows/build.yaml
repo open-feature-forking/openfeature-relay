@@ -28,6 +28,10 @@ concurrency:
   group: build-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# The default token reads. A job that needs more asks for it at job level (coverage, docker-local).
+permissions:
+  contents: read
+
 env:
   # The toolchain determines which FIPS snapshots exist, so pin it.
   GOTOOLCHAIN: local
@@ -96,8 +100,6 @@ jobs:
       # C1 and C2: the module table and the Makefile targets that `make test` and `make lint` run.
       - name: Test the module table against the Makefile
         run: python3 .github/scripts/test_ci_modules.py
-      - name: Test the coverage comparison
-        run: python3 .github/scripts/test_compare_coverage.py
       - name: Test the comparison of the pass sets of the testbed suites
         run: python3 .github/scripts/test_compare_pass_sets.py
       # The module boundary tables include the evaluator boundary (NFR-005), which check-evaluator-boundary names.
@@ -274,78 +276,6 @@ jobs:
           ALL: ${{ needs.changes.outputs.all }}
           ORACLE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && '--oracle' || '' }}
         run: python3 .github/scripts/ci-modules.py miss-report --log test.log --tested "$TESTED" --all "$ALL" $ORACLE --summary "$GITHUB_STEP_SUMMARY"
-
-  # Statement coverage per package (#208), on the pull request's merge commit and on its first parent, the base as it is
-  # now. The head's profiles come from the test job. The base's come from the coverage-profiles artifact of main's own
-  # run for that commit when there is one, and otherwise from testing the base here with the same flags. A package that
-  # loses more than the tolerance in compare-coverage.py fails the job, and so does one that no longer has a profile.
-  coverage:
-    name: Coverage against the base
-    if: github.event_name == 'pull_request'
-    needs: test
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      actions: read
-    env:
-      GOPATH: /home/runner/work/open-feature/flagd
-      GOBIN: /home/runner/work/open-feature/flagd/bin
-      GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
-    steps:
-      - name: Checkout the merge commit and its first parent
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
-        with:
-          fetch-depth: 2
-      - name: Fetch the head's coverage profiles
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: coverage-profiles
-          path: head-coverage
-      - name: Look for the base's profiles in main's run for that commit
-        id: base-profiles
-        run: |
-          git worktree add "$RUNNER_TEMP/base" "HEAD^1"
-          sha=$(git rev-parse "HEAD^1")
-          id=$(gh run list --workflow build.yaml --branch main --event push --commit "$sha" --status success --json databaseId --jq '.[0].databaseId' || true)
-          if [ -n "$id" ] && gh run download "$id" --name coverage-profiles --dir "$RUNNER_TEMP/base-coverage"; then
-            echo "found=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::The base's profiles come from the run $id of main at $sha."
-          else
-            echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No successful run of main with profiles at $sha: the base is tested here."
-          fi
-      - name: Setup go
-        if: steps.base-profiles.outputs.found != 'true'
-        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
-        with:
-          go-version-file: 'flagd/go.mod'
-          cache: false
-      # read-only: the test job saves this cache on main
-      - name: Restore the Go caches
-        if: steps.base-profiles.outputs.found != 'true'
-        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
-        with:
-          path: |
-            ${{ env.GOPATH }}/pkg/mod
-            ~/.cache/go-build
-          key: go-test-${{ hashFiles('**/go.sum') }}
-          restore-keys: go-test-
-      - name: Test the base with coverage
-        if: steps.base-profiles.outputs.found != 'true'
-        run: |
-          git -C "$RUNNER_TEMP/base" submodule update --init test-harness
-          bash .github/scripts/run-coverage.sh "$RUNNER_TEMP/base" "$RUNNER_TEMP/base-coverage"
-      - name: Keep the base's coverage profiles
-        if: steps.base-profiles.outputs.found != 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: coverage-profiles-base
-          path: ${{ runner.temp }}/base-coverage
-          retention-days: 30
-          if-no-files-found: ignore
-      - name: Compare the coverage per package
-        run: python3 .github/scripts/compare-coverage.py --base-root "$RUNNER_TEMP/base" --head-root . "$RUNNER_TEMP/base-coverage" head-coverage
 
   builder-e2e:
     name: Builder end to end

@@ -29,16 +29,17 @@ const ConfigKey = "config"
 //	max-request-header-bytes, max-request-body-bytes   numbers
 func decodeConfig(config map[string]any) (SvcConfigurations, error) {
 	cfg, _ := config[ConfigKey].(SvcConfigurations)
-	err := service.ConfigDecoder{
-		"port": service.Set(&cfg.Port, service.Uint16), "cert-path": service.Set(&cfg.CertPath, service.String),
-		"key-path": service.Set(&cfg.KeyPath, service.String), "socket-path": service.Set(&cfg.SocketPath, service.String),
-		"service-name": service.Set(&cfg.ServiceName, service.String), "http-enabled": service.Set(&cfg.HTTPEnabled, service.Bool),
-		"disable-sync-metadata": service.Set(&cfg.DisableSyncMetadata, service.Bool), "cors": service.Set(&cfg.CORS, service.Strings),
-		"context-values":           service.Set(&cfg.ContextValues, service.Map),
-		"stream-deadline":          service.Set(&cfg.StreamDeadline, service.Duration),
-		"max-request-header-bytes": service.Set(&cfg.MaxRequestHeaderBytes, service.Int64),
-		"max-request-body-bytes":   service.Set(&cfg.MaxRequestBodyBytes, service.Int64),
-	}.Decode(config, ConfigKey)
+	err := service.EndpointKeys{
+		Port: &cfg.Port, ServiceName: &cfg.ServiceName, CORS: &cfg.CORS, ContextValues: &cfg.ContextValues,
+		MaxRequestHeaderBytes: &cfg.MaxRequestHeaderBytes, MaxRequestBodyBytes: &cfg.MaxRequestBodyBytes,
+	}.Decoder(service.ConfigDecoder{
+		"cert-path":             service.Set(&cfg.CertPath, service.String),
+		"key-path":              service.Set(&cfg.KeyPath, service.String),
+		"socket-path":           service.Set(&cfg.SocketPath, service.String),
+		"http-enabled":          service.Set(&cfg.HTTPEnabled, service.Bool),
+		"disable-sync-metadata": service.Set(&cfg.DisableSyncMetadata, service.Bool),
+		"stream-deadline":       service.Set(&cfg.StreamDeadline, service.Duration),
+	}).Decode(config, ConfigKey)
 	return cfg, err
 }
 

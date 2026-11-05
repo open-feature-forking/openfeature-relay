@@ -9,12 +9,16 @@
 - Q2 (a): attestations, Dependabot for the base images, and a Trivy report;
 - Q3 (a): every `sha-` tag kept during the PoC;
 - Q5 (a): accepted and documented;
-- Q6 (b): throttled publishing.
+- Q6 (b): throttled publishing;
+- **later, no `-fips` images:** FIPS becomes a documented do-it-yourself build with relay-builder, and CI keeps one nightly FIPS check;
+- **later, publishing runs from the nightly dry run:** the CI slimming moved the release dry run from every `main` push to nightly, manual and `FULL_CI` runs. Q6 (b)'s throttle is that nightly run plus a `workflow_dispatch` on `main`.
+
+Where a later section still says FIPS, ~8 publishes a day or "a `main` push", these two decisions win (section 8).
 
 W is #231 (`ci/workflow-permissions`).
 
 **Decided by the project lead (#216):**
-- **Images:** flagd-full, flagd-minimal, flagd-minimal-otel, flagd-cloud, flagd-kubernetes and flagd-sync, each in standard and FIPS, plus flagd-testbed. All are linux/amd64 + linux/arm64, under `ghcr.io/open-feature-forking/`.
+- **Images (7, one package each):** flagd-full, flagd-minimal, flagd-minimal-otel, flagd-cloud, flagd-kubernetes and flagd-sync, standard only, plus flagd-testbed. No FIPS images (later decision). All are linux/amd64 + linux/arm64, under `ghcr.io/open-feature-forking/`.
 - **Not pushed:** flagd and flagd-proxy (they would be confused with the official images), and the Flagsmith distribution.
 - **Tags:** `:main`, which moves, and `:sha-<short>`, which is immutable. No `latest`, no semver.
 - **Push only from `main`.** This lifts the standing "never push images" rule deliberately; release-please stays disabled.
@@ -125,7 +129,7 @@ W is #231 (`ci/workflow-permissions`).
 **Planner defaults (the lead can overrule):**
 - **Names.** `ghcr.io/open-feature-forking/<name>`, with `<name>` = `flagd-full`, `flagd-minimal`, `flagd-minimal-otel`, `flagd-cloud`, `flagd-kubernetes`, `flagd-sync` or `flagd-testbed`.
   - flagd-full is published as `flagd-full`, not as BR-012's `flagd` (#216). That is a PoC deviation, recorded in UC-012's gaps.
-  - FIPS is a tag suffix in the same package (`:main-fips`, `:sha-<short>-fips`), as BR-012 does.
+  - No FIPS variant is published. `try-it.md` documents building one with relay-builder and the reference Dockerfile (`--build-arg FIPS=on`).
 - **`<short>`** is `${GITHUB_SHA::7}` everywhere: tags, version, docs.
 - **Visibility.** Public, and linked to this repository through `org.opencontainers.image.source`. After the first push an org owner sets the 7 packages to public once, and D checks them with an anonymous pull.
 - **Permissions.** `publish-images` alone requests:
@@ -183,12 +187,12 @@ W is #231 (`ci/workflow-permissions`).
 |---|---|---|
 | `test_only_publish_images_pushes_or_logs_in` | K2, every workflow | the push surface, its `if:`, the one allowlisted login (section 0) |
 | `test_publish_jobs` | K2 | `publish-images` needs `image-build`, `release-dry-run` and `testbed`, and runs no build step; `move-main` has `concurrency: move-main`; `publish-gate` drives `image-build` |
-| `test_release_dry_run_parts` | K2, updated | `full` still covers today's archive and image lists; `image-build`'s parts cover the 13 images |
+| `test_release_dry_run_parts` | K2, updated | `full` still covers today's archive and image lists; `image-build`'s parts cover the 7 images, and none is FIPS |
 | `BuildDockerfiles` | K3 | flagd's and flagd-proxy's Dockerfiles unchanged |
 | the base pin test | `test/image` | every `FROM` of the published Dockerfiles carries a digest |
-| the layout checks, per image | dry-run scripts | name, `linux/amd64 linux/arm64`, attestation manifests, provenance, SBOM, Q4's labels and annotations, for 13 images (testbed included); entrypoint, user and `version --verbose` on the amd64 image loaded from the layout |
+| the layout checks, per image | dry-run scripts | name, `linux/amd64 linux/arm64`, attestation manifests, provenance, SBOM, Q4's labels and annotations, for 7 images (testbed included); entrypoint, user and `version --verbose` on the amd64 image loaded from the layout |
 | the publish rehearsal | `publish-images.sh` against `registry:2`, in WSL and on a `release-check` run | push by digest (the pushed digest equals the layout's); the tags; attestations survive; a destination outside the 7 is refused; a missing testbed layout is skipped and reported; an older commit published after a newer one leaves `:main` on the newer |
-| `publish-gate` | a unit test of its script | inputs unchanged gives no publish; `:main` younger than 3 h gives no publish; a missing `:main` or `workflow_dispatch` gives a publish |
+| `publish-gate` | a unit test of its script | a `push` or a pull request gives no publish; a `schedule` run or `workflow_dispatch` on `main` gives a publish, unless `:main` already carries the head commit |
 | the testbed on its layout | `testbed` job, publishing run | contract and suites green on the image that is pushed |
 | the first `main` publish | the reviewer, after P merges | 7 public, linked packages; both platforms; `version --verbose` prints `v0.0.0-main.<short>`; Q2's verify passes; flagd and flagd-proxy absent from the namespace |
 
@@ -197,7 +201,7 @@ W is #231 (`ci/workflow-permissions`).
 | PR | Model | Base | Content | Starts |
 |---|---|---|---|---|
 | W | #231 (`ci/workflow-permissions`), the lead's separate PR | `main` | top-level `permissions` in every workflow, its K2 check, the default token set to read | now, outside step 17 |
-| B | implementer | `main` | The builds, with no push. `publish-gate`; `image-build` (parts below); flagd-full under its own name; the four missing images; Q4; the layout-based runtime checks; the testbed Dockerfile, its layout and `TESTBED_RELAY_IMAGE`; the base pins; Trivy (Q2); the artifacts. It measures every part on a `workflow_dispatch` | after the decisions |
+| B | implementer | `main`, after the CI slimming's nightly dry run is merged | The builds, with no push, on the nightly and manual dry run only. `publish-gate`; `image-build` (parts below); flagd-full under its own name; the four missing images; Q4; the layout-based runtime checks; the testbed Dockerfile, its layout and `TESTBED_RELAY_IMAGE`; the base pins; Trivy (Q2); the artifacts. It measures every part on a `workflow_dispatch` | after the decisions |
 | P | implementer | B, and W merged | `publish-images.sh` and its rehearsal, `publish-images`, `move-main`, the attestation (Q2), Dependabot (Q2), K2's push test | after B exists (stacked); merges after W |
 | D | mechanic | P merged and its first publish checked | README, `try-it.md`, UC-002, UC-012, CLAUDE.md (below), `/spec-review`, #216 | last |
 
@@ -205,8 +209,8 @@ W is #231 (`ci/workflow-permissions`).
 
 | Part | Images | Compiles | Estimate |
 |---|---|---|---|
-| A | flagd-full and flagd-sync, each standard and FIPS | 8 | ~11 min |
-| B | flagd-cloud, flagd-kubernetes and flagd-minimal-otel, each standard and FIPS | 12 | ~13 min |
+| A | flagd-full and flagd-sync | 4 | ~6 min |
+| B | flagd-cloud, flagd-kubernetes and flagd-minimal-otel | 6 | ~7 min |
 
 flagd-minimal stays in the `distributions` part; the testbed stays in `testbed`.
 
@@ -239,7 +243,7 @@ The critical path is B → P (with W merged) → the first publish → the org o
 
 - **R1, who can push (Q5).** After W, only `publish-images` requests `packages: write`, and K2 pins that. *Anyone who can push a branch here can still push these images*, by requesting the permission in a branch's workflow. Under Q5 (a) that is accepted for the PoC and written in CLAUDE.md; Q5 (b) closes it.
 - **R2, confusion with official images.** Against it: a different owner, no `latest`, no semver, a pre-release version, the description, the README's disclaimer, and no `flagd` or `flagd-proxy` package. Nothing stops someone running `flagd-full:main` in production.
-- **R3, the queue (Q6).** Under (b), ~8 runs a day go from 18 to 22 jobs. Under (a), ~45 do, and PRs wait behind `main`.
+- **R3, the queue (Q6).** Publishing adds 4 jobs to the nightly run and to manual runs on `main`, and none to pushes or PRs. `:main` is up to a day behind the head; a `workflow_dispatch` on `main` refreshes it.
 - **R4, artifacts.** ~0.5–1 GB of layouts per publishing run, kept for one day: ~4–8 GB a day under Q6 (b). B measures.
 - **R5, the testbed's certificate.** It is generated at build time, valid for 365 days, and signed with `custom-ca.key` from the public test-harness submodule. The CA key is public by design, so the certificate proves nothing. `try-it.md` says so.
 - **R6, a red `main`.** `publish-images` needs the builds, so a red run publishes nothing. `move-main`'s ancestor check keeps `:main` on the newest green published commit.
@@ -262,7 +266,19 @@ The critical path is B → P (with W merged) → the first publish → the org o
 | Q2 | (a), as recommended | B: Trivy in `image-build`, report only. P: `actions/attest-build-provenance` in `publish-images`, and `.github/dependabot.yml` for the `docker` ecosystem, weekly |
 | Q3 | (a), as recommended | No cleanup job; "delete untagged" never used; the question returns at the end of the PoC or at 30 days |
 | Q5 | (a), as recommended | No environment and no extra credential. R1 and D's CLAUDE.md rule state that a branch here could push; W (#231) narrows the default token |
-| Q6 | (b), as recommended | B: `publish-gate` (image inputs changed and `:main` older than 3 h, or a `workflow_dispatch` on `main`) |
+| Q6 | (b), as recommended | B: `publish-gate`, superseded below by the nightly run |
+
+### Later decisions (project lead)
+
+- **No `-fips` images.** 7 images and 7 packages, no FIPS tags.
+  - B builds no FIPS image: `image-build` part A has 4 compiles, part B has 6.
+  - The `distributions` part keeps its FIPS archive checks, and CI keeps one nightly FIPS check (not this step).
+  - D documents the do-it-yourself FIPS build with relay-builder in `try-it.md`, and adds the FIPS images to UC-012's gap line.
+- **Publishing from the nightly dry run.** The CI slimming moved the dry run to nightly (`schedule`), manual and `FULL_CI` runs.
+  - `publish-gate` publishes on a `schedule` or `workflow_dispatch` run on `main` when `:main` does not already carry the head commit. It never publishes on a `push`, a PR or `FULL_CI` alone.
+  - `publish-images`' `if:` takes `schedule` in place of `push`.
+  - About 1 publish a day: ~7 `sha-` tags and ~35 package versions a day (Q3), and one run's artifacts.
+  - B starts once the slimming's nightly dry run is on `main`.
 
 ### Revision 2 (`step-17-opposer.md`)
 
