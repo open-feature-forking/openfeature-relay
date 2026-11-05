@@ -11,14 +11,12 @@ import (
 	"fmt"
 	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"syscall"
-	"sync"
 	"testing"
 	"time"
 
@@ -26,36 +24,17 @@ import (
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature-forking/openfeature-relay/runtime"
 	otelprovider "github.com/open-feature-forking/openfeature-relay/telemetry/otel"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/porttest"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 )
 
 const flags = `{"flags":{"f1":{"state":"ENABLED","defaultVariant":"on","variants":{"on":true,"off":false}}}}`
 
-// issuedPorts are the ports freePort has handed out in this process. A port is free again the moment it is closed, so
-// the next call can get the same one, and one start would listen twice on it.
-var issuedPorts sync.Map
-
+// freePort reserves a port the runtime is handed through Components.Listen: see porttest.
 func freePort(t *testing.T) uint16 {
 	t.Helper()
-	// a port the kernel hands out again stays open until a new one comes, so the next listen cannot get it
-	var held []net.Listener
-	defer func() {
-		for _, h := range held {
-			_ = h.Close()
-		}
-	}()
-	for {
-		l, err := net.Listen("tcp", "127.0.0.1:0")
-		require.NoError(t, err)
-		port := l.Addr().(*net.TCPAddr).Port
-		if _, taken := issuedPorts.LoadOrStore(port, true); taken {
-			held = append(held, l)
-			continue
-		}
-		_ = l.Close()
-		return uint16(port)
-	}
+	return porttest.Port(t)
 }
 
 func get(t *testing.T, url string) (*http.Response, string) {
@@ -175,5 +154,6 @@ func TestManagementPort(t *testing.T) {
 // line selects it.
 func withOpenTelemetry(components runtime.Components) runtime.Components {
 	components.Telemetry = otelprovider.NewFactory()
+	components.Listen = porttest.Listen
 	return components
 }

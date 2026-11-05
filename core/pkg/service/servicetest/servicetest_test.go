@@ -49,7 +49,11 @@ type stubEndpoint struct {
 
 func (e *stubEndpoint) Serve(ctx context.Context) error {
 	port, _ := e.settings.Config["port"].(int)
-	listener, err := net.Listen("tcp", ":"+strconv.Itoa(port))
+	listen := e.settings.Listen.Or()
+	if e.broken == "binds without Settings.Listen" {
+		listen = net.Listen
+	}
+	listener, err := listen("tcp", ":"+strconv.Itoa(port))
 	if err != nil {
 		if e.broken == "swallows serve error" {
 			return nil
@@ -370,6 +374,7 @@ func text(c contracttest.Case) string {
 const (
 	nameServes     = "serves and returns within the budget with its connections ended"
 	nameServeError = "a serve error is returned"
+	nameListen     = "opens its listeners through Settings.Listen"
 	nameResolves   = "resolves through the injected resolver with the effective selector"
 	nameEvent      = "publishes one evaluation event per resolved flag"
 	nameDocuments  = "serves the documents of the requested format, unchanged, with versions"
@@ -399,31 +404,31 @@ func TestStubsMeetTheContract(t *testing.T) {
 			name:    "resolver",
 			factory: stub{typeName: "resolver", needs: service.Needs{Router: true}, features: resolverFeatures},
 			inputs:  inputsFor(resolverFeatures, true),
-			ran:     []string{nameServes, nameServeError, nameResolves, nameEvent, nameSelector},
+			ran:     []string{nameServes, nameListen, nameServeError, nameResolves, nameEvent, nameSelector},
 		},
 		{
 			name:    "vendor evaluator",
 			factory: stub{typeName: "vendor", needs: service.Needs{Format: "flagd"}, features: resolverFeatures},
 			inputs:  inputsFor(resolverFeatures, false),
-			ran:     []string{nameServes, nameServeError, nameResolves, nameEvent},
+			ran:     []string{nameServes, nameListen, nameServeError, nameResolves, nameEvent},
 		},
 		{
 			name:    "config server",
 			factory: stub{typeName: "config-server", features: serverFeatures},
 			inputs:  inputsFor(serverFeatures, false),
-			ran:     []string{nameServes, nameServeError, nameDocuments, nameValidator, nameReacts},
+			ran:     []string{nameServes, nameListen, nameServeError, nameDocuments, nameValidator, nameReacts},
 		},
 		{
 			name:    "collector",
 			factory: stub{typeName: "collector", features: collectFeatures},
 			inputs:  inputsFor(collectFeatures, false),
-			ran:     []string{nameServes, nameServeError, nameRelays},
+			ran:     []string{nameServes, nameListen, nameServeError, nameRelays},
 		},
 		{
 			name:    "silent",
 			factory: stub{typeName: "silent"},
 			inputs:  inputsFor(features{}, false),
-			ran:     []string{nameServes, nameServeError},
+			ran:     []string{nameServes, nameListen, nameServeError},
 		},
 	}
 	for _, tt := range tests {
@@ -460,6 +465,13 @@ func TestBrokenStubsFailExactlyTheirCases(t *testing.T) {
 			inputs:   inputsFor(features{}, false),
 			wantFail: []string{nameServeError},
 			wantText: "expected Serve to return an error when its port is in use\nobserved: it returned nil",
+		},
+		{
+			broken:   "binds without Settings.Listen",
+			factory:  stub{typeName: "x", broken: "binds without Settings.Listen"},
+			inputs:   inputsFor(features{}, false),
+			wantFail: []string{nameListen},
+			wantText: "expected the endpoint to open its listeners through Settings.Listen (UC-004 BR-012)\nobserved: it listened on its port without calling Settings.Listen",
 		},
 		{
 			broken:   "answers by itself",
@@ -557,7 +569,8 @@ func TestMissingInputFailsNamingIt(t *testing.T) {
 	in = inputsFor(features{}, false)
 	in.Connect = nil
 	results = Check(t, stub{typeName: "x"}, in)
-	require.Equal(t, []string{nameServes}, failed(results))
+	// every case that starts the endpoint names the missing input
+	require.Equal(t, []string{nameServes, nameListen}, failed(results))
 	require.Contains(t, text(results.Cases[2]), "the input Connect is required")
 
 	in = inputsFor(features{}, false)

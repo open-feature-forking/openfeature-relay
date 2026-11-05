@@ -130,7 +130,7 @@ func startOnInvalid(t *testing.T, name string, portFlags []string) (ready bool, 
 
 	var lines []string
 	for _, line := range strings.Split(logs.String(), "\n") {
-		if strings.Contains(line, `"level":"warn"`) || strings.Contains(line, `"level":"error"`) {
+		if strings.Contains(line, `"level":"warn"`) || strings.Contains(line, `"level":"error"`) || strings.Contains(line, `"level":"fatal"`) {
 			line = regexp.MustCompile(`"ts":[^,]+,`).ReplaceAllString(line, "")
 			line = regexp.MustCompile(`"caller":"[^"]+",?`).ReplaceAllString(line, "")
 			lines = append(lines, strings.ReplaceAll(line, dir, "<dir>"))

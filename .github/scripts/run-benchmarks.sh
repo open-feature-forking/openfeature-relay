@@ -4,7 +4,8 @@
 #   run-benchmarks.sh <dir> <out>
 #
 # The benchmarks run on the library modules the Makefile of <dir> names (GO_LIB_MODULE_DIRS) and on the packages of
-# the flagd and flagd-proxy modules, whose service endpoints have benchmarks of their own (NFR-001, NFR-013). Each runs
+# the flagd and flagd-proxy modules, whose service endpoints have benchmarks of their own (NFR-001, NFR-013), and on
+# the Flagsmith engine, an evaluator of the evaluation path that is not a library module. Each runs
 # a fixed number of iterations, several times, so that the spread of a benchmark shows. 1000 iterations amortize the
 # one-time allocations of a run to under one per operation (at 100 the benchmarks of 200 to 400 allocs/op moved by up
 # to 6). SetState, which allocates 368,000 times per operation and takes 70 s for 1000 iterations, runs 100; a run of
@@ -29,7 +30,7 @@ libs=$(printf 'include Makefile\nprint-libs:\n\t@echo $(GO_LIB_MODULE_DIRS) $(FL
 patterns=()
 declare -A seen
 # a base without FLAGD_MODULE_DIRS has the flagd module alone, so flagd is named here as well
-for lib in $libs ./flagd ./flagd-proxy; do
+for lib in $libs ./flagd ./flagd-proxy ./contrib/flagsmith/engine; do
   if [ -d "$lib" ] && [ -z "${seen[$lib]:-}" ]; then seen[$lib]=1; patterns+=("$lib/..."); fi
 done
 

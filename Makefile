@@ -104,6 +104,7 @@ TEST_TARGETS += test-contract-external
 TEST_TARGETS += test-middleware-example
 TEST_TARGETS += test-release
 TEST_TARGETS += test-concurrency
+TEST_TARGETS += test-porttest
 test: $(TEST_TARGETS)
 test-core: test-modules
 # The loops below and CI's matrix (.github/scripts/ci-modules.json) run the same recipe, test-module.
@@ -122,8 +123,8 @@ COVERED_MODULES := $(patsubst ./%,%,$(GO_LIB_MODULE_DIRS) $(FLAGD_MODULE_DIRS) $
 PLAIN_TEST_MODULES := builder test/release test/service-example test/sync-example test/evaluator-testkit \
     test/configformat-example test/configformat-example/distribution test/eventsink-example test/eventsink-example/distribution \
     test/middleware-example test/middleware-example/distribution test/telemetry-example test/telemetry-example/distribution \
-    test/inprocess-example/file test/inprocess-example/filegrpc test/inprocess-example/engine
-# Every module that leaves a <module>-coverage.out profile; the coverage job and run-coverage.sh read this list.
+    test/inprocess-example/file test/inprocess-example/filegrpc test/inprocess-example/engine test/porttest
+# Every module that leaves a <module>-coverage.out profile, uploaded by CI as the coverage-profiles artifact.
 COVERAGE_MODULES := $(COVERED_MODULES) flagd-proxy $(PLAIN_TEST_MODULES)
 .PHONY: test-module
 test-module:
@@ -194,6 +195,9 @@ test-load-smoke:
 	K6_IMAGE=$(K6_IMAGE) RELAY_LOAD=smoke go test -count=1 -timeout 30m -run 'TestCheckerSelfTest|TestConcurrency' ./test/concurrency/...
 test-load:
 	K6_IMAGE=$(K6_IMAGE) RELAY_LOAD=full go test -count=1 -timeout 60m ./test/concurrency/...
+# The shared port helpers of the test modules.
+test-porttest:
+	@$(MAKE) --no-print-directory test-module MODULE=test/porttest
 test-distributions:
 	cd test/distributions && go test -count=1 -timeout 30m ./...
 test-flagd-proxy:

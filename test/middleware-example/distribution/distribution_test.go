@@ -10,14 +10,12 @@ import (
 	"encoding/json"
 	"fmt"
 	flagdcomponents "github.com/open-feature/flagd/flagd/components"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"syscall"
-	"sync"
 	"testing"
 	"time"
 
@@ -26,6 +24,7 @@ import (
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/open-feature-forking/openfeature-relay/runtime"
 	middlewareexample "github.com/open-feature/flagd/test/middleware-example"
+	"github.com/open-feature-forking/openfeature-relay/test/porttest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,30 +34,10 @@ const flags = `{"flags":{
 	"b1":{"state":"ENABLED","defaultVariant":"on","variants":{"on":true,"off":false},"metadata":{"flagSetId":"team-b"}}
 }}`
 
-// issuedPorts are the ports freePort has handed out in this process. A port is free again the moment it is closed, so
-// the next call can get the same one, and one start would listen twice on it.
-var issuedPorts sync.Map
-
+// freePort reserves a port the runtime is handed through Components.Listen: see porttest.
 func freePort(t *testing.T) uint16 {
 	t.Helper()
-	// a port the kernel hands out again stays open until a new one comes, so the next listen cannot get it
-	var held []net.Listener
-	defer func() {
-		for _, h := range held {
-			_ = h.Close()
-		}
-	}()
-	for {
-		l, err := net.Listen("tcp", "127.0.0.1:0")
-		require.NoError(t, err)
-		port := l.Addr().(*net.TCPAddr).Port
-		if _, taken := issuedPorts.LoadOrStore(port, true); taken {
-			held = append(held, l)
-			continue
-		}
-		_ = l.Close()
-		return uint16(port)
-	}
+	return uint16(porttest.Reserve(t))
 }
 
 // TestExtensionMiddlewareBindsSelector builds flagd-full's components with the example middleware and evaluates all
@@ -70,6 +49,7 @@ func TestExtensionMiddlewareBindsSelector(t *testing.T) {
 	require.NoError(t, os.WriteFile(source, []byte(flags), 0o600))
 
 	components := flagdcomponents.Components()
+	components.Listen = porttest.Listen
 	components.Middleware = []middleware.Configured{{
 		Factory: middlewareexample.Factory{},
 		Config: map[string]any{middlewareexample.SettingKeys: map[string]any{

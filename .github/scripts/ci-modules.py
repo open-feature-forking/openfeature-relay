@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Which Go modules does a change affect, and which of the `make test` failures did that set miss (step 15, slice P1).
+"""Which Go modules does a change affect, which jobs does it call for, and which `make test` failures did the set miss.
 
 Standard library only. The module set is the Makefile's ALL_GO_MOD_DIRS; ci-modules.json says how each module is
-tested. `changes` prints the matrix of the modules a pull request or push can break; it does not gate anything yet.
+tested. `changes` prints the matrix of the modules a pull request or push can break, and sets the flags that the gated
+jobs of build.yaml wait for (FLAG_PATTERNS).
 """
 import argparse
 import fnmatch
@@ -27,6 +28,25 @@ EXTRA_EDGES = {
 MANIFEST_READER = "test/distributions"
 MANIFEST_GLOBS = ["distributions/*/manifest.yaml", "test/distributions/**/manifest.yaml"]
 SUBMODULE = "test-harness"
+
+# Which changed paths call for a gated job of build.yaml; the job runs when its flag is true.
+FLAG_PATTERNS = {
+    "go": r"\.go$|(^|/)go\.(mod|sum)$",
+    "deps": r"(^|/)go\.(mod|sum)$",
+    "dockerfile": r"(^|/)[^/]*Dockerfile$",
+    "benchmark": r"\.go$|(^|/)go\.(mod|sum)$|^\.github/scripts/(run-benchmarks|compare-allocs)",
+    "image": r"(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^\.github/workflows/build\.yaml$",
+    # the reference Dockerfile of the Builder and the tests that build images from it
+    "reference": r"^builder/reference/|^test/image/|(^|/)[^/]*Dockerfile$|^\.github/workflows/build\.yaml$",
+    # Dockerfiles; the manifest of flagd-full and the Builder that builds it; flagd, which holds flagd-full's main and its
+    # list of components; the differential's own test; any Go source or module file, because a change under core/,
+    # service/, sync/, runtime/ or evaluator/ changes flagd-full.
+    "upgrade": r"\.go$|(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^flagd/|^test/upgrade/|"
+               r"^\.github/workflows/build\.yaml$",
+    # the same, and the testbed, its distribution and the suites
+    "testbed": r"\.go$|(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^flagd/|^testbed/|"
+               r"^test/(testbed|integration|upgrade)/|^\.github/scripts/(testbed|compare-pass)|^\.github/workflows/build\.yaml$",
+}
 
 
 class TableError(Exception):
@@ -268,6 +288,32 @@ def change_set(root, event, ref, sha, before, full_ci=""):
     return [p.decode() for p in out.split(b"\0") if p], "", base
 
 
+def flag_change_set(root, event, sha, before, full_ci=""):
+    """The paths a change touches for the flags, or None when every flag is true: FULL_CI, a manual run, the schedule and a
+    base that cannot be compared with. A pull request is its merge commit against the first parent, a push is before..after."""
+    if full_ci == "true" or event not in ("pull_request", "push"):
+        return None
+    if event == "pull_request":
+        base = git(root, "rev-parse", "--verify", "-q", f"{sha}^1").stdout.strip()
+    else:
+        base = (before or "").strip()
+        if base == ZERO or git(root, "cat-file", "-e", f"{base}^{{commit}}").returncode:
+            base = ""
+    if not base:
+        return None
+    out = subprocess.run(["git", "diff", "--name-only", "--no-renames", "-z", base, sha], cwd=root, capture_output=True, check=True).stdout
+    return [p.decode() for p in out.split(b"\0") if p]
+
+
+def flags(changed):
+    """flag -> bool for the changed paths (None: all true)."""
+    return {n: changed is None or any(re.search(p, f) for f in changed) for n, p in FLAG_PATTERNS.items()}
+
+
+def flag_lines(values):
+    return "".join(f"{n}={str(v).lower()}\n" for n, v in values.items())
+
+
 def failed_packages(log):
     """The packages of the `FAIL<TAB>package` lines of a go test log."""
     return re.findall(r"^FAIL\t(\S+)", log, re.M)
@@ -318,10 +364,11 @@ def write(path, text):
             f.write(text)
 
 
-def cmd_changes(a):
+def changes(a):
     root = pathlib.Path(a.root)
     prune, table, graph = load(root)
-    changed, force, base = change_set(root, a.event, a.ref, a.sha, a.before, os.environ.get("FULL_CI", ""))
+    full_ci = os.environ.get("FULL_CI", "")
+    changed, force, base = change_set(root, a.event, a.ref, a.sha, a.before, full_ci)
     base_dirs = module_dirs(list_files(root, base), prune) if base else set()
     try:
         result = compute(changed or [], graph, table, base_dirs, force or None)
@@ -329,15 +376,32 @@ def cmd_changes(a):
         print(f"::error::{e}")
         return 1
     entries, notes = matrix(result, graph, table, root)
+    values = flags(flag_change_set(root, a.event, a.sha, a.before, full_ci))
     lines = [f"## Affected modules ({'all' if result.everything else len(entries)})", ""]
     if result.everything:
         lines.append(f"Everything runs: {result.reason}.")
     lines += [f"- `{d}`: {w}" for d, w in sorted(notes.items())]
+    lines += ["", "## Jobs this change calls for", ""] + [f"- `{n}`: {'yes' if v else 'no'}" for n, v in values.items()]
     summary = "\n".join(lines) + "\n"
     print(summary)
     write(a.summary, summary)
-    write(a.github_output, f"test={json.dumps(entries, separators=(',', ':'))}\nall={str(result.everything).lower()}\nlint-all=true\n")
+    write(a.github_output, f"test={json.dumps(entries, separators=(',', ':'))}\nall={str(result.everything).lower()}\nlint-all=true\n"
+                           + flag_lines(values))
     return 0
+
+
+def cmd_changes(a):
+    """A bug in the computation must not skip a gated job: every flag is true instead, and the run says so."""
+    try:
+        return changes(a)
+    except TableError as e:  # a module the table lacks is a mistake to fix, not something to run around
+        print(f"::error::{e}")
+        return 1
+    except Exception as e:  # noqa: BLE001 (any failure of the computation, not only the ones anticipated)
+        print(f"::warning::ci-modules.py failed ({type(e).__name__}: {e}); every gated job runs")
+        write(a.summary, f"## Jobs this change calls for\n\nAll: ci-modules.py failed with `{type(e).__name__}: {e}`.\n")
+        write(a.github_output, "all=true\n" + flag_lines(flags(None)))
+        return 0
 
 
 def cmd_miss_report(a):

@@ -64,6 +64,8 @@ The release dry run writes the size of each `linux_x86_64` binary it builds to t
 A Distribution Builder writes a manifest that lists official and third-party component modules, and the builder compiles it ([UC-001](../use_cases/UC-001-build-custom-distribution.md)).
 The builder rejects a manifest whose components need a component it does not select, such as OFREP without an evaluator.
 
+Any distribution, standard or custom, can be built as a FIPS 140-3 binary or image: [Build a FIPS distribution](fips.md).
+
 ## Vendor distributions
 
 A vendor distribution puts another vendor's sync provider, configuration format and evaluator behind OFREP — for example the Flagsmith engine or GO Feature Flag's evaluation module — so it can serve OpenFeature clients in place of that vendor's edge or relay proxy ([UC-019](../use_cases/UC-019-serve-vendor-flags.md)).

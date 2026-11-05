@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"io"
 	"net/http"
 	"os"
@@ -74,7 +73,7 @@ func TestEngineServesBothFormats(t *testing.T) {
 		},
 		ConfigurationFormats: []configformat.Factory{keyvalue.Factory{}},
 		Evaluators:           []evaluator.Factory{keyvalueeval.Factory{}},
-	}, flagdcomponents.Components())
+	}, listening())
 	require.NoError(t, err)
 
 	done := make(chan error, 1)
