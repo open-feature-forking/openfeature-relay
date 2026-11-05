@@ -23,6 +23,8 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 const characterizedFlags = `{"flags":{"f1":{"state":"ENABLED","defaultVariant":"on","variants":{"on":true,"off":false}}}}`
@@ -79,13 +81,17 @@ func startRuntime(t *testing.T, cfg Config) (cancel func(), done <-chan error) {
 // startRuntimeWith is startRuntime for a distribution with these components.
 func startRuntimeWith(t *testing.T, cfg Config, components Components) (cancel func(), done <-chan error) {
 	t.Helper()
-	rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, components)
+	core, logs := observer.New(zap.DebugLevel)
+	report := &runReport{logs: logs}
+	rt, err := FromConfig(logger.NewLogger(zap.New(core), false), "test", cfg, components)
 	require.NoError(t, err)
 	ctx, stop := context.WithCancel(context.Background())
 	result := make(chan error, 1)
 	finished := make(chan struct{})
 	go func() {
-		result <- rt.start(ctx)
+		err := rt.start(ctx)
+		report.result.Store(&err)
+		result <- err
 		close(finished)
 	}()
 	t.Cleanup(func() {
@@ -104,7 +110,7 @@ func startRuntimeWith(t *testing.T, cfg Config, components Components) (cancel f
 		}
 		defer resp.Body.Close()
 		return resp.StatusCode == http.StatusOK
-	}, time.Minute, 50*time.Millisecond, "the runtime becomes ready")
+	}, time.Minute, 50*time.Millisecond, "the runtime becomes ready: %s", report)
 	return stop, result
 }
 
