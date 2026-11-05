@@ -60,11 +60,12 @@ class BuildWorkflow(unittest.TestCase):
     def test_jobs(self):
         names = re.findall(r"^  ([a-z][a-z-]*):\n", self.text.split("\njobs:\n", 1)[1], re.M)
         self.assertEqual(
-            ["lint", "benchmark", "docs-check", "test", "fips", "docker-local", "upgrade-test", "release-dry-run"], names)
+            ["lint", "benchmark", "docs-check", "test", "fips", "docker-local", "upgrade-test", "release-dry-run",
+             "testbed-grpc-sync"], names)
 
     def test_gated_jobs(self):
         gate = "if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'"
-        for name in ("fips", "docker-local"):
+        for name in ("fips", "docker-local", "testbed-grpc-sync"):
             with self.subTest(job=name):
                 self.assertIn(gate, self.job(name))
         self.assertIn("if: github.event_name == 'pull_request'", self.job("benchmark"))
@@ -76,6 +77,10 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIn('[ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]', job)
         self.assertIn(r"^\.github/scripts/testdata/|^\.github/workflows/release-please\.yaml$|^builder/|^distributions/|Dockerfile$", job)
         self.assertIn("if: steps.gate.outputs.run == 'true'", job)
+
+    def test_grpc_sync_job_runs_the_testbed_test(self):
+        """UC-023 Q14: the gated job runs flagd-full with a grpc source against the relay testbed."""
+        self.assertIn("make testbed-grpc-sync", self.job("testbed-grpc-sync"))
 
 
 class BuildDockerfiles(unittest.TestCase):
