@@ -6,16 +6,24 @@ on:
       - feature/workflows
       - main
     paths-ignore:
-      - "README.md"
+      - "**/*.md"
       - "docs/**"
+      - ".claude/**"
   pull_request:
     branches:
       - main
     paths-ignore:
-      - "README.md"
+      - "**/*.md"
       - "docs/**"
+      - ".claude/**"
   # Full run including the gated jobs below.
   workflow_dispatch:
+
+# A newer push to a pull request's branch cancels the superseded run. Every other event gets a group of its own (the
+# commit), so a run on main is never cancelled or replaced by the one that queues behind it.
+concurrency:
+  group: build-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # The toolchain determines which FIPS snapshots exist, so pin it.
