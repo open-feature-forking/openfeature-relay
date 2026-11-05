@@ -81,6 +81,7 @@ nav:
   - 'Distributions': 'relay/distributions.md'
   - 'Syncing from an upstream': 'relay/grpc-source.md'
   - 'The testbed': 'relay/testbed.md'
+  - 'The load test': 'relay/load-test.md'
   - 'Contract tests': 'reference/contract-tests.md'
   - 'Status and roadmap': 'relay/status.md'
   - 'Try it': 'relay/try-it.md'
