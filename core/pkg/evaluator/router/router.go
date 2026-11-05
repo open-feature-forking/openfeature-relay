@@ -31,6 +31,7 @@ var _ evaluator.Evaluator = (*Router)(nil)
 
 // New returns a router over routes. A router with one route hands every request to it and needs no store;
 // otherwise the store holds the documents that decide where a flag goes. Each format has one route.
+// Close closes the evaluator of every route, so an evaluator in two routes is closed twice.
 func New(st *store.Store, routes ...Route) (*Router, error) {
 	if len(routes) == 0 {
 		return nil, errors.New("a router needs at least one evaluator")
@@ -241,8 +242,13 @@ func hasResult(results []evaluator.Result, key string) bool {
 
 // Close closes the evaluators of the routes that are an io.Closer, and returns their errors joined.
 func (r *Router) Close() error {
+	return closeEvaluators(r.routes)
+}
+
+// closeEvaluators closes the evaluators of routes that are an io.Closer, and returns their errors joined.
+func closeEvaluators(routes []Route) error {
 	var errs []error
-	for _, route := range r.routes {
+	for _, route := range routes {
 		if closer, ok := route.Evaluator.(io.Closer); ok {
 			errs = append(errs, closer.Close())
 		}
