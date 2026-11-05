@@ -106,7 +106,7 @@ class BuildWorkflow(unittest.TestCase):
         """Every job's text by id, including ids with digits that job() cannot reach."""
         jobs = self.text.split("\njobs:\n", 1)[1]
         parts = re.split(r"(?m)^(?=  [a-z][a-z0-9-]*:[^\n]*\n)", jobs)
-        return {re.match(r"  ([a-z0-9-]+):", part).group(1): part for part in parts if part.startswith("  ")}
+        return {m.group(1): part for part in parts if (m := re.match(r"  ([a-z0-9-]+):", part))}
 
     CACHED_JOBS = ("lint", "docs-check", "test", "builder-e2e", "fips", "integration-test", "upgrade-test", "release-dry-run")
     GATED_CACHED_JOBS = ("upgrade-test", "release-dry-run")
