@@ -32,3 +32,5 @@ benchmark.txt
 /.flagd-full-build/
 /.flagsmith-build/
 /distributions/*/build/
+
+__pycache__/
