@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strings"
 	"syscall"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,12 +35,30 @@ const flags = `{"flags":{
 	"b1":{"state":"ENABLED","defaultVariant":"on","variants":{"on":true,"off":false},"metadata":{"flagSetId":"team-b"}}
 }}`
 
+// issuedPorts are the ports freePort has handed out in this process. A port is free again the moment it is closed, so
+// the next call can get the same one, and one start would listen twice on it.
+var issuedPorts sync.Map
+
 func freePort(t *testing.T) uint16 {
 	t.Helper()
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	defer l.Close()
-	return uint16(l.Addr().(*net.TCPAddr).Port)
+	// a port the kernel hands out again stays open until a new one comes, so the next listen cannot get it
+	var held []net.Listener
+	defer func() {
+		for _, h := range held {
+			_ = h.Close()
+		}
+	}()
+	for {
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		require.NoError(t, err)
+		port := l.Addr().(*net.TCPAddr).Port
+		if _, taken := issuedPorts.LoadOrStore(port, true); taken {
+			held = append(held, l)
+			continue
+		}
+		_ = l.Close()
+		return uint16(port)
+	}
 }
 
 // TestExtensionMiddlewareBindsSelector builds flagd-full's components with the example middleware and evaluates all

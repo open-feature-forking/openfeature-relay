@@ -61,6 +61,12 @@ class BuildWorkflow(unittest.TestCase):
         jobs = yaml.safe_load(self.text)["jobs"]
         self.assertIn("test", jobs)
 
+    def test_every_action_is_pinned_to_a_commit(self):
+        """A mangled `uses:` (a stray character in place of the @) is still valid YAML, and GitHub rejects the workflow."""
+        for text in (self.text, RELEASE_CHECK.read_text(encoding="utf-8")):
+            for ref in re.findall(r"^\s*(?:- )?uses: (\S+)", text, re.M):
+                self.assertRegex(ref, r"^[\w./-]+@[0-9a-f]{40}$")
+
     def test_paths_ignore_docs_on_push_and_pull_request(self):
         block = '    paths-ignore:\n      - "**/*.md"\n      - "docs/**"\n      - ".claude/**"\n'
         self.assertEqual(2, self.text.count(block))
@@ -83,7 +89,7 @@ class BuildWorkflow(unittest.TestCase):
     def test_jobs(self):
         names = re.findall(r"^  ([a-z][a-z0-9-]*):[ \t]*(?:#.*)?\n", self.text.split("\njobs:\n", 1)[1], re.M)
         self.assertEqual(
-            ["changes", "lint", "benchmark", "docs-check", "test", "miss-report", "builder-e2e", "fips", "docker-local", "integration-test",
+            ["changes", "lint", "benchmark", "docs-check", "test", "miss-report", "coverage", "builder-e2e", "fips", "docker-local", "integration-test",
              "upgrade-test", "release-dry-run", "testbed", "testbed-rpc-outages", "testbed-grpc-sync", "load-smoke", "load-test"], names)
 
     def test_changes_is_report_only(self):
@@ -108,8 +114,8 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIn("run: python3 .github/scripts/test_ci_modules.py\n", self.job("lint"))
 
     def test_gated_jobs(self):
-        gate = "if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'"
-        for name in ("fips", "docker-local", "testbed-rpc-outages", "testbed-grpc-sync", "load-test"):
+        gate = "if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'"
+        for name in ("testbed-rpc-outages", "testbed-grpc-sync"):
             with self.subTest(job=name):
                 self.assertIn(gate, self.job(name))
         self.assertIn("if: github.event_name == 'pull_request'", self.job("benchmark"))
@@ -118,6 +124,8 @@ class BuildWorkflow(unittest.TestCase):
         """W: the 60 s race-build smoke is on every build, the 10 min run is gated, and both keep their logs on failure."""
         self.assertNotIn("if:", self.job("load-smoke").split("steps:", 1)[0])
         self.assertIn("run: make test-load-smoke", self.job("load-smoke"))
+        self.assertIn("if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'", self.job("load-test"))
+        self.assertNotIn("schedule", self.job("load-test").split("steps:", 1)[0])
         self.assertRegex(self.job("load-test"), r"run: make test-load\s")
         for name in ("load-smoke", "load-test"):
             with self.subTest(job=name):
@@ -160,7 +168,7 @@ class BuildWorkflow(unittest.TestCase):
         return {m.group(1): part for part in parts if (m := re.match(r"  ([a-z0-9-]+):", part))}
 
     CACHED_JOBS = ("lint", "docs-check", "test", "builder-e2e", "fips", "integration-test", "upgrade-test", "release-dry-run")
-    GATED_CACHED_JOBS = ("upgrade-test", "release-dry-run")
+    GATED_CACHED_JOBS = ("fips", "upgrade-test", "release-dry-run")
     ON_MAIN = "github.ref == 'refs/heads/main' && github.event_name == 'push'"
 
     def test_go_caches_are_saved_only_on_main(self):
@@ -197,7 +205,7 @@ class BuildWorkflow(unittest.TestCase):
         """P0: a pull request's change set is its merge commit against the first parent. base.sha is where the pull
         request was opened and holds what the base gained since."""
         jobs = self.all_jobs()
-        for name in ("upgrade-test", "testbed"):
+        for name in ("upgrade-test", "testbed", "fips", "docker-local"):
             with self.subTest(job=name):
                 job = jobs[name]
                 self.assertIn("BASE: ${{ github.event.before }}\n", job)
@@ -218,6 +226,88 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIn("if: steps.gate.outputs.run == 'true'", job)
         self.assertIn("make testbed-contract-both", job)
         self.assertIn("make testbed-suites", job)
+
+    def test_upgrade_differential_runs_on_any_go_change(self):
+        """Coverage gap 1: a change under core/, service/, sync/ or runtime/ changes flagd-full, so it runs the differential."""
+        job = self.all_jobs()["upgrade-test"]
+        pattern = re.search(r"pattern='([^']*)'", job).group(1)
+        for path in ("core/pkg/evaluator/x.go", "service/ofrep/x.go", "sync/http/go.mod", "runtime/go.sum", "go.sum",
+                     "flagd/build.Dockerfile", "distributions/flagd-full/manifest.yaml", "builder/main.go"):
+            with self.subTest(path=path):
+                self.assertTrue(re.search(pattern, path), path)
+        for path in ("README.md", "docs/vision.md", "Makefile"):
+            with self.subTest(path=path):
+                self.assertFalse(re.search(pattern, path), path)
+
+    def test_fips_runs_on_go_changes_with_the_submodule(self):
+        """Coverage gap 2: runtime/cmd's tests need the test-harness submodule; the job runs on a push to main, FULL_CI,
+        a manual run and a pull request that changes Go code, and every step after the checkout waits for the gate."""
+        job = self.all_jobs()["fips"]
+        self.assertNotRegex(job, r"\n    if:")
+        self.assertIn("git submodule update --init test-harness", job)
+        self.assertLess(job.index("git submodule update --init test-harness"), job.index("make test-fips"))
+        pattern = re.search(r"pattern='([^']*)'", job).group(1)
+        self.assertTrue(re.search(pattern, "core/pkg/x.go"))
+        self.assertTrue(re.search(pattern, "sync/http/go.sum"))
+        self.assertFalse(re.search(pattern, "README.md"))
+        self.assertIn('[ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]', job)
+        steps = re.split(r"(?m)^      - ", job.split("\n    steps:\n", 1)[1])[1:]
+        ungated = [s.splitlines()[0] for s in steps if "steps.gate.outputs.run == 'true'" not in s]
+        self.assertEqual(["name: Checkout repository", "name: Fetch the commit before the push",
+                          "name: Does the FIPS job apply to this change?"], ungated)
+
+    def test_image_build_and_scan_run_on_dependency_and_dockerfile_changes(self):
+        """Coverage gap 6: docker-local and Trivy run on a push to main, FULL_CI, a manual run, and a pull request that
+        changes go.mod, go.sum or a Dockerfile; every step after the checkout waits for the gate."""
+        job = self.all_jobs()["docker-local"]
+        self.assertNotRegex(job, r"\n    if:")
+        pattern = re.search(r"pattern='([^']*)'", job).group(1)
+        for path in ("go.sum", "core/go.mod", "flagd/build.Dockerfile", "distributions/flagd-full/Dockerfile"):
+            with self.subTest(path=path):
+                self.assertTrue(re.search(pattern, path), path)
+        for path in ("core/pkg/x.go", "README.md"):
+            with self.subTest(path=path):
+                self.assertFalse(re.search(pattern, path), path)
+        self.assertIn('[ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]', job)
+        self.assertIn("security-events: write", job)
+        steps = re.split(r"(?m)^      - ", job.split("\n    steps:\n", 1)[1])[1:]
+        ungated = [s.splitlines()[0] for s in steps if "steps.gate.outputs.run == 'true'" not in s]
+        self.assertEqual(["name: Checkout", "name: Fetch the commit before the push",
+                          "name: Does the image build and scan apply to this change?"], ungated)
+        self.assertIn("aquasecurity/trivy-action", job)
+
+    def test_outage_and_grpc_source_suites_run_nightly_on_main(self):
+        """Coverage gap 7: a cron schedule (which GitHub runs on the default branch only) starts both suites."""
+        head = self.text.split("\njobs:\n", 1)[0]
+        self.assertRegex(head, r'  schedule:\n    - cron: "[0-9*/, ]+ [0-9*/, ]+ \* \* \*"\n')
+        for name in ("testbed-rpc-outages", "testbed-grpc-sync"):
+            with self.subTest(job=name):
+                self.assertIn("github.event_name == 'schedule'", self.job(name))
+        # nothing else is gated on the schedule: the pull-request-only and push-only jobs skip it
+        self.assertIn("if: github.event_name == 'pull_request'", self.job("benchmark"))
+
+    def test_coverage_is_kept_and_compared_with_the_base(self):
+        """#208: the profiles are an artifact, a pull request's per-package totals are compared with its first parent's,
+        and the Codecov step that failed on every run for want of a token is gone."""
+        self.assertNotIn("codecov", self.text.lower())
+        test = self.job("test")
+        self.assertIn('name: coverage-profiles' + chr(10) + '          path: "*-coverage.out"', test)
+        job = self.job("coverage")
+        self.assertIn("if: github.event_name == 'pull_request'", job)
+        self.assertIn("needs: test", job)
+        self.assertIn('git worktree add "$RUNNER_TEMP/base" "HEAD^1"', job)
+        self.assertNotIn("base.sha", job)
+        # the base's profiles come from main's run for that commit; testing the base is the fallback
+        self.assertIn("gh run list --workflow build.yaml --branch main --event push --commit", job)
+        self.assertIn("gh run download", job)
+        self.assertIn("actions: read", job)
+        self.assertEqual(4, job.count("if: steps.base-profiles.outputs.found != 'true'"))
+        self.assertIn("name: coverage-profiles\n          path: head-coverage", job)
+        self.assertIn('run-coverage.sh "$RUNNER_TEMP/base" "$RUNNER_TEMP/base-coverage"', job)
+        self.assertIn('compare-coverage.py --base-root "$RUNNER_TEMP/base" --head-root . "$RUNNER_TEMP/base-coverage" head-coverage', job)
+        self.assertNotIn("continue-on-error", job)
+        self.assertNotIn("cache/save", job)
+        self.assertIn("run: python3 .github/scripts/test_compare_coverage.py", self.job("lint"))
 
     def test_outage_job_compares_both_images(self):
         """UC-022 Q16: the gated job runs the RPC suite with the outage scenarios against both images."""

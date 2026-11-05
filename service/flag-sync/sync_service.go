@@ -172,15 +172,16 @@ func (s *Service) Start(ctx context.Context) error {
 	// derive errgroup so we track ctx for exit as well as startup errors
 	g, lCtx := errgroup.WithContext(ctx)
 
-	ready := make(chan struct{})
+	ready := make(chan bool, 1)
 	g.Go(func() error {
-		s.waitForInitialSync()
-		close(ready)
+		ready <- s.waitForInitialSync(lCtx)
 		return nil
 	})
 
 	g.Go(func() error {
-		<-ready
+		if !<-ready {
+			return nil
+		}
 
 		err := s.serve()
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -223,10 +224,15 @@ func (s *Service) Emit(source string) {
 }
 
 // waitForInitialSync delays serving until every known sync source has reported its first sync, so
-// clients cannot be handed a partial configuration at startup.
-func (s *Service) waitForInitialSync() {
+// clients cannot be handed a partial configuration at startup. It returns false when ctx ends first: a start that
+// failed elsewhere stops at once instead of after the timeout.
+func (s *Service) waitForInitialSync(ctx context.Context) bool {
+	timeout := time.NewTimer(5 * time.Second)
+	defer timeout.Stop()
 	select {
-	case <-time.After(5 * time.Second):
+	case <-ctx.Done():
+		return false
+	case <-timeout.C:
 		s.logger.Warn("timeout while waiting for all sync sources to complete their initial sync. " +
 			"continuing sync service")
 	case <-s.startupTracker.getDone():
@@ -236,6 +242,7 @@ func (s *Service) waitForInitialSync() {
 			s.modTime.set(time.Now())
 		}
 	}
+	return true
 }
 
 func (s *Service) shutdown() {
