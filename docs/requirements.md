@@ -62,11 +62,11 @@ Derived from [vision.md](vision.md). Terms follow [glossary.md](glossary.md).
 | FR-055 | Write Streaming Sync Provider  | As an Extension Author, I want to implement a sync provider that both detects changes and delivers flag configurations, as flagd's gRPC sync protocol and the OpenFeature Operator do, so that push protocols keep working without a separate fetcher. | High     | Implemented |
 | FR-056 | Provide Testbed Control API    | As a Provider Author, I want a launchpad-compatible control API as a reusable module so that my provider's test suites, and other testbeds, can start, stop, restart and change a flagd without changing the suites. | High     | Implemented |
 | FR-057 | Simulate Outages and Restarts  | As a Provider Author, I want a testbed outage to close the runtime's listeners and every start to reload a cleaned store so that my provider sees refused connections, broken streams and fresh flags as against a restarted flagd. | High     | Implemented |
-| FR-058 | Retry Upstream Sync Like the Provider | As an Operator, I want a `grpc` source to opt into the Go flagd provider's retry policy and reconnect delay so that it survives the upstream's outages the way the providers do. | Medium | Open |
-| FR-059 | End on Fatal Sync Status         | As an Operator, I want a `grpc` source to opt into status codes that end flagd before the source's first payload so that a wrong credential fails the start instead of retrying forever. | Medium | Open |
-| FR-060 | Recycle and Keep Alive Upstream Sync | As an Operator, I want a `grpc` source to opt into a stream deadline, HTTP/2 keepalive and readiness on its first payload so that long-lived streams survive intermediaries and the sync provider's readiness means a payload arrived. | Medium | Open |
-| FR-061 | Send Selector as Header          | As an Operator, I want a `grpc` source to opt into sending its selector as the `flagd-selector` header so that an upstream that prefers the header sees the selector. | Medium | Open |
-| FR-062 | Resolve Headers From Secrets     | As an Operator, I want a `grpc` source to resolve `headersFrom` like every other source so that its credentials come from the environment or a file. | Medium | Open |
+| FR-058 | Retry Upstream Sync Like the Provider | As an Operator, I want a `grpc` source to opt into the Go flagd provider's retry policy and reconnect delay so that it survives the upstream's outages the way the providers do. | Medium | Implemented |
+| FR-059 | End on Fatal Sync Status         | As an Operator, I want a `grpc` source to opt into status codes that end flagd before the source's first payload so that a wrong credential fails the start instead of retrying forever. | Medium | Implemented |
+| FR-060 | Recycle and Keep Alive Upstream Sync | As an Operator, I want a `grpc` source to opt into a stream deadline, HTTP/2 keepalive and readiness on its first payload so that long-lived streams survive intermediaries and the sync provider's readiness means a payload arrived. | Medium | Implemented |
+| FR-061 | Send Selector as Header          | As an Operator, I want a `grpc` source to opt into sending its selector as the `flagd-selector` header so that an upstream that prefers the header sees the selector. | Medium | Implemented |
+| FR-062 | Resolve Headers From Secrets     | As an Operator, I want a `grpc` source to resolve `headersFrom` like every other source so that its credentials come from the environment or a file. | Medium | Implemented |
 
 ## Non-Functional Requirements
 
@@ -87,7 +87,7 @@ Derived from [vision.md](vision.md). Terms follow [glossary.md](glossary.md).
 | NFR-013 | Event Publishing Overhead     | With no event sink selected, publishing evaluation events adds no allocation to the endpoint benchmarks of the flag evaluation and OFREP service endpoints (the evaluator publishes nothing); with sinks selected, a full sink buffer drops events and counts the drops instead of blocking evaluation. | Performance     | High     | Implemented   |
 | NFR-014 | Drop-In Testbed               | Provider suites that pass against the flagd-testbed image run unchanged against the relay testbed and pass the same scenarios. | Compatibility   | High     | Implemented |
 | NFR-015 | Test-Only Components          | No standard distribution manifest contains a module under `testbed/`. | Maintainability | Medium   | Implemented |
-| NFR-016 | Drop-In Upstream Sync         | Without a `grpc` object, a `grpc` source behaves as before: the same schedule, fail-fast connection, retries, keepalive, dial options and request metadata. | Compatibility   | High     | Open   |
+| NFR-016 | Drop-In Upstream Sync         | Without a `grpc` object, a `grpc` source behaves as before: the same schedule, fail-fast connection, retries, keepalive, dial options and request metadata. | Compatibility   | High     | Implemented |
 
 ## Constraints
 

@@ -30,6 +30,7 @@
 | Selector | An expression a client sends, or middleware derives from the client's credential, to restrict a query, an evaluation or a flag sync subscription to the flags of certain sources or flag sets. |  |
 | OFREP                 | The OpenFeature Remote Evaluation Protocol, an HTTP API for evaluating flags; one of flagd's service endpoints.                          |                               |
 | Vendor Flag Service | Another vendor's hosted flag management service that a vendor distribution syncs flag configurations from, such as Flagsmith. |  |
+| Upstream Flag Sync Endpoint | The flag sync endpoint a `grpc` source syncs flag configurations from: another flagd, a configuration proxy, flagd-proxy or a vendor's. |  |
 | Edge Proxy            | A vendor's own process that caches and evaluates flags close to applications; a vendor distribution can take its place.              |                               |
 | Vendor Distribution   | A custom distribution built from another vendor's sync provider, configuration format and evaluator, typically behind OFREP. | |
 | Flag Model            | flagd's own representation of a flag: variants, default variant, targeting and metadata, as defined by flagd's flag configuration schema. | |

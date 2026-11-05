@@ -8,7 +8,7 @@
 **Secondary Actors:** Upstream Flag Sync Endpoint
 **Goal:** Configure a `grpc` source to survive the outages and misconfigurations of the upstream flag sync endpoint as the flagd providers do, with nothing changing for sources that do not opt in.
 **Trigger:** Operator wants a `grpc` source to reconnect on the provider's schedule, end flagd on a fatal status code, recycle its stream, keep its connection alive, send its selector as a header or report readiness on its first payload
-**Status:** Draft
+**Status:** Implemented
 
 **Requirements:** [FR-058, FR-059, FR-060, FR-061, FR-062, NFR-016](../requirements.md)
 
@@ -44,7 +44,7 @@
 **Trigger:** The `grpc` object holds a setting the system rejects (step 2)
 **Flow:**
 
-1. System refuses to start and names the source and the setting, for a code name that is not a gRPC status code, a negative duration, `retryBackoffMs` above `retryBackoffMaxMs`, `keepAliveTime` from 1 to 9999, `selectorHeader` together with a `flagd-selector` entry in the source's `headers`, an unknown key or a value of the wrong type inside the `grpc` object, and a `grpc` object on a source whose provider is not `grpc`.
+1. System refuses to start and names the source and the setting, for a code name that is not a gRPC status code or is `OK`, a negative duration, `retryBackoffMs` above `retryBackoffMaxMs`, `keepAliveTime` from 1 to 9999, `selectorHeader` together with a `flagd-selector` entry in the source's `headers` or `headersFrom`, an unknown key or a value of the wrong type inside the `grpc` object, and a `grpc` object on a source whose provider is not `grpc`.
 2. Operator corrects the setting.
 3. Use case continues at step 1.
 
@@ -101,7 +101,7 @@ With `streamDeadlineMs` set, the stream is re-opened at once when the deadline e
 
 ### BR-006: Selector Header
 
-With `selectorHeader`, the `flagd-selector` header carries the selector on `SyncFlags` and `FetchAllFlags`, next to the selector field of the request body. A `flagd-selector` entry in `headers` on the same source is refused.
+With `selectorHeader`, the `flagd-selector` header carries the source's selector on `SyncFlags` and `FetchAllFlags`, next to the selector field of the request body; a source without a selector sends no header. A `flagd-selector` entry in `headers` or `headersFrom` on the same source is refused.
 
 ### BR-007: Readiness
 
