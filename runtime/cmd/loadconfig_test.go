@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	"github.com/open-feature-forking/openfeature-relay/runtime/runtimetest"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
 	"github.com/stretchr/testify/require"
 )
 
@@ -44,7 +44,7 @@ func TestLoadConfigMatchesStart(t *testing.T) {
 				args: []string{"start", "--config", path},
 			}))
 
-			cfg, comps, err := LoadConfig(path, runtimetest.Components(), nil)
+			cfg, comps, err := LoadConfig(path, officialset.Components(), nil)
 			require.NoError(t, err)
 			got := renderRuntimeConfig(cfg) + renderTelemetryConfig(comps.TelemetryConfig)
 			require.Equal(t, want, got)
@@ -53,13 +53,13 @@ func TestLoadConfigMatchesStart(t *testing.T) {
 }
 
 func TestLoadConfigReadsTheSettingsOfTheFile(t *testing.T) {
-	cfg, _, err := LoadConfig(configNamed(t, "ssl.json"), runtimetest.Components(), nil)
+	cfg, _, err := LoadConfig(configNamed(t, "ssl.json"), officialset.Components(), nil)
 	require.NoError(t, err)
 	require.Equal(t, "/ssl/server-cert.pem", cfg.ServiceCertPath)
 	require.Equal(t, "/ssl/server-key.pem", cfg.ServiceKeyPath)
 	require.Equal(t, uint16(8013), cfg.ServicePort, "a setting the file does not set has the default of flagd start")
 
-	cfg, _, err = LoadConfig(configNamed(t, "sync-payload.json"), runtimetest.Components(), nil)
+	cfg, _, err = LoadConfig(configNamed(t, "sync-payload.json"), officialset.Components(), nil)
 	require.NoError(t, err)
 	require.True(t, cfg.DisableSyncMetadata)
 	require.Equal(t, map[string]any{"injectedmetadata": "set"}, cfg.ContextValues)
@@ -90,9 +90,9 @@ func allFlagsRewrite(source sync.SourceConfig) sync.SourceConfig {
 func TestLoadConfigRewriteTouchesOneSource(t *testing.T) {
 	for _, path := range harnessConfigs(t) {
 		t.Run(filepath.Base(path), func(t *testing.T) {
-			plain, plainComponents, err := LoadConfig(path, runtimetest.Components(), nil)
+			plain, plainComponents, err := LoadConfig(path, officialset.Components(), nil)
 			require.NoError(t, err)
-			rewritten, rewrittenComponents, err := LoadConfig(path, runtimetest.Components(), []SourceRewrite{allFlagsRewrite})
+			rewritten, rewrittenComponents, err := LoadConfig(path, officialset.Components(), []SourceRewrite{allFlagsRewrite})
 			require.NoError(t, err)
 
 			require.Len(t, rewritten.SyncProviders, len(plain.SyncProviders))
@@ -117,7 +117,7 @@ func TestLoadConfigRewriteTouchesOneSource(t *testing.T) {
 	t.Run("the configurations that name the source are default, ssl and sync-payload", func(t *testing.T) {
 		var named []string
 		for _, path := range harnessConfigs(t) {
-			cfg, _, err := LoadConfig(path, runtimetest.Components(), []SourceRewrite{allFlagsRewrite})
+			cfg, _, err := LoadConfig(path, officialset.Components(), []SourceRewrite{allFlagsRewrite})
 			require.NoError(t, err)
 			for _, source := range cfg.SyncProviders {
 				if source.URI == rewrittenSource {
@@ -141,7 +141,7 @@ func TestLoadConfigRewritesRunInOrderOnEverySource(t *testing.T) {
 			return source
 		}
 	}
-	cfg, _, err := LoadConfig(path, runtimetest.Components(), []SourceRewrite{suffix("+a"), suffix("+b")})
+	cfg, _, err := LoadConfig(path, officialset.Components(), []SourceRewrite{suffix("+a"), suffix("+b")})
 	require.NoError(t, err)
 	for _, source := range cfg.SyncProviders {
 		require.True(t, strings.HasSuffix(source.URI, "+a+b"), source.URI)
@@ -150,13 +150,13 @@ func TestLoadConfigRewritesRunInOrderOnEverySource(t *testing.T) {
 
 func TestLoadConfigErrors(t *testing.T) {
 	t.Run("a file that is not there", func(t *testing.T) {
-		_, _, err := LoadConfig(filepath.Join(t.TempDir(), "missing.json"), runtimetest.Components(), nil)
+		_, _, err := LoadConfig(filepath.Join(t.TempDir(), "missing.json"), officialset.Components(), nil)
 		require.ErrorContains(t, err, "missing.json")
 	})
 
 	t.Run("a setting of a component the distribution lacks", func(t *testing.T) {
 		// flagd-full's components without the flag sync endpoint cannot take disable-sync-metadata
-		without := runtimetest.Components()
+		without := officialset.Components()
 		without.Endpoints = nil
 		_, _, err := LoadConfig(configNamed(t, "sync-payload.json"), without, nil)
 		require.ErrorContains(t, err, "disable-sync-metadata")
@@ -167,11 +167,11 @@ func TestLoadConfigErrors(t *testing.T) {
 // can load configurations repeatedly and each load is the same.
 func TestLoadConfigIsRepeatableAndLeavesGlobalStateAlone(t *testing.T) {
 	path := configNamed(t, "ssl.json")
-	first, _, err := LoadConfig(path, runtimetest.Components(), nil)
+	first, _, err := LoadConfig(path, officialset.Components(), nil)
 	require.NoError(t, err)
-	_, _, err = LoadConfig(configNamed(t, "default.json"), runtimetest.Components(), nil)
+	_, _, err = LoadConfig(configNamed(t, "default.json"), officialset.Components(), nil)
 	require.NoError(t, err)
-	second, _, err := LoadConfig(path, runtimetest.Components(), nil)
+	second, _, err := LoadConfig(path, officialset.Components(), nil)
 	require.NoError(t, err)
 	require.Equal(t, first, second)
 	require.Empty(t, cfgFile, "the --config of the command is not touched")
@@ -190,7 +190,7 @@ func writeConfig(t *testing.T, content string) string {
 // malformed stops LoadConfig with an error that names the file, the source and the key.
 func TestLoadConfigGRPCObjectIsStrict(t *testing.T) {
 	t.Run("a valid object arrives on the source", func(t *testing.T) {
-		cfg, _, err := LoadConfig(writeConfig(t, grpcSourceFile), runtimetest.Components(), nil)
+		cfg, _, err := LoadConfig(writeConfig(t, grpcSourceFile), officialset.Components(), nil)
 		require.NoError(t, err)
 		require.Len(t, cfg.SyncProviders, 1)
 		require.Equal(t, &sync.GRPCSourceSettings{
@@ -204,7 +204,7 @@ func TestLoadConfigGRPCObjectIsStrict(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			path := writeConfig(t, `{"sources":[{"uri":"up:8015","provider":"grpc","grpc":`+object+`}]}`)
-			_, _, err := LoadConfig(path, runtimetest.Components(), nil)
+			_, _, err := LoadConfig(path, officialset.Components(), nil)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), path)
 			require.Contains(t, err.Error(), `source "up:8015"`)
@@ -222,7 +222,7 @@ func TestLoadConfigMatchesStartWithGRPCObject(t *testing.T) {
 	}))
 	require.Contains(t, want, `"grpc":{"keepAliveTime":30000`, "start read the object")
 
-	cfg, comps, err := LoadConfig(writeConfig(t, grpcSourceFile), runtimetest.Components(), nil)
+	cfg, comps, err := LoadConfig(writeConfig(t, grpcSourceFile), officialset.Components(), nil)
 	require.NoError(t, err)
 	require.Equal(t, want, renderRuntimeConfig(cfg)+renderTelemetryConfig(comps.TelemetryConfig))
 }

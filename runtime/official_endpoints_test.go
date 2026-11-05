@@ -8,7 +8,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"github.com/open-feature-forking/openfeature-relay/runtime/runtimetest"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
 	"net"
 	"net/http"
 	"os"
@@ -346,7 +346,7 @@ func TestRuntimeStartsAnyEndpointSet(t *testing.T) {
 			},
 		},
 		{
-			name: "all three", endpoints: runtimetest.Components().Endpoints, evaluator: true,
+			name: "all three", endpoints: officialset.Components().Endpoints, evaluator: true,
 			check: func(t *testing.T, p ports) {
 				for _, port := range []uint16{p.service, p.ofrep, p.sync} {
 					waitForPort(t, port)
@@ -359,8 +359,8 @@ func TestRuntimeStartsAnyEndpointSet(t *testing.T) {
 			p := newPorts(t)
 			cfg := characterizedConfig(t, p)
 			rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, Components{
-				Sync:                 runtimetest.Components().Sync,
-				ConfigurationFormats: runtimetest.Components().ConfigurationFormats, Evaluators: runtimetest.Components().Evaluators, Endpoints: tt.endpoints,
+				Sync:                 officialset.Components().Sync,
+				ConfigurationFormats: officialset.Components().ConfigurationFormats, Evaluators: officialset.Components().Evaluators, Endpoints: tt.endpoints,
 			})
 			require.NoError(t, err)
 			require.Equal(t, tt.evaluator, rt.Evaluator != nil, "an evaluator is built only for an endpoint that needs one")

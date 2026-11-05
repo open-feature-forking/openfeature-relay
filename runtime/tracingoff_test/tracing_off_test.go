@@ -10,7 +10,7 @@ package tracingoff_test
 import (
 	"context"
 	"fmt"
-	"github.com/open-feature-forking/openfeature-relay/runtime/runtimetest"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
 	"net"
 	"net/http"
 	"os"
@@ -61,7 +61,7 @@ func TestTracingOffCharacterization(t *testing.T) {
 		KeepAliveMinTime:             runtime.KeepAliveMinTimeDefault,
 		KeepAlivePermitWithoutStream: runtime.KeepAlivePermitWithoutStreamDefault,
 		SyncProviders:                []coresync.SourceConfig{{URI: file, Provider: "file"}},
-	}, withOpenTelemetry(runtimetest.Components()))
+	}, withOpenTelemetry(officialset.Components()))
 	require.NoError(t, err)
 
 	require.Empty(t, otel.GetTextMapPropagator().Fields(), "no propagator is installed")

@@ -5,7 +5,7 @@
 package telemetrystartup_test
 
 import (
-	"github.com/open-feature-forking/openfeature-relay/runtime/runtimetest"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
 	"os"
 	"path/filepath"
 	"testing"
@@ -22,7 +22,7 @@ func startup(t *testing.T, config map[string]any) (*runtime.Runtime, error) {
 
 	file := filepath.Join(t.TempDir(), "flags.json")
 	require.NoError(t, os.WriteFile(file, []byte(`{"flags":{}}`), 0o600))
-	components := runtimetest.Components()
+	components := officialset.Components()
 	components.Telemetry = otelprovider.NewFactory()
 	components.TelemetryConfig = config
 	return runtime.FromConfig(logger.NewLogger(nil, false), "test", runtime.Config{

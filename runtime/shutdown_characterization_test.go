@@ -5,7 +5,7 @@ package runtime
 import (
 	"context"
 	"fmt"
-	"github.com/open-feature-forking/openfeature-relay/runtime/runtimetest"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
 	"io"
 	"net"
 	"net/http"
@@ -71,7 +71,7 @@ func startRuntime(t *testing.T, cfg Config) (cancel func(), done <-chan error) {
 	t.Helper()
 	// the runtime's pins run without a telemetry provider, as they did when the components were hand-written and the
 	// command chose the provider; the tests that need one set it
-	components := runtimetest.Components()
+	components := officialset.Components()
 	components.Telemetry = nil
 	return startRuntimeWith(t, cfg, components)
 }

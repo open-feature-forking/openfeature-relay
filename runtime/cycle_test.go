@@ -14,7 +14,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	"github.com/open-feature-forking/openfeature-relay/runtime/runtimetest"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 )
@@ -106,7 +106,7 @@ func twoSourceConfig(t *testing.T, p ports) Config {
 }
 
 func officialComponents() Components {
-	components := runtimetest.Components()
+	components := officialset.Components()
 	components.Telemetry = nil
 	return components
 }

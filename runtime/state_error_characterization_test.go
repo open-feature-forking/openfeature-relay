@@ -5,7 +5,7 @@ package runtime
 import (
 	"context"
 	"errors"
-	"github.com/open-feature-forking/openfeature-relay/runtime/runtimetest"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
 	"os"
 	"path/filepath"
 	"testing"
@@ -54,7 +54,7 @@ func TestRejectedDeliveryLogText(t *testing.T) {
 	cfg.ConfigurationFormats = append(cfg.ConfigurationFormats, rejectingFactory{})
 
 	core, logs := observer.New(zap.DebugLevel)
-	rt, err := FromConfig(logger.NewLogger(zap.New(core), false), "test", cfg, runtimetest.Components())
+	rt, err := FromConfig(logger.NewLogger(zap.New(core), false), "test", cfg, officialset.Components())
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
