@@ -84,14 +84,32 @@ type hit struct {
 // attributes of the evaluation context are the identity's traits.
 func (e *Evaluator) Evaluate(_ context.Context, req evaluator.Request, dst []evaluator.Result) ([]evaluator.Result, model.Metadata, error) {
 	meta := req.Selector.ToMetadata()
+	best := map[flagID]hit{}
+	e.bestHits(best, req)
+	ordered := sortedHits(best)
+
+	if req.Bulk && req.FlagKeys == nil {
+		return appendAll(dst, ordered), meta, nil
+	}
+	keys := req.FlagKeys
+	if keys == nil {
+		keys = []string{req.FlagKey}
+	}
+	return appendByKey(dst, ordered, keys, meta), meta, nil
+}
+
+// flagID names a flag within a flag set.
+type flagID struct{ flagSet, key string }
+
+// bestHits resolves every wanted flag of the selected documents into best, keeping per flag set and key the hit of the
+// source with the highest priority: a later source wins. The caller owns best so that it stays on its stack.
+func (e *Evaluator) bestHits(best map[flagID]hit, req evaluator.Request) {
 	flagSet, named := req.Selector.DocumentFlagSet()
 	onlySource := req.Selector.Source()
 	wanted := req.WantedKeys()
 	id := identityOf(req.Context)
 	client := req.Attributes[CredentialAttribute] == CredentialClient
 
-	type pair struct{ flagSet, key string }
-	best := map[pair]hit{}
 	view := e.store.View()
 	for priority, source := range e.store.Sources() {
 		if onlySource != "" && source != onlySource {
@@ -106,14 +124,17 @@ func (e *Evaluator) Evaluate(_ context.Context, req evaluator.Request, dst []eva
 				if client && d.HideDisabled && !fr.Enabled {
 					continue
 				}
-				p := pair{doc.FlagSet, key}
+				p := flagID{doc.FlagSet, key}
 				if cur, ok := best[p]; !ok || priority > cur.priority {
 					best[p] = hit{flagSet: doc.FlagSet, key: key, priority: priority, result: e.resolve(doc.FlagSet, key, fr, req)}
 				}
 			}
 		}
 	}
+}
 
+// sortedHits orders the hits by flag set, then by key.
+func sortedHits(best map[flagID]hit) []hit {
 	ordered := make([]hit, 0, len(best))
 	for _, h := range best {
 		ordered = append(ordered, h)
@@ -124,18 +145,20 @@ func (e *Evaluator) Evaluate(_ context.Context, req evaluator.Request, dst []eva
 		}
 		return ordered[i].key < ordered[j].key
 	})
+	return ordered
+}
 
-	if req.Bulk && req.FlagKeys == nil {
-		for _, h := range ordered {
-			dst = append(dst, h.result)
-		}
-		return dst, meta, nil
+// appendAll appends every hit's result, in the order given.
+func appendAll(dst []evaluator.Result, ordered []hit) []evaluator.Result {
+	for _, h := range ordered {
+		dst = append(dst, h.result)
 	}
+	return dst
+}
 
-	keys := req.FlagKeys
-	if keys == nil {
-		keys = []string{req.FlagKey}
-	}
+// appendByKey appends one result per requested key: the hit of that key with the highest priority across flag sets (the
+// first in order on a tie), or a flag-not-found result.
+func appendByKey(dst []evaluator.Result, ordered []hit, keys []string, meta model.Metadata) []evaluator.Result {
 	for _, key := range keys {
 		var found *hit
 		for i := range ordered {
@@ -152,7 +175,7 @@ func (e *Evaluator) Evaluate(_ context.Context, req evaluator.Request, dst []eva
 		}
 		dst = append(dst, found.result)
 	}
-	return dst, meta, nil
+	return dst
 }
 
 type identity struct {
