@@ -61,6 +61,8 @@ Derived from [vision.md](vision.md). Terms follow [glossary.md](glossary.md).
 | FR-053 | Combine Fetch Triggers         | As an Operator, I want to attach one or more fetch triggers to a fetcher's source (an interval, a server-sent event stream, a file watch, a webhook) so that flagd refetches as soon as the source changes and still polls as a fallback. | High     | Implemented |
 | FR-054 | Write Fetch Trigger            | As an Extension Author, I want to implement a fetch trigger behind the trigger factory interface, such as a vendor's change event stream, so that a fetcher refetches on that vendor's signal without changing the fetcher. | Medium   | Implemented |
 | FR-055 | Write Streaming Sync Provider  | As an Extension Author, I want to implement a sync provider that both detects changes and delivers flag configurations, as flagd's gRPC sync protocol and the OpenFeature Operator do, so that push protocols keep working without a separate fetcher. | High     | Implemented |
+| FR-056 | Provide Testbed Control API    | As a Provider Author, I want a launchpad-compatible control API as a reusable module so that my provider's test suites, and other testbeds, can start, stop, restart and change a flagd without changing the suites. | High     | Open     |
+| FR-057 | Simulate Outages and Restarts  | As a Provider Author, I want a testbed outage to close the runtime's listeners and every start to reload a cleaned store so that my provider sees refused connections, broken streams and fresh flags as against a restarted flagd. | High     | Open     |
 
 ## Non-Functional Requirements
 
@@ -79,6 +81,8 @@ Derived from [vision.md](vision.md). Terms follow [glossary.md](glossary.md).
 | NFR-011 | Proxy Distribution Deps       | The flagd-sync binary links no evaluator module and no `github.com/diegoholiveira/jsonlogic` module, and the packages of the distribution import none.                                                                                 | Maintainability | High     | Implemented |
 | NFR-012 | Stable Dependencies           | No Go file imports `golang.org/x/exp` or another experimental package once the Go standard library offers an equivalent (`maps`, `slices`, `cmp`, `iter`), and no go.mod requires one directly; indirect requirements through third-party modules are allowed. | Maintainability | Medium   | Open   |
 | NFR-013 | Event Publishing Overhead     | With no event sink selected, publishing evaluation events adds no allocation to the endpoint benchmarks of the flag evaluation and OFREP service endpoints (the evaluator publishes nothing); with sinks selected, a full sink buffer drops events and counts the drops instead of blocking evaluation. | Performance     | High     | Implemented   |
+| NFR-014 | Drop-In Testbed               | Provider suites that pass against the flagd-testbed image run unchanged against the relay testbed and pass the same scenarios. | Compatibility   | High     | Open   |
+| NFR-015 | Test-Only Components          | No standard distribution manifest contains a module under `testbed/`. | Maintainability | Medium   | Open   |
 
 ## Constraints
 
