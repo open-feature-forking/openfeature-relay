@@ -8,7 +8,7 @@
 **Secondary Actors:** GitHub Actions, flagd Test Harness  
 **Goal:** Run a provider's Gherkin suite against the flagd being released, with the outages the suite controls, without changing the suite.  
 **Trigger:** A provider suite starts the testbed through the flagd-testbed compose file  
-**Status:** Draft  
+**Status:** Implemented  
 
 **Requirements:** [FR-056, FR-057, NFR-014, NFR-015](../requirements.md)
 
@@ -21,7 +21,7 @@
 
 1. GitHub Actions starts the compose stack with the testbed image.
 2. The control module combines the raw flags in memory and builds the runtime from the testbed configuration `default`, with `flags/allFlags.json` read from the testbed source. When the runtime is ready, the control module renders `allFlags.json` from the in-memory state and ports 8013 to 8015 open. Port 8080 of the control API opens only after the `default` configuration has started, as in flagd-testbed, and the suite waits for it.
-3. The suite calls `/start` for the configuration `default` in every scenario. The testbed closes the gate, resets and reloads the store, opens the gate when the runtime is ready again, and answers.
+3. The suite calls `/start` for the configuration `default` in every scenario. The testbed closes the listener gate, resets and reloads the store, opens the gate when the runtime is ready again, and answers.
 4. The suite evaluates flags over RPC, in-process sync or the rendered file.
 5. The suite calls `/change`. The testbed toggles `changing-flag` in the in-memory state, loads the new version into the store, renders `allFlags.json` atomically once the store holds it, and answers.
 6. The suite calls `/restart?seconds=N`. The testbed answers at once, closes the gate and removes the rendered `allFlags.json`; providers see refused connections, broken streams and a missing file. After N seconds it starts as in step 3, which renders the file again.
@@ -82,16 +82,25 @@
 2. The gate and the runtime stay as they were, and the last good configuration stays remembered.
 3. Use case ends.
 
+### A10: Default Configuration Does Not Start
+
+**Trigger:** The runtime is not ready within the start timeout for the `default` configuration when the testbed starts (step 2)  
+**Flow:**
+
+1. The testbed exits with an error naming `failed to start flagd`; port 8080 never opens and ports 8013 to 8015 stay closed.
+2. The suite cannot reach the control API, and its first `/start` fails.
+3. Use case ends.
+
 ## Postconditions
 
 ### Success Postconditions
 
 - The suite has passed the same scenarios against the testbed as against the flagd-testbed image.
-- The runtime still runs; state outside the store (the event bus, the process start time) survives restarts.
+- The runtime still runs; state outside the store (the event bus, the process start time) survives every start with the configuration in use. A configuration switch (A1) builds a new runtime, and only the control module's in-memory state survives it.
 
 ### Failure Postconditions
 
-- No file under the flags and configurations the testbed was built with has changed.
+- No source file the testbed was built with (raw flags, selector and metadata flags, configurations) has changed; the rendered `allFlags.json` is the only file the testbed writes.
 - A failed start leaves the last good configuration remembered.
 
 ## Business Rules
@@ -141,6 +150,10 @@ The control module knows no flagd type; a target supplies the behaviour (start, 
 
 ## Accepted Test Gaps
 
-- Fault injection and a public fetch call are follow-ups: the testbed has no faults endpoint, no `/fetch` and no evaluation-recording sink.
-- The suites' `@customCert` and `@unixsocket` scenarios and the other languages' suites run manually in the proof of concept; the `ssl` configuration itself is tested automatically.
+This use case is `Implemented`: the main success scenario, every alternative flow and every business rule have an automated test, and both the flagd-testbed image and the relay testbed pass the RPC and in-process suites with the same scenarios in CI (`testbed` job). No test case under `docs/test_cases/` covers it yet. These parts are accepted gaps:
+
+- Fault injection and `/faults`: #194.
+- A public `/fetch` call: #195.
+- An event sink that records evaluation events for tests to query: #196.
+- The suites' `@customCert` and `@unixsocket` scenarios and the other languages' suites run manually in the proof of concept; the `ssl` configuration itself is tested automatically. The RPC outage scenarios (`@reconnect`, `@events`, `@grace` over RPC) run in the gated `testbed-rpc-outages` job, with `FULL_CI` or a manual run, not on every pull request.
 - The scenarios `@fractional-v1` and `@fractional-v2` stay excluded (tracked in #47).

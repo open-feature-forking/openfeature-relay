@@ -82,7 +82,7 @@ class BuildWorkflow(unittest.TestCase):
         names = re.findall(r"^  ([a-z][a-z0-9-]*):[ \t]*(?:#.*)?\n", self.text.split("\njobs:\n", 1)[1], re.M)
         self.assertEqual(
             ["changes", "lint", "benchmark", "docs-check", "test", "miss-report", "builder-e2e", "fips", "docker-local", "integration-test",
-             "upgrade-test", "release-dry-run", "testbed", "testbed-rpc-outages"], names)
+             "upgrade-test", "release-dry-run", "testbed", "testbed-rpc-outages", "testbed-grpc-sync"], names)
 
     def test_changes_is_report_only(self):
         """P1: the affected-module report runs beside today's jobs; nothing but the miss report waits on it."""
@@ -107,7 +107,7 @@ class BuildWorkflow(unittest.TestCase):
 
     def test_gated_jobs(self):
         gate = "if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'"
-        for name in ("fips", "docker-local", "testbed-rpc-outages"):
+        for name in ("fips", "docker-local", "testbed-rpc-outages", "testbed-grpc-sync"):
             with self.subTest(job=name):
                 self.assertIn(gate, self.job(name))
         self.assertIn("if: github.event_name == 'pull_request'", self.job("benchmark"))
@@ -164,6 +164,10 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIn('others="flagd-minimal-otel flagd-cloud flagd-kubernetes flagd-sync"', dists)
         self.assertIn('platforms="linux/amd64"', dists)
 
+
+    def test_grpc_sync_job_runs_the_testbed_test(self):
+        """UC-023 Q14: the gated job runs flagd-full with a grpc source against the relay testbed."""
+        self.assertIn("make testbed-grpc-sync", self.job("testbed-grpc-sync"))
 
 class SpecLintWorkflow(unittest.TestCase):
     """The spec lint gates spec changes on errors only, and its sibling scripts sit where load_sibling looks."""

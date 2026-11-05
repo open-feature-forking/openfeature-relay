@@ -412,13 +412,16 @@ generate-flagd-full:
 # (NFR-008 asks for under three minutes). Run it with a warm module cache. The binary and the pins that run against it
 # stay out of flagd/.
 FLAGD_FULL_BUILD_DIR := .flagd-full-build
+# NFR-008: a warm build of flagd-full finishes within three minutes.
+FLAGD_FULL_BUILD_LIMIT ?= 180
 .PHONY: build-flagd-full
 build-flagd-full:
 	cd builder && go build -o ../bin/relay-builder ./cmd/relay-builder
 	rm -rf $(FLAGD_FULL_BUILD_DIR)
 	start=$$(date +%s); \
 	GOWORK=off ./bin/relay-builder --manifest distributions/flagd-full/manifest.yaml --output $(FLAGD_FULL_BUILD_DIR) || exit 1; \
-	echo "flagd-full built in $$(( $$(date +%s) - start ))s"
+	took=$$(( $$(date +%s) - start )); echo "flagd-full built in $${took}s"; \
+	if [ "$${took}" -gt "$(FLAGD_FULL_BUILD_LIMIT)" ]; then echo "NFR-008: flagd-full took $${took}s, over $(FLAGD_FULL_BUILD_LIMIT)s"; exit 1; fi
 	test -x $(FLAGD_FULL_BUILD_DIR)/flagd
 	cd flagd && FLAGD_BINARY=$$(cd ../$(FLAGD_FULL_BUILD_DIR) && pwd)/flagd go test -count=1 -run "TestCLICharacterization|TestStartupLogCharacterization" ./
 
@@ -481,3 +484,12 @@ testbed-suites: testbed-launchpad-image testbed-relay-image
 	.github/scripts/testbed-suites.sh
 testbed-rpc-outages: testbed-launchpad-image testbed-relay-image
 	.github/scripts/testbed-suites.sh outages
+
+# UC-023 (Q14): flagd-full with a grpc source against the relay testbed. It builds both images, so it needs Docker and
+# stays out of `make test`; the test skips without TESTBED_FLAGD_IMAGE.
+.PHONY: testbed-grpc-sync
+testbed-grpc-sync:
+	docker build -f distributions/flagd-testbed/Dockerfile -t testbed-relay:grpc-sync .
+	docker build -f flagd/build.Dockerfile -t flagd-full:grpc-sync .
+	cd test/testbed && TESTBED_IMAGE=testbed-relay:grpc-sync TESTBED_KIND=relay TESTBED_FLAGD_IMAGE=flagd-full:grpc-sync \
+		go test -count=1 -timeout 30m -v -run 'TestGRPCSource' ./...

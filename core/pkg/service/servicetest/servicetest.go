@@ -155,7 +155,8 @@ var always = func(service.Needs, Inputs) bool { return true }
 func resolves(n service.Needs, _ Inputs) bool { return n.Router || n.Format != "" }
 
 // Check runs the cases and returns the report, without failing a test. A case of a feature the author named in Without
-// is reported as not applicable; one whose input is neither supplied nor named fails, naming the input.
+// is reported as not applicable; one whose input is neither supplied nor named fails, naming the input. A feature both
+// supplied and named in Without, or a name that is no feature, aborts the run without a case (UC-008 BR-006).
 func Check(_ testing.TB, f service.Factory, in Inputs) contracttest.Report {
 	cases := []contractCase{
 		{"declarations", always, caseDeclarations, ""},
@@ -179,7 +180,7 @@ func Check(_ testing.TB, f service.Factory, in Inputs) contracttest.Report {
 		supplied[feature] = feature.supplied(in)
 	}
 	if err := contracttest.ValidateWithout(in.Without, supplied); err != nil {
-		report.Cases = append(report.Cases, failure("inputs", err))
+		return contracttest.Report{Aborted: err.Error()}
 	}
 	for _, c := range cases {
 		if !c.applicable(needs, in) {

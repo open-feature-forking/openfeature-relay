@@ -10,8 +10,8 @@ What runs by default is flagd-full, which is flagd built from this repository by
 
 ## Done
 
-Steps 1 to 11 of the proof of concept are done, and step 12 is done except for the release.
-A use case counts as done when its **Status** line reads `Implemented`.
+Steps 1 to 13 of the proof of concept are done; step 12's release runs as a dry run.
+A use case counts as done when its **Status** line reads `Implemented`, or `Tested` once a test case under `docs/test_cases/` covers it.
 
 - **Evaluator without telemetry, with a boundary**: the evaluator no longer imports OpenTelemetry, and `depguard` rules and a CI check keep OpenTelemetry, gRPC, ConnectRPC, Kubernetes and cloud SDKs out of its dependencies (FR-040, NFR-005).
 - **Configuration format and evaluator as modules**: the configuration format is split out of the evaluator, with document versions ([UC-018](../use_cases/UC-018-develop-configuration-format-extension.md)), and the evaluator and flagd's format are dependency-free modules that an in-process provider can embed ([UC-014](../use_cases/UC-014-embed-evaluator-in-in-process-provider.md)).
@@ -30,13 +30,11 @@ A use case counts as done when its **Status** line reads `Implemented`.
 - **A vendor's flags behind OFREP**: the flagsmith distribution evaluates Flagsmith environments with Flagsmith's engine ([UC-019](../use_cases/UC-019-serve-vendor-flags.md), [guide](../guides/serve-flagsmith-flags.md)).
 - **The reference image and the CI checks**: a reference Dockerfile builds any distribution into an image ([UC-002](../use_cases/UC-002-package-distribution-as-image.md)), and CI verifies a change against the distributions ([UC-013](../use_cases/UC-013-verify-change-against-distributions.md)).
 - **A release dry run**: the release's build steps run in CI without publishing or signing anything ([UC-012](../use_cases/UC-012-release-distributions-and-component-modules.md), part of it).
+- **The flagd testbed as a distribution**: the testbed the provider suites run against is built by the relay builder, with a control module, a listener gate and a runtime reset, and CI runs the RPC and in-process suites against it and against the flagd-testbed image ([UC-022](../use_cases/UC-022-run-provider-test-suites-against-the-testbed.md), [the testbed](testbed.md)).
 
 ## In progress
 
-- **Step 12, release**: [UC-012 Release Distributions and Component Modules](../use_cases/UC-012-release-distributions-and-component-modules.md) is still `Draft`.
-    The module path checks, the pins of today's release and the dry run are merged; the flagd-minimal-otel distribution (#147), the binary sizes in the dry run (#148) and the closing change that moves the use case to `Implemented` are pending.
-- **Step 13, the flagd testbed as a distribution**: the testbed that runs flagd's test-harness suites is being built as a `relay-builder` distribution, so that the project tests itself with the tool it ships.
-    The use case, UC-022, is not specified yet; the work is tracked in [#110](https://github.com/open-feature-forking/openfeature-relay/issues/110).
+- **Step 14, syncing from an upstream flag sync endpoint**: [UC-023](../use_cases/UC-023-sync-from-an-upstream-flag-sync-endpoint.md) brings the Go flagd provider's gRPC sync features to `sync/flagd-grpc`, opt-in per source ([#158](https://github.com/open-feature-forking/openfeature-relay/issues/158)).
 
 ## How a change is verified
 
@@ -78,8 +76,10 @@ The table shows the order; the sections above say which rows are done.
 | 10 | [UC-011](../use_cases/UC-011-inspect-distribution-components.md), [UC-010](../use_cases/UC-010-adopt-standard-distribution.md), [UC-017](../use_cases/UC-017-run-configuration-proxy.md), [UC-021](../use_cases/UC-021-export-evaluation-data.md) | components command, standard distributions, flagd-sync, event export |
 | 11 | [UC-019](../use_cases/UC-019-serve-vendor-flags.md) | a Flagsmith engine module as the cross-vendor proof |
 | 12 | [UC-002](../use_cases/UC-002-package-distribution-as-image.md), [UC-012](../use_cases/UC-012-release-distributions-and-component-modules.md), [UC-013](../use_cases/UC-013-verify-change-against-distributions.md) | image, release, CI verification |
-| 13 | UC-022 (in progress, [#110](https://github.com/open-feature-forking/openfeature-relay/issues/110)) | the flagd testbed as a `relay-builder` distribution |
-| 14 | UC-023 (in progress, [#158](https://github.com/open-feature-forking/openfeature-relay/issues/158)) | the Go flagd provider's gRPC sync features in `sync/flagd-grpc`, opt-in |
+| 13 | [UC-022](../use_cases/UC-022-run-provider-test-suites-against-the-testbed.md) | the flagd testbed as a `relay-builder` distribution |
+| 14 | [UC-023](../use_cases/UC-023-sync-from-an-upstream-flag-sync-endpoint.md) (in progress, [#158](https://github.com/open-feature-forking/openfeature-relay/issues/158)) | the Go flagd provider's gRPC sync features in `sync/flagd-grpc`, opt-in |
+| 15 | [#176](https://github.com/open-feature-forking/openfeature-relay/issues/176) (in progress) | a CI test and lint job per component, only for the modules a PR reaches |
+| 16 | [#183](https://github.com/open-feature-forking/openfeature-relay/issues/183) (planned) | a load test that flagd-minimal stays correct under concurrent OFREP, RPC and sync clients |
 
 [UC-016 Recover from Snapshot](../use_cases/UC-016-recover-from-snapshot.md) is deferred to a later release.
 Provider migration (formerly UC-015) is a follow-up after the proof of concept, [#156](https://github.com/open-feature-forking/openfeature-relay/issues/156).

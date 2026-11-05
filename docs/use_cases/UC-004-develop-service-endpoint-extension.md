@@ -20,7 +20,7 @@
 
 1. Extension Author adds the core module as a dependency of their component module.
 2. Extension Author names the service endpoint's type and declares that it resolves flags through the evaluation router.
-3. Extension Author implements the service endpoint: it starts serving clients when the distribution starts, resolves the flags of each request for the request's selector through the injected evaluation router, which publishes an evaluation event for each resolved flag on the event bus, answers in its protocol, and stops serving when the distribution shuts down.
+3. Extension Author implements the service endpoint: it starts serving clients when the distribution starts, resolves the flags of each request for the request's selector through the injected evaluation router, publishes an evaluation event for each resolved flag on the event bus, answers in its protocol, and stops serving when the distribution shuts down.
 4. Extension Author subscribes the service endpoint, through the event bus, to the configuration change events it reacts to, such as a change of the flags its clients have asked for.
 5. Extension Author implements the factory that creates the service endpoint from the dependencies a distribution injects: store with document versions, event bus, configuration, logger, telemetry provider and, because it declared that it resolves flags, the evaluation router.
 6. Extension Author runs the service endpoint contract tests (include UC-008 Run Contract Tests).
@@ -135,7 +135,7 @@ The event bus carries three kinds of events: configuration change events, which 
 
 ### BR-003: Resolve Through the Evaluation Router
 
-A service endpoint resolves flags only through the evaluation router, which picks for a selector and flag key the configuration format holding the flag and its evaluator; when two sources within the selector hold the same flag key, today's source precedence decides (FR-035). Typed values and type mismatch errors come from the core's typed adapter, so that every service endpoint reports a type mismatch alike. A service endpoint does not create an evaluator, decode, parse or convert flag configurations or read sources itself, so that every service endpoint of a distribution serves the same flags.
+A service endpoint that declared it needs the evaluation router resolves flags only through it; one that declared the evaluator of one specific configuration format (A2) gets that evaluator from the router. The evaluation router picks for a selector and flag key the configuration format holding the flag and its evaluator; when two sources within the selector hold the same flag key, today's source precedence decides (FR-035). Typed values and type mismatch errors come from the core's typed adapter, so that every service endpoint reports a type mismatch alike. A service endpoint does not create an evaluator, decode, parse or convert flag configurations or read sources itself, so that every service endpoint of a distribution serves the same flags.
 
 ### BR-004: Declared Needs
 

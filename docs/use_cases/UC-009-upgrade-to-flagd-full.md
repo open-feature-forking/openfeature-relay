@@ -111,7 +111,7 @@ flagd-full reaches readiness within 10% of the time the previous flagd needs wit
 
 ### BR-006: Same Trace Shape
 
-The flag evaluation and OFREP service endpoints record one evaluation span per flag evaluation in every distribution with an OpenTelemetry telemetry provider, flagd-full included, so that an Operator's traces keep the shape the previous flagd's evaluator gave them (FR-033).
+The flag evaluation and OFREP service endpoints record one evaluation span per evaluation request, a bulk request included, in every distribution with an OpenTelemetry telemetry provider, flagd-full included, so that an Operator's traces keep the shape the previous flagd's evaluator gave them (FR-033).
 
 ### BR-007: Release Names
 
@@ -119,7 +119,7 @@ Binary archives follow today's release pattern with the distribution name in the
 
 ### BR-008: No Staleness Limit by Default
 
-flagd-full applies no staleness limit unless the Operator configures one, so readiness behaves as before the upgrade (C-003). With a configured limit, readiness fails while a source has not delivered within it (FR-052).
+flagd-full applies no staleness limit unless the Operator configures one, so readiness behaves as before the upgrade (C-003). With a configured limit, readiness fails while the last contact with a source is older than it (FR-052).
 
 ## Delivered by Later Use Cases
 
