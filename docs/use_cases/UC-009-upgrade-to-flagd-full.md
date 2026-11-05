@@ -36,7 +36,7 @@
 **Trigger:** The current deployment runs the FIPS build of flagd (step 1)  
 **Flow:**
 
-1. Operator selects the FIPS build of flagd-full under the names of BR-007: the binary archive `flagd-fips_<version>_<OS>_<arch>` or the image `ghcr.io/open-feature/flagd` with the `-fips` tag suffix.
+1. Operator selects a FIPS build of flagd-full: one published under the names of BR-007 (the binary archive `flagd-fips_<version>_<OS>_<arch>` or the image `ghcr.io/open-feature/flagd` with the `-fips` tag suffix), or one built with the builder as [Build a FIPS distribution](../relay/fips.md) shows. CI does not verify the FIPS build (C-009).
 2. Use case continues at step 2.
 
 ### A2: Source With Unrecognized Scheme

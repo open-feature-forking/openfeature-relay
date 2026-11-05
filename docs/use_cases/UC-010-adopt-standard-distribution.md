@@ -36,7 +36,7 @@
 **Trigger:** The deployment must use FIPS 140-3 validated cryptography (step 3)  
 **Flow:**
 
-1. Operator selects the FIPS build of the chosen standard distribution, whose image tag carries the `-fips` suffix.
+1. Operator selects a FIPS build of the chosen standard distribution, whose image tag carries the `-fips` suffix, or builds one with the builder as [Build a FIPS distribution](../relay/fips.md) shows. CI does not verify the FIPS build (C-009).
 2. Use case continues at step 4.
 
 ### A2: Scheme Not in Distribution
@@ -132,5 +132,5 @@ This use case is `Implemented`: the manifests of flagd-minimal, flagd-minimal-ot
 
 | Gap | Delivered by |
 |-----|--------------|
-| A1: the FIPS image of a standard distribution with the `-fips` tag. A FIPS build of any manifest is the builder's do-it-yourself build ([Build a FIPS distribution](../relay/fips.md), C-009), not verified in CI | UC-002 |
+| A1: a published FIPS image of a standard distribution with the `-fips` tag. A FIPS build of any manifest is built with the builder ([Build a FIPS distribution](../relay/fips.md)); CI does not verify it (C-009) | UC-002 |
 | BR-005: the image names, the binary archives and the release names of the standard distributions, and their platform matrix (NFR-009) | UC-012 |

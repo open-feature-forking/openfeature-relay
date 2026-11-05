@@ -125,7 +125,7 @@ The Distribution Builder chooses the image name and tag of a custom distribution
 
 ### BR-007: FIPS Suffix
 
-A FIPS build of a distribution carries the `-fips` suffix and is published beside the regular image, never in its place.
+A FIPS build of a distribution carries the `-fips` suffix and is tagged beside the regular image, never in its place. How to build and verify one is in [Build a FIPS distribution](../relay/fips.md); CI does not verify the FIPS build of any distribution (C-009).
 
 ## Delivered by Later Use Cases
 

@@ -28,7 +28,7 @@
 5. GitHub Actions tags each released module with its release tag and creates a GitHub release with that module's changelog.
 6. GitHub Actions confirms that each new tag resolves as a version of its component module.
 7. GitHub Actions builds every standard distribution from its manifest against the released component module versions, as a standard build and a FIPS build, for every OS and architecture of the platform matrix.
-8. GitHub Actions confirms that every FIPS build carries the certified Go Cryptographic Module and refuses to run with FIPS mode disabled.
+8. GitHub Actions confirms that every FIPS build carries the certified Go Cryptographic Module and refuses to run with FIPS mode disabled. Outside a release, CI does not verify FIPS builds (C-009); [Build a FIPS distribution](../relay/fips.md) shows how to make and check one.
 9. GitHub Actions attaches each standard distribution's manifest, binary archives and software bill of materials to the flagd release.
 10. GitHub Actions builds the standard and FIPS images of every standard distribution for `linux/amd64` and `linux/arm64`, pushes them to the Container Registry and signs them.
 11. Maintainer sees the flagd release with the manifests, binaries and images of all six standard distributions, and the new component module versions available for manifests to pin.
