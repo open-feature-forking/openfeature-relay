@@ -9,7 +9,7 @@ package managementport
 
 import (
 	"fmt"
-	flagdcomponents "github.com/open-feature/flagd/flagd/components"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -82,7 +82,7 @@ func TestManagementPort(t *testing.T) {
 			{URI: file, Provider: "file"},
 			{URI: remote.URL, Provider: "http", Interval: 60},
 		},
-	}, withOpenTelemetry(flagdcomponents.Components()))
+	}, withOpenTelemetry(officialset.Components()))
 	require.NoError(t, err)
 	// with OTEL_TRACES_EXPORTER unset, autoexport selects the OTLP span exporter, so FromConfig installs the trace
 	// provider and the W3C propagators; only OTEL_TRACES_EXPORTER=none leaves both noop

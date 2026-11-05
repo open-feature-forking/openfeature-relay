@@ -8,7 +8,7 @@
 **Secondary Actors:** GitHub Actions, flagd Test Harness  
 **Goal:** Know before a change is merged whether it keeps every standard distribution building, keeps flagd-full compatible with today's flagd, keeps flagd-sync rejecting what flagd-full rejects, and keeps evaluation performance and dependency boundaries within their limits.  
 **Trigger:** A pull request against main is opened or updated  
-**Status:** Implemented  
+**Status:** Tested  
 
 **Requirements:** [FR-026, FR-032, NFR-001, NFR-004, NFR-005, NFR-007, NFR-011, C-009, C-010](../requirements.md)
 
@@ -180,6 +180,5 @@ This use case is `Implemented`: the build of every standard distribution from it
 | Gap | Delivered by |
 |-----|--------------|
 | Precondition, "required for merging": branch protection is a repository setting the project lead makes; no workflow enforces it | the project lead, after the proof of concept |
-| BR-001, step 3: the FIPS compile and crypto closure check of each standard distribution run in the gated FIPS job (`FULL_CI` or a manual run), not on every pull request | the project lead, after the proof of concept |
 | BR-005, NFR-001: the allocs/op of the evaluator benchmarks against the upstream commit the work branched from. Every benchmark's package path moved, so `compare-allocs.py` finds no common benchmark without a mapping of old paths to new ones | after the incubator |
 | A6: a setup failure of the Test Harness or the flagd-full image fails the integration test with `failed to build flagd image` before any scenario; no test pins it | the project lead, after the proof of concept |

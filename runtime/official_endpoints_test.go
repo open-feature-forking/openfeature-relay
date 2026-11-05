@@ -8,7 +8,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	flagdcomponents "github.com/open-feature/flagd/flagd/components"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
 	"net"
 	"net/http"
 	"os"
@@ -350,7 +350,7 @@ func TestRuntimeStartsAnyEndpointSet(t *testing.T) {
 			},
 		},
 		{
-			name: "all three", endpoints: flagdcomponents.Components().Endpoints, evaluator: true,
+			name: "all three", endpoints: officialset.Components().Endpoints, evaluator: true,
 			check: func(t *testing.T, p ports) {
 				for _, port := range []uint16{p.service, p.ofrep, p.sync} {
 					waitForPort(t, port)
@@ -363,8 +363,8 @@ func TestRuntimeStartsAnyEndpointSet(t *testing.T) {
 			p := newPorts(t)
 			cfg := characterizedConfig(t, p)
 			rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, listening(Components{
-				Sync:                 flagdcomponents.Components().Sync,
-				ConfigurationFormats: flagdcomponents.Components().ConfigurationFormats, Evaluators: flagdcomponents.Components().Evaluators, Endpoints: tt.endpoints,
+				Sync:                 officialset.Components().Sync,
+				ConfigurationFormats: officialset.Components().ConfigurationFormats, Evaluators: officialset.Components().Evaluators, Endpoints: tt.endpoints,
 			}))
 			require.NoError(t, err)
 			require.Equal(t, tt.evaluator, rt.Evaluator != nil, "an evaluator is built only for an endpoint that needs one")

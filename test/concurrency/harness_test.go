@@ -74,10 +74,16 @@ func buildRace(dir string) (string, error) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return "", fmt.Errorf("building flagd-minimal: %w\n%s", err, out)
 	}
-	return filepath.Join(dir, "flagd"), nil
+	binary := filepath.Join(dir, "flagd")
+	out, err := exec.Command("go", "version", "-m", binary).Output()
+	if err != nil || !strings.Contains(string(out), "-race=true") {
+		return "", fmt.Errorf("flagd-minimal was not built with the race detector: %v\n%s", err, out)
+	}
+	return binary, nil
 }
 
-// requireLoad skips a test unless RELAY_LOAD is set and Docker shares this machine's network and clock.
+// requireLoad skips a test unless RELAY_LOAD is set and Docker shares this machine's network and clock. In CI (CI is
+// set) a load run that cannot happen fails instead: a skip would read as a green job.
 func requireLoad(t *testing.T) {
 	t.Helper()
 	if os.Getenv("RELAY_LOAD") == "" {
@@ -85,11 +91,19 @@ func requireLoad(t *testing.T) {
 	}
 	out, err := exec.Command("docker", "info", "--format", "{{.OperatingSystem}}").Output()
 	if err != nil {
-		t.Skipf("docker is not available: %v", err)
+		skipUnlessCI(t, "docker is not available: %v", err)
 	}
 	if os := strings.TrimSpace(string(out)); strings.Contains(os, "Docker Desktop") {
-		t.Skipf("%s runs containers in a VM: --network host does not reach this machine and the clock is the VM's", os)
+		skipUnlessCI(t, "%s runs containers in a VM: --network host does not reach this machine and the clock is the VM's", os)
 	}
+}
+
+func skipUnlessCI(t *testing.T, format string, args ...any) {
+	t.Helper()
+	if os.Getenv("CI") != "" {
+		t.Fatalf(format, args...)
+	}
+	t.Skipf(format, args...)
 }
 
 // k6ImageName is the Makefile's K6_IMAGE, pinned by digest; images are pulled, never pushed (K2).

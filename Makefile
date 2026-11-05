@@ -118,23 +118,22 @@ test-flagd:
 # The tests of one module (MODULE=core, with or without the leading ./), with the flags that `make test` has always
 # used for it. The recipes of the single-module targets below are the same ones; test_ci_modules.py pins that.
 TEST_MODULE := $(patsubst ./%,%,$(MODULE))
-COVERED_MODULES := $(patsubst ./%,%,$(GO_LIB_MODULE_DIRS) $(FLAGD_MODULE_DIRS))
-UNCOVERED_MODULES := $(patsubst ./%,%,$(CONTRIB_MODULE_DIRS) $(TESTBED_MODULE_DIRS))
-# Modules whose tests run as `go test -race -short -count=1 ./<module>/...`.
+COVERED_MODULES := $(patsubst ./%,%,$(GO_LIB_MODULE_DIRS) $(FLAGD_MODULE_DIRS) $(CONTRIB_MODULE_DIRS) $(TESTBED_MODULE_DIRS))
+# Modules whose tests run as `go test -race -covermode=atomic -cover -short -count=1 ./<module>/...`, with a profile.
 PLAIN_TEST_MODULES := builder test/release test/service-example test/sync-example test/evaluator-testkit \
     test/configformat-example test/configformat-example/distribution test/eventsink-example test/eventsink-example/distribution \
     test/middleware-example test/middleware-example/distribution test/telemetry-example test/telemetry-example/distribution \
     test/inprocess-example/file test/inprocess-example/filegrpc test/inprocess-example/engine test/porttest
+# Every module that leaves a <module>-coverage.out profile; the coverage job and run-coverage.sh read this list.
+COVERAGE_MODULES := $(COVERED_MODULES) flagd-proxy $(PLAIN_TEST_MODULES)
 .PHONY: test-module
 test-module:
 ifneq ($(filter $(TEST_MODULE),$(COVERED_MODULES)),)
 	go test -race -covermode=atomic -cover -short ./$(TEST_MODULE)/... -coverprofile=$(subst /,-,$(TEST_MODULE))-coverage.out
 else ifeq ($(TEST_MODULE),flagd-proxy)
-	go test -race -covermode=atomic -cover -short ./flagd-proxy/pkg/... -coverprofile=flagd-proxy-coverage.out
-else ifneq ($(filter $(TEST_MODULE),$(UNCOVERED_MODULES)),)
-	go test -race -covermode=atomic -cover -short ./$(TEST_MODULE)/...
+	go test -race -covermode=atomic -cover -short ./flagd-proxy/... -coverprofile=flagd-proxy-coverage.out
 else ifneq ($(filter $(TEST_MODULE),$(PLAIN_TEST_MODULES)),)
-	go test -race -short -count=1 ./$(TEST_MODULE)/...
+	go test -race -covermode=atomic -cover -short -count=1 ./$(TEST_MODULE)/... -coverprofile=$(subst /,-,$(TEST_MODULE))-coverage.out
 else ifeq ($(TEST_MODULE),test/concurrency)
 	go test -race -count=1 ./test/concurrency/...
 else ifeq ($(TEST_MODULE),test/distributions)
@@ -147,20 +146,20 @@ else
 	@echo "test-module: no test recipe for MODULE=$(MODULE); ci-modules.json lists the modules that have one"; exit 1
 endif
 test-sync-example:
-	go test -race -short -count=1 ./test/sync-example/...
+	@$(MAKE) --no-print-directory test-module MODULE=test/sync-example
 test-telemetry-example:
-	go test -race -short -count=1 ./test/telemetry-example/... ./test/telemetry-example/distribution/...
+	@rc=0; for m in test/telemetry-example test/telemetry-example/distribution; do $(MAKE) --no-print-directory test-module MODULE=$$m || rc=1; done; exit $$rc
 test-contract-external:
 	./test/contract-external.sh
 test-middleware-example:
-	go test -race -short -count=1 ./test/middleware-example/... ./test/middleware-example/distribution/...
+	@rc=0; for m in test/middleware-example test/middleware-example/distribution; do $(MAKE) --no-print-directory test-module MODULE=$$m || rc=1; done; exit $$rc
 # The release tests read the module paths of the repository and build a distribution from a file:// module proxy of it.
 test-release:
-	go test -race -short -count=1 ./test/release/...
+	@$(MAKE) --no-print-directory test-module MODULE=test/release
 test-eventsink-example:
-	go test -race -short -count=1 ./test/eventsink-example/... ./test/eventsink-example/distribution/...
+	@rc=0; for m in test/eventsink-example test/eventsink-example/distribution; do $(MAKE) --no-print-directory test-module MODULE=$$m || rc=1; done; exit $$rc
 test-configformat-example:
-	go test -race -short -count=1 ./test/configformat-example/... ./test/configformat-example/distribution/...
+	@rc=0; for m in test/configformat-example test/configformat-example/distribution; do $(MAKE) --no-print-directory test-module MODULE=$$m || rc=1; done; exit $$rc
 # Opt-in, not part of `make test`: the shared engine test data of Flagsmith has no licence, so it is read from a clone
 # outside this repository, at the commit that flagsmith-go-client v5.3.0 records for it.
 FLAGSMITH_ENGINE_DATA_COMMIT := 2e710ea7c6994110d17d1adb40b2ec2e90e7cf44
@@ -172,16 +171,16 @@ flagsmith-engine-data-check:
 	git -C $(FLAGSMITH_ENGINE_DATA_DIR) checkout --quiet $(FLAGSMITH_ENGINE_DATA_COMMIT)
 	FLAGSMITH_ENGINE_TEST_DATA=$(FLAGSMITH_ENGINE_DATA_DIR)/test_cases go test -count=1 -v -run TestSharedEngineTestData ./contrib/flagsmith/engine/...
 test-service-example:
-	go test -race -short -count=1 ./test/service-example/...
+	@$(MAKE) --no-print-directory test-module MODULE=test/service-example
 # The testbed's evaluator suite lives in the test-harness submodule (git submodule update --init test-harness).
 test-evaluator-testkit:
-	go test -race -short -count=1 ./test/evaluator-testkit/...
+	@$(MAKE) --no-print-directory test-module MODULE=test/evaluator-testkit
 # The in-process examples assert on their own module graphs, which they read with the go command outside the workspace.
 test-inprocess-example:
-	go test -race -short -count=1 ./test/inprocess-example/file/... ./test/inprocess-example/filegrpc/... ./test/inprocess-example/engine/...
+	@rc=0; for m in test/inprocess-example/file test/inprocess-example/filegrpc test/inprocess-example/engine; do $(MAKE) --no-print-directory test-module MODULE=$$m || rc=1; done; exit $$rc
 # The Builder is a tool of its own: it imports no relay module (UC-001 Q1).
 test-builder:
-	go test -race -short -count=1 ./builder/...
+	@$(MAKE) --no-print-directory test-module MODULE=builder
 # The concurrency module's Docker-free tests; its load tests run only when RELAY_LOAD is set (NFR-017).
 test-concurrency:
 	go test -race -count=1 ./test/concurrency/...
@@ -202,7 +201,7 @@ test-porttest:
 test-distributions:
 	cd test/distributions && go test -count=1 -timeout 30m ./...
 test-flagd-proxy:
-	go test -race -covermode=atomic -cover -short ./flagd-proxy/pkg/... -coverprofile=flagd-proxy-coverage.out
+	@$(MAKE) --no-print-directory test-module MODULE=flagd-proxy
 # fips140=only makes non-approved algorithms error or panic, so this fails if a
 # tested path reaches MD5, SHA-1, RC4, 3DES or ChaCha20-Poly1305. Test mode only;
 # released binaries run with fips140=on.

@@ -18,6 +18,9 @@ on:
       - ".claude/**"
   # Full run including the gated jobs below.
   workflow_dispatch:
+  # Nightly, on the default branch: the outage and gRPC source suites run only here, with FULL_CI and manually.
+  schedule:
+    - cron: "17 3 * * *"
 
 # A newer push to a pull request's branch cancels the superseded run. Every other event gets a group of its own (the
 # commit), so a run on main is never cancelled or replaced by the one that queues behind it.
@@ -93,6 +96,8 @@ jobs:
       # C1 and C2: the module table and the Makefile targets that `make test` and `make lint` run.
       - name: Test the module table against the Makefile
         run: python3 .github/scripts/test_ci_modules.py
+      - name: Test the coverage comparison
+        run: python3 .github/scripts/test_compare_coverage.py
       - name: Test the comparison of the pass sets of the testbed suites
         run: python3 .github/scripts/test_compare_pass_sets.py
       # The module boundary tables include the evaluator boundary (NFR-005), which check-evaluator-boundary names.
@@ -221,8 +226,16 @@ jobs:
           name: test-log
           path: test.log
           if-no-files-found: ignore
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044 # v4
+      # One profile per module (<module>-coverage.out, written by make test-module). The hosted upload that stood here needed
+      # a token this repository does not have and failed on every run. The coverage job compares these with the base.
+      - name: Keep the coverage profiles
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage-profiles
+          path: "*-coverage.out"
+          retention-days: 30
+          if-no-files-found: warn
       - name: Save the Go caches
         if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
@@ -262,6 +275,78 @@ jobs:
           ORACLE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && '--oracle' || '' }}
         run: python3 .github/scripts/ci-modules.py miss-report --log test.log --tested "$TESTED" --all "$ALL" $ORACLE --summary "$GITHUB_STEP_SUMMARY"
 
+  # Statement coverage per package (#208), on the pull request's merge commit and on its first parent, the base as it is
+  # now. The head's profiles come from the test job. The base's come from the coverage-profiles artifact of main's own
+  # run for that commit when there is one, and otherwise from testing the base here with the same flags. A package that
+  # loses more than the tolerance in compare-coverage.py fails the job, and so does one that no longer has a profile.
+  coverage:
+    name: Coverage against the base
+    if: github.event_name == 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    env:
+      GOPATH: /home/runner/work/open-feature/flagd
+      GOBIN: /home/runner/work/open-feature/flagd/bin
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Checkout the merge commit and its first parent
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+        with:
+          fetch-depth: 2
+      - name: Fetch the head's coverage profiles
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: coverage-profiles
+          path: head-coverage
+      - name: Look for the base's profiles in main's run for that commit
+        id: base-profiles
+        run: |
+          git worktree add "$RUNNER_TEMP/base" "HEAD^1"
+          sha=$(git rev-parse "HEAD^1")
+          id=$(gh run list --workflow build.yaml --branch main --event push --commit "$sha" --status success --json databaseId --jq '.[0].databaseId' || true)
+          if [ -n "$id" ] && gh run download "$id" --name coverage-profiles --dir "$RUNNER_TEMP/base-coverage"; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::The base's profiles come from the run $id of main at $sha."
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No successful run of main with profiles at $sha: the base is tested here."
+          fi
+      - name: Setup go
+        if: steps.base-profiles.outputs.found != 'true'
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
+        with:
+          go-version-file: 'flagd/go.mod'
+          cache: false
+      # read-only: the test job saves this cache on main
+      - name: Restore the Go caches
+        if: steps.base-profiles.outputs.found != 'true'
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ${{ env.GOPATH }}/pkg/mod
+            ~/.cache/go-build
+          key: go-test-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-test-
+      - name: Test the base with coverage
+        if: steps.base-profiles.outputs.found != 'true'
+        run: |
+          git -C "$RUNNER_TEMP/base" submodule update --init test-harness
+          bash .github/scripts/run-coverage.sh "$RUNNER_TEMP/base" "$RUNNER_TEMP/base-coverage"
+      - name: Keep the base's coverage profiles
+        if: steps.base-profiles.outputs.found != 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage-profiles-base
+          path: ${{ runner.temp }}/base-coverage
+          retention-days: 30
+          if-no-files-found: ignore
+      - name: Compare the coverage per package
+        run: python3 .github/scripts/compare-coverage.py --base-root "$RUNNER_TEMP/base" --head-root . "$RUNNER_TEMP/base-coverage" head-coverage
+
   builder-e2e:
     name: Builder end to end
     runs-on: ubuntu-latest
@@ -297,8 +382,8 @@ jobs:
 
   fips:
     name: FIPS 140-3
-    # Gated during the proof of concept: set the repository variable FULL_CI=true, or run the workflow manually.
-    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'
+    # Runs on a push to main, with FULL_CI=true, manually, and on a pull request that changes Go code, the Makefile or this
+    # workflow (the pattern in the gate step). Otherwise only the gate step runs.
     runs-on: ubuntu-latest
     env:
       GOPATH: /home/runner/work/open-feature/flagd
@@ -306,12 +391,52 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+        with:
+          fetch-depth: 2
+      - name: Fetch the commit before the push
+        if: github.event_name == 'push'
+        run: git fetch --no-tags --depth=1 origin "${{ github.event.before }}" || true
+      - name: Does the FIPS job apply to this change?
+        id: gate
+        env:
+          FULL_CI: ${{ vars.FULL_CI }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          # for a push, the commits it brought
+          BASE: ${{ github.event.before }}
+          HEAD: ${{ github.sha }}
+        run: |
+          # A pull request's own changes are its merge commit against the first parent: the base as it is now.
+          if [ "$EVENT" = pull_request ]; then BASE=$(git rev-parse "$HEAD^1"); fi
+          pattern='\.go$|(^|/)go\.(mod|sum)$|^Makefile$|^\.github/workflows/build\.yaml$'
+          run=false
+          if [ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]; then
+            run=true
+            echo "::notice::The FIPS job runs: FULL_CI or a manual run."
+          elif [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]; then
+            run=true
+            echo "::notice::The FIPS job runs: a push to main."
+          elif [ -z "$BASE" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "::notice::No base to compare with: the FIPS job is skipped. Run the workflow manually or set FULL_CI."
+          else
+            hits=$(git diff --name-only "$BASE" "$HEAD" | grep -E "$pattern" || true)
+            if [ -n "$hits" ]; then
+              run=true
+              echo "::notice::The FIPS job runs: this change touches Go code or the build."
+              printf '%s\n' "$hits" | head -10
+            else
+              echo "::notice::The FIPS job is skipped: no Go code or build file changed. Set FULL_CI or run the workflow manually to run it."
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
       - name: Setup go
+        if: steps.gate.outputs.run == 'true'
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
         with:
           go-version-file: 'flagd/go.mod'
           cache: false
       - name: Restore the Go caches
+        if: steps.gate.outputs.run == 'true'
         id: go-cache
         uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
@@ -320,19 +445,27 @@ jobs:
             ~/.cache/go-build
           key: go-fips-${{ hashFiles('**/go.sum') }}
           restore-keys: go-fips-
+      # TestLoadConfig* in runtime/cmd read the evaluator suite from the test-harness submodule
+      - name: Fetch the testbed's evaluator suite
+        if: steps.gate.outputs.run == 'true'
+        run: git submodule update --init test-harness
       - run: make workspace-init
+        if: steps.gate.outputs.run == 'true'
 
       # Fails if any tested code path reaches a non-approved algorithm.
       - name: Test the FIPS variant with strict enforcement
+        if: steps.gate.outputs.run == 'true'
         run: make test-fips
 
       - name: Build both variants
+        if: steps.gate.outputs.run == 'true'
         run: |
           set -euo pipefail
           make build-flagd
           make build-flagd-fips
 
       - name: The standard build must not claim FIPS
+        if: steps.gate.outputs.run == 'true'
         run: |
           set -euo pipefail
           version_output=$(./bin/flagd version)
@@ -342,6 +475,7 @@ jobs:
           GODEBUG=fips140=off ./bin/flagd version >/dev/null
 
       - name: The FIPS build must carry and require the certified module
+        if: steps.gate.outputs.run == 'true'
         run: |
           set -euo pipefail
           build_info=$(go version -m ./bin/flagd-fips)
@@ -357,6 +491,7 @@ jobs:
           fi
 
       - name: A fips140-tagged build without GOFIPS140 must refuse to start
+        if: steps.gate.outputs.run == 'true'
         run: |
           set -euo pipefail
           go build -tags fips140 -o /tmp/flagd-mismatch ./flagd
@@ -365,18 +500,21 @@ jobs:
           fi
 
       - name: Build the FIPS variant of every standard distribution
+        if: steps.gate.outputs.run == 'true'
         run: make build-standard-fips
 
       - name: The FIPS crypto closure of every standard distribution is within the recorded one
+        if: steps.gate.outputs.run == 'true'
         run: make fips-closure-standard
 
       - name: Check the cryptographic dependency closure has not drifted
+        if: steps.gate.outputs.run == 'true'
         run: |
           make fips-closure
           git diff --exit-code docs/reference/fips-crypto-closure.txt \
             || { echo "::error::cryptographic dependency closure changed; review docs/reference/fips-140-3.md and commit the regenerated closure"; exit 1; }
       - name: Save the Go caches
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        if: steps.gate.outputs.run == 'true' && github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
           path: |
@@ -386,31 +524,76 @@ jobs:
 
 
   docker-local:
-    # Gated during the proof of concept: set the repository variable FULL_CI=true, or run the workflow manually.
-    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'
+    # Runs on a push to main, with FULL_CI=true, manually, and on a pull request that changes go.mod, go.sum or a Dockerfile
+    # (the pattern in the gate step). Otherwise only the gate step runs. Trivy reports to the Security tab, so the job
+    # may write security events.
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
         with:
           submodules: recursive
-
+          fetch-depth: 2
+      - name: Fetch the commit before the push
+        if: github.event_name == 'push'
+        run: git fetch --no-tags --depth=1 origin "${{ github.event.before }}" || true
+      - name: Does the image build and scan apply to this change?
+        id: gate
+        env:
+          FULL_CI: ${{ vars.FULL_CI }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          # for a push, the commits it brought
+          BASE: ${{ github.event.before }}
+          HEAD: ${{ github.sha }}
+        run: |
+          # A pull request's own changes are its merge commit against the first parent: the base as it is now.
+          if [ "$EVENT" = pull_request ]; then BASE=$(git rev-parse "$HEAD^1"); fi
+          # what goes into the image besides the Go sources: dependencies and Dockerfiles
+          pattern='(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^\.github/workflows/build\.yaml$'
+          run=false
+          if [ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]; then
+            run=true
+            echo "::notice::The image build and scan run: FULL_CI or a manual run."
+          elif [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]; then
+            run=true
+            echo "::notice::The image build and scan run: a push to main."
+          elif [ -z "$BASE" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "::notice::No base to compare with: the image build and scan are skipped. Run the workflow manually or set FULL_CI."
+          else
+            hits=$(git diff --name-only "$BASE" "$HEAD" | grep -E "$pattern" || true)
+            if [ -n "$hits" ]; then
+              run=true
+              echo "::notice::The image build and scan run: this change touches dependencies or a Dockerfile."
+              printf '%s\n' "$hits" | head -10
+            else
+              echo "::notice::The image build and scan are skipped: no go.mod, go.sum or Dockerfile changed. Set FULL_CI or run the workflow manually to run them."
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
       - name: Setup go
+        if: steps.gate.outputs.run == 'true'
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
         with:
           go-version-file: 'flagd/go.mod'
 
       - name: Set up QEMU
+        if: steps.gate.outputs.run == 'true'
         uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
         with:
           platforms: all
 
       - name: Set up Docker Buildx
+        if: steps.gate.outputs.run == 'true'
         id: buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Build
+        if: steps.gate.outputs.run == 'true'
         uses: docker/build-push-action@4a13e500e55cf31b7a5d59a38ab2040ab0f42f56 # v5
         with:
           context: .
@@ -419,6 +602,7 @@ jobs:
           tags: flagd-local:test
 
       - name: Run Trivy vulnerability scanner
+        if: steps.gate.outputs.run == 'true'
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
         with:
           input: ${{ github.workspace }}/flagd-local.tar
@@ -430,6 +614,7 @@ jobs:
           TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2
 
       - name: Upload Trivy scan results to GitHub Security tab
+        if: steps.gate.outputs.run == 'true'
         uses: github/codeql-action/upload-sarif@e8893c57a1f3a2b659b6b55564fdfdbbd2982911 # v3
         with:
           sarif_file: "trivy-results.sarif"
@@ -476,7 +661,7 @@ jobs:
   upgrade-test:
     name: Upgrade differential
     # The job builds two images (today's flagd and the flagd-full the Builder makes), so it follows the rule for images:
-    # it runs when the change touches a Dockerfile or the build (the pattern in the gate step), or with FULL_CI=true, or
+    # it runs when the change touches Go code, a Dockerfile or the build (the pattern in the gate step), or with FULL_CI=true, or
     # when the workflow is run manually. Otherwise only the gate step runs.
     runs-on: ubuntu-latest
     # go test has a 60 minute timeout; this keeps a hung Docker build from holding a runner for GitHub's six hours
@@ -497,11 +682,12 @@ jobs:
           HEAD: ${{ github.sha }}
         run: |
           # Dockerfiles; the manifest of flagd-full and the Builder that builds it; flagd, which holds flagd-full's main
-          # and its list of components; the differential's own test, the reference Dockerfile and its image tests, and this workflow
+          # and its list of components; the differential's own test, the reference Dockerfile and its image tests, and this workflow.
+          # Any Go source or module file too: a change under core/, service/, sync/, runtime/ or evaluator/ changes flagd-full.
           # A pull request's own changes are its merge commit against the first parent: the base as it is now. The
           # base sha is where the pull request was opened, so base..merge commit also holds what the base gained since.
           if [ "$EVENT" = pull_request ]; then BASE=$(git rev-parse "$HEAD^1"); fi
-          pattern='(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^flagd/|^test/upgrade/|^builder/reference/|^test/image/|^\.github/workflows/build\.yaml$'
+          pattern='\.go$|(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^flagd/|^test/upgrade/|^builder/reference/|^test/image/|^\.github/workflows/build\.yaml$'
           run=false
           if [ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]; then
             run=true
@@ -513,10 +699,10 @@ jobs:
             hits=$(printf '%s\n' "$changed" | grep -E "$pattern" || true)
             if [ -n "$hits" ]; then
               run=true
-              echo "::notice::The differential runs: this change touches a Dockerfile or the build."
+              echo "::notice::The differential runs: this change touches Go code, a Dockerfile or the build."
               printf '%s\n' "$hits" | head -10
             else
-              echo "::notice::The differential is skipped: no Dockerfile or build file changed. Set FULL_CI or run the workflow manually to run it."
+              echo "::notice::The differential is skipped: no Go code, Dockerfile or build file changed. Set FULL_CI or run the workflow manually to run it."
             fi
           fi
           echo "run=$run" >> "$GITHUB_OUTPUT"
@@ -685,8 +871,8 @@ jobs:
 
   testbed-rpc-outages:
     name: Testbed RPC outages
-    # Gated during the proof of concept: set the repository variable FULL_CI=true, or run the workflow manually.
-    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'
+    # Nightly on main (schedule), with FULL_CI=true, and when the workflow is run manually; not on pull requests.
+    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -703,8 +889,8 @@ jobs:
 
   testbed-grpc-sync:
     name: Testbed gRPC source
-    # Gated during the proof of concept: set the repository variable FULL_CI=true, or run the workflow manually.
-    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'
+    # Nightly on main (schedule), with FULL_CI=true, and when the workflow is run manually; not on pull requests.
+    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -718,3 +904,92 @@ jobs:
           go-version-file: 'flagd/go.mod'
       - name: A grpc source against the relay testbed - reconnects, a fatal status code and a stream deadline (UC-023)
         run: make testbed-grpc-sync
+
+  # The concurrency load against the race build of flagd-minimal (NFR-017, #183): OFREP, flag evaluation and flag sync
+  # clients at once while the flags change. The smoke is about 60 seconds of load and runs on every build.
+  load-smoke:
+    name: Load smoke (race)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - name: Setup go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
+        with:
+          go-version-file: 'flagd/go.mod'
+          cache: false
+      - name: Restore the Go caches
+        id: go-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-load-smoke-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-load-smoke-
+      - run: make workspace-init
+      - name: Self-test the checks, then run the smoke against the race build
+        env:
+          RELAY_LOAD_LOGS: ${{ runner.temp }}/load-logs
+        run: make test-load-smoke
+      - name: Save the Go caches
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ steps.go-cache.outputs.cache-primary-key }}
+      - name: Keep flagd's stderr and k6's output
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: load-smoke-logs
+          path: ${{ runner.temp }}/load-logs
+          if-no-files-found: ignore
+
+  # The full 10 minute run: gated, like fips and docker-local.
+  load-test:
+    name: Load test (race, 10 min)
+    # Gated during the proof of concept: set the repository variable FULL_CI=true, or run the workflow manually.
+    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - name: Setup go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
+        with:
+          go-version-file: 'flagd/go.mod'
+          cache: false
+      - name: Restore the Go caches
+        id: go-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-load-test-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-load-test-
+      - run: make workspace-init
+      - name: Run the full load against the race build
+        env:
+          RELAY_LOAD_LOGS: ${{ runner.temp }}/load-logs
+        run: make test-load
+      - name: Save the Go caches
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ steps.go-cache.outputs.cache-primary-key }}
+      - name: Keep flagd's stderr and k6's output
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: load-test-logs
+          path: ${{ runner.temp }}/load-logs
+          if-no-files-found: ignore

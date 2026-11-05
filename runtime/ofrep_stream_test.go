@@ -6,7 +6,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	flagdcomponents "github.com/open-feature/flagd/flagd/components"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -29,7 +29,7 @@ func TestOFREPEventStreamAnnouncesAVendorChange(t *testing.T) {
 	require.NoError(t, os.WriteFile(vendor, []byte(`{}`), 0o600))
 	cfg.SyncProviders = append(cfg.SyncProviders, coresync.SourceConfig{URI: vendor, Provider: "file", Format: "versioned"})
 	rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, listening(withFlagd(Components{
-		Endpoints:            flagdcomponents.Components().Endpoints,
+		Endpoints:            officialset.Components().Endpoints,
 		ConfigurationFormats: []configformat.Factory{versionedFactory{}},
 	})))
 	require.NoError(t, err)

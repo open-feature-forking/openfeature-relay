@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -52,7 +53,9 @@ func runLoad(t *testing.T, n int, skip map[int]bool, env map[string]string) *loa
 	run := runK6(ctx, t, p, "load.js", args)
 	res := <-done
 	require.NoError(t, res.err)
-	require.NoError(t, p.stop(t), "flagd exits cleanly on SIGTERM:\n%s", p.stderr)
+	stopErr := p.stop(t)
+	saveLogs(t, p, run)
+	require.NoError(t, stopErr, "flagd exits cleanly on SIGTERM:\n%s", p.stderr)
 	require.NotContains(t, p.stderr.String(), "WARNING: DATA RACE", "flagd's stderr")
 	return &loadRun{k6: run, rep: res.rep, flagd: p}
 }
@@ -116,4 +119,17 @@ func TestRaceBuildInEffect(t *testing.T) {
 	out, err := execOutput("go", "version", "-m", flagdBinary)
 	require.NoError(t, err)
 	require.True(t, strings.Contains(out, "-race=true"), "go version -m:\n%s", out)
+}
+
+// saveLogs writes flagd's stderr and k6's output of a run into RELAY_LOAD_LOGS, which CI uploads when the job fails.
+func saveLogs(t *testing.T, p *flagdProc, run k6Run) {
+	t.Helper()
+	dir := os.Getenv("RELAY_LOAD_LOGS")
+	if dir == "" {
+		return
+	}
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	name := strings.ReplaceAll(t.Name(), "/", "-")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, name+"-flagd.log"), []byte(p.stderr.String()), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, name+"-k6.log"), []byte(run.Output), 0o644))
 }

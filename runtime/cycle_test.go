@@ -17,7 +17,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
-	flagdcomponents "github.com/open-feature/flagd/flagd/components"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 	"go.uber.org/zap"
@@ -147,7 +147,7 @@ func twoSourceConfig(t *testing.T, p ports) Config {
 }
 
 func officialComponents() Components {
-	components := flagdcomponents.Components()
+	components := officialset.Components()
 	components.Telemetry = nil
 	return components
 }

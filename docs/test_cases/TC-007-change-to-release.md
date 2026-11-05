@@ -24,7 +24,7 @@
 |------|------|-------------|-----------|----------|------------|
 | 1 | Open change | The Maintainer opens a pull request against main that changes a component module | a change under `core/` | [UC-013](../use_cases/UC-013-verify-change-against-distributions.md) | `build.yaml` triggers on `pull_request` to `main`; a change that only touches `docs/**` or `README.md` skips the workflow (A1) |
 | 2 | Lint and unit test | GitHub Actions runs the linters with the dependency rules and the unit tests of every module | `make lint`, `make test` | [UC-013](../use_cases/UC-013-verify-change-against-distributions.md) | `lint` job (`make lint`, `check-package-coverage`, `check-module-boundary`, `check-evaluator-boundary`, the `golang.org/x/exp` greps) and `test` job (`make test`), every PR |
-| 3 | Build standard distributions | GitHub Actions builds every standard distribution with the change's modules in place of released versions, as a standard and a FIPS build | the six manifests | [UC-013](../use_cases/UC-013-verify-change-against-distributions.md) | `TestStandardModuleGraphs` and `TestRepositoryManifestsReplaceEveryRelayModule` (`test/distributions`, `test` job); `builder-e2e` job; FIPS: `fips` job (`build-standard-fips`, `fips-closure-standard`), `FULL_CI` or manual run only |
+| 3 | Build standard distributions | GitHub Actions builds every standard distribution with the change's modules in place of released versions, as a standard and a FIPS build | the six manifests | [UC-013](../use_cases/UC-013-verify-change-against-distributions.md) | `TestStandardModuleGraphs` and `TestRepositoryManifestsReplaceEveryRelayModule` (`test/distributions`, `test` job); `builder-e2e` job; FIPS: `fips` job (`build-standard-fips`, `fips-closure-standard`) on every pull request that changes Go code, the Makefile or the build |
 | 4 | Verify dependency boundaries | flagd-minimal links no NFR-004 module, flagd-sync links no evaluator or JsonLogic module, and the evaluator and the flagd configuration format depend on no NFR-005 package | flagd-minimal, flagd-sync | [UC-013](../use_cases/UC-013-verify-change-against-distributions.md) | `TestStandardModuleGraphs`, `TestMinimalShapeLinksNoPlatformSDK` (`test/distributions`); `check-module-boundary` in the `lint` job |
 | 5 | Run Test Harness | GitHub Actions builds the flagd-full image of the change and runs the RPC and in-process suites with today's tag selection | `flagd/build.Dockerfile`, `tag-selection.golden` | [UC-013](../use_cases/UC-013-verify-change-against-distributions.md) | `TestRPC`, `TestInProcess`, `TestTagSelectionMatchesBranchPoint` (`test/integration`, `integration-test` job, every PR) |
 | 6 | Compare flagd-sync with flagd-full | GitHub Actions gives both each flag configuration of the set and checks they accept and reject the same ones | `flag-configurations/valid/`, `flag-configurations/invalid/` | [UC-013](../use_cases/UC-013-verify-change-against-distributions.md) | `TestProxyRejectsWhatFlagdFullRejects`, `TestInvalidFlagConfigurationRejectedAlike` (`test/distributions`) |
@@ -36,7 +36,7 @@
 | 12 | Publish images | GitHub Actions builds the standard and FIPS images for `linux/amd64` and `linux/arm64`, pushes and signs them | `ghcr.io/open-feature/flagd` | [UC-012](../use_cases/UC-012-release-distributions-and-component-modules.md) | dry run builds the flagd and flagd-minimal images; `image-test` in the `upgrade-test` job (gated); push and signing are a gap |
 | 13 | Verify release visible | The flagd release carries the manifests, binaries and images of all six standard distributions | - | - | gap |
 
-Steps 1–8 are covered on every pull request except the FIPS build of step 3 (see Gaps).
+Steps 1–8 are covered on every pull request that changes more than documentation.
 
 ## Validation
 
@@ -54,7 +54,6 @@ Steps 1–8 are covered on every pull request except the FIPS build of step 3 (s
 
 | Step | Gap |
 |------|-----|
-| 3 | The FIPS build runs in the `fips` job only with `FULL_CI` or a manual run, not on every pull request (UC-013 gap table); #212 runs it on every Go pull request. |
 | 9 | Component modules are not registered with release-please and its workflow runs only in `open-feature/flagd`; no release pull request exists in this repository. |
 | 10 | Nothing is tagged; `TestPublishedComponentModulesBuildADistribution` (`test/release`) resolves the modules from a simulated release with a `file://` proxy, so a real tag resolving remains the gap. |
 | 11 | The dry run builds every archive of flagd, flagd-proxy and flagd-minimal, but only one `linux/amd64` archive of the other four distributions and none of their FIPS archives, from the tree rather than released versions; nothing is attached to a release. |
