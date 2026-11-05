@@ -110,7 +110,7 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIn("path: test.log", job)
 
     def test_test_and_fips_summarize_their_failed_tests(self):
-        """#190: a failed test job lists each failed test and whether the change edits its module; report-only."""
+        """#190: a failed test job lists each failed test with its package, time and first error; report-only."""
         self.assertIn("if: failure()", self.job("test"))
         self.assertIn("test-failures.py --log test.log", self.job("test"))
         fips = self.all_jobs()["fips"]
