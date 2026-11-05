@@ -28,6 +28,9 @@ accepted:
     item: "flagd-full links two more modules and the `event-collector` key is no longer ignored"
     covered_by: ["test/distributions TestFlagdFullLinkedModules", "test/distributions TestFlagdFullOpensTodaysPorts", "test/distributions TestExportToWebhook", "runtime/cmd TestEventCollectorKeyIsTheCollectorsEndpointSettings"]
   - kind: "#78"
+    item: "A `grpc` object on a source is read and validated"
+    covered_by: ["core/pkg/sync TestFlatProviderKeysStillIgnored", "core/pkg/sync TestGRPCObjectDecodedStrictly", "sync/flagd-grpc TestSettingsValidation", "sync/builder TestGRPCObjectRejectedOnOtherProviders"]
+  - kind: "#78"
     item: "Flag sync's `Last-Modified` moves only on a configuration change"
     covered_by: ["service/flag-sync contract_test.go"]
   - kind: "#78"
