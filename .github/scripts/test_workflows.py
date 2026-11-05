@@ -13,6 +13,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 BUILD = ROOT / ".github" / "workflows" / "build.yaml"
+RELEASE_CHECK = ROOT / ".github" / "workflows" / "release-check.yaml"
 
 
 def sha256(relative):
@@ -66,6 +67,7 @@ class BuildWorkflow(unittest.TestCase):
         head = self.text.split("\njobs:\n", 1)[0]
         self.assertIn("  push:\n    branches:", head)
         self.assertIn("  pull_request:\n    branches:", head)
+        self.assertNotIn("labeled", head)
 
     def test_concurrency_group(self):
         """QD: a superseded pull request run is cancelled; every other run has a group of its own, so none is."""
@@ -112,12 +114,22 @@ class BuildWorkflow(unittest.TestCase):
                 self.assertIn(gate, self.job(name))
         self.assertIn("if: github.event_name == 'pull_request'", self.job("benchmark"))
 
+    def test_build_never_sees_a_label_event(self):
+        """The release-check label starts release-check.yaml, not build.yaml: a label event in build.yaml would cancel the
+        pull request's running jobs through the concurrency group and report skipped jobs under the real check names."""
+        self.assertNotIn("github.event.action", self.text)
+        self.assertNotIn("github.event.label", self.text)
+        self.assertNotIn("types:", self.text)
+
     def test_release_dry_run_runs_when_its_inputs_change(self):
-        """Q16: the job has a gate step, like upgrade-test: FULL_CI, a manual run, or a change to the release's inputs."""
+        """build.yaml's dry run is the full set: a push to `main`, FULL_CI or a manual run. A pull request gets the reduced
+        set from release-check.yaml, when it carries the label; a change to the release's inputs alone starts nothing."""
         job = self.job("release-dry-run")
         self.assertNotIn("\n    if:", job)
         self.assertIn('[ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]', job)
-        self.assertIn(r"^\.github/scripts/testdata/|^\.github/workflows/release-please\.yaml$|^builder/|^distributions/|Dockerfile$", job)
+        self.assertIn('[ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]', job)
+        for gone in ("git diff", "BASE", "DRY_RUN_SCOPE", "DRY_RUN_DISTS", "pull_request"):
+            self.assertNotIn(gone, job.replace("A pull request opts into the reduced set", ""))
         self.assertIn("if: steps.gate.outputs.run == 'true'", job)
 
     def all_jobs(self):
@@ -164,13 +176,17 @@ class BuildWorkflow(unittest.TestCase):
         """P0: a pull request's change set is its merge commit against the first parent. base.sha is where the pull
         request was opened and holds what the base gained since."""
         jobs = self.all_jobs()
-        for name in ("upgrade-test", "release-dry-run"):
+        for name in ("upgrade-test", "testbed"):
             with self.subTest(job=name):
                 job = jobs[name]
                 self.assertIn("BASE: ${{ github.event.before }}\n", job)
                 self.assertNotIn("base.sha", job)
                 self.assertIn('if [ "$EVENT" = pull_request ]; then BASE=$(git rev-parse "$HEAD^1"); fi', job)
                 self.assertIn('git diff --name-only "$BASE" "$HEAD"', job)
+        check = RELEASE_CHECK.read_text(encoding="utf-8")
+        self.assertIn('BASE=$(git rev-parse "$HEAD^1")', check)
+        self.assertNotIn("base.sha", check)
+
     def test_testbed_runs_when_go_code_or_the_testbed_changes(self):
         """UC-022 Q14: the relay testbed has a gate step: FULL_CI, a manual run, or a change outside docs/ and .claude/."""
         job = self.job("testbed")
@@ -186,16 +202,34 @@ class BuildWorkflow(unittest.TestCase):
         """UC-022 Q16: the gated job runs the RPC suite with the outage scenarios against both images."""
         self.assertIn("make testbed-rpc-outages", self.job("testbed-rpc-outages"))
 
+    PARTS = "part: [flagd-standard, flagd-fips, flagd-proxy-standard, flagd-proxy-fips, images, distributions]"
+
     def test_release_dry_run_parts(self):
-        """Slice R: the dry run is a matrix of parts; a pull request builds the reduced set, `main`, FULL_CI and a manual run the full one."""
+        """Slice R: the dry run is a matrix of parts, the full set on `main`, with FULL_CI and manually."""
         job = self.job("release-dry-run")
-        self.assertIn(
-            "part: [flagd-standard, flagd-fips, flagd-proxy-standard, flagd-proxy-fips, images, distributions]", job)
+        self.assertIn(self.PARTS, job)
         self.assertIn("fail-fast: false", job)
         self.assertIn("DRY_RUN_PART: ${{ matrix.part }}", job)
-        self.assertIn("DRY_RUN_SCOPE: ${{ steps.gate.outputs.scope }}", job)
-        self.assertIn('[ "$REF" = refs/heads/main ]', job)
-        self.assertIn('echo "scope=$scope" >> "$GITHUB_OUTPUT"', job)
+
+    def test_release_check_workflow(self):
+        """A pull request labeled release-check gets the reduced dry run from a workflow of its own: the same parts and
+        scripts, its own concurrency group, and nothing else it can cancel or be mistaken for."""
+        text = RELEASE_CHECK.read_text(encoding="utf-8")
+        self.assertIn("on:\n  pull_request:\n    types: [labeled, synchronize]\n    branches:\n      - main\n", text)
+        self.assertIn("group: release-check-${{ github.ref }}-${{ github.event.action == 'labeled' && "
+                      "github.event.label.name != 'release-check' && github.run_id || 'run' }}", text)
+        self.assertIn("cancel-in-progress: true", text)
+        self.assertEqual(1, text.count("\n    if: contains(github.event.pull_request.labels.*.name, 'release-check') && "
+                                       "(github.event.action != 'labeled' || github.event.label.name == 'release-check')\n"))
+        self.assertIn("name: Release check (${{ matrix.part }})", text)
+        self.assertIn(self.PARTS, text)
+        self.assertIn("DRY_RUN_PART: ${{ matrix.part }}\n          DRY_RUN_SCOPE: reduced\n", text)
+        self.assertIn("run: .github/scripts/release-dry-run.sh", text)
+        # it reads the cache build.yaml's dry run saves on main and saves nothing itself
+        self.assertIn("key: go-release-dry-run-${{ matrix.part }}-${{ hashFiles('**/go.sum') }}", text)
+        self.assertNotIn("cache/save", text)
+        self.assertNotRegex(text, r"push:\s*true")
+        self.assertNotIn("docker/login-action", text)
 
     def test_release_dry_run_full_covers_todays_set(self):
         """Slice R: the parts together build the 11 archives of flagd and flagd-proxy, the images and the five distributions."""

@@ -1,0 +1,93 @@
+name: release-check
+
+# The reduced release dry run of a pull request that carries the release-check label. It is a workflow of its own, so a
+# label event never starts build.yaml: its concurrency group would cancel the pull request's running jobs, and the skipped
+# jobs of the label run would be reported under the check names of the real ones. The full set runs from build.yaml on
+# main, with FULL_CI and manually.
+on:
+  pull_request:
+    types: [labeled, synchronize]
+    branches:
+      - main
+
+# One run per pull request branch; a label other than release-check gets a group of its own, so it cancels nothing.
+concurrency:
+  group: release-check-${{ github.ref }}-${{ github.event.action == 'labeled' && github.event.label.name != 'release-check' && github.run_id || 'run' }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # The toolchain determines which FIPS snapshots exist, so pin it.
+  GOTOOLCHAIN: local
+
+jobs:
+  release-check:
+    name: Release check (${{ matrix.part }})
+    if: contains(github.event.pull_request.labels.*.name, 'release-check') && (github.event.action != 'labeled' || github.event.label.name == 'release-check')
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [flagd-standard, flagd-fips, flagd-proxy-standard, flagd-proxy-fips, images, distributions]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+        with:
+          fetch-depth: 0
+      - name: Which distributions does this change touch?
+        id: gate
+        env:
+          HEAD: ${{ github.sha }}
+        run: |
+          # A pull request's own changes are its merge commit against the first parent: the base as it is now. The
+          # base sha is where the pull request was opened, so base..merge commit also holds what the base gained since.
+          BASE=$(git rev-parse "$HEAD^1")
+          # the release scripts and the goldens they compare, the release workflow the dry run reads, the Builder and its reference
+          # Dockerfile, the distributions and every Dockerfile
+          pattern='^\.github/scripts/release-|^\.github/scripts/render-|^\.github/scripts/testdata/|^\.github/workflows/release-please\.yaml$|^builder/|^distributions/|Dockerfile$'
+          all_dists="flagd-minimal flagd-minimal-otel flagd-cloud flagd-kubernetes flagd-sync"
+          dists="$all_dists"
+          hits=$(git diff --name-only "$BASE" "$HEAD" | grep -E "$pattern" || true)
+          printf '%s\n' "$hits" | head -10
+          # only the distributions the change names; a change to anything shared checks them all.
+          # flagd-full is released under flagd's names, so the flagd parts cover it.
+          if ! printf '%s\n' "$hits" | grep -qvE '^(distributions/(flagd-full|'"${all_dists// /|}"')/|$)'; then
+            dists=""
+            for d in $all_dists; do
+              ! printf '%s\n' "$hits" | grep -q "^distributions/$d/" || dists="$dists $d"
+            done
+            dists="${dists# }"
+          fi
+          echo "dists=$dists" >> "$GITHUB_OUTPUT"
+      - name: Setup go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
+        with:
+          go-version-file: 'flagd/go.mod'
+          cache: false
+      - name: Restore the Go caches
+        # the key build.yaml's dry run saves on main; this workflow only reads it
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-release-dry-run-${{ matrix.part }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-release-dry-run-${{ matrix.part }}-
+      - name: Install cyclonedx-gomod
+        # The release's action resolves its version through the GitHub API, which rate-limits a runner without a token.
+        # v1.12.0 is what that action's `version: v1` resolves to; the module proxy needs no GitHub API.
+        run: |
+          go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.12.0
+          gobin="$(go env GOBIN)"
+          echo "${gobin:-$(go env GOPATH)/bin}" >> "$GITHUB_PATH"
+      - name: The release's build steps, reduced, without publishing or signing anything (UC-009, UC-012)
+        # the distributions part has nothing to check when the change touches no distribution
+        if: matrix.part != 'distributions' || steps.gate.outputs.dists != ''
+        env:
+          DRY_RUN_PART: ${{ matrix.part }}
+          DRY_RUN_SCOPE: reduced
+          DRY_RUN_DISTS: ${{ steps.gate.outputs.dists }}
+        run: .github/scripts/release-dry-run.sh
