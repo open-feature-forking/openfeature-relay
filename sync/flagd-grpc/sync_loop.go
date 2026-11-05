@@ -53,9 +53,19 @@ func (g *Sync) streamContext(ctx context.Context) (context.Context, context.Canc
 	return ctx, func() {}
 }
 
-// deadlineElapsed tells a stream that ended at its deadline, with the parent context alive, from one that failed.
-func (g *Sync) deadlineElapsed(parent, stream context.Context) bool {
-	return g.Options.StreamDeadline > 0 && parent.Err() == nil && errors.Is(stream.Err(), context.DeadlineExceeded)
+// deadlineElapsed tells a stream that ended at its deadline, with the parent context alive, from one that failed. The
+// context of the stream may not say so yet: gRPC sends the deadline to the server too, which can end the stream, with
+// DEADLINE_EXCEEDED or cleanly, before the timer of the client has run. So the code of the error and the clock count as
+// well.
+func (g *Sync) deadlineElapsed(parent, stream context.Context, err error) bool {
+	if g.Options.StreamDeadline <= 0 || parent.Err() != nil {
+		return false
+	}
+	if errors.Is(stream.Err(), context.DeadlineExceeded) || status.Code(err) == codes.DeadlineExceeded {
+		return true
+	}
+	deadline, ok := stream.Deadline()
+	return ok && !time.Now().Before(deadline)
 }
 
 func (g *Sync) logStreamEnd(err error, recycled bool) {
