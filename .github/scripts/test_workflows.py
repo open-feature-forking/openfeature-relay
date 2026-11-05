@@ -6,6 +6,8 @@ new hash in the same commit.
 import hashlib
 import pathlib
 import re
+import shlex
+import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -54,10 +56,10 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIn("  pull_request:\n    branches:", head)
 
     def test_concurrency_group(self):
-        """QD: a superseded pull request run is cancelled; a run on main never is."""
+        """QD: a superseded pull request run is cancelled; every other run has a group of its own, so none is."""
         head = self.text.split("\njobs:\n", 1)[0]
         self.assertIn(
-            "concurrency:\n  group: build-${{ github.ref }}\n"
+            "concurrency:\n  group: build-${{ github.event_name == 'pull_request' && github.ref || github.sha }}\n"
             "  cancel-in-progress: ${{ github.event_name == 'pull_request' }}\n", head)
 
     def test_nothing_is_pushed_or_logged_in(self):
@@ -86,6 +88,10 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIn("- run: make test 2>&1 | tee test.log\n        shell: bash", job)
         self.assertIn("CONTRACT_EXTERNAL_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}", job)
         self.assertIn("path: test.log", job)
+
+    def test_lint_runs_the_module_table_tests(self):
+        """C1 and C2 are the parity gate for make test and make lint: CI has to run them."""
+        self.assertIn("run: python3 .github/scripts/test_ci_modules.py\n", self.job("lint"))
 
     def test_gated_jobs(self):
         gate = "if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'"
@@ -181,6 +187,12 @@ class DocsCheckWorkflow(unittest.TestCase):
         names = re.findall(r"^  ([a-z][a-z-]*):\n", self.text.split("\njobs:\n", 1)[1], re.M)
         self.assertEqual(["docs-check", "upgrade-guide"], names)
 
+    def test_the_job_names_differ_from_the_build_workflows(self):
+        build = BUILD.read_text(encoding="utf-8")
+        self.assertNotIn("name: docs-check\n", self.text.split("\njobs:\n", 1)[1])
+        self.assertIn("    name: docs-check (markdown run)\n", self.text)
+        self.assertNotIn("name: docs-check (markdown run)", build)
+
     def test_commands(self):
         self.assertIn("      - run: make generate-docs\n", self.text)
         self.assertIn("      - run: make test-upgrade-accepted\n", self.text)
@@ -189,14 +201,46 @@ class DocsCheckWorkflow(unittest.TestCase):
 class NoEmbeddedMarkdown(unittest.TestCase):
     """R7: a go:embed of a markdown file would be read by a build that markdown-only changes skip."""
 
+    @staticmethod
+    def embedded_markdown(go_file):
+        """The markdown files that the go:embed directives of go_file pull in: files, globs and directories."""
+        found = []
+        for line in go_file.read_text(encoding="utf-8", errors="replace").splitlines():
+            if not re.match(r"\s*//go:embed\b", line):
+                continue
+            for pattern in shlex.split(line.split("embed", 1)[1]):
+                with_hidden = pattern.startswith("all:")
+                for match in go_file.parent.glob(pattern.removeprefix("all:")):
+                    files = [f for f in match.rglob("*") if f.is_file()] if match.is_dir() else [match]
+                    for f in files:
+                        hidden = any(p.startswith((".", "_")) for p in f.relative_to(match if match.is_dir() else f.parent).parts)
+                        if f.suffix == ".md" and (with_hidden or not hidden):
+                            found.append(f"{go_file}: {f}")
+        return found
+
+    def test_embedded_markdown_is_found_in_files_globs_and_directories(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            (root / "docs" / "sub").mkdir(parents=True)
+            (root / "docs" / "sub" / "a.md").write_text("a")
+            (root / "x.md").write_text("x")
+            (root / "y.txt").write_text("y")
+            cases = {"x.md": 1, "*.md": 1, "docs": 1, "all:docs": 1, "y.txt": 0, "*.txt": 0, '"x.md" y.txt': 1}
+            for pattern, want in cases.items():
+                with self.subTest(pattern=pattern):
+                    src = root / "e.go"
+                    src.write_text(f"package e\n\n//go:embed {pattern}\nvar f string\n")
+                    self.assertEqual(want, len(self.embedded_markdown(src)))
+            (root / "docs" / "sub" / "a.md").rename(root / "docs" / "sub" / "_a.md")
+            src.write_text("package e\n\n//go:embed docs\nvar f string\n")
+            self.assertEqual([], self.embedded_markdown(src))
+
     def test_no_go_embed_matches_markdown(self):
         found = []
         for path in ROOT.rglob("*.go"):
             if any(part in (".git", "node_modules", "worktrees") for part in path.relative_to(ROOT).parts):
                 continue
-            for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-                if re.match(r"\s*//go:embed\b", line) and re.search(r"\.md\b", line):
-                    found.append(f"{path.relative_to(ROOT)}: {line.strip()}")
+            found += self.embedded_markdown(path)
         self.assertEqual([], found)
 
 

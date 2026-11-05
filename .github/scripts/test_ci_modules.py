@@ -23,7 +23,7 @@ def make_dry_run(*args):
     if shutil.which("make"):
         cmd = ["make", "-n", *args]
     elif shutil.which("wsl"):
-        wsl_root = subprocess.run(["wsl", "-d", "Ubuntu", "wslpath", "-a", str(ROOT)],
+        wsl_root = subprocess.run(["wsl", "-d", "Ubuntu", "wslpath", "-a", ROOT.as_posix()],
                                   capture_output=True, text=True).stdout.strip()
         cmd = ["wsl", "-d", "Ubuntu", "make", "-n", "-C", wsl_root, *args]
     else:
