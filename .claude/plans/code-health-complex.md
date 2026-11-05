@@ -88,7 +88,7 @@ benchmark exists**, so CI compares nothing for the router.
 **Pinned today** (`evaluator_test.go`, `vectors_test.go`, `segments_test.go`): the evaluator contract kit, values by
 type, type mismatch, unknown key, reasons, both boolean modes, hide-disabled for client keys, flag sets as
 environments, later source wins, explicit keys of a bulk request, equality with `flagengine`. `BenchmarkEvaluate`
-exists, but `contrib/flagsmith/engine` is not in `run-benchmarks.sh`, so CI does not compare it (Q1).
+exists, but `contrib/flagsmith/engine` is not in `run-benchmarks.sh`, so CI does not compare it yet; A2 adds it (Q1).
 
 **Missing:**
 
@@ -199,7 +199,7 @@ Inside WSL from the repository root, `GOTOOLCHAIN=go1.27.3`.
 | Tests, race | `go test -race -count=3 ./runtime/... ./core/pkg/evaluator/... ./contrib/flagsmith/engine/... ./service/event-collector/... ./sync/sse/... ./sync/s3/...` (the package of the PR) | every PR |
 | Characterization holds | the tests-only PR is green on unchanged code; the refactor PR's `git diff <parent> -- '*_test.go'` adds lines only | every refactor PR |
 | Complexity | `gocyclo -over 15` and `gocognit -over 20` print none of the scope's functions or their new helpers; `funlen` passes without `nolint` | every refactor PR |
-| allocs/op | CI `Benchmarks (allocs/op)`, equal to base for `BenchmarkRouterEvaluate/*`, `BenchmarkConnectResolve*`, `BenchmarkOFREP*`; Flagsmith via CI if Q1, else `go test -run '^$' -bench . -benchmem -benchtime=1000x -count=5 ./contrib/flagsmith/engine/` on parent and head, posted in the PR | 2a, 2b |
+| allocs/op | CI `Benchmarks (allocs/op)`, equal to base for `BenchmarkRouterEvaluate/*`, `BenchmarkConnectResolve*`, `BenchmarkOFREP*` and the Flagsmith `BenchmarkEvaluate/*` (in the CI set from A2 on, Q1) | 2a, 2b |
 | Escape analysis | `go build -gcflags=-m ./core/pkg/evaluator/router` (and the engine package) on parent and head, line numbers stripped, sorted, diffed: no new `escapes to heap` / `moved to heap` | 2a, 2b |
 | ns/op | reviewer: `-count=10` parent and head, `benchstat`; no regression above 5% with p < 0.05 | 2a, 2b |
 | Acceptance | CI integration suite (flagd-full goes through the router's fast path) | 2a |
@@ -211,7 +211,7 @@ Inside WSL from the repository root, `GOTOOLCHAIN=go1.27.3`.
 | PR | Branch | Base | Content | Role |
 |----|--------|------|---------|------|
 | A1 | `health/pin-from-config` | `main` | the `FromConfig` characterization tests | implementer |
-| A2 | `health/pin-evaluation` | `main` | router and Flagsmith characterization tests, `BenchmarkRouterEvaluate`, Flagsmith sub-benchmarks, and (Q1) `./contrib/flagsmith/engine` in `run-benchmarks.sh` | implementer |
+| A2 | `health/pin-evaluation` | `main` | router and Flagsmith characterization tests, `BenchmarkRouterEvaluate`, Flagsmith sub-benchmarks, and `./contrib/flagsmith/engine` in `run-benchmarks.sh` | implementer |
 | A3 | `health/pin-settings-parsers` | `main` | `TestParseEvent`, `TestParseHeadersFrom`, the s3 rows and client-options test | implementer |
 | B1 | `health/from-config-extract` | A1 | the `FromConfig` shape, one commit per helper | implementer |
 | B2 | `health/router-extract` | A2 | the router shape | implementer |
@@ -235,19 +235,17 @@ Each PR starts `Part of #177`; #177's PR list gets the seven.
 - **Result order and ties (2):** map iteration in `winners`/`best` is hidden by the sorts and the priority
   comparisons; a helper that sorts or breaks ties differently changes what clients see. The tie and order tests.
 - **Random error choice (4):** a refactor that turns a map loop into a slice loop makes the choice deterministic: no
-  failing test, but a behaviour change. Q2.
+  failing test, but a behaviour change. Ruled out (Q2).
 - **Error wrapping (4):** `%v` → `%w` changes no text but changes `errors.Is`; keep the verbs.
 - **Merge conflicts:** findings 5–7 of the parallel health session touch the same files (other functions); merge up.
 - C-005 and the evaluator boundary (NFR-005) are not touched: no imports move, no protobuf changes.
 
-## Questions for the project lead
+## Decisions of the project lead
 
 **Q1. Should CI compare the Flagsmith engine's allocs/op?** `contrib/flagsmith/engine` is not in the benchmark set.
-(a) add `./contrib/flagsmith/engine` to the fixed list in `run-benchmarks.sh` in A2, so B3 and every later PR are
-compared (~10 s more per run); (b) local comparison posted in B3 only. **Default: (a).**
+**Decided (a):** A2 adds `./contrib/flagsmith/engine` to the fixed list in `run-benchmarks.sh`, so B3 and every later
+PR are compared in CI (~10 s more per run). The local Flagsmith comparison in the allocs/op gate falls away.
 
 **Q2. The random error choice in the parsers.** With two faulty entries, `parseEvent`, `parseHeadersFrom` and
-`configOptions` report a random one today. (a) keep the map iteration, so the refactor changes nothing, and pin
-single-fault texts plus "one of" for multi-fault inputs; (b) make the order deterministic (declaration order, sorted
-names) in the refactor, as every fixed order was already a possible outcome. **Default: (a)**; (b) can follow as its
-own PR if wanted.
+`configOptions` report a random one today. **Decided (a):** keep the map iteration, so the refactor changes nothing;
+pin single-fault texts exactly and "one of" for multi-fault inputs. A deterministic order can follow as its own PR.
