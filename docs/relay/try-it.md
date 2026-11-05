@@ -105,5 +105,5 @@ The `flagsmith` distribution evaluates Flagsmith environments with Flagsmith's o
 
 ## Run the gates
 
-Every change has to keep flagd's gates green: unit tests (`make test`), lint (`make lint`), the evaluator boundary (`make check-evaluator-boundary`), benchmarks and the flagd test harness (`make flagd-integration-test`).
+Every change has to keep flagd's gates green: unit tests (`make test`), lint (`make lint`), the evaluator boundary (`make check-evaluator-boundary`), benchmarks, the flagd test harness (`make flagd-integration-test`) and the [load test](load-test.md) (`make test-load-smoke`).
 The [contributing guide](https://github.com/open-feature-forking/openfeature-relay/blob/main/CONTRIBUTING.md) has the details.
