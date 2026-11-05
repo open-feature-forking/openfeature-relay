@@ -43,6 +43,7 @@ github.com/open-feature-forking/openfeature-relay/runtime/cmd
 github.com/open-feature-forking/openfeature-relay/runtime/fromconfig_test
 github.com/open-feature-forking/openfeature-relay/runtime/grpcclient_test
 github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset
+github.com/open-feature-forking/openfeature-relay/runtime/internal/porttest
 github.com/open-feature-forking/openfeature-relay/runtime/managementport
 github.com/open-feature-forking/openfeature-relay/runtime/propagation_test
 github.com/open-feature-forking/openfeature-relay/runtime/syncmetrics_test
