@@ -7,7 +7,7 @@
 **Primary Actor:** Extension Author  
 **Goal:** Publish a telemetry provider in the Extension Author's own component module, verified against the telemetry provider contract, so that a distribution reports the traces and metrics of its service endpoints and middleware to a backend other than OpenTelemetry.  
 **Trigger:** Extension Author needs flagd to report to a backend no official telemetry provider supports  
-**Status:** Implemented  
+**Status:** Tested  
 
 **Requirements:** [FR-013, FR-015, FR-024, FR-033, FR-003, FR-008, NFR-006](../requirements.md)
 

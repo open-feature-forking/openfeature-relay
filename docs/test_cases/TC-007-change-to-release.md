@@ -36,7 +36,7 @@
 | 12 | Publish images | GitHub Actions builds the standard and FIPS images for `linux/amd64` and `linux/arm64`, pushes and signs them | `ghcr.io/open-feature/flagd` | [UC-012](../use_cases/UC-012-release-distributions-and-component-modules.md) | dry run builds the flagd and flagd-minimal images; `image-test` in the `upgrade-test` job (gated); push and signing are a gap |
 | 13 | Verify release visible | The flagd release carries the manifests, binaries and images of all six standard distributions | - | - | gap |
 
-Steps 1–8 are covered. The FIPS build of step 3 runs in the `fips` job, which runs only with `FULL_CI` or a manual run, not on every pull request (UC-013 gap table).
+Steps 1–8 are covered on every pull request except the FIPS build of step 3 (see Gaps).
 
 ## Validation
 
@@ -54,6 +54,7 @@ Steps 1–8 are covered. The FIPS build of step 3 runs in the `fips` job, which 
 
 | Step | Gap |
 |------|-----|
+| 3 | The FIPS build runs in the `fips` job only with `FULL_CI` or a manual run, not on every pull request (UC-013 gap table); #212 runs it on every Go pull request. |
 | 9 | Component modules are not registered with release-please and its workflow runs only in `open-feature/flagd`; no release pull request exists in this repository. |
 | 10 | Nothing is tagged; `TestPublishedComponentModulesBuildADistribution` (`test/release`) resolves the modules from a simulated release with a `file://` proxy, so a real tag resolving remains the gap. |
 | 11 | The dry run builds every archive of flagd, flagd-proxy and flagd-minimal, but only one `linux/amd64` archive of the other four distributions and none of their FIPS archives, from the tree rather than released versions; nothing is attached to a release. |

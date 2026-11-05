@@ -8,7 +8,7 @@
 **Secondary Actors:** GitHub Actions, flagd Test Harness  
 **Goal:** Know before a change is merged whether it keeps every standard distribution building, keeps flagd-full compatible with today's flagd, keeps flagd-sync rejecting what flagd-full rejects, and keeps evaluation performance and dependency boundaries within their limits.  
 **Trigger:** A pull request against main is opened or updated  
-**Status:** Tested  
+**Status:** Implemented  
 
 **Requirements:** [FR-026, FR-032, NFR-001, NFR-004, NFR-005, NFR-007, NFR-011, C-009, C-010](../requirements.md)
 
