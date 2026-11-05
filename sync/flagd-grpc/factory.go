@@ -56,6 +56,16 @@ func (Factory) ParseURI(uri string) (sync.SourceConfig, bool) {
 // CreateStreaming creates the provider of a source.
 func (f Factory) CreateStreaming(settings sync.Settings) (sync.StreamingSyncProvider, error) {
 	config := settings.Source
+	options, err := OptionsFrom(config)
+	if err != nil {
+		return nil, err
+	}
+	headers := config.Headers
+	if len(config.HeadersFrom) > 0 {
+		if headers, err = sync.ResolveHeaders(config); err != nil {
+			return nil, err
+		}
+	}
 	streamMetrics, dialOptions := f.StreamMetrics, f.DialOptions
 	if settings.Telemetry != nil {
 		if streamMetrics == nil {
@@ -78,7 +88,8 @@ func (f Factory) CreateStreaming(settings sync.Settings) (sync.StreamingSyncProv
 		Selector:            config.Selector,
 		MaxMsgSize:          config.MaxMsgSize,
 		IncrementalUpdates:  config.IncrementalUpdates,
-		Headers:             config.Headers,
+		Headers:             headers,
+		Options:             options,
 		SyncMetricsRecorder: settings.Metrics,
 
 		StreamMetricsRecorder: streamMetrics,

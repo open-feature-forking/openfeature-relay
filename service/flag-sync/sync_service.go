@@ -12,6 +12,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	flagdService "github.com/open-feature-forking/openfeature-relay/service/transport"
@@ -52,6 +53,8 @@ type SvcConfigurations struct {
 
 	// HTTPMiddleware wraps the routes after CORS and before their instrumentation. Nil means none.
 	HTTPMiddleware func(http.Handler) http.Handler
+	// Listen opens the service's listener; nil means net.Listen.
+	Listen service.ListenFunc
 	// Initialized, when set, ends the wait for the first delivery of every source once it is closed.
 	Initialized <-chan struct{}
 	// Formats are the configuration formats of the distribution. A request may name one other than flagd's in the
@@ -130,10 +133,10 @@ func NewSyncService(cfg SvcConfigurations) (*Service, error) {
 	var lis net.Listener
 	if cfg.SocketPath != "" {
 		l.Info(fmt.Sprintf("starting flag sync service at %s", cfg.SocketPath))
-		lis, err = net.Listen("unix", cfg.SocketPath)
+		lis, err = cfg.Listen.Or()("unix", cfg.SocketPath)
 	} else {
 		l.Info(fmt.Sprintf("starting flag sync service on port %d", cfg.Port))
-		lis, err = net.Listen("tcp", fmt.Sprintf(":%d", cfg.Port))
+		lis, err = cfg.Listen.Or()("tcp", fmt.Sprintf(":%d", cfg.Port))
 	}
 	if err != nil {
 		endStreams()
@@ -153,6 +156,16 @@ func NewSyncService(cfg SvcConfigurations) (*Service, error) {
 			doneChan: make(chan interface{}),
 		},
 	}, nil
+}
+
+// Close releases what NewSyncService opened, for a service that is never started: its listener and its streams. A
+// service that was started releases them itself when its context ends. Close is safe to repeat.
+func (s *Service) Close() error {
+	s.endStreams()
+	if err := s.listener.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+		return err
+	}
+	return nil
 }
 
 func (s *Service) Start(ctx context.Context) error {

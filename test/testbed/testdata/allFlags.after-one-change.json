@@ -1,0 +1,1690 @@
+{
+  "$evaluators": {
+    "is_ballmer": {
+      "==": [
+        "ballmer@macrosoft.com",
+        {
+          "var": [
+            "email"
+          ]
+        }
+      ]
+    }
+  },
+  "flags": {
+    "boolean-flag": {
+      "defaultVariant": "on",
+      "state": "ENABLED",
+      "variants": {
+        "off": false,
+        "on": true
+      }
+    },
+    "boolean-targeted-zero-flag": {
+      "defaultVariant": "zero",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "$ref": "is_ballmer"
+          },
+          "zero"
+        ]
+      },
+      "variants": {
+        "non-zero": true,
+        "zero": false
+      }
+    },
+    "boolean-zero-flag": {
+      "defaultVariant": "zero",
+      "state": "ENABLED",
+      "variants": {
+        "non-zero": true,
+        "zero": false
+      }
+    },
+    "changing-flag": {
+      "defaultVariant": "bar",
+      "state": "ENABLED",
+      "variants": {
+        "bar": "bar",
+        "foo": "foo"
+      }
+    },
+    "context-aware": {
+      "defaultVariant": "external",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "and": [
+              {
+                "==": [
+                  {
+                    "var": [
+                      "fn"
+                    ]
+                  },
+                  "Sulisław"
+                ]
+              },
+              {
+                "==": [
+                  {
+                    "var": [
+                      "ln"
+                    ]
+                  },
+                  "Świętopełk"
+                ]
+              },
+              {
+                "==": [
+                  {
+                    "var": [
+                      "age"
+                    ]
+                  },
+                  29
+                ]
+              },
+              {
+                "==": [
+                  {
+                    "var": [
+                      "customer"
+                    ]
+                  },
+                  false
+                ]
+              }
+            ]
+          },
+          "internal",
+          "external"
+        ]
+      },
+      "variants": {
+        "external": "EXTERNAL",
+        "internal": "INTERNAL"
+      }
+    },
+    "cross-flagset-flag": {
+      "defaultVariant": "on",
+      "state": "DISABLED",
+      "variants": {
+        "off": false,
+        "on": true
+      }
+    },
+    "disabled-boolean-flag": {
+      "defaultVariant": "on",
+      "state": "DISABLED",
+      "variants": {
+        "off": false,
+        "on": true
+      }
+    },
+    "disabled-float-flag": {
+      "defaultVariant": "half",
+      "state": "DISABLED",
+      "variants": {
+        "half": 0.5,
+        "tenth": 0.1
+      }
+    },
+    "disabled-integer-flag": {
+      "defaultVariant": "ten",
+      "state": "DISABLED",
+      "variants": {
+        "one": 1,
+        "ten": 10
+      }
+    },
+    "disabled-object-flag": {
+      "defaultVariant": "template",
+      "state": "DISABLED",
+      "variants": {
+        "empty": {},
+        "template": {
+          "imagesPerPage": 100,
+          "showImages": true,
+          "title": "Check out these pics!"
+        }
+      }
+    },
+    "disabled-string-flag": {
+      "defaultVariant": "greeting",
+      "state": "DISABLED",
+      "variants": {
+        "greeting": "hi",
+        "parting": "bye"
+      }
+    },
+    "empty-targeting-flag": {
+      "defaultVariant": "false",
+      "state": "ENABLED",
+      "targeting": {},
+      "variants": {
+        "false": 1,
+        "true": 2
+      }
+    },
+    "ends-with-non-string-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "ends_with": [
+          {
+            "var": "num"
+          },
+          "xyz"
+        ]
+      },
+      "variants": {
+        "fallback": "fallback",
+        "false": "false",
+        "true": "true"
+      }
+    },
+    "ends-with-wrong-args-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "ends_with": [
+          "xyz"
+        ]
+      },
+      "variants": {
+        "fallback": "fallback",
+        "false": "false",
+        "true": "true"
+      }
+    },
+    "equal-greater-lesser-version-flag": {
+      "defaultVariant": "none",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "sem_ver": [
+              {
+                "var": "version"
+              },
+              "=",
+              "2.0.0"
+            ]
+          },
+          "equal",
+          {
+            "if": [
+              {
+                "sem_ver": [
+                  {
+                    "var": "version"
+                  },
+                  "\u003e",
+                  "2.0.0"
+                ]
+              },
+              "greater",
+              {
+                "if": [
+                  {
+                    "sem_ver": [
+                      {
+                        "var": "version"
+                      },
+                      "\u003c",
+                      "2.0.0"
+                    ]
+                  },
+                  "lesser",
+                  {
+                    "if": [
+                      {
+                        "sem_ver": [
+                          {
+                            "var": "version"
+                          },
+                          "=",
+                          "2.0.0.0"
+                        ]
+                      },
+                      "fail",
+                      "none"
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "variants": {
+        "equal": "equal",
+        "greater": "greater",
+        "lesser": "lesser",
+        "none": "none"
+      }
+    },
+    "error-targeting-flag": {
+      "defaultVariant": "two",
+      "state": "ENABLED",
+      "targeting": {
+        "invalid": [
+          "this is not valid targeting"
+        ]
+      },
+      "variants": {
+        "one": 1,
+        "two": 2
+      }
+    },
+    "flagd-context-aware": {
+      "defaultVariant": "external",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "==": [
+              {
+                "var": [
+                  "injectedmetadata"
+                ]
+              },
+              "set"
+            ]
+          },
+          "internal",
+          "external"
+        ]
+      },
+      "variants": {
+        "external": "EXTERNAL",
+        "internal": "INTERNAL"
+      }
+    },
+    "float-flag": {
+      "defaultVariant": "half",
+      "state": "ENABLED",
+      "variants": {
+        "half": 0.5,
+        "tenth": 0.1
+      }
+    },
+    "float-targeted-zero-flag": {
+      "defaultVariant": "zero",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "$ref": "is_ballmer"
+          },
+          "zero"
+        ]
+      },
+      "variants": {
+        "non-zero": 1,
+        "zero": 0
+      }
+    },
+    "float-zero-flag": {
+      "defaultVariant": "zero",
+      "state": "ENABLED",
+      "variants": {
+        "non-zero": 1,
+        "zero": 0
+      }
+    },
+    "fractional-as-condition-false-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "fractional": [
+              [
+                false,
+                100
+              ],
+              [
+                true,
+                0
+              ]
+            ]
+          },
+          "big",
+          "small"
+        ]
+      },
+      "variants": {
+        "big": "hundreds",
+        "fallback": "zero",
+        "small": "ones"
+      }
+    },
+    "fractional-as-condition-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "fractional": [
+              [
+                false,
+                0
+              ],
+              [
+                true,
+                100
+              ]
+            ]
+          },
+          "big",
+          "small"
+        ]
+      },
+      "variants": {
+        "big": "hundreds",
+        "fallback": "zero",
+        "small": "ones"
+      }
+    },
+    "fractional-basic-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "fractional": [
+          {
+            "var": "hashing_input"
+          },
+          [
+            "bucket1",
+            4
+          ],
+          [
+            "bucket2",
+            4
+          ],
+          [
+            "bucket3",
+            4
+          ],
+          [
+            "bucket4",
+            4
+          ],
+          [
+            "bucket5",
+            4
+          ],
+          [
+            "bucket6",
+            4
+          ],
+          [
+            "bucket7",
+            4
+          ],
+          [
+            "bucket8",
+            4
+          ],
+          [
+            "bucket9",
+            4
+          ],
+          [
+            "bucket10",
+            4
+          ],
+          [
+            "bucket11",
+            4
+          ],
+          [
+            "bucket12",
+            4
+          ],
+          [
+            "bucket13",
+            4
+          ],
+          [
+            "bucket14",
+            4
+          ],
+          [
+            "bucket15",
+            4
+          ],
+          [
+            "bucket16",
+            4
+          ],
+          [
+            "bucket17",
+            4
+          ],
+          [
+            "bucket18",
+            4
+          ],
+          [
+            "bucket19",
+            4
+          ],
+          [
+            "bucket20",
+            4
+          ],
+          [
+            "bucket21",
+            4
+          ],
+          [
+            "bucket22",
+            4
+          ],
+          [
+            "bucket23",
+            4
+          ],
+          [
+            "bucket24",
+            4
+          ],
+          [
+            "bucket25",
+            4
+          ]
+        ]
+      },
+      "variants": {
+        "bucket1": "bucket1",
+        "bucket10": "bucket10",
+        "bucket11": "bucket11",
+        "bucket12": "bucket12",
+        "bucket13": "bucket13",
+        "bucket14": "bucket14",
+        "bucket15": "bucket15",
+        "bucket16": "bucket16",
+        "bucket17": "bucket17",
+        "bucket18": "bucket18",
+        "bucket19": "bucket19",
+        "bucket2": "bucket2",
+        "bucket20": "bucket20",
+        "bucket21": "bucket21",
+        "bucket22": "bucket22",
+        "bucket23": "bucket23",
+        "bucket24": "bucket24",
+        "bucket25": "bucket25",
+        "bucket3": "bucket3",
+        "bucket4": "bucket4",
+        "bucket5": "bucket5",
+        "bucket6": "bucket6",
+        "bucket7": "bucket7",
+        "bucket8": "bucket8",
+        "bucket9": "bucket9",
+        "fallback": "fallback"
+      }
+    },
+    "fractional-bool-bucket-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "fractional": [
+          [
+            true,
+            50
+          ],
+          [
+            false,
+            50
+          ]
+        ]
+      },
+      "variants": {
+        "fallback": "fallback",
+        "false": "off",
+        "true": "on"
+      }
+    },
+    "fractional-cat-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "cat": [
+          {
+            "fractional": [
+              [
+                "b",
+                50
+              ],
+              [
+                "d",
+                50
+              ]
+            ]
+          },
+          "ig"
+        ]
+      },
+      "variants": {
+        "big": "big",
+        "dig": "dig",
+        "fallback": "fallback"
+      }
+    },
+    "fractional-flag": {
+      "defaultVariant": "wild",
+      "state": "ENABLED",
+      "targeting": {
+        "fractional": [
+          {
+            "cat": [
+              {
+                "var": "$flagd.flagKey"
+              },
+              {
+                "var": "user.name"
+              }
+            ]
+          },
+          [
+            "clubs",
+            25
+          ],
+          [
+            "diamonds",
+            25
+          ],
+          [
+            "hearts",
+            25
+          ],
+          [
+            "spades",
+            25
+          ]
+        ]
+      },
+      "variants": {
+        "clubs": "clubs",
+        "diamonds": "diamonds",
+        "hearts": "hearts",
+        "spades": "spades",
+        "wild": "wild"
+      }
+    },
+    "fractional-flag-A-shared-seed": {
+      "defaultVariant": "wild",
+      "state": "ENABLED",
+      "targeting": {
+        "fractional": [
+          {
+            "cat": [
+              "shared-seed",
+              {
+                "var": "user.name"
+              }
+            ]
+          },
+          [
+            "clubs",
+            25
+          ],
+          [
+            "diamonds",
+            25
+          ],
+          [
+            "hearts",
+            25
+          ],
+          [
+            "spades",
+            25
+          ]
+        ]
+      },
+      "variants": {
+        "clubs": "clubs",
+        "diamonds": "diamonds",
+        "hearts": "hearts",
+        "spades": "spades",
+        "wild": "wild"
+      }
+    },
+    "fractional-flag-B-shared-seed": {
+      "defaultVariant": "wild",
+      "state": "ENABLED",
+      "targeting": {
+        "fractional": [
+          {
+            "cat": [
+              "shared-seed",
+              {
+                "var": "user.name"
+              }
+            ]
+          },
+          [
+            "clubs",
+            25
+          ],
+          [
+            "diamonds",
+            25
+          ],
+          [
+            "hearts",
+            25
+          ],
+          [
+            "spades",
+            25
+          ]
+        ]
+      },
+      "variants": {
+        "clubs": "ace-of-clubs",
+        "diamonds": "ace-of-diamonds",
+        "hearts": "ace-of-hearts",
+        "spades": "ace-of-spades",
+        "wild": "wild"
+      }
+    },
+    "fractional-flag-shorthand": {
+      "defaultVariant": "draw",
+      "state": "ENABLED",
+      "targeting": {
+        "fractional": [
+          [
+            "heads"
+          ],
+          [
+            "tails",
+            1
+          ]
+        ]
+      },
+      "variants": {
+        "draw": "draw",
+        "heads": "heads",
+        "tails": "tails"
+      }
+    },
+    "fractional-hash-edge-flag": {
+      "defaultVariant": "lower",
+      "state": "ENABLED",
+      "targeting": {
+        "fractional": [
+          {
+            "var": "targetingKey"
+          },
+          [
+            "lower",
+            50
+          ],
+          [
+            "upper",
+            50
+          ]
+        ]
+      },
+      "variants": {
+        "lower": "lower",
+        "upper": "upper"
+      }
+    },
+    "fractional-negative-weight-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "fractional": [
+          {
+            "var": "targetingKey"
+          },
+          [
+            "one",
+            -50
+          ],
+          [
+            "two",
+            100
+          ]
+        ]
+      },
+      "variants": {
+        "fallback": "fallback",
+        "one": "one",
+        "two": "two"
+      }
+    },
+    "fractional-nested-if-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "fractional": [
+          {
+            "var": "targetingKey"
+          },
+          [
+            {
+              "if": [
+                {
+                  "==": [
+                    {
+                      "var": "tier"
+                    },
+                    "premium"
+                  ]
+                },
+                "premium",
+                "standard"
+              ]
+            },
+            50
+          ],
+          [
+            "standard",
+            50
+          ]
+        ]
+      },
+      "variants": {
+        "fallback": "fallback",
+        "premium": "premium",
+        "standard": "standard"
+      }
+    },
+    "fractional-nested-var-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "fractional": [
+          {
+            "var": "targetingKey"
+          },
+          [
+            {
+              "var": "color"
+            },
+            50
+          ],
+          [
+            "blue",
+            50
+          ]
+        ]
+      },
+      "variants": {
+        "blue": "blue",
+        "fallback": "fallback",
+        "green": "green",
+        "red": "red"
+      }
+    },
+    "fractional-nested-weight-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "fractional": [
+          {
+            "var": "targetingKey"
+          },
+          [
+            "red",
+            {
+              "if": [
+                {
+                  "==": [
+                    {
+                      "var": "tier"
+                    },
+                    "premium"
+                  ]
+                },
+                100,
+                0
+              ]
+            }
+          ],
+          [
+            "blue",
+            10
+          ]
+        ]
+      },
+      "variants": {
+        "blue": "blue",
+        "fallback": "fallback",
+        "red": "red"
+      }
+    },
+    "fractional-null-bucket-condition-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "fractional": [
+              [
+                null,
+                50
+              ],
+              [
+                true,
+                50
+              ]
+            ]
+          },
+          "then",
+          "else"
+        ]
+      },
+      "variants": {
+        "else": "else",
+        "fallback": "fallback",
+        "then": "then"
+      }
+    },
+    "fractional-null-bucket-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "fractional": [
+          [
+            null,
+            50
+          ],
+          [
+            "a",
+            50
+          ]
+        ]
+      },
+      "variants": {
+        "a": "a",
+        "fallback": "fallback"
+      }
+    },
+    "fractional-null-bucket-key-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "fractional": [
+          {
+            "var": "missing_key"
+          },
+          [
+            "one",
+            50
+          ],
+          [
+            "two",
+            50
+          ]
+        ]
+      },
+      "variants": {
+        "fallback": "fallback",
+        "one": "one",
+        "two": "two"
+      }
+    },
+    "fractional-of-fractional-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "fractional": [
+          {
+            "fractional": [
+              [
+                "one",
+                50
+              ],
+              [
+                "two",
+                50
+              ]
+            ]
+          },
+          [
+            "red",
+            10
+          ],
+          [
+            "blue",
+            90
+          ]
+        ]
+      },
+      "variants": {
+        "blue": "blue",
+        "fallback": "fallback",
+        "red": "red"
+      }
+    },
+    "fractional-single-entry-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "fractional": [
+          [
+            "single",
+            1
+          ]
+        ]
+      },
+      "variants": {
+        "fallback": "fallback",
+        "single": "single"
+      }
+    },
+    "fractional-zero-weights-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "fractional": [
+          {
+            "var": "targetingKey"
+          },
+          [
+            "one",
+            0
+          ],
+          [
+            "two",
+            0
+          ]
+        ]
+      },
+      "variants": {
+        "fallback": "fallback",
+        "one": "one",
+        "two": "two"
+      }
+    },
+    "huge-integer-flag": {
+      "defaultVariant": "max-safe",
+      "state": "ENABLED",
+      "variants": {
+        "max-safe": 9007199254740991,
+        "one": 1
+      }
+    },
+    "integer-flag": {
+      "defaultVariant": "ten",
+      "state": "ENABLED",
+      "variants": {
+        "one": 1,
+        "ten": 10
+      }
+    },
+    "integer-targeted-zero-flag": {
+      "defaultVariant": "zero",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "$ref": "is_ballmer"
+          },
+          "zero"
+        ]
+      },
+      "variants": {
+        "non-zero": 1,
+        "zero": 0
+      }
+    },
+    "integer-zero-flag": {
+      "defaultVariant": "zero",
+      "state": "ENABLED",
+      "variants": {
+        "non-zero": 1,
+        "zero": 0
+      }
+    },
+    "integral-float-flag": {
+      "defaultVariant": "ten",
+      "state": "ENABLED",
+      "variants": {
+        "ten": 10,
+        "tenth": 0.1
+      }
+    },
+    "large-integer-flag": {
+      "defaultVariant": "max-int32",
+      "state": "ENABLED",
+      "variants": {
+        "max-int32": 2147483647,
+        "one": 1
+      }
+    },
+    "major-minor-version-flag": {
+      "defaultVariant": "none",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "sem_ver": [
+              {
+                "var": "version"
+              },
+              "~",
+              "3.0.0"
+            ]
+          },
+          "minor",
+          {
+            "if": [
+              {
+                "sem_ver": [
+                  {
+                    "var": "version"
+                  },
+                  "^",
+                  "3.0.0"
+                ]
+              },
+              "major",
+              "none"
+            ]
+          }
+        ]
+      },
+      "variants": {
+        "major": "major",
+        "minor": "minor",
+        "none": "none"
+      }
+    },
+    "metadata-flag": {
+      "defaultVariant": "false",
+      "metadata": {
+        "boolean": true,
+        "float": 1.2,
+        "integer": 1,
+        "string": "a"
+      },
+      "state": "ENABLED",
+      "targeting": {},
+      "variants": {
+        "false": false,
+        "true": true
+      }
+    },
+    "missing-variant-targeting-flag": {
+      "defaultVariant": "two",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          true,
+          "three",
+          "one"
+        ]
+      },
+      "variants": {
+        "one": 1,
+        "two": 2
+      }
+    },
+    "no-default-flag-null-targeting-variant": {
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "==": [
+              "jobs@orange.com",
+              {
+                "var": [
+                  "email"
+                ]
+              }
+            ]
+          },
+          "special",
+          null
+        ]
+      },
+      "variants": {
+        "normal": "CFO",
+        "special": "CEO"
+      }
+    },
+    "no-default-flag-undefined-targeting-variant": {
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "==": [
+              "jobs@orange.com",
+              {
+                "var": [
+                  "email"
+                ]
+              }
+            ]
+          },
+          "special"
+        ]
+      },
+      "variants": {
+        "normal": "CFO",
+        "special": "CEO"
+      }
+    },
+    "non-string-variant-targeting-flag": {
+      "defaultVariant": "false",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          true,
+          true,
+          false
+        ]
+      },
+      "variants": {
+        "false": 1,
+        "true": 2
+      }
+    },
+    "null-default-flag": {
+      "defaultVariant": null,
+      "state": "ENABLED",
+      "variants": {
+        "off": false,
+        "on": true
+      }
+    },
+    "object-flag": {
+      "defaultVariant": "template",
+      "state": "ENABLED",
+      "variants": {
+        "empty": {},
+        "template": {
+          "imagesPerPage": 100,
+          "showImages": true,
+          "title": "Check out these pics!"
+        }
+      }
+    },
+    "ref-to-nonexistent-evaluator-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "$ref": "nonexistent_evaluator"
+          },
+          "hit",
+          "miss"
+        ]
+      },
+      "variants": {
+        "fallback": "fallback",
+        "hit": "hit",
+        "miss": "miss"
+      }
+    },
+    "ref-whitespace-compact-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "$ref": "is_ballmer"
+          },
+          "hi",
+          "bye"
+        ]
+      },
+      "variants": {
+        "bye": "bye",
+        "fallback": "fallback",
+        "hi": "hi"
+      }
+    },
+    "ref-whitespace-space-after-colon-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "$ref": "is_ballmer"
+          },
+          "hi",
+          "bye"
+        ]
+      },
+      "variants": {
+        "bye": "bye",
+        "fallback": "fallback",
+        "hi": "hi"
+      }
+    },
+    "ref-whitespace-space-around-colon-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "$ref": "is_ballmer"
+          },
+          "hi",
+          "bye"
+        ]
+      },
+      "variants": {
+        "bye": "bye",
+        "fallback": "fallback",
+        "hi": "hi"
+      }
+    },
+    "semver-build-metadata-flag": {
+      "defaultVariant": "no-match",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "sem_ver": [
+              {
+                "var": "version"
+              },
+              "=",
+              "1.0.0+build"
+            ]
+          },
+          "match",
+          "no-match"
+        ]
+      },
+      "variants": {
+        "match": "match",
+        "no-match": "no-match"
+      }
+    },
+    "semver-invalid-operator-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "sem_ver": [
+          {
+            "var": "version"
+          },
+          "===",
+          "1.0.0"
+        ]
+      },
+      "variants": {
+        "fallback": "fallback",
+        "false": "false",
+        "true": "true"
+      }
+    },
+    "semver-invalid-version-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "sem_ver": [
+          {
+            "var": "version"
+          },
+          "=",
+          "1.0.0"
+        ]
+      },
+      "variants": {
+        "fallback": "fallback",
+        "false": "false",
+        "true": "true"
+      }
+    },
+    "semver-numeric-context-flag": {
+      "defaultVariant": "no-match",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "sem_ver": [
+              {
+                "var": "version"
+              },
+              "\u003e",
+              "1.1"
+            ]
+          },
+          "match",
+          "no-match"
+        ]
+      },
+      "variants": {
+        "match": "match",
+        "no-match": "no-match"
+      }
+    },
+    "semver-partial-version-flag": {
+      "defaultVariant": "no-match",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "sem_ver": [
+              {
+                "var": "version"
+              },
+              "^",
+              "1"
+            ]
+          },
+          "match",
+          "no-match"
+        ]
+      },
+      "variants": {
+        "match": "match",
+        "no-match": "no-match"
+      }
+    },
+    "semver-v-prefix-flag": {
+      "defaultVariant": "no-match",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "sem_ver": [
+              {
+                "var": "version"
+              },
+              "=",
+              "v1.0.0"
+            ]
+          },
+          "match",
+          "no-match"
+        ]
+      },
+      "variants": {
+        "match": "match",
+        "no-match": "no-match"
+      }
+    },
+    "semver-wrong-args-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "sem_ver": [
+          {
+            "var": "version"
+          },
+          "="
+        ]
+      },
+      "variants": {
+        "fallback": "fallback",
+        "false": "false",
+        "true": "true"
+      }
+    },
+    "some-email-targeted-flag": {
+      "defaultVariant": "none",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "$ref": "is_ballmer"
+          },
+          "hi",
+          "bye"
+        ]
+      },
+      "variants": {
+        "bye": "bye",
+        "hi": "hi",
+        "none": "none"
+      }
+    },
+    "some-other-email-targeted-flag": {
+      "defaultVariant": "none",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "$ref": "is_ballmer"
+          },
+          "yes",
+          "no"
+        ]
+      },
+      "variants": {
+        "no": "no",
+        "none": "none",
+        "yes": "yes"
+      }
+    },
+    "starts-ends-flag": {
+      "defaultVariant": "none",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "starts_with": [
+              {
+                "var": "id"
+              },
+              "abc"
+            ]
+          },
+          "prefix",
+          {
+            "if": [
+              {
+                "ends_with": [
+                  {
+                    "var": "id"
+                  },
+                  "xyz"
+                ]
+              },
+              "postfix",
+              {
+                "if": [
+                  {
+                    "ends_with": [
+                      {
+                        "var": "id"
+                      },
+                      3
+                    ]
+                  },
+                  "fail",
+                  "none"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "variants": {
+        "none": "none",
+        "postfix": "postfix",
+        "prefix": "prefix"
+      }
+    },
+    "starts-with-non-string-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "starts_with": [
+          {
+            "var": "num"
+          },
+          "abc"
+        ]
+      },
+      "variants": {
+        "fallback": "fallback",
+        "false": "false",
+        "true": "true"
+      }
+    },
+    "starts-with-wrong-args-flag": {
+      "defaultVariant": "fallback",
+      "state": "ENABLED",
+      "targeting": {
+        "starts_with": [
+          "abc"
+        ]
+      },
+      "variants": {
+        "fallback": "fallback",
+        "false": "false",
+        "true": "true"
+      }
+    },
+    "string-flag": {
+      "defaultVariant": "greeting",
+      "state": "ENABLED",
+      "variants": {
+        "greeting": "hi",
+        "parting": "bye"
+      }
+    },
+    "string-targeted-zero-flag": {
+      "defaultVariant": "zero",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "$ref": "is_ballmer"
+          },
+          "zero"
+        ]
+      },
+      "variants": {
+        "non-zero": "str",
+        "zero": ""
+      }
+    },
+    "string-zero-flag": {
+      "defaultVariant": "zero",
+      "state": "ENABLED",
+      "variants": {
+        "non-zero": "str",
+        "zero": ""
+      }
+    },
+    "targeting-key-flag": {
+      "defaultVariant": "miss",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "==": [
+              {
+                "var": "targetingKey"
+              },
+              "5c3d8535-f81a-4478-a6d3-afaa4d51199e"
+            ]
+          },
+          "hit",
+          null
+        ]
+      },
+      "variants": {
+        "hit": "hit",
+        "miss": "miss"
+      }
+    },
+    "targeting-null-flag": {
+      "defaultVariant": "two",
+      "state": "ENABLED",
+      "targeting": {
+        "fractional": [
+          null,
+          [
+            "one"
+          ]
+        ]
+      },
+      "variants": {
+        "one": 1,
+        "two": 2
+      }
+    },
+    "targeting-null-variant-flag": {
+      "defaultVariant": "two",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          true,
+          null,
+          "one"
+        ]
+      },
+      "variants": {
+        "one": 1,
+        "two": 2
+      }
+    },
+    "timestamp-flag": {
+      "defaultVariant": "none",
+      "state": "ENABLED",
+      "targeting": {
+        "if": [
+          {
+            "\u003e": [
+              {
+                "var": "$flagd.timestamp"
+              },
+              {
+                "var": "time"
+              }
+            ]
+          },
+          "past",
+          {
+            "if": [
+              {
+                "\u003c": [
+                  {
+                    "var": "$flagd.timestamp"
+                  },
+                  {
+                    "var": "time"
+                  }
+                ]
+              },
+              "future",
+              "none"
+            ]
+          }
+        ]
+      },
+      "variants": {
+        "future": 1,
+        "none": 0,
+        "past": -1
+      }
+    },
+    "undefined-default-flag": {
+      "state": "ENABLED",
+      "variants": {
+        "big": 1000,
+        "small": 10
+      }
+    },
+    "wrong-flag": {
+      "defaultVariant": "one",
+      "state": "ENABLED",
+      "variants": {
+        "one": "uno",
+        "two": "dos"
+      }
+    }
+  }
+}

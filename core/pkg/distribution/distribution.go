@@ -47,6 +47,10 @@ type Components struct {
 	// MetricsHandler serves /metrics on the management port. Nil leaves it to the telemetry provider, and answers
 	// 404 if the provider serves none.
 	MetricsHandler http.Handler
+	// Listen opens every listener the runtime and its service endpoints open: the flag evaluation, flag sync and
+	// OFREP ports, the event collector's, the management port, and unix sockets. Nil means net.Listen. It does not reach
+	// the management server of the flag evaluation endpoint's embedder path, which only an embedder starts.
+	Listen service.ListenFunc
 }
 
 // Info is what the main of a distribution knows about its build: the values its build stamped in with the linker,

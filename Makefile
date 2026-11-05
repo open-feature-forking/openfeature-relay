@@ -16,9 +16,9 @@ FLAGD_MODULE_DIRS := ./flagd ./runtime ./service/transport ./service/flag-evalua
 # test-fips.
 CONTRIB_MODULE_DIRS := ./contrib/flagsmith/engine ./contrib/flagsmith/middleware ./contrib/flagsmith/sync
 
-# The testbed modules (UC-022): libraries for the test suites of providers, which no distribution links. They are tested
-# and pinned like the library modules.
-TESTBED_MODULE_DIRS := ./testbed/control
+# The testbed's modules (UC-022): the control API, a library for the test suites of providers, and the runtime pieces of
+# the test harness. Tested and pinned like the contrib modules, and in no standard distribution.
+TESTBED_MODULE_DIRS := ./testbed/control ./testbed/source
 
 # The FIPS variant builds against the CMVP-certified Go Cryptographic Module
 # v1.0.0 (certificate #5247). The literal version is required; the
@@ -71,7 +71,7 @@ build-flagd-fips:
 
 # UC-010 Q17: each standard distribution compiles as a FIPS variant too. The Builder generates the source of each
 # manifest, and the FIPS build of that source carries the certified module and the fips140 tag.
-STANDARD_DISTRIBUTIONS := flagd-minimal flagd-cloud flagd-kubernetes flagd-sync
+STANDARD_DISTRIBUTIONS := flagd-minimal flagd-minimal-otel flagd-cloud flagd-kubernetes flagd-sync
 .PHONY: build-standard-fips
 build-standard-fips:
 	cd builder && go build -o ../bin/relay-builder ./cmd/relay-builder
@@ -103,7 +103,6 @@ TEST_TARGETS += test-eventsink-example
 TEST_TARGETS += test-contract-external
 TEST_TARGETS += test-middleware-example
 TEST_TARGETS += test-release
-TEST_TARGETS += test-testbed-control
 test: $(TEST_TARGETS)
 test-core: test-modules
 test-modules:
@@ -111,7 +110,7 @@ test-modules:
 		go test -race -covermode=atomic -cover -short $$m/... -coverprofile=$$(echo $$m | sed 's#^\./##; s#/#-#g')-coverage.out || rc=1; \
 	done; exit $$rc
 test-contrib:
-	go test -race -covermode=atomic -cover -short $(addsuffix /...,$(CONTRIB_MODULE_DIRS))
+	go test -race -covermode=atomic -cover -short $(addsuffix /...,$(CONTRIB_MODULE_DIRS) $(TESTBED_MODULE_DIRS))
 test-flagd:
 	go test -race -covermode=atomic -cover -short $(addsuffix /...,$(FLAGD_MODULE_DIRS)) -coverprofile=flagd-coverage.out
 test-sync-example:
@@ -125,8 +124,6 @@ test-middleware-example:
 # The release tests read the module paths of the repository, not a binary.
 test-release:
 	go test -race -short -count=1 ./test/release/...
-test-testbed-control:
-	go test -race -short -count=1 ./testbed/control/...
 test-eventsink-example:
 	go test -race -short -count=1 ./test/eventsink-example/... ./test/eventsink-example/distribution/...
 test-configformat-example:
@@ -427,3 +424,12 @@ test-upgrade-accepted:
 # Refreshes the list of behaviour changes that accepted.yaml has to cover.
 refresh-issue-78:
 	gh issue view 78 --repo open-feature-forking/openfeature-relay --json body --jq .body > test/upgrade/testdata/issue-78.txt
+
+# UC-022: the launchpad contract of a flagd testbed image. testbed-launchpad-image builds today's upstream image from the
+# test-harness submodule (git submodule update --init test-harness); KIND is launchpad or relay.
+.PHONY: testbed-launchpad-image testbed-contract
+testbed-launchpad-image:
+	docker build -f test-harness/flagd/Dockerfile -t testbed-launchpad:local test-harness
+testbed-contract:
+	@test -n "$(IMAGE)" || { echo "usage: make testbed-contract IMAGE=<image> [KIND=launchpad|relay]"; exit 1; }
+	cd test/testbed && TESTBED_IMAGE=$(IMAGE) TESTBED_KIND=$(or $(KIND),launchpad) go test -count=1 -timeout 30m -v ./...

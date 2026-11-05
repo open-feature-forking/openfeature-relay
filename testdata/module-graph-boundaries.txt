@@ -18,6 +18,8 @@ sync/s3:cloud.google.com|github.com/Azure|gocloud.dev|openfeature-relay/(telemet
 sync/sse:go.opentelemetry.io|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|openfeature-relay/(telemetry|sync/(file|flagd-grpc|http|openfeature-operator|gcs|azblob|s3|builder))
 # The Flagsmith sync provider (UC-019) requires the core only: no telemetry SDK, transport or other component module.
 contrib/flagsmith/sync:go.opentelemetry.io|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|openfeature-relay/(telemetry|sync/|evaluator|configformat|service|runtime)
+# The testbed sync provider (UC-022) requires the core only.
+testbed/source:go.opentelemetry.io|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|openfeature-relay/(telemetry|sync/|evaluator|configformat|service|runtime)
 # The telemetry module carries no sync provider and no Kubernetes or gocloud client (OpenTelemetry brings a few Google auth modules).
 telemetry/otel:openfeature-relay/sync/|k8s.io|gocloud.dev|github.com/Azure|github.com/aws
 # BR-001 of UC-004: the example service endpoint's module graph carries the core module only.
@@ -47,3 +49,27 @@ builder:open-feature/flagd/|openfeature-relay/(core|runtime|sync|evaluator|confi
 eventsink/webhook:robfig|opentelemetry|google.golang.org/grpc|connectrpc.com|k8s.io|gocloud.dev|cloud.google.com|github.com/Azure|github.com/aws|prometheus|open-feature/flagd/flagd|openfeature-relay/((sync|telemetry|evaluator|configformat|service)/|runtime)
 # UC-022: the control module of the testbed has no relay module in its module graph (BR-008).
 testbed/control:openfeature-relay/(runtime|core|service|sync|evaluator|configformat|telemetry|eventsink|contrib)|open-feature/flagd
+# Only testbed/*, test/* and distributions/flagd-testbed may require the testbed modules (UC-022).
+core:openfeature-relay/testbed
+sync/file:openfeature-relay/testbed
+sync/flagd-grpc:openfeature-relay/testbed
+sync/http:openfeature-relay/testbed
+sync/openfeature-operator:openfeature-relay/testbed
+sync/gcs:openfeature-relay/testbed
+sync/azblob:openfeature-relay/testbed
+sync/s3:openfeature-relay/testbed
+sync/sse:openfeature-relay/testbed
+sync/builder:openfeature-relay/testbed
+telemetry/otel:openfeature-relay/testbed
+eventsink/webhook:openfeature-relay/testbed
+evaluator/flagd:openfeature-relay/testbed
+configformat/flagd:openfeature-relay/testbed
+contrib/flagsmith/engine:openfeature-relay/testbed
+contrib/flagsmith/sync:openfeature-relay/testbed
+runtime:openfeature-relay/testbed
+service/transport:openfeature-relay/testbed
+service/flag-evaluation:openfeature-relay/testbed
+service/ofrep:openfeature-relay/testbed
+service/flag-sync:openfeature-relay/testbed
+service/event-collector:openfeature-relay/testbed
+builder:openfeature-relay/testbed

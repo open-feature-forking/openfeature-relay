@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -476,6 +477,26 @@ func TestCollectorServeBlocksWithoutPort(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestListenSeamUsedByTheCollector pins that the collector opens its listener through Settings.Listen, and serves on
+// the listener that function returns.
+func TestListenSeamUsedByTheCollector(t *testing.T) {
+	var asked []string
+	var mu sync.Mutex
+	listen := func(network, address string) (net.Listener, error) {
+		mu.Lock()
+		asked = append(asked, network+" "+address)
+		mu.Unlock()
+		return net.Listen(network, address)
+	}
+	s := startWith(t, nil, func(settings *service.Settings) { settings.Listen = listen })
+
+	_, port, err := net.SplitHostPort(s.addr)
+	require.NoError(t, err)
+	mu.Lock()
+	defer mu.Unlock()
+	require.Equal(t, []string{"tcp :" + port}, asked)
 }
 
 // TestCollectorHasNoServerWithoutAPort pins that an inert collector builds no HTTP server, so Serve cannot open a port.

@@ -78,6 +78,7 @@ func (Factory) Create(s service.Settings) (service.Endpoint, error) {
 	}
 	cfg.Service.Logger = s.Logger.WithFields(zap.String("component", "OFREPService"))
 	cfg.Service.HTTPMiddleware = s.HTTPMiddleware
+	cfg.Service.Listen = s.Listen
 	cfg.Service.Telemetry = s.Telemetry
 	cfg.Service.Bus = s.Bus
 	cfg.Service.Formats = cfg.Formats
@@ -96,3 +97,6 @@ func (e endpoint) Serve(ctx context.Context) error { return e.svc.Start(ctx) }
 
 // NewFactory returns the factory of the OFREP endpoint, as a generated main of a distribution calls it.
 func NewFactory() service.Factory { return Factory{} }
+
+// Close implements io.Closer for an endpoint that is never served, which the runtime closes when it fails to build.
+func (e endpoint) Close() error { return e.svc.Close() }

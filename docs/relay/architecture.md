@@ -4,7 +4,7 @@ description: How a distribution's runtime moves flag configurations from sources
 
 # Architecture
 
-This is the target design. Today's code is flagd's, part way there; see [Status and roadmap](status.md).
+This is the design the code on `main` follows; [Status and roadmap](status.md) says what is done and what is still open.
 
 ```mermaid
 flowchart LR

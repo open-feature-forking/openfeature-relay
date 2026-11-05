@@ -75,6 +75,13 @@ func init() {
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_")) // sync-provider-args becomes SYNC_PROVIDER_ARGS
 	viper.SetEnvPrefix("FLAGD")                            // port becomes FLAGD_PORT
 
+	defineStartFlags(flags)
+	bindFlags(flags)
+}
+
+// defineStartFlags defines the flags of flagd start. LoadConfig defines them on a flag set of its own, so that the
+// defaults of a configuration file read there are those of flagd start.
+func defineStartFlags(flags *pflag.FlagSet) {
 	flags.Int32P(managementPortFlagName, "m", 8014, "Port for management operations")
 	flags.Int32P(portFlagName, "p", 8013, "Port to listen on")
 	flags.Int32P(syncPortFlagName, "g", 8015, "Flag sync service port, serving gRPC, gRPC-Web and Connect")
@@ -128,41 +135,42 @@ func init() {
 	flags.Int64P(maxRequestHeaderFlagName, "R", 1_000_000, "Maximum allowed request header size in bytes. Requests exceeding this are rejected with HTTP 431. Set to 0 to use Go's built-in default (1 MiB). WARNING: setting a very large or zero value may allow memory exhaustion from oversized headers.")
 	flags.Duration(keepAliveMinTimeFlagName, runtime.KeepAliveMinTimeDefault, "No-op, accepted for compatibility. The flag sync server is served by connect over net/http, which has no keepalive enforcement policy to configure and imposes no minimum ping interval.")
 	flags.Bool(keepAlivePermitWithoutStreamFlagName, runtime.KeepAlivePermitWithoutStreamDefault, "No-op, accepted for compatibility. The flag sync server is served by connect over net/http, which always permits keepalive pings without an active stream.")
-
-	bindFlags(flags)
 }
 
-func bindFlags(flags *pflag.FlagSet) {
-	_ = viper.BindPFlag(corsFlagName, flags.Lookup(corsFlagName))
-	_ = viper.BindPFlag(logFormatFlagName, flags.Lookup(logFormatFlagName))
-	_ = viper.BindPFlag(metricsExporter, flags.Lookup(metricsExporter))
-	_ = viper.BindPFlag(managementPortFlagName, flags.Lookup(managementPortFlagName))
-	_ = viper.BindPFlag(otelCollectorURI, flags.Lookup(otelCollectorURI))
-	_ = viper.BindPFlag(otelCertPathFlagName, flags.Lookup(otelCertPathFlagName))
-	_ = viper.BindPFlag(otelKeyPathFlagName, flags.Lookup(otelKeyPathFlagName))
-	_ = viper.BindPFlag(otelCAPathFlagName, flags.Lookup(otelCAPathFlagName))
-	_ = viper.BindPFlag(portFlagName, flags.Lookup(portFlagName))
-	_ = viper.BindPFlag(serverCertPathFlagName, flags.Lookup(serverCertPathFlagName))
-	_ = viper.BindPFlag(serverKeyPathFlagName, flags.Lookup(serverKeyPathFlagName))
-	_ = viper.BindPFlag(socketPathFlagName, flags.Lookup(socketPathFlagName))
-	_ = viper.BindPFlag(sourcesFlagName, flags.Lookup(sourcesFlagName))
-	_ = viper.BindPFlag(uriFlagName, flags.Lookup(uriFlagName))
-	_ = viper.BindPFlag(syncPortFlagName, flags.Lookup(syncPortFlagName))
-	_ = viper.BindPFlag(syncHTTPFlagName, flags.Lookup(syncHTTPFlagName))
-	_ = viper.BindPFlag(syncSocketPathFlagName, flags.Lookup(syncSocketPathFlagName))
-	_ = viper.BindPFlag(ofrepPortFlagName, flags.Lookup(ofrepPortFlagName))
-	_ = viper.BindPFlag(ofrepSSEEnabledFlagName, flags.Lookup(ofrepSSEEnabledFlagName))
-	_ = viper.BindPFlag(ofrepSSEInactivityFlagName, flags.Lookup(ofrepSSEInactivityFlagName))
-	_ = viper.BindPFlag(ofrepSSEPublicURLFlagName, flags.Lookup(ofrepSSEPublicURLFlagName))
-	_ = viper.BindPFlag(contextValueFlagName, flags.Lookup(contextValueFlagName))
-	_ = viper.BindPFlag(headerToContextKeyFlagName, flags.Lookup(headerToContextKeyFlagName))
-	_ = viper.BindPFlag(streamDeadlineFlagName, flags.Lookup(streamDeadlineFlagName))
-	_ = viper.BindPFlag(disableSyncMetadata, flags.Lookup(disableSyncMetadata))
-	_ = viper.BindPFlag(strictNumericRangeFlagName, flags.Lookup(strictNumericRangeFlagName))
-	_ = viper.BindPFlag(maxRequestBodyFlagName, flags.Lookup(maxRequestBodyFlagName))
-	_ = viper.BindPFlag(maxRequestHeaderFlagName, flags.Lookup(maxRequestHeaderFlagName))
-	_ = viper.BindPFlag(keepAliveMinTimeFlagName, flags.Lookup(keepAliveMinTimeFlagName))
-	_ = viper.BindPFlag(keepAlivePermitWithoutStreamFlagName, flags.Lookup(keepAlivePermitWithoutStreamFlagName))
+func bindFlags(flags *pflag.FlagSet) { bindFlagsTo(viper.GetViper(), flags) }
+
+// bindFlagsTo binds the flags that flagd start reads through viper to the keys of v.
+func bindFlagsTo(v *viper.Viper, flags *pflag.FlagSet) {
+	_ = v.BindPFlag(corsFlagName, flags.Lookup(corsFlagName))
+	_ = v.BindPFlag(logFormatFlagName, flags.Lookup(logFormatFlagName))
+	_ = v.BindPFlag(metricsExporter, flags.Lookup(metricsExporter))
+	_ = v.BindPFlag(managementPortFlagName, flags.Lookup(managementPortFlagName))
+	_ = v.BindPFlag(otelCollectorURI, flags.Lookup(otelCollectorURI))
+	_ = v.BindPFlag(otelCertPathFlagName, flags.Lookup(otelCertPathFlagName))
+	_ = v.BindPFlag(otelKeyPathFlagName, flags.Lookup(otelKeyPathFlagName))
+	_ = v.BindPFlag(otelCAPathFlagName, flags.Lookup(otelCAPathFlagName))
+	_ = v.BindPFlag(portFlagName, flags.Lookup(portFlagName))
+	_ = v.BindPFlag(serverCertPathFlagName, flags.Lookup(serverCertPathFlagName))
+	_ = v.BindPFlag(serverKeyPathFlagName, flags.Lookup(serverKeyPathFlagName))
+	_ = v.BindPFlag(socketPathFlagName, flags.Lookup(socketPathFlagName))
+	_ = v.BindPFlag(sourcesFlagName, flags.Lookup(sourcesFlagName))
+	_ = v.BindPFlag(uriFlagName, flags.Lookup(uriFlagName))
+	_ = v.BindPFlag(syncPortFlagName, flags.Lookup(syncPortFlagName))
+	_ = v.BindPFlag(syncHTTPFlagName, flags.Lookup(syncHTTPFlagName))
+	_ = v.BindPFlag(syncSocketPathFlagName, flags.Lookup(syncSocketPathFlagName))
+	_ = v.BindPFlag(ofrepPortFlagName, flags.Lookup(ofrepPortFlagName))
+	_ = v.BindPFlag(ofrepSSEEnabledFlagName, flags.Lookup(ofrepSSEEnabledFlagName))
+	_ = v.BindPFlag(ofrepSSEInactivityFlagName, flags.Lookup(ofrepSSEInactivityFlagName))
+	_ = v.BindPFlag(ofrepSSEPublicURLFlagName, flags.Lookup(ofrepSSEPublicURLFlagName))
+	_ = v.BindPFlag(contextValueFlagName, flags.Lookup(contextValueFlagName))
+	_ = v.BindPFlag(headerToContextKeyFlagName, flags.Lookup(headerToContextKeyFlagName))
+	_ = v.BindPFlag(streamDeadlineFlagName, flags.Lookup(streamDeadlineFlagName))
+	_ = v.BindPFlag(disableSyncMetadata, flags.Lookup(disableSyncMetadata))
+	_ = v.BindPFlag(strictNumericRangeFlagName, flags.Lookup(strictNumericRangeFlagName))
+	_ = v.BindPFlag(maxRequestBodyFlagName, flags.Lookup(maxRequestBodyFlagName))
+	_ = v.BindPFlag(maxRequestHeaderFlagName, flags.Lookup(maxRequestHeaderFlagName))
+	_ = v.BindPFlag(keepAliveMinTimeFlagName, flags.Lookup(keepAliveMinTimeFlagName))
+	_ = v.BindPFlag(keepAlivePermitWithoutStreamFlagName, flags.Lookup(keepAlivePermitWithoutStreamFlagName))
 }
 
 // startCmd represents the start command
@@ -217,18 +225,12 @@ var startCmd = &cobra.Command{
 			if err != nil {
 				log.Fatal(err)
 			}
+			// the decoder of the configuration file ignores unknown keys; the grpc object of a source is strict
+			if err = decodeGRPCSettings(viper.Get(sourcesFlagName), syncProvidersFromConfig); err != nil {
+				log.Fatal(err)
+			}
 		}
 		syncProviders = append(syncProviders, syncProvidersFromConfig...)
-
-		contextValuesToMap := make(map[string]any)
-		for k, v := range viper.GetStringMapString(contextValueFlagName) {
-			contextValuesToMap[k] = v
-		}
-
-		headerToContextKeyMappings := make(map[string]string)
-		for k, v := range viper.GetStringMapString(headerToContextKeyFlagName) {
-			headerToContextKeyMappings[k] = v
-		}
 
 		// Request size limits
 		maxRequestBodyBytes := viper.GetInt64(maxRequestBodyFlagName)
@@ -246,35 +248,7 @@ var startCmd = &cobra.Command{
 			rtLogger.Fatal(err.Error())
 		}
 		components := withTelemetryConfig(extensions.components)
-		rt, err := fromConfig(logger, Version, runtime.Config{
-			EndpointSettings:       extensions.endpointSettings,
-			EventSinksNeedMetrics:  extensions.eventSinks,
-			CORS:                   viper.GetStringSlice(corsFlagName),
-			ManagementPort:         viper.GetUint16(managementPortFlagName),
-			OfrepServicePort:       viper.GetUint16(ofrepPortFlagName),
-			OfrepSSEEnabled:        viper.GetBool(ofrepSSEEnabledFlagName),
-			OfrepSSEInactivityDel:  viper.GetInt(ofrepSSEInactivityFlagName),
-			OfrepSSEPublicURL:      viper.GetString(ofrepSSEPublicURLFlagName),
-			ServiceCertPath:        viper.GetString(serverCertPathFlagName),
-			ServiceKeyPath:         viper.GetString(serverKeyPathFlagName),
-			ServicePort:            viper.GetUint16(portFlagName),
-			ServiceSocketPath:      viper.GetString(socketPathFlagName),
-			SyncServicePort:        viper.GetUint16(syncPortFlagName),
-			SyncServiceHTTPEnabled: viper.GetBool(syncHTTPFlagName),
-			SyncServiceSocketPath:  viper.GetString(syncSocketPathFlagName),
-			StreamDeadline:         viper.GetDuration(streamDeadlineFlagName),
-			DisableSyncMetadata:    viper.GetBool(disableSyncMetadata),
-			StrictNumericRange:     viper.GetBool(strictNumericRangeFlagName),
-			//nolint:staticcheck // SA1019 no-ops, read so FromConfig can warn when they are set
-			KeepAliveMinTime: viper.GetDuration(keepAliveMinTimeFlagName),
-			//nolint:staticcheck // SA1019 see above
-			KeepAlivePermitWithoutStream: viper.GetBool(keepAlivePermitWithoutStreamFlagName),
-			SyncProviders:                syncProviders,
-			ContextValues:                contextValuesToMap,
-			HeaderToContextKeyMappings:   headerToContextKeyMappings,
-			MaxRequestBodyBytes:          maxRequestBodyBytes,
-			MaxRequestHeaderBytes:        maxRequestHeaderBytes,
-		}, components)
+		rt, err := fromConfig(logger, Version, runtimeConfig(viper.GetViper(), syncProviders, extensions), components)
 		if err != nil {
 			rtLogger.Fatal(err.Error())
 		}
@@ -288,13 +262,84 @@ var startCmd = &cobra.Command{
 // withTelemetryConfig returns the components with the settings of the telemetry provider that the telemetry flags
 // name. The distribution's main chooses the provider.
 func withTelemetryConfig(components distribution.Components) distribution.Components {
+	return withTelemetryConfigFrom(viper.GetViper(), components)
+}
+
+func withTelemetryConfigFrom(v *viper.Viper, components distribution.Components) distribution.Components {
 	components.TelemetryConfig = map[string]any{
-		telemetryMetricsExporter: viper.GetString(metricsExporter),
-		telemetryCollectorURI:    viper.GetString(otelCollectorURI),
-		telemetryCertPath:        viper.GetString(otelCertPathFlagName),
-		telemetryKeyPath:         viper.GetString(otelKeyPathFlagName),
-		telemetryCAPath:          viper.GetString(otelCAPathFlagName),
-		telemetryReloadInterval:  viper.GetDuration(otelReloadIntervalFlagName),
+		telemetryMetricsExporter: v.GetString(metricsExporter),
+		telemetryCollectorURI:    v.GetString(otelCollectorURI),
+		telemetryCertPath:        v.GetString(otelCertPathFlagName),
+		telemetryKeyPath:         v.GetString(otelKeyPathFlagName),
+		telemetryCAPath:          v.GetString(otelCAPathFlagName),
+		telemetryReloadInterval:  v.GetDuration(otelReloadIntervalFlagName),
 	}
 	return components
+}
+
+// decodeGRPCSettings reads the `grpc` object of each source of the configuration file strictly, over what the
+// configuration file's decoder, which ignores unknown keys, made of it.
+func decodeGRPCSettings(raw any, sources []sync.SourceConfig) error {
+	entries, _ := raw.([]any)
+	for i, entry := range entries {
+		if i >= len(sources) {
+			break
+		}
+		object, _ := entry.(map[string]any)
+		for key, value := range object {
+			if !strings.EqualFold(key, "grpc") {
+				continue
+			}
+			settings, err := sync.DecodeGRPCSettings(value)
+			if err != nil {
+				return fmt.Errorf("source %q: %w", sources[i].URI, err)
+			}
+			sources[i].GRPC = settings
+		}
+	}
+	return nil
+}
+
+// runtimeConfig is the runtime.Config that flagd start builds from the settings v holds, with the sources and the
+// extension settings it has read. flagd start reads the global viper through it, LoadConfig a viper of its own.
+func runtimeConfig(v *viper.Viper, syncProviders []sync.SourceConfig, extensions extensionSettings) runtime.Config {
+	contextValuesToMap := make(map[string]any)
+	for k, value := range v.GetStringMapString(contextValueFlagName) {
+		contextValuesToMap[k] = value
+	}
+
+	headerToContextKeyMappings := make(map[string]string)
+	for k, value := range v.GetStringMapString(headerToContextKeyFlagName) {
+		headerToContextKeyMappings[k] = value
+	}
+
+	return runtime.Config{
+		EndpointSettings:       extensions.endpointSettings,
+		EventSinksNeedMetrics:  extensions.eventSinks,
+		CORS:                   v.GetStringSlice(corsFlagName),
+		ManagementPort:         v.GetUint16(managementPortFlagName),
+		OfrepServicePort:       v.GetUint16(ofrepPortFlagName),
+		OfrepSSEEnabled:        v.GetBool(ofrepSSEEnabledFlagName),
+		OfrepSSEInactivityDel:  v.GetInt(ofrepSSEInactivityFlagName),
+		OfrepSSEPublicURL:      v.GetString(ofrepSSEPublicURLFlagName),
+		ServiceCertPath:        v.GetString(serverCertPathFlagName),
+		ServiceKeyPath:         v.GetString(serverKeyPathFlagName),
+		ServicePort:            v.GetUint16(portFlagName),
+		ServiceSocketPath:      v.GetString(socketPathFlagName),
+		SyncServicePort:        v.GetUint16(syncPortFlagName),
+		SyncServiceHTTPEnabled: v.GetBool(syncHTTPFlagName),
+		SyncServiceSocketPath:  v.GetString(syncSocketPathFlagName),
+		StreamDeadline:         v.GetDuration(streamDeadlineFlagName),
+		DisableSyncMetadata:    v.GetBool(disableSyncMetadata),
+		StrictNumericRange:     v.GetBool(strictNumericRangeFlagName),
+		//nolint:staticcheck // SA1019 no-ops, read so FromConfig can warn when they are set
+		KeepAliveMinTime: v.GetDuration(keepAliveMinTimeFlagName),
+		//nolint:staticcheck // SA1019 see above
+		KeepAlivePermitWithoutStream: v.GetBool(keepAlivePermitWithoutStreamFlagName),
+		SyncProviders:                syncProviders,
+		ContextValues:                contextValuesToMap,
+		HeaderToContextKeyMappings:   headerToContextKeyMappings,
+		MaxRequestBodyBytes:          v.GetInt64(maxRequestBodyFlagName),
+		MaxRequestHeaderBytes:        v.GetInt64(maxRequestHeaderFlagName),
+	}
 }

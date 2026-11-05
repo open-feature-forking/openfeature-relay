@@ -22,6 +22,12 @@ expect_equal() { # <what> <expected> <got>
   if [ "$2" = "$3" ]; then note "- ok: $1"; else fail "$1: expected '$2', got '$3'"; fi
 }
 
+# the size of each linux_x86_64 binary in MiB, for the step summary
+sizes_file="${out}/sizes.md"
+add_size() { # <name> <binary>
+  printf '| %s | %.1f |\n' "$1" "$(awk -v b="$(stat -c %s "$2")" "BEGIN { print b / 1048576 }")" >>"${sizes_file}"
+}
+
 note "### Release dry run (version v${version}, commit ${commit})"
 note ""
 
@@ -50,6 +56,7 @@ for item in ${DRY_RUN_ITEMS:-flagd flagd-proxy}; do
 
   # the release builds ./<item>/main.go, a file, so the build info path is command-line-arguments, as it is today
   tar -xzf "${dir}/${item}_${version}_Linux_x86_64.tar.gz" -C "${dir}" "./${item}_linux_x86_64"
+  add_size "${item}" "${dir}/${item}_linux_x86_64"
   info="$(go version -m "${dir}/${item}_linux_x86_64")"
   expect_equal "${item}: build info path" "command-line-arguments" "$(awk '$1 == "path" {print $2}' <<<"${info}")"
   tar -xzf "${dir}/${item}-fips_${version}_Linux_x86_64.tar.gz" -C "${dir}" "./${item}-fips_linux_amd64"
@@ -129,6 +136,13 @@ if [ "${DRY_RUN_DISTRIBUTIONS:-on}" != off ]; then
   .github/scripts/release-dry-run-distributions.sh "${version}" "${commit}" "${date}" "${out}" || fail "the standard distributions"
 fi
 
-note ""
+if [ -s "${sizes_file}" ]; then
+  note ""
+  note "#### Binary sizes (linux_x86_64)"
+  note ""
+  note "| Binary | MiB |"
+  note "|---|---|"
+  tee -a "${summary}" <"${sizes_file}"
+fi
 if [ "${failures}" -gt 0 ]; then note "${failures} check(s) failed."; exit 1; fi
 note "Nothing was pushed or signed."

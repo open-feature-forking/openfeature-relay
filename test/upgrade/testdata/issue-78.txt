@@ -1,4 +1,4 @@
-flagd built from this repository is a drop-in replacement for today's flagd: internals change, observable behaviour does not (see `CLAUDE.md`, Conventions). The changes below were approved before that rule and were kept by the project lead's decision. They must all appear in the migration guide (UC-015) and UC-009's migration notes. Each lands in its own commit.
+flagd built from this repository is a drop-in replacement for today's flagd: internals change, observable behaviour does not (see `CLAUDE.md`, Conventions). The changes below were approved before that rule and were kept by the project lead's decision. They must all appear in the migration guide of the provider migration (#156) and UC-009's migration notes. Each lands in its own commit.
 
 **Could break a setup that works today**
 - [ ] A failed first fetch or connect no longer exits flagd: it stays up and not ready (UC-003 Q2, #54).
@@ -6,11 +6,11 @@ flagd built from this repository is a drop-in replacement for today's flagd: int
 - [ ] Invalid blob URL options or Azure variables stop startup, where flagd used to start and never become ready (#57).
 - [ ] `awssdk=v1` on an `s3://` source stops startup; the native client is AWS SDK v2 only (#57).
 - [ ] `event-sinks`, `middleware` and `endpoint-settings` in the configuration file are no longer ignored: they configure event sinks, middleware and extension service endpoints, and an entry whose type the distribution lacks stops startup (UC-021 Q12, E1). A configuration file that used them for nothing must drop them.
+- [ ] flagd-full links two more modules and the `event-collector` key is no longer ignored: `eventsink/webhook` and `service/event-collector` appear in `go version -m` and in the SBOM, and `event-collector: {port: N}` in the configuration file opens the event collector's port, which stays closed without it (UC-021 Q15, Q16, E4). A configuration file that used the key for nothing must drop it.
 
 **Visible to clients, unlikely to break them**
 - [ ] Flag sync's `Last-Modified` moves only on a configuration change (UC-004 Q10, #71).
 - [ ] Flag sync reads the `Flagd-Configuration-Format` header: a value that names a configuration format the distribution lacks is answered `InvalidArgument` (HTTP 400), where the header used to be ignored; no header, or `flagd`, keeps today's behaviour (FR-044, UC-017 Q10, #117).
-- [ ] flagd-full links two more modules and the `event-collector` key is no longer ignored: `eventsink/webhook` and `service/event-collector` appear in `go version -m` and in the SBOM, and `event-collector: {port: N}` in the configuration file opens the event collector's port, which stays closed without it (UC-021 Q15, Q16, E4). A configuration file that used the key for nothing must drop it.
 - [ ] OFREP `flagConfigEtag` values change (still opaque), and vendor-format changes send refetch events (Q8, #75).
 - [ ] Shutdown: event streams get `provider_shutdown` and end at once; flag sync streams end cleanly in under 2 s (#71, #76). With step 6's hooks, shutdown takes up to 10 s.
 - [ ] The operator source delivers `spec.flagSpec` as written (UC-003 Q5, #54).
@@ -28,6 +28,5 @@ flagd built from this repository is a drop-in replacement for today's flagd: int
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
-UC-015 is deferred until after the proof of concept; this list stays the input for its migration guide.
-
+Provider migration is a follow-up (#156); this list stays the input for its migration guide.
 

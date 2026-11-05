@@ -3,7 +3,6 @@ package flagdgrpc
 import (
 	"context"
 	"fmt"
-	"math"
 	"sync/atomic"
 	"time"
 
@@ -55,6 +54,9 @@ type Sync struct {
 	IncrementalUpdates      bool
 	Headers                 map[string]string
 
+	// Options are the opt-in settings of the source (the `grpc` object); the zero value is today's behaviour.
+	Options Options
+
 	// SyncMetricsRecorder, when non-nil, is used to record the source-agnostic
 	// client-side sync metrics (feature_flag.flagd.sync.client.flag_config.*). Nil is
 	// safe — the recorder's methods tolerate nil receivers.
@@ -68,7 +70,16 @@ type Sync struct {
 	DialOptions []grpc.DialOption
 
 	client FlagSyncServiceClient
+	conn   *grpc.ClientConn // closed when Sync returns
 	ready  atomic.Bool
+	// firstPayload is set when the first payload of the source arrived, and tells a fatal status code from a failure
+	// after the source was up. ready is set when the stream opens, so it cannot.
+	firstPayload atomic.Bool
+
+	// after returns the channel that fires once the delay is over; time.After when nil. Tests replace it.
+	after func(time.Duration) <-chan time.Time
+	// dialRecorder, when non-nil, receives the options the client connection is created with. Tests set it.
+	dialRecorder func([]grpc.DialOption)
 
 	streamOpen  atomic.Bool
 	lastContact atomic.Int64 // unix nanoseconds at which the last stream ended; zero before the first
@@ -85,6 +96,9 @@ func (g *Sync) Init(_ context.Context) error {
 		opts := make([]grpc.DialOption, 0, len(g.GrpcDialOptionsOverride)+len(g.DialOptions))
 		opts = append(opts, g.GrpcDialOptionsOverride...)
 		opts = append(opts, g.DialOptions...)
+		// the override owns the dial: the retry policy and the keepalive do not apply to it, the selector header does
+		opts = append(opts, g.Options.selectorOptions(g.Selector)...)
+		g.recordDial(opts)
 		rpcCon, err = grpc.NewClient(g.URI, opts...)
 	} else {
 		var tCredentials credentials.TransportCredentials
@@ -101,7 +115,10 @@ func (g *Sync) Init(_ context.Context) error {
 			g.Logger.Info(fmt.Sprintf("setting max receive message size %d bytes default 4MB", g.MaxMsgSize))
 			opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(g.MaxMsgSize)))
 		}
+		opts = append(opts, g.Options.connectionOptions()...)
 		opts = append(opts, g.DialOptions...)
+		opts = append(opts, g.Options.selectorOptions(g.Selector)...)
+		g.recordDial(opts)
 		rpcCon, err = grpc.NewClient(g.URI, opts...)
 	}
 
@@ -112,9 +129,16 @@ func (g *Sync) Init(_ context.Context) error {
 	}
 
 	// Setup service client
+	g.conn = rpcCon
 	g.client = syncv1grpc.NewFlagSyncServiceClient(rpcCon)
 
 	return nil
+}
+
+func (g *Sync) recordDial(opts []grpc.DialOption) {
+	if g.dialRecorder != nil {
+		g.dialRecorder(opts)
+	}
 }
 
 func (g *Sync) contextWithHeaders(ctx context.Context) context.Context {
@@ -165,14 +189,30 @@ func (g *Sync) LastContact() time.Time {
 	return time.Time{}
 }
 
+// closeConn closes the client connection, once.
+func (g *Sync) closeConn() {
+	if conn := g.conn; conn != nil {
+		g.conn = nil
+		_ = conn.Close()
+	}
+}
+
 func (g *Sync) Sync(ctx context.Context, dataSync chan<- sync.DataSync) error {
+	defer g.closeConn()
 	g.Logger.Info(fmt.Sprintf("starting sync from %s", g.URI))
 
 	// Initialize SyncFlags client. A failure to open the stream, such as an unreachable server, is retried with a
 	// backoff like the loss of a stream that was open
 	g.Logger.Debug(fmt.Sprintf("initial stream connection to %s", g.URI))
-	syncClient, err := g.client.SyncFlags(g.contextWithHeaders(ctx), &v1.SyncFlagsRequest{ProviderId: g.ProviderID, Selector: g.Selector}) //nolint:staticcheck // deprecated selector kept for backwards compat
+	streamCtx, cancel := g.streamContext(ctx)
+	syncClient, err := g.openStream(streamCtx)
+	recycled := false
 	if err != nil {
+		recycled = g.deadlineElapsed(ctx, streamCtx)
+		cancel()
+		if fatal := g.fatalError(ctx, err, recycled); fatal != nil {
+			return fatal
+		}
 		g.Logger.Warn(fmt.Sprintf("unable to sync flags: %s", err.Error()))
 	} else {
 		g.streamOpened(ctx)
@@ -182,30 +222,49 @@ func (g *Sync) Sync(ctx context.Context, dataSync chan<- sync.DataSync) error {
 		// Initial stream listening. Error will be logged and continue and retry connection establishment
 		err = g.handleFlagSync(ctx, syncClient, dataSync, false)
 		g.streamClosed(ctx)
+		recycled = g.deadlineElapsed(ctx, streamCtx)
+		cancel()
 		if err == nil {
 			// This should not happen as handleFlagSync expects to return with an error
 			return nil
 		}
-
-		g.Logger.Warn(fmt.Sprintf("error with stream listener: %s", err.Error()))
+		if fatal := g.fatalError(ctx, err, recycled); fatal != nil {
+			return fatal
+		}
+		g.logStreamEnd(err, recycled)
 	}
 
 	// retry connection establishment
 	for {
-		syncClient, ok := g.connectWithRetry(ctx)
-		if !ok {
+		opened, fatal := g.reconnect(ctx, recycled)
+		if fatal != nil {
+			return fatal
+		}
+		if opened == nil {
 			// We shall exit
 			return nil
 		}
 		g.streamOpened(ctx)
 
-		err = g.handleFlagSync(ctx, syncClient, dataSync, true)
+		err = g.handleFlagSync(ctx, opened.client, dataSync, !recycled)
 		g.streamClosed(ctx)
+		recycled = g.deadlineElapsed(ctx, opened.ctx)
+		opened.cancel()
 		if err != nil {
-			g.Logger.Warn(fmt.Sprintf("error with stream listener: %s", err.Error()))
+			if fatal := g.fatalError(ctx, err, recycled); fatal != nil {
+				return fatal
+			}
+			g.logStreamEnd(err, recycled)
 			continue
 		}
 	}
+}
+
+func (g *Sync) afterFunc() func(time.Duration) <-chan time.Time {
+	if g.after != nil {
+		return g.after
+	}
+	return time.After
 }
 
 // connectWithRetry is a helper that performs exponential back off after retrying connection attempts periodically until
@@ -215,36 +274,61 @@ func (g *Sync) Sync(ctx context.Context, dataSync chan<- sync.DataSync) error {
 func (g *Sync) connectWithRetry(
 	ctx context.Context,
 ) (syncv1grpc.FlagSyncService_SyncFlagsClient, bool) {
+	opened, _ := g.reconnect(ctx, false)
+	if opened == nil {
+		return nil, false
+	}
+	return opened.client, true
+}
+
+// openedStream is a SyncFlags stream with the context that bounds it and the function that releases that context.
+type openedStream struct {
+	client syncv1grpc.FlagSyncService_SyncFlagsClient
+	ctx    context.Context
+	cancel context.CancelFunc
+}
+
+// reconnect opens a stream again, waiting the delay of the schedule before each attempt. After a stream that ended at
+// its deadline (immediate), the first attempt follows at once. It returns nil, nil when ctx is done, and an error when
+// a fatal status code ends the source.
+func (g *Sync) reconnect(ctx context.Context, immediate bool) (*openedStream, error) {
 	var iteration int
 
 	for {
-		var sleep time.Duration
-		if iteration >= backOffLimit {
-			sleep = constantBackOffDelay * time.Second
-		} else {
-			iteration++
-			sleep = time.Duration(math.Pow(backOffBase, float64(iteration))) * time.Second
+		sleep := time.Duration(0)
+		if !immediate {
+			sleep = g.nextDelay(&iteration)
 		}
+		immediate = false
 
 		// Block the next connection attempt and check the context
-		select {
-		case <-time.After(sleep):
-			break
-		case <-ctx.Done():
-			// context done means we shall exit
-			return nil, false
+		if sleep > 0 {
+			select {
+			case <-g.afterFunc()(sleep):
+			case <-ctx.Done():
+				// context done means we shall exit
+				return nil, nil
+			}
+		} else if ctx.Err() != nil {
+			return nil, nil
 		}
 
 		g.Logger.Warn(fmt.Sprintf("connection re-establishment attempt in-progress for grpc target: %s", g.URI))
 
-		syncClient, err := g.client.SyncFlags(g.contextWithHeaders(ctx), &v1.SyncFlagsRequest{ProviderId: g.ProviderID, Selector: g.Selector}) //nolint:staticcheck // deprecated selector kept for backwards compat
+		streamCtx, cancel := g.streamContext(ctx)
+		syncClient, err := g.openStream(streamCtx)
 		if err != nil {
+			recycled := g.deadlineElapsed(ctx, streamCtx)
+			cancel()
+			if fatal := g.fatalError(ctx, err, recycled); fatal != nil {
+				return nil, fatal
+			}
 			g.Logger.Debug(fmt.Sprintf("error opening service client: %s", err.Error()))
 			continue
 		}
 
 		g.Logger.Info(fmt.Sprintf("connection re-established with grpc target: %s", g.URI))
-		return syncClient, true
+		return &openedStream{client: syncClient, ctx: streamCtx, cancel: cancel}, nil
 	}
 }
 
@@ -255,7 +339,9 @@ func (g *Sync) handleFlagSync(
 	dataSync chan<- sync.DataSync,
 	isReconnect bool,
 ) error {
-	g.ready.Store(true)
+	if !g.Options.ReadyOnFirstPayload {
+		g.ready.Store(true)
+	}
 	g.streamOpen.Store(true)
 	defer func() {
 		g.lastContact.Store(time.Now().UnixNano())
@@ -267,6 +353,10 @@ func (g *Sync) handleFlagSync(
 		data, err := stream.Recv()
 		if err != nil {
 			return fmt.Errorf("error receiving payload from stream: %w", err)
+		}
+		g.firstPayload.Store(true)
+		if g.Options.ReadyOnFirstPayload {
+			g.ready.Store(true)
 		}
 
 		// only count a reconnect once the stream is confirmed; a rejected stream errors above

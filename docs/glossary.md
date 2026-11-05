@@ -6,7 +6,7 @@
 | Builder | The relay builder CLI that turns a manifest into generated source and a compiled distribution. | ocb, generator, flagd-builder |
 | Manifest              | The YAML file that names a distribution and lists the component modules, versions and replacements it is built from.                       | config, builder config        |
 | Distribution          | A flagd binary, and its image, built from one manifest; it contains exactly the components the manifest selects.                          | flavour                       |
-| Standard Distribution | A distribution whose manifest the Maintainers publish with every release: flagd-minimal, flagd-cloud, flagd-kubernetes, flagd-sync or flagd-full. |  |
+| Standard Distribution | A distribution whose manifest the Maintainers publish with every release: flagd-minimal, flagd-minimal-otel, flagd-cloud, flagd-kubernetes, flagd-sync or flagd-full. |  |
 | flagd-full            | The standard distribution with every official component; it behaves exactly like flagd before the builder.                               | monolith                      |
 | Custom Distribution   | A distribution built from a manifest that is not a standard distribution.                                                                   |                               |
 | Component             | A selectable unit compiled into a distribution, exposed by a component module through a factory.                                          |                               |
@@ -73,3 +73,7 @@
 | Extension Author      | A person who writes an extension in their own Go module.                                                                                   | contributor                   |
 | Provider Author       | A person who maintains an in-process provider that embeds the evaluator.                                                                   |                               |
 | Maintainer            | A person who maintains flagd, its component modules and the standard distributions.                                                       |                               |
+| Testbed | A distribution of the flagd-testbed role: flagd built from `distributions/flagd-testbed` with a control endpoint and a listener gate, against which provider test suites run. | |
+| Launchpad API | The control API of flagd-testbed v3.11.0 on port 8080: `/start`, `/stop`, `/restart` and `/change`, with their texts and codes. | |
+| Listener Gate | The layer through which the runtime opens its listeners; closing it closes every listener and connection with a plain close, opening it binds them again. | |
+| Control Target | The interface through which the control module drives a runtime: start, stop, load a document and report readiness. | |

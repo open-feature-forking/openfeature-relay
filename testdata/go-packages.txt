@@ -54,6 +54,7 @@ github.com/open-feature-forking/openfeature-relay/service/flag-sync
 github.com/open-feature-forking/openfeature-relay/service/ofrep
 github.com/open-feature-forking/openfeature-relay/service/ofrep/sse
 github.com/open-feature-forking/openfeature-relay/service/transport
+github.com/open-feature-forking/openfeature-relay/service/transport/gate
 github.com/open-feature-forking/openfeature-relay/service/transport/middleware
 github.com/open-feature-forking/openfeature-relay/service/transport/middleware/compress
 github.com/open-feature-forking/openfeature-relay/service/transport/middleware/cors
@@ -78,6 +79,7 @@ github.com/open-feature-forking/openfeature-relay/sync/sse
 github.com/open-feature-forking/openfeature-relay/telemetry/otel
 github.com/open-feature-forking/openfeature-relay/telemetry/otel/oteltest
 github.com/open-feature-forking/openfeature-relay/testbed/control
+github.com/open-feature-forking/openfeature-relay/testbed/source
 github.com/open-feature/flagd/flagd
 github.com/open-feature/flagd/flagd/cmd/doc
 github.com/open-feature/flagd/flagd/components

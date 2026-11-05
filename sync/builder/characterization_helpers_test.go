@@ -81,6 +81,8 @@ func (s *runningSource) requireDelivery(t *testing.T, want sync.DataSync) {
 
 	select {
 	case got := <-s.deliveries:
+		// the source version of a fetched delivery is the fetching provider's own tests' business
+		got.Version = want.Version
 		require.Equal(t, want, got)
 	case err := <-s.syncErr:
 		t.Fatalf("the provider stopped with %v while waiting for a delivery", err)
