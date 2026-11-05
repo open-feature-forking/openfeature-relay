@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -174,4 +175,54 @@ func TestLoadConfigIsRepeatableAndLeavesGlobalStateAlone(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, first, second)
 	require.Empty(t, cfgFile, "the --config of the command is not touched")
+}
+
+const grpcSourceFile = `{"sources":[{"uri":"up:8015","provider":"grpc","selector":"a=b","grpc":{"keepAliveTime":30000,"selectorHeader":true,"fatalStatusCodes":["PERMISSION_DENIED"]}}]}`
+
+func writeConfig(t *testing.T, content string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "flagd.json")
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+	return path
+}
+
+// TestLoadConfigGRPCObjectIsStrict: the grpc object of a source in the file reaches the source, and one that is
+// malformed stops LoadConfig with an error that names the file, the source and the key.
+func TestLoadConfigGRPCObjectIsStrict(t *testing.T) {
+	t.Run("a valid object arrives on the source", func(t *testing.T) {
+		cfg, _, err := LoadConfig(writeConfig(t, grpcSourceFile), components.Components(), nil)
+		require.NoError(t, err)
+		require.Len(t, cfg.SyncProviders, 1)
+		require.Equal(t, &sync.GRPCSourceSettings{
+			KeepAliveTime: 30000, SelectorHeader: true, FatalStatusCodes: []string{"PERMISSION_DENIED"},
+		}, cfg.SyncProviders[0].GRPC)
+	})
+
+	for name, object := range map[string]string{
+		"an unknown key": `{"keepAliveTimeMs":30000}`,
+		"a wrong type":   `{"keepAliveTime":"30s"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := writeConfig(t, `{"sources":[{"uri":"up:8015","provider":"grpc","grpc":`+object+`}]}`)
+			_, _, err := LoadConfig(path, components.Components(), nil)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), path)
+			require.Contains(t, err.Error(), `source "up:8015"`)
+			require.Contains(t, strings.ToLower(err.Error()), "keepalivetime", "viper lower-cases the keys it reads")
+		})
+	}
+}
+
+// TestLoadConfigMatchesStartWithGRPCObject: flagd start and LoadConfig read the grpc object of a source alike.
+func TestLoadConfigMatchesStartWithGRPCObject(t *testing.T) {
+	want := withoutConfigFileLine(runStartConfigCase(t, startConfigCase{
+		name:  "a grpc source with a grpc object",
+		args:  []string{"start", "--config", "$HOME/flagd.json"},
+		files: map[string]string{"flagd.json": grpcSourceFile},
+	}))
+	require.Contains(t, want, `"grpc":{"keepAliveTime":30000`, "start read the object")
+
+	cfg, comps, err := LoadConfig(writeConfig(t, grpcSourceFile), components.Components(), nil)
+	require.NoError(t, err)
+	require.Equal(t, want, renderRuntimeConfig(cfg)+renderTelemetryConfig(comps.TelemetryConfig))
 }

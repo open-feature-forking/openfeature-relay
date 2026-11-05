@@ -170,4 +170,4 @@ This use case is `Implemented` for the configuration proxy: flagd-sync as a buil
 |-----|--------------|
 | flagd-sync as a released binary and image (precondition) | UC-002 and UC-012 |
 | A7 with a vendor's real sync protocol, such as Flagsmith's environment document endpoint, in place of the example endpoint | UC-019 |
-| Main step 12 and A6 at the level of a released in-process provider: the proxy is tested with a subscriber of the flag sync protocol, and the released Go provider runs against flagd built from this repository in `make flagd-integration-test` | UC-015 |
+| Main step 12 and A6 at the level of a released in-process provider: the proxy is tested with a subscriber of the flag sync protocol, and the released Go provider runs against flagd built from this repository in `make flagd-integration-test` | #156 (provider migration, after the PoC) |

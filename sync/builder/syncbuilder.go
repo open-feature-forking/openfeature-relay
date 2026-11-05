@@ -15,6 +15,7 @@ import (
 const (
 	providerFile       = "file"
 	providerKubernetes = "kubernetes"
+	providerGRPC       = "grpc"
 )
 
 type ISyncBuilder interface {
@@ -78,6 +79,9 @@ func (sb *SyncBuilder) SyncsFromConfig(sourceConfigs []sync.SourceConfig, logger
 }
 
 func (sb *SyncBuilder) syncFromConfig(sourceConfig sync.SourceConfig, log *logger.Logger) (sync.ISync, error) {
+	if sourceConfig.GRPC != nil && sourceConfig.Provider != providerGRPC {
+		return nil, fmt.Errorf("source %q: the grpc object is for sources of the provider %q, not %q", sourceConfig.URI, providerGRPC, sourceConfig.Provider)
+	}
 	resolution, err := sb.Resolve(sourceConfig, log)
 	if err != nil {
 		return nil, err
