@@ -33,13 +33,6 @@ type flagdProperties struct {
 	Timestamp int64  `json:"timestamp"`
 }
 
-// Deprecated - this will be remove in the next release
-func WithEvaluator(name string, evalFunc func(interface{}, interface{}) interface{}) JSONEvaluatorOption {
-	return func(_ *JSON) {
-		jl.AddOperator(name, evalFunc)
-	}
-}
-
 // WithStrictNumericRange rejects numeric variants outside [-(2^53-1), 2^53-1] with TYPE_MISMATCH.
 // Temporary: this will become the default behavior, after which the option will be removed.
 // TODO(#2101): remove

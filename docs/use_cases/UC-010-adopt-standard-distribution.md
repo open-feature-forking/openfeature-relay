@@ -36,7 +36,7 @@
 **Trigger:** The deployment must use FIPS 140-3 validated cryptography (step 3)  
 **Flow:**
 
-1. Operator selects the FIPS build of the chosen standard distribution, whose image tag carries the `-fips` suffix.
+1. Operator builds a FIPS build of the chosen standard distribution with the builder, as [Build a FIPS distribution](../relay/fips.md) shows, and tags its image with the `-fips` suffix: the relay's releases publish no FIPS build (C-009). CI does not verify the FIPS build.
 2. Use case continues at step 4.
 
 ### A2: Scheme Not in Distribution
@@ -115,7 +115,7 @@ flagd-minimal is at most 50% of the size of flagd-full for the same OS and archi
 
 ### BR-005: Release Names
 
-A standard distribution's image is `ghcr.io/open-feature/flagd-<distribution>` and its binary archives are `flagd-<distribution>_<version>_<OS>_<arch>`; flagd-full keeps `ghcr.io/open-feature/flagd` and `flagd_<version>_<OS>_<arch>` (UC-009 BR-007). The FIPS build of a standard distribution adds `-fips` to its image tags and to the product name of its archives, e.g. `flagd-sync-fips_<version>_<OS>_<arch>`, and keeps the crypto boundary of today's FIPS build of flagd (C-009).
+A standard distribution's image is `ghcr.io/open-feature/flagd-<distribution>` and its binary archives are `flagd-<distribution>_<version>_<OS>_<arch>`; flagd-full keeps `ghcr.io/open-feature/flagd` and `flagd_<version>_<OS>_<arch>` (UC-009 BR-007). No FIPS archive or image of a standard distribution is released; one an Operator builds keeps the crypto boundary of today's FIPS build of flagd (C-009).
 
 ### BR-006: Same Evaluation Results
 
@@ -132,5 +132,5 @@ This use case is `Implemented`: the manifests of flagd-minimal, flagd-minimal-ot
 
 | Gap | Delivered by |
 |-----|--------------|
-| A1: the FIPS image of a standard distribution with the `-fips` tag. The FIPS compile of every manifest is checked by `make build-standard-fips`, in the FIPS job | UC-002 |
+| A1: the FIPS image an Operator builds with the `-fips` tag. The relay's releases publish none; [Build a FIPS distribution](../relay/fips.md) shows how to build one, and CI does not verify it (C-009) | UC-002 |
 | BR-005: the image names, the binary archives and the release names of the standard distributions, and their platform matrix (NFR-009) | UC-012 |

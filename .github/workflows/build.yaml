@@ -18,7 +18,8 @@ on:
       - ".claude/**"
   # Full run including the gated jobs below.
   workflow_dispatch:
-  # Nightly, on the default branch: the outage and gRPC source suites run only here, with FULL_CI and manually.
+  # Nightly, on the default branch, with every flag of the changes job true: the release dry run, the image tests, the
+  # image scan, the load test and the outage and gRPC source suites run here, with FULL_CI and manually.
   schedule:
     - cron: "17 3 * * *"
 
@@ -33,18 +34,27 @@ permissions:
   contents: read
 
 env:
-  # The toolchain determines which FIPS snapshots exist, so pin it.
+  # Pin the toolchain.
   GOTOOLCHAIN: local
 
 jobs:
-  # Report-only (step 15, P1): which modules the change affects, and later whether `make test` failed outside them.
-  # Nothing waits on it yet; the per-module matrix replaces the serial `test` once the reports show no miss.
+  # The single gate (step 15): which jobs the change calls for, from its first-parent diff, and which modules it affects.
+  # A job that waits on a flag takes no runner when the flag is false. FULL_CI, a manual run and the schedule set every
+  # flag; if ci-modules.py itself fails, so does the fallback.
   changes:
     runs-on: ubuntu-latest
     outputs:
       test: ${{ steps.affected.outputs.test }}
       all: ${{ steps.affected.outputs.all }}
       lint-all: ${{ steps.affected.outputs.lint-all }}
+      go: ${{ steps.affected.outputs.go }}
+      deps: ${{ steps.affected.outputs.deps }}
+      dockerfile: ${{ steps.affected.outputs.dockerfile }}
+      benchmark: ${{ steps.affected.outputs.benchmark }}
+      image: ${{ steps.affected.outputs.image }}
+      reference: ${{ steps.affected.outputs.reference }}
+      upgrade: ${{ steps.affected.outputs.upgrade }}
+      testbed: ${{ steps.affected.outputs.testbed }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
@@ -88,6 +98,11 @@ jobs:
           key: go-lint-${{ hashFiles('**/go.sum') }}
           restore-keys: go-lint-
       - run: make workspace-init
+      # the generated CLI reference under docs/ matches the commands; first, while the tree is clean
+      - run: make generate-docs
+      - name: Check no diff
+        run: |
+          if [ ! -z "$(git status --porcelain)" ]; then echo "Doc generation produced diff. Run 'make generate-docs' and commit results."; exit 1; fi
       - run: make lint
       - run: make check-package-coverage
       - run: make check-flagd-full-modules
@@ -100,6 +115,9 @@ jobs:
       # C1 and C2: the module table and the Makefile targets that `make test` and `make lint` run.
       - name: Test the module table against the Makefile
         run: python3 .github/scripts/test_ci_modules.py
+      # the affected modules and the flags that gate the other jobs
+      - name: Test the change set and the job flags
+        run: python3 .github/scripts/test_ci_modules_affected.py
       - name: Test the comparison of the pass sets of the testbed suites
         run: python3 .github/scripts/test_compare_pass_sets.py
       - name: Test the publish gate
@@ -116,7 +134,7 @@ jobs:
           found=$(grep -rn 'golang.org/x/exp' --include=go.mod . | grep -v indirect || true)
           if [ -n "$found" ]; then echo "::error::golang.org/x/exp is a direct requirement in:"; echo "$found"; exit 1; fi
       - name: Save the Go caches
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.go-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
           path: |
@@ -132,7 +150,8 @@ jobs:
   # ns/op is not compared: runners are too noisy for it.
   benchmark:
     name: Benchmarks (allocs/op)
-    if: github.event_name == 'pull_request'
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.benchmark == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout the merge commit
@@ -157,40 +176,6 @@ jobs:
         run: bash head/.github/scripts/run-benchmarks.sh head "$RUNNER_TEMP/head.txt"
       - name: Compare allocs/op
         run: python3 head/.github/scripts/compare-allocs.py "$RUNNER_TEMP/base.txt" "$RUNNER_TEMP/head.txt"
-
-  docs-check:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
-      - name: Setup go
-        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
-        with:
-          go-version-file: 'flagd/go.mod'
-          cache: false
-      - name: Restore the Go caches
-        id: go-cache
-        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: go-docs-check-${{ hashFiles('**/go.sum') }}
-          restore-keys: go-docs-check-
-      - run: make workspace-init
-      - run: make generate-docs
-      - name: Check no diff
-        run: |
-          if [ ! -z "$(git status --porcelain)" ]; then echo "Doc generation produced diff. Run 'make generate-docs' and commit results."; exit 1; fi
-      - name: Save the Go caches
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: ${{ steps.go-cache.outputs.cache-primary-key }}
-
 
   test:
     runs-on: ubuntu-latest
@@ -217,19 +202,12 @@ jobs:
       - name: Fetch the testbed's evaluator suite
         run: git submodule update --init test-harness
       - run: make workspace-init
-      # shell: bash makes the pipe fail with make; the log feeds the miss report
+      # shell: bash makes the pipe fail with make; the log is what a failure summary reads
       - run: make test 2>&1 | tee test.log
         shell: bash
         env:
           # test/contract-external.sh fetches core at this commit; a pull request's merge commit is on no branch
           CONTRACT_EXTERNAL_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
-      - name: Keep the test log for the miss report
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: test-log
-          path: test.log
-          if-no-files-found: ignore
       # One profile per module (<module>-coverage.out, written by make test-module). The hosted upload that stood here needed
       # a token this repository does not have and failed on every run. The coverage job compares these with the base.
       - name: Keep the coverage profiles
@@ -241,212 +219,7 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
       - name: Save the Go caches
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
-        with:
-          path: |
-            ${{ env.GOPATH }}/pkg/mod
-            ~/.cache/go-build
-          key: ${{ steps.go-cache.outputs.cache-primary-key }}
-
-
-  # Report-only: a module that failed in `make test` outside the affected set is a miss. Never fails the run.
-  miss-report:
-    needs: [changes, test]
-    if: always() && needs.changes.result == 'success'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
-      - name: Fetch the test log
-        continue-on-error: true
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: test-log
-      - name: Setup go
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
-        with:
-          go-version-file: 'flagd/go.mod'
-      - name: Workspace for the dependency oracle
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: make workspace-init
-      - name: Miss report
-        continue-on-error: true
-        env:
-          TESTED: ${{ needs.changes.outputs.test }}
-          ALL: ${{ needs.changes.outputs.all }}
-          ORACLE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && '--oracle' || '' }}
-        run: python3 .github/scripts/ci-modules.py miss-report --log test.log --tested "$TESTED" --all "$ALL" $ORACLE --summary "$GITHUB_STEP_SUMMARY"
-
-  builder-e2e:
-    name: Builder end to end
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
-      - name: Setup go
-        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
-        with:
-          go-version-file: 'flagd/go.mod'
-          cache: false
-      - name: Restore the Go caches
-        id: go-cache
-        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: go-builder-e2e-${{ hashFiles('**/go.sum') }}
-          restore-keys: go-builder-e2e-
-      - run: make workspace-init
-      - name: Build flagd-full from its manifest, check its components and run the CLI pins against it
-        run: make builder-e2e
-      - name: Save the Go caches
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: ${{ steps.go-cache.outputs.cache-primary-key }}
-
-
-  fips:
-    name: FIPS 140-3
-    # Runs on a push to main, with FULL_CI=true, manually, and on a pull request that changes Go code, the Makefile or this
-    # workflow (the pattern in the gate step). Otherwise only the gate step runs.
-    runs-on: ubuntu-latest
-    env:
-      GOPATH: /home/runner/work/open-feature/flagd
-      GOBIN: /home/runner/work/open-feature/flagd/bin
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
-        with:
-          fetch-depth: 2
-      - name: Fetch the commit before the push
-        if: github.event_name == 'push'
-        run: git fetch --no-tags --depth=1 origin "${{ github.event.before }}" || true
-      - name: Does the FIPS job apply to this change?
-        id: gate
-        env:
-          FULL_CI: ${{ vars.FULL_CI }}
-          EVENT: ${{ github.event_name }}
-          REF: ${{ github.ref }}
-          # for a push, the commits it brought
-          BASE: ${{ github.event.before }}
-          HEAD: ${{ github.sha }}
-        run: |
-          # A pull request's own changes are its merge commit against the first parent: the base as it is now.
-          if [ "$EVENT" = pull_request ]; then BASE=$(git rev-parse "$HEAD^1"); fi
-          pattern='\.go$|(^|/)go\.(mod|sum)$|^Makefile$|^\.github/workflows/build\.yaml$'
-          run=false
-          if [ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]; then
-            run=true
-            echo "::notice::The FIPS job runs: FULL_CI or a manual run."
-          elif [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]; then
-            run=true
-            echo "::notice::The FIPS job runs: a push to main."
-          elif [ -z "$BASE" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
-            echo "::notice::No base to compare with: the FIPS job is skipped. Run the workflow manually or set FULL_CI."
-          else
-            hits=$(git diff --name-only "$BASE" "$HEAD" | grep -E "$pattern" || true)
-            if [ -n "$hits" ]; then
-              run=true
-              echo "::notice::The FIPS job runs: this change touches Go code or the build."
-              printf '%s\n' "$hits" | head -10
-            else
-              echo "::notice::The FIPS job is skipped: no Go code or build file changed. Set FULL_CI or run the workflow manually to run it."
-            fi
-          fi
-          echo "run=$run" >> "$GITHUB_OUTPUT"
-      - name: Setup go
-        if: steps.gate.outputs.run == 'true'
-        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
-        with:
-          go-version-file: 'flagd/go.mod'
-          cache: false
-      - name: Restore the Go caches
-        if: steps.gate.outputs.run == 'true'
-        id: go-cache
-        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
-        with:
-          path: |
-            ${{ env.GOPATH }}/pkg/mod
-            ~/.cache/go-build
-          key: go-fips-${{ hashFiles('**/go.sum') }}
-          restore-keys: go-fips-
-      # TestLoadConfig* in runtime/cmd read the evaluator suite from the test-harness submodule
-      - name: Fetch the testbed's evaluator suite
-        if: steps.gate.outputs.run == 'true'
-        run: git submodule update --init test-harness
-      - run: make workspace-init
-        if: steps.gate.outputs.run == 'true'
-
-      # Fails if any tested code path reaches a non-approved algorithm.
-      - name: Test the FIPS variant with strict enforcement
-        if: steps.gate.outputs.run == 'true'
-        run: make test-fips
-
-      - name: Build both variants
-        if: steps.gate.outputs.run == 'true'
-        run: |
-          set -euo pipefail
-          make build-flagd
-          make build-flagd-fips
-
-      - name: The standard build must not claim FIPS
-        if: steps.gate.outputs.run == 'true'
-        run: |
-          set -euo pipefail
-          version_output=$(./bin/flagd version)
-          grep -q 'build variant: standard' <<<"$version_output"
-          grep -q 'FIPS 140-3 mode: disabled' <<<"$version_output"
-          # The standard build must still run with FIPS mode forced off.
-          GODEBUG=fips140=off ./bin/flagd version >/dev/null
-
-      - name: The FIPS build must carry and require the certified module
-        if: steps.gate.outputs.run == 'true'
-        run: |
-          set -euo pipefail
-          build_info=$(go version -m ./bin/flagd-fips)
-          grep -q 'GOFIPS140=v1\.0\.0' <<<"$build_info"
-          grep -q 'DefaultGODEBUG=fips140=on' <<<"$build_info"
-          grep -q -- '-tags=fips140' <<<"$build_info"
-          version_output=$(./bin/flagd-fips version)
-          grep -q 'build variant: fips' <<<"$version_output"
-          grep -q 'FIPS 140-3 mode: enabled' <<<"$version_output"
-          # Enforcement is unconditional: no flag can turn it off.
-          if GODEBUG=fips140=off ./bin/flagd-fips start -f file:./config/samples/example_flags.flagd.json; then
-            echo "::error::the FIPS build started with FIPS mode disabled"; exit 1
-          fi
-
-      - name: A fips140-tagged build without GOFIPS140 must refuse to start
-        if: steps.gate.outputs.run == 'true'
-        run: |
-          set -euo pipefail
-          go build -tags fips140 -o /tmp/flagd-mismatch ./flagd
-          if /tmp/flagd-mismatch start -f file:./config/samples/example_flags.flagd.json; then
-            echo "::error::a mislabelled FIPS build started"; exit 1
-          fi
-
-      - name: Build the FIPS variant of every standard distribution
-        if: steps.gate.outputs.run == 'true'
-        run: make build-standard-fips
-
-      - name: The FIPS crypto closure of every standard distribution is within the recorded one
-        if: steps.gate.outputs.run == 'true'
-        run: make fips-closure-standard
-
-      - name: Check the cryptographic dependency closure has not drifted
-        if: steps.gate.outputs.run == 'true'
-        run: |
-          make fips-closure
-          git diff --exit-code docs/reference/fips-crypto-closure.txt \
-            || { echo "::error::cryptographic dependency closure changed; review docs/reference/fips-140-3.md and commit the regenerated closure"; exit 1; }
-      - name: Save the Go caches
-        if: steps.gate.outputs.run == 'true' && github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.go-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
           path: |
@@ -456,9 +229,10 @@ jobs:
 
 
   docker-local:
-    # Runs on a push to main, with FULL_CI=true, manually, and on a pull request that changes go.mod, go.sum or a Dockerfile
-    # (the pattern in the gate step). Otherwise only the gate step runs. Trivy reports to the Security tab, so the job
-    # may write security events.
+    # Runs nightly, with FULL_CI=true, manually, and on a pull request that changes go.mod, go.sum or a Dockerfile (the
+    # `image` flag of the changes job). Trivy reports to the Security tab, so the job may write security events.
+    needs: changes
+    if: needs.changes.outputs.image == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -469,63 +243,16 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
         with:
           submodules: recursive
-          fetch-depth: 2
-      - name: Fetch the commit before the push
-        if: github.event_name == 'push'
-        run: git fetch --no-tags --depth=1 origin "${{ github.event.before }}" || true
-      - name: Does the image build and scan apply to this change?
-        id: gate
-        env:
-          FULL_CI: ${{ vars.FULL_CI }}
-          EVENT: ${{ github.event_name }}
-          REF: ${{ github.ref }}
-          # for a push, the commits it brought
-          BASE: ${{ github.event.before }}
-          HEAD: ${{ github.sha }}
-        run: |
-          # A pull request's own changes are its merge commit against the first parent: the base as it is now.
-          if [ "$EVENT" = pull_request ]; then BASE=$(git rev-parse "$HEAD^1"); fi
-          # what goes into the image besides the Go sources: dependencies and Dockerfiles
-          pattern='(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^\.github/workflows/build\.yaml$'
-          run=false
-          if [ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]; then
-            run=true
-            echo "::notice::The image build and scan run: FULL_CI or a manual run."
-          elif [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]; then
-            run=true
-            echo "::notice::The image build and scan run: a push to main."
-          elif [ -z "$BASE" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
-            echo "::notice::No base to compare with: the image build and scan are skipped. Run the workflow manually or set FULL_CI."
-          else
-            hits=$(git diff --name-only "$BASE" "$HEAD" | grep -E "$pattern" || true)
-            if [ -n "$hits" ]; then
-              run=true
-              echo "::notice::The image build and scan run: this change touches dependencies or a Dockerfile."
-              printf '%s\n' "$hits" | head -10
-            else
-              echo "::notice::The image build and scan are skipped: no go.mod, go.sum or Dockerfile changed. Set FULL_CI or run the workflow manually to run them."
-            fi
-          fi
-          echo "run=$run" >> "$GITHUB_OUTPUT"
       - name: Setup go
-        if: steps.gate.outputs.run == 'true'
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
         with:
           go-version-file: 'flagd/go.mod'
 
-      - name: Set up QEMU
-        if: steps.gate.outputs.run == 'true'
-        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
-        with:
-          platforms: all
-
       - name: Set up Docker Buildx
-        if: steps.gate.outputs.run == 'true'
         id: buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Build
-        if: steps.gate.outputs.run == 'true'
         uses: docker/build-push-action@4a13e500e55cf31b7a5d59a38ab2040ab0f42f56 # v5
         with:
           context: .
@@ -534,7 +261,6 @@ jobs:
           tags: flagd-local:test
 
       - name: Run Trivy vulnerability scanner
-        if: steps.gate.outputs.run == 'true'
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
         with:
           input: ${{ github.workspace }}/flagd-local.tar
@@ -546,7 +272,6 @@ jobs:
           TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2
 
       - name: Upload Trivy scan results to GitHub Security tab
-        if: steps.gate.outputs.run == 'true'
         uses: github/codeql-action/upload-sarif@e8893c57a1f3a2b659b6b55564fdfdbbd2982911 # v3
         with:
           sarif_file: "trivy-results.sarif"
@@ -575,13 +300,18 @@ jobs:
           key: go-integration-test-${{ hashFiles('**/go.sum') }}
           restore-keys: go-integration-test-
 
-      - name: The flagd module is what the Builder generates from the manifest of flagd-full
-        run: make check-flagd-full-generated
+      # flagd-full from its manifest (NFR-008), its components, and the CLI and startup pins run against it
+      - run: make workspace-init
+      - name: Build flagd-full from its manifest, check its components and run the CLI pins against it
+        run: make build-flagd-full
+      # UC-019: the vendor distribution (Flagsmith engine) builds and links its engine module; builder-e2e ran this
+      - name: Build the Flagsmith distribution
+        run: make build-flagsmith
 
       - name: Run test suite
         run: make workspace-clean && cd test/integration && go clean -testcache && go test -cover
       - name: Save the Go caches
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.go-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
           path: |
@@ -593,8 +323,10 @@ jobs:
   upgrade-test:
     name: Upgrade differential
     # The job builds two images (today's flagd and the flagd-full the Builder makes), so it follows the rule for images:
-    # it runs when the change touches Go code, a Dockerfile or the build (the pattern in the gate step), or with FULL_CI=true, or
-    # when the workflow is run manually. Otherwise only the gate step runs.
+    # it runs when the change touches Go code, a Dockerfile or the build (the `upgrade` flag of the changes job), or with
+    # FULL_CI=true, or when the workflow is run manually.
+    needs: changes
+    if: needs.changes.outputs.upgrade == 'true'
     runs-on: ubuntu-latest
     # go test has a 60 minute timeout; this keeps a hung Docker build from holding a runner for GitHub's six hours
     timeout-minutes: 75
@@ -604,49 +336,13 @@ jobs:
         with:
           # the baseline is built from the upstream merge-base, which the shallow default does not fetch
           fetch-depth: 0
-      - name: Does the differential apply to this change?
-        id: gate
-        env:
-          FULL_CI: ${{ vars.FULL_CI }}
-          EVENT: ${{ github.event_name }}
-          # for a push, the commits it brought
-          BASE: ${{ github.event.before }}
-          HEAD: ${{ github.sha }}
-        run: |
-          # Dockerfiles; the manifest of flagd-full and the Builder that builds it; flagd, which holds flagd-full's main
-          # and its list of components; the differential's own test, the reference Dockerfile and its image tests, and this workflow.
-          # Any Go source or module file too: a change under core/, service/, sync/, runtime/ or evaluator/ changes flagd-full.
-          # A pull request's own changes are its merge commit against the first parent: the base as it is now. The
-          # base sha is where the pull request was opened, so base..merge commit also holds what the base gained since.
-          if [ "$EVENT" = pull_request ]; then BASE=$(git rev-parse "$HEAD^1"); fi
-          pattern='\.go$|(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^flagd/|^test/upgrade/|^builder/reference/|^test/image/|^\.github/workflows/build\.yaml$'
-          run=false
-          if [ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]; then
-            run=true
-            echo "::notice::The differential runs: FULL_CI or a manual run."
-          elif [ -z "$BASE" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ]; then
-            echo "::notice::No base to compare with (a new branch): the differential is skipped. Run the workflow manually or set FULL_CI."
-          else
-            changed=$(git diff --name-only "$BASE" "$HEAD")
-            hits=$(printf '%s\n' "$changed" | grep -E "$pattern" || true)
-            if [ -n "$hits" ]; then
-              run=true
-              echo "::notice::The differential runs: this change touches Go code, a Dockerfile or the build."
-              printf '%s\n' "$hits" | head -10
-            else
-              echo "::notice::The differential is skipped: no Go code, Dockerfile or build file changed. Set FULL_CI or run the workflow manually to run it."
-            fi
-          fi
-          echo "run=$run" >> "$GITHUB_OUTPUT"
       - name: Setup go
-        if: steps.gate.outputs.run == 'true'
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
         with:
           go-version-file: 'flagd/go.mod'
           cache: false
       - name: Restore the Go caches
         id: go-cache
-        if: steps.gate.outputs.run == 'true'
         uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
           path: |
@@ -655,13 +351,47 @@ jobs:
           key: go-upgrade-test-${{ hashFiles('**/go.sum') }}
           restore-keys: go-upgrade-test-
       - name: Today's flagd and the flagd-full the Builder made, side by side (UC-009)
-        if: steps.gate.outputs.run == 'true'
         run: make upgrade-test
+      - name: Save the Go caches
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.go-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ steps.go-cache.outputs.cache-primary-key }}
+
+
+  # The reference Dockerfile's images, as OCI layouts and loaded locally (UC-002): when the Builder's reference Dockerfile,
+  # the image tests or a Dockerfile change (the `reference` flag of the changes job), and nightly.
+  image-test:
+    name: Image tests
+    needs: changes
+    if: needs.changes.outputs.reference == 'true'
+    runs-on: ubuntu-latest
+    # go test has a 60 minute timeout; this keeps a hung Docker build from holding a runner for GitHub's six hours
+    timeout-minutes: 75
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - name: Setup go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
+        with:
+          go-version-file: 'flagd/go.mod'
+          cache: false
+      - name: Restore the Go caches
+        id: go-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-image-test-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-image-test-
       - name: The reference Dockerfile's images, as OCI layouts and loaded locally (UC-002)
-        if: steps.gate.outputs.run == 'true'
         run: make image-test
       - name: Save the Go caches
-        if: steps.gate.outputs.run == 'true' && github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.go-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
           path: |
@@ -712,47 +442,27 @@ jobs:
   release-dry-run:
     name: Release dry run (${{ matrix.part }})
     needs: publish-gate
-    # Runs the full set on a push to `main`, with FULL_CI=true and when the workflow is run manually. Otherwise only the gate
-    # step runs. A pull request opts into the reduced set with the release-check label (release-check.yaml). One job per
-    # part, in parallel.
+    # Runs the full set nightly, with FULL_CI=true and when the workflow is run manually. A pull request opts into the
+    # reduced set with the release-check label (release-check.yaml). One job per part, in parallel.
+    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
-        part: [flagd-standard, flagd-fips, flagd-proxy-standard, flagd-proxy-fips, images, distributions]
+        part: [flagd-standard, flagd-proxy-standard, images, distributions]
     steps:
       - name: Checkout repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
         with:
           fetch-depth: 0
-      - name: Does the release dry run apply to this change?
-        id: gate
-        env:
-          FULL_CI: ${{ vars.FULL_CI }}
-          EVENT: ${{ github.event_name }}
-          REF: ${{ github.ref }}
-        run: |
-          run=false
-          if [ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]; then
-            run=true
-            echo "::notice::The release dry run runs: FULL_CI or a manual run."
-          elif [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]; then
-            run=true
-            echo "::notice::The release dry run runs: a push to main."
-          else
-            echo "::notice::The release dry run is skipped. It runs on a push to main, with FULL_CI, manually, or on a pull request labeled release-check (release-check.yaml)."
-          fi
-          echo "run=$run" >> "$GITHUB_OUTPUT"
       - name: Setup go
-        if: steps.gate.outputs.run == 'true'
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
         with:
           go-version-file: 'flagd/go.mod'
           cache: false
       - name: Restore the Go caches
         id: go-cache
-        if: steps.gate.outputs.run == 'true'
         uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
           path: |
@@ -761,7 +471,6 @@ jobs:
           key: go-release-dry-run-${{ matrix.part }}-${{ hashFiles('**/go.sum') }}
           restore-keys: go-release-dry-run-${{ matrix.part }}-
       - name: Install cyclonedx-gomod
-        if: steps.gate.outputs.run == 'true'
         # The release's action resolves its version through the GitHub API, which rate-limits a runner without a token.
         # v1.12.0 is what that action's `version: v1` resolves to; the module proxy needs no GitHub API.
         run: |
@@ -769,7 +478,6 @@ jobs:
           gobin="$(go env GOBIN)"
           echo "${gobin:-$(go env GOPATH)/bin}" >> "$GITHUB_PATH"
       - name: The release's build steps, without publishing or signing anything (UC-009, UC-012)
-        if: steps.gate.outputs.run == 'true'
         env:
           DRY_RUN_PART: ${{ matrix.part }}
           DRY_RUN_LAYOUTS: ${{ runner.temp }}/layouts
@@ -782,7 +490,7 @@ jobs:
             .github/scripts/release-dry-run.sh
           fi
       - name: Keep the layouts for the push
-        if: steps.gate.outputs.run == 'true' && needs.publish-gate.outputs.publish == 'true' && matrix.part == 'distributions'
+        if: needs.publish-gate.outputs.publish == 'true' && matrix.part == 'distributions'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: layouts-flagd-minimal
@@ -790,7 +498,7 @@ jobs:
           retention-days: 1
           if-no-files-found: error
       - name: Save the Go caches
-        if: steps.gate.outputs.run == 'true' && github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.go-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
           path: |
@@ -799,7 +507,7 @@ jobs:
           key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
 
-  # Step 17: the images of the other standard distributions as two-platform layouts, standard and FIPS, built once and
+  # Step 17: the images of the other standard distributions as two-platform layouts, built once and
   # checked as layouts and run from the layout. flagd-minimal is built by the distributions part above, the testbed by its job.
   image-build:
     name: Images (${{ matrix.part }})
@@ -857,77 +565,43 @@ jobs:
 
   testbed:
     name: Relay testbed
-    needs: publish-gate
     # The relay testbed (UC-022) takes the place of the launchpad in the provider test suites, so it is built and compared
-    # with the upstream launchpad image whenever Go code changes outside docs/ and .claude/ (docs/ is ignored above), or
-    # the upgrade differential's inputs, or the testbed itself change. It also runs with FULL_CI=true or a manual run.
+    # with the upstream launchpad image whenever Go code, the upgrade differential's inputs or the testbed itself change
+    # (the `testbed` flag of the changes job). It also runs with FULL_CI=true or a manual run.
+    # A run that builds the images runs it as well: the layout that is published is tested here.
+    needs: [changes, publish-gate]
+    if: needs.changes.outputs.testbed == 'true' || needs.publish-gate.outputs.build == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
       - name: Checkout repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
         with:
-          fetch-depth: 0
           submodules: recursive
-      - name: Does the relay testbed apply to this change?
-        id: gate
-        env:
-          FULL_CI: ${{ vars.FULL_CI }}
-          EVENT: ${{ github.event_name }}
-          IMAGE_BUILD: ${{ needs.publish-gate.outputs.build }}
-          # for a push, the commits it brought
-          BASE: ${{ github.event.before }}
-          HEAD: ${{ github.sha }}
-        run: |
-          # A pull request's own changes are its merge commit against the first parent: the base as it is now. The
-          # base sha is where the pull request was opened, so base..merge commit also holds what the base gained since.
-          if [ "$EVENT" = pull_request ]; then BASE=$(git rev-parse "$HEAD^1"); fi
-          # any Go source or module file; what the upgrade differential watches; the testbed, its distribution, the suites
-          # and this workflow
-          pattern='\.go$|(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^flagd/|^testbed/|^test/(testbed|integration|upgrade)/|^\.github/scripts/(testbed|compare-pass)|^\.github/workflows/build\.yaml$'
-          run=false
-          if [ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ] || [ "$IMAGE_BUILD" = true ]; then
-            run=true
-            echo "::notice::The relay testbed runs: FULL_CI, a manual run or a run that builds the images."
-          elif [ -z "$BASE" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ]; then
-            echo "::notice::No base to compare with (a new branch): the relay testbed is skipped. Run the workflow manually or set FULL_CI."
-          else
-            changed=$(git diff --name-only "$BASE" "$HEAD" | grep -Ev '^(docs|\.claude)/' || true)
-            hits=$(printf '%s\n' "$changed" | grep -E "$pattern" || true)
-            if [ -n "$hits" ]; then
-              run=true
-              echo "::notice::The relay testbed runs: this change touches Go code or the testbed."
-              printf '%s\n' "$hits" | head -10
-            else
-              echo "::notice::The relay testbed is skipped: no Go code or testbed file changed. Set FULL_CI or run the workflow manually to run it."
-            fi
-          fi
-          echo "run=$run" >> "$GITHUB_OUTPUT"
       - name: Setup go
-        if: steps.gate.outputs.run == 'true'
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
         with:
           go-version-file: 'flagd/go.mod'
       - name: The launchpad contract against both images (the launchpad quirks on the launchpad only)
-        if: steps.gate.outputs.run == 'true' && needs.publish-gate.outputs.build != 'true'
+        if: needs.publish-gate.outputs.build != 'true'
         run: make testbed-contract-both
       - name: TestRPC and TestInProcess against both images, with the same scenarios passed
-        if: steps.gate.outputs.run == 'true' && needs.publish-gate.outputs.build != 'true'
+        if: needs.publish-gate.outputs.build != 'true'
         run: make testbed-suites
       # A run that builds the images builds the testbed once, as the layout that is published; the tests run on its amd64 image.
       - name: Build the testbed layout and check it
-        if: steps.gate.outputs.run == 'true' && needs.publish-gate.outputs.build == 'true'
+        if: needs.publish-gate.outputs.build == 'true'
         env:
           DRY_RUN_LAYOUTS: ${{ runner.temp }}/layouts
         run: .github/scripts/image-testbed.sh "0.0.0-main.${GITHUB_SHA::7}" "$GITHUB_SHA" "$(date -u +%FT%TZ)" "$RUNNER_TEMP/image-testbed"
       - name: The launchpad contract, on the testbed image of the layout
-        if: steps.gate.outputs.run == 'true' && needs.publish-gate.outputs.build == 'true'
+        if: needs.publish-gate.outputs.build == 'true'
         run: make testbed-contract-both TESTBED_RELAY_IMAGE=flagd-testbed:layout
       - name: TestRPC and TestInProcess, on the testbed image of the layout
-        if: steps.gate.outputs.run == 'true' && needs.publish-gate.outputs.build == 'true'
+        if: needs.publish-gate.outputs.build == 'true'
         run: make testbed-suites TESTBED_RELAY_IMAGE=flagd-testbed:layout
       - name: Scan the testbed layout (report only)
-        if: steps.gate.outputs.run == 'true' && needs.publish-gate.outputs.build == 'true'
+        if: needs.publish-gate.outputs.build == 'true'
         continue-on-error: true
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
         with:
@@ -939,7 +613,7 @@ jobs:
           TRIVY_PLATFORM: linux/amd64
           TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2
       - name: Keep the layout for the push
-        if: steps.gate.outputs.run == 'true' && needs.publish-gate.outputs.publish == 'true'
+        if: needs.publish-gate.outputs.publish == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: layouts-flagd-testbed
@@ -1012,7 +686,7 @@ jobs:
           RELAY_LOAD_LOGS: ${{ runner.temp }}/load-logs
         run: make test-load-smoke
       - name: Save the Go caches
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.go-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
           path: |
@@ -1027,11 +701,10 @@ jobs:
           path: ${{ runner.temp }}/load-logs
           if-no-files-found: ignore
 
-  # The full 10 minute run: gated, like fips and docker-local.
+  # The full 10 minute run: nightly, with FULL_CI=true and from a manual run.
   load-test:
     name: Load test (race, 10 min)
-    # Gated during the proof of concept: set the repository variable FULL_CI=true, or run the workflow manually.
-    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'
+    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -1057,7 +730,7 @@ jobs:
           RELAY_LOAD_LOGS: ${{ runner.temp }}/load-logs
         run: make test-load
       - name: Save the Go caches
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.go-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
           path: |

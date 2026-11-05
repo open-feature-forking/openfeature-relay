@@ -54,7 +54,7 @@ func TestRejectedDeliveryLogText(t *testing.T) {
 	cfg.ConfigurationFormats = append(cfg.ConfigurationFormats, rejectingFactory{})
 
 	core, logs := observer.New(zap.DebugLevel)
-	rt, err := FromConfig(logger.NewLogger(zap.New(core), false), "test", cfg, officialset.Components())
+	rt, err := FromConfig(logger.NewLogger(zap.New(core), false), "test", cfg, listening(officialset.Components()))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
