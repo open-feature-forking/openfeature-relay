@@ -5,9 +5,12 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -17,6 +20,8 @@ import (
 	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 // cycles is how many times a test builds or resets a runtime.
@@ -83,8 +88,9 @@ func (p probe) ready() bool {
 	return resp.StatusCode == http.StatusOK
 }
 
-// waitReady polls until the runtime is ready and returns how long that took.
-func (p probe) waitReady(t *testing.T, since time.Time) time.Duration {
+// waitReady polls until the runtime is ready and returns how long that took. When it gives up it prints what report
+// says, such as the runtime's log and why Run ended.
+func (p probe) waitReady(t *testing.T, since time.Time, report ...func() string) time.Duration {
 	t.Helper()
 	for time.Since(since) < 10*time.Second {
 		if p.ready() {
@@ -92,8 +98,43 @@ func (p probe) waitReady(t *testing.T, since time.Time) time.Duration {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	t.Fatal("the runtime did not become ready")
+	message := "the runtime did not become ready"
+	for _, r := range report {
+		message += "\n" + r()
+	}
+	t.Fatal(message)
 	return 0
+}
+
+// runReport describes a runtime that is being built and run: how Run ended, if it has, and what the runtime logged.
+type runReport struct {
+	logs   *observer.ObservedLogs
+	result atomic.Pointer[error]
+}
+
+func (r *runReport) String() string {
+	var b strings.Builder
+	if err := r.result.Load(); err != nil {
+		fmt.Fprintf(&b, "Run has returned: %v\n", *err)
+	} else {
+		b.WriteString("Run has not returned\n")
+	}
+	for _, e := range r.logs.All() {
+		fmt.Fprintf(&b, "log %s %s %v\n", e.Level, e.Message, e.ContextMap())
+	}
+	return b.String()
+}
+
+// requirePortsFree fails if the runtime still holds one of its ports after Run returned.
+func requirePortsFree(t *testing.T, cfg Config) {
+	t.Helper()
+	for name, port := range map[string]uint16{
+		"management": cfg.ManagementPort, "service": cfg.ServicePort, "ofrep": cfg.OfrepServicePort, "sync": cfg.SyncServicePort,
+	} {
+		l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+		require.NoError(t, err, "the %s port %d is still held after Run returned", name, port)
+		_ = l.Close()
+	}
 }
 
 func twoSourceConfig(t *testing.T, p ports) Config {
@@ -119,11 +160,24 @@ func build(t *testing.T, cfg Config) (*Runtime, func()) {
 // buildWith is build for these components.
 func buildWith(t *testing.T, cfg Config, components Components) (*Runtime, func()) {
 	t.Helper()
-	rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, listening(components))
+	rt, stop, _ := buildReported(t, cfg, components)
+	return rt, stop
+}
+
+// buildReported is buildWith that also returns what the runtime logged and how Run ended, for a failure message.
+func buildReported(t *testing.T, cfg Config, components Components) (*Runtime, func(), *runReport) {
+	t.Helper()
+	core, logs := observer.New(zap.DebugLevel)
+	report := &runReport{logs: logs}
+	rt, err := FromConfig(logger.NewLogger(zap.New(core), false), "test", cfg, listening(components))
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- rt.Run(ctx) }()
+	go func() {
+		err := rt.Run(ctx)
+		report.result.Store(&err)
+		done <- err
+	}()
 	return rt, func() {
 		cancel()
 		select {
@@ -132,7 +186,7 @@ func buildWith(t *testing.T, cfg Config, components Components) (*Runtime, func(
 		case <-time.After(20 * time.Second):
 			t.Fatal("Run did not stop")
 		}
-	}
+	}, report
 }
 
 // Building, running and stopping a runtime over and over in one process leaves nothing behind: no goroutine, no file
@@ -142,25 +196,26 @@ func TestFromConfigRepeatedly(t *testing.T) {
 	cfg := twoSourceConfig(t, p)
 	check := newProbe(p.management)
 
-	cycle := func() time.Duration {
+	cycle := func(i int) time.Duration {
 		start := time.Now()
-		rt, stop := build(t, cfg)
-		elapsed := check.waitReady(t, start)
+		rt, stop, report := buildReported(t, cfg, officialComponents())
+		elapsed := check.waitReady(t, start, func() string { return fmt.Sprintf("cycle %d\n%s", i, report) })
 		resolved, _, _, _, err := rt.Evaluator.ResolveBooleanValue(context.Background(), "id", "f1", nil)
 		require.NoError(t, err)
 		require.True(t, resolved)
 		stop()
+		requirePortsFree(t, cfg)
 		return elapsed
 	}
 
-	cycle() // the first cycle starts what the libraries start once
+	cycle(-1) // the first cycle starts what the libraries start once
 	check.client.CloseIdleConnections()
 	ignore := goleak.IgnoreCurrent()
 	fds := settledFDs(t)
 
 	var slowest time.Duration
 	for i := range cycles {
-		elapsed := cycle()
+		elapsed := cycle(i)
 		slowest = max(slowest, elapsed)
 		require.Less(t, elapsed, readyWithin, "cycle %d took %s to become ready", i, elapsed)
 	}

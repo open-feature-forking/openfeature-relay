@@ -20,9 +20,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// k6Image is pinned by digest; images are pulled, never pushed (K2). K6_IMAGE overrides it.
-const k6Image = "grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34"
-
 // Timing of the schedule. D is the apply bound; eps is clock slack. See the PR description for the measurement of D.
 var (
 	period = envMillis("RELAY_LOAD_P", 4100*time.Millisecond)
@@ -95,11 +92,12 @@ func requireLoad(t *testing.T) {
 	}
 }
 
-func k6ImageName() string {
-	if v := os.Getenv("K6_IMAGE"); v != "" {
-		return v
-	}
-	return k6Image
+// k6ImageName is the Makefile's K6_IMAGE, pinned by digest; images are pulled, never pushed (K2).
+func k6ImageName(t *testing.T) string {
+	t.Helper()
+	image := os.Getenv("K6_IMAGE")
+	require.NotEmpty(t, image, "K6_IMAGE is the Makefile's; run through make test-load-smoke or make test-load")
+	return image
 }
 
 // freePort is a free port no call has returned before: see porttest.
@@ -219,7 +217,7 @@ func runK6(ctx context.Context, t *testing.T, p *flagdProc, script string, env m
 	for k, v := range env {
 		args = append(args, "-e", k+"="+v)
 	}
-	args = append(args, k6ImageName(), "run", "--quiet", "--log-format", "raw", "/suite/k6/"+script)
+	args = append(args, k6ImageName(t), "run", "--quiet", "--log-format", "raw", "/suite/k6/"+script)
 	cmd := exec.CommandContext(ctx, "docker", args...)
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out
