@@ -341,5 +341,75 @@ class TestChangesCommand(unittest.TestCase):
         self.assertIn("Everything runs", summary)
 
 
+class TestFlagChangeSet(unittest.TestCase):
+    def commit(self, repo, name):
+        (repo / name).write_text(name)
+        git(repo, "add", name)
+        git(repo, "commit", "-q", "-m", name)
+
+    def test_a_pull_request_is_its_merge_commit_against_the_first_parent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = pathlib.Path(tmp)
+            git(repo, "init", "-q", "-b", "main")
+            self.commit(repo, "a.txt")
+            git(repo, "checkout", "-q", "-b", "pr")
+            self.commit(repo, "from-pr.go")
+            git(repo, "checkout", "-q", "main")
+            self.commit(repo, "later-on-main.txt")
+            git(repo, "merge", "-q", "--no-ff", "-m", "merge", "pr")
+            merge = git(repo, "rev-parse", "HEAD")
+            self.assertEqual(["from-pr.go"], cm.flag_change_set(repo, "pull_request", merge, ""))
+
+    def test_a_push_is_before_to_after_and_a_missing_base_sets_every_flag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = pathlib.Path(tmp)
+            git(repo, "init", "-q", "-b", "main")
+            self.commit(repo, "one")
+            self.commit(repo, "two")
+            before, after = git(repo, "rev-parse", "HEAD~1"), git(repo, "rev-parse", "HEAD")
+            self.assertEqual(["two"], cm.flag_change_set(repo, "push", after, before))
+            for unusable in ("", cm.ZERO, "1" * 40):
+                with self.subTest(before=unusable):
+                    self.assertIsNone(cm.flag_change_set(repo, "push", after, unusable))
+
+    def test_full_ci_a_manual_run_and_the_schedule_set_every_flag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = pathlib.Path(tmp)
+            git(repo, "init", "-q", "-b", "main")
+            self.commit(repo, "one")
+            self.commit(repo, "two")
+            before, after = git(repo, "rev-parse", "HEAD~1"), git(repo, "rev-parse", "HEAD")
+            self.assertIsNone(cm.flag_change_set(repo, "push", after, before, "true"))
+            for event in ("workflow_dispatch", "schedule"):
+                self.assertIsNone(cm.flag_change_set(repo, event, after, before))
+
+    def test_the_changes_command_writes_the_flags_and_a_crash_sets_them_all(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = pathlib.Path(tmp) / "out"
+            rc = cm.main(["--root", str(ROOT), "changes", "--event", "workflow_dispatch", "--sha", "HEAD", "--github-output", str(out)])
+            outputs = dict(l.split("=", 1) for l in out.read_text().splitlines())
+            self.assertEqual(0, rc)
+            self.assertEqual({n: "true" for n in cm.FLAG_PATTERNS}, {n: outputs[n] for n in cm.FLAG_PATTERNS})
+        real = cm.load
+        cm.load = lambda root: (_ for _ in ()).throw(RuntimeError("boom"))
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                out = pathlib.Path(tmp) / "out"
+                rc = cm.main(["--root", str(ROOT), "changes", "--event", "pull_request", "--sha", "HEAD", "--github-output", str(out)])
+                outputs = dict(l.split("=", 1) for l in out.read_text().splitlines())
+                self.assertEqual(0, rc)
+                self.assertEqual({n: "true" for n in cm.FLAG_PATTERNS}, {n: outputs[n] for n in cm.FLAG_PATTERNS})
+        finally:
+            cm.load = real
+
+    def test_a_table_error_still_fails(self):
+        real = cm.load
+        cm.load = lambda root: (_ for _ in ()).throw(cm.TableError("no entry in ci-modules.json for: x"))
+        try:
+            self.assertEqual(1, cm.main(["--root", str(ROOT), "changes", "--event", "workflow_dispatch", "--sha", "HEAD"]))
+        finally:
+            cm.load = real
+
+
 if __name__ == "__main__":
     unittest.main()
