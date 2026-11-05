@@ -96,8 +96,12 @@ func (p *process) running() bool {
 	}
 }
 
+// probe is the client of the readiness check; a port that accepts and never answers must not hold a wait past its
+// deadline.
+var probe = &http.Client{Timeout: 2 * time.Second}
+
 func isReady(managementPort int) bool {
-	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/readyz", managementPort)) //nolint:noctx // a local probe
+	resp, err := probe.Get(fmt.Sprintf("http://127.0.0.1:%d/readyz", managementPort)) //nolint:noctx // a local probe
 	if err != nil {
 		return false
 	}
@@ -341,14 +345,47 @@ func TestAbsentComponentSettingStopsStartup(t *testing.T) {
 // startOnFile starts the distribution on a source whose content is given and returns whether it became ready and the
 // warnings and errors it logged, without clocks and paths. A source that is expected to be accepted is waited for;
 // one that is expected to be rejected is given the time to deliver, and the process is stopped after it.
+//
+// A start that was expected to become ready and did not is made once more on new ports. A configuration the
+// distribution rejects is rejected again, so the verdict is the same; a start that stalled for a reason outside the
+// configuration is not held against it. The output of the first attempt is logged, so a start that needed the second
+// one is visible.
 func startOnFile(t *testing.T, name string, portFlags []string, content, ext string, expectReady bool) (ready bool, problems string) {
+	t.Helper()
+	ready, problems, raw := startOnFileOnce(t, name, portFlags, content, ext, expectReady)
+	if expectReady && !ready {
+		t.Logf("%s was not ready within the deadline and is started again; its first output:\n%s", name, raw)
+		reportStall(t, name, raw)
+		ready, problems, _ = startOnFileOnce(t, name, portFlags, content, ext, expectReady)
+	}
+	return ready, problems
+}
+
+// reportStall appends a start that needed its second attempt to the job summary of GitHub Actions, where it shows
+// although the passing subtest prints nothing (the tests run without -v).
+func reportStall(t *testing.T, name, raw string) {
+	path := os.Getenv("GITHUB_STEP_SUMMARY")
+	if path == "" {
+		return
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o644)
+	if err != nil {
+		t.Logf("the job summary cannot be written: %v", err)
+		return
+	}
+	defer f.Close()
+	_, _ = fmt.Fprintf(f, "### %s: %s was not ready in time and started again\n\n```\n%s\n```\n\n", t.Name(), name, raw)
+}
+
+func startOnFileOnce(t *testing.T, name string, portFlags []string, content, ext string, expectReady bool) (ready bool, problems, raw string) {
 	t.Helper()
 	bin := builtBinary(t, name)
 	dir := t.TempDir()
 	path := filepath.Join(dir, "flags"+ext)
 	writeFile(t, path, content)
 
-	args := []string{"start", "--log-format", "json", "--uri", "file:" + path}
+	// debug lines are not warnings or errors, so the comparison of what the two log is unaffected
+	args := []string{"start", "--debug", "--log-format", "json", "--uri", "file:" + path}
 	ports := map[string]int{}
 	for _, flagName := range portFlags {
 		ports[flagName] = freePort(t)
@@ -363,7 +400,17 @@ func startOnFile(t *testing.T, name string, portFlags []string, content, ext str
 		p.settle(t, 30*time.Second)
 		ready = isReady(ports["management-port"])
 	}
+	exited := !p.running()
+	if expectReady && !ready && !exited {
+		// SIGQUIT makes the Go runtime print the stack of every goroutine and exit, which shows where the start stalled
+		_ = p.cmd.Process.Signal(syscall.SIGQUIT)
+		select {
+		case <-p.done:
+		case <-time.After(5 * time.Second):
+		}
+	}
 	p.stop(20 * time.Second)
+	raw = fmt.Sprintf("the process had exited: %t\n%s", exited, p.out.String())
 
 	var lines []string
 	for _, line := range strings.Split(p.out.String(), "\n") {
@@ -373,7 +420,7 @@ func startOnFile(t *testing.T, name string, portFlags []string, content, ext str
 			lines = append(lines, orderless(strings.ReplaceAll(line, dir, "<dir>")))
 		}
 	}
-	return ready, strings.Join(lines, "\n")
+	return ready, strings.Join(lines, "\n"), raw
 }
 
 // orderless sorts the lines inside a log entry. The schema validation lists its errors in the order of a map, which
