@@ -379,13 +379,16 @@ generate-flagd-full:
 # (NFR-008 asks for under three minutes). Run it with a warm module cache. The binary and the pins that run against it
 # stay out of flagd/.
 FLAGD_FULL_BUILD_DIR := .flagd-full-build
+# NFR-008: a warm build of flagd-full finishes within three minutes.
+FLAGD_FULL_BUILD_LIMIT ?= 180
 .PHONY: build-flagd-full
 build-flagd-full:
 	cd builder && go build -o ../bin/relay-builder ./cmd/relay-builder
 	rm -rf $(FLAGD_FULL_BUILD_DIR)
 	start=$$(date +%s); \
 	GOWORK=off ./bin/relay-builder --manifest distributions/flagd-full/manifest.yaml --output $(FLAGD_FULL_BUILD_DIR) || exit 1; \
-	echo "flagd-full built in $$(( $$(date +%s) - start ))s"
+	took=$$(( $$(date +%s) - start )); echo "flagd-full built in $${took}s"; \
+	if [ "$${took}" -gt "$(FLAGD_FULL_BUILD_LIMIT)" ]; then echo "NFR-008: flagd-full took $${took}s, over $(FLAGD_FULL_BUILD_LIMIT)s"; exit 1; fi
 	test -x $(FLAGD_FULL_BUILD_DIR)/flagd
 	cd flagd && FLAGD_BINARY=$$(cd ../$(FLAGD_FULL_BUILD_DIR) && pwd)/flagd go test -count=1 -run "TestCLICharacterization|TestStartupLogCharacterization" ./
 
