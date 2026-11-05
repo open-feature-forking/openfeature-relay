@@ -89,43 +89,14 @@ func open(ctx context.Context, bucketURL, object string, extra []func(*s3.Option
 	}
 	q := u.Query()
 
-	if sseType := q.Get("ssetype"); sseType != "" {
-		q.Del("ssetype")
-		valid := false
-		for _, v := range types.ServerSideEncryptionAes256.Values() {
-			valid = valid || strings.EqualFold(string(v), sseType)
-		}
-		if !valid {
-			return nil, fmt.Errorf("%q is not a valid value for %q", sseType, "ssetype")
-		}
+	if err := checkSSEType(q); err != nil {
+		return nil, err
 	}
 	q.Del("kmskeyid")
 
-	var clientOptions []func(*s3.Options)
-	if value := q.Get("accelerate"); value != "" {
-		q.Del("accelerate")
-		accelerate, err := parseBool("accelerate", value)
-		if err != nil {
-			return nil, err
-		}
-		clientOptions = append(clientOptions, func(o *s3.Options) { o.UseAccelerate = accelerate })
-	}
-	if value := q.Get("disable_https"); value != "" {
-		q.Del("disable_https")
-		disable, err := parseBool("disable_https", value)
-		if err != nil {
-			return nil, err
-		}
-		clientOptions = append(clientOptions, func(o *s3.Options) { o.EndpointOptions.DisableHTTPS = disable })
-	}
-	pathStyle := false
-	for _, key := range []string{"use_path_style", "s3ForcePathStyle"} {
-		if value := q.Get(key); value != "" {
-			q.Del(key)
-			if pathStyle, err = parseBool(key, value); err != nil {
-				return nil, err
-			}
-		}
+	clientOptions, pathStyle, err := clientOptionsOf(q)
+	if err != nil {
+		return nil, err
 	}
 
 	loadOptions, endpoint, hostnameImmutable, rateLimitCapacity, err := configOptions(q)
@@ -137,11 +108,78 @@ func open(ctx context.Context, bucketURL, object string, extra []func(*s3.Option
 		return nil, fmt.Errorf("open bucket %v: %v", u, err)
 	}
 
+	clientOptions = append(clientOptions, addressingOption(pathStyle, endpoint, hostnameImmutable, rateLimitCapacity))
+	return &store{
+		client: s3.NewFromConfig(cfg, append(clientOptions, extra...)...),
+		bucket: u.Host,
+		key:    object,
+	}, nil
+}
+
+// checkSSEType removes the ssetype option from q and rejects a value that is not a server-side encryption type; the
+// type is accepted and unused for reading.
+func checkSSEType(q url.Values) error {
+	sseType := q.Get("ssetype")
+	if sseType == "" {
+		return nil
+	}
+	q.Del("ssetype")
+	for _, v := range types.ServerSideEncryptionAes256.Values() {
+		if strings.EqualFold(string(v), sseType) {
+			return nil
+		}
+	}
+	return fmt.Errorf("%q is not a valid value for %q", sseType, "ssetype")
+}
+
+// takeBool reads and removes a boolean option of q; set is false for an absent or empty one, which stays in q.
+func takeBool(q url.Values, key string) (value, set bool, err error) {
+	raw := q.Get(key)
+	if raw == "" {
+		return false, false, nil
+	}
+	q.Del(key)
+	value, err = parseBool(key, raw)
+	return value, true, err
+}
+
+// clientOptionsOf removes the options that shape the S3 client from q, in the order accelerate, disable_https and
+// use_path_style (or s3ForcePathStyle, which wins as the later of the two), and returns the client options and
+// whether path-style addressing was asked for.
+func clientOptionsOf(q url.Values) (opts []func(*s3.Options), pathStyle bool, err error) {
+	accelerate, set, err := takeBool(q, "accelerate")
+	if err != nil {
+		return nil, false, err
+	}
+	if set {
+		opts = append(opts, func(o *s3.Options) { o.UseAccelerate = accelerate })
+	}
+	disable, set, err := takeBool(q, "disable_https")
+	if err != nil {
+		return nil, false, err
+	}
+	if set {
+		opts = append(opts, func(o *s3.Options) { o.EndpointOptions.DisableHTTPS = disable })
+	}
+	for _, key := range []string{"use_path_style", "s3ForcePathStyle"} {
+		value, set, err := takeBool(q, key)
+		if err != nil {
+			return nil, false, err
+		}
+		if set {
+			pathStyle = value
+		}
+	}
+	return opts, pathStyle, nil
+}
+
+// addressingOption sets the endpoint, the addressing style and the retryer of the client.
+func addressingOption(pathStyle bool, endpoint string, hostnameImmutable bool, rateLimitCapacity int64) func(*s3.Options) {
 	var limiter retry.RateLimiter = ratelimit.None
 	if rateLimitCapacity > 0 {
 		limiter = ratelimit.NewTokenRateLimit(uint(rateLimitCapacity))
 	}
-	clientOptions = append(clientOptions, func(o *s3.Options) {
+	return func(o *s3.Options) {
 		o.UsePathStyle = pathStyle || (endpoint != "" && hostnameImmutable)
 		if endpoint != "" {
 			o.BaseEndpoint = aws.String(endpoint)
@@ -150,12 +188,7 @@ func open(ctx context.Context, bucketURL, object string, extra []func(*s3.Option
 			so.RateLimiter = limiter
 			so.MaxAttempts = maxAttempts
 		})
-	})
-	return &store{
-		client: s3.NewFromConfig(cfg, append(clientOptions, extra...)...),
-		bucket: u.Host,
-		key:    object,
-	}, nil
+	}
 }
 
 // configOptions reads the options that shape the SDK's shared config.
