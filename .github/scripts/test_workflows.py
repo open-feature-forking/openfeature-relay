@@ -127,9 +127,10 @@ class BuildWorkflow(unittest.TestCase):
 
     def test_test_runs_make_test(self):
         job = self.job("test")
-        self.assertIn("- run: make test\n", job)
+        self.assertIn("- run: make test 2>&1 | tee test.log\n        shell: bash", job)
         self.assertIn("CONTRACT_EXTERNAL_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}", job)
-        self.assertNotIn("test.log", job)
+        # the log stays for a failure summary; there is no artifact of it and no miss report to read one
+        self.assertNotIn("path: test.log", job)
 
     def test_docs_check_and_builder_e2e_are_folded_into_other_jobs(self):
         """docs-check runs first in lint, while the tree is clean; builder-e2e is integration-test's flagd-full build."""
@@ -144,7 +145,9 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIn("run: make build-flagd-full", integration)
         self.assertNotIn("check-flagd-full-generated", integration)
         self.assertLess(integration.index("make workspace-init"), integration.index("make build-flagd-full"))
-        self.assertLess(integration.index("make build-flagd-full"), integration.index("make workspace-clean"))
+        self.assertIn("run: make build-flagsmith", integration)
+        self.assertLess(integration.index("make build-flagd-full"), integration.index("make build-flagsmith"))
+        self.assertLess(integration.index("make build-flagsmith"), integration.index("make workspace-clean"))
 
     def test_flags_follow_the_diff(self):
         """The flag patterns are the conditions the gate steps of the jobs used to hold."""
