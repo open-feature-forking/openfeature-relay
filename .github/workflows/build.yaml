@@ -476,7 +476,7 @@ jobs:
   upgrade-test:
     name: Upgrade differential
     # The job builds two images (today's flagd and the flagd-full the Builder makes), so it follows the rule for images:
-    # it runs when the change touches a Dockerfile or the build (the pattern in the gate step), or with FULL_CI=true, or
+    # it runs when the change touches Go code, a Dockerfile or the build (the pattern in the gate step), or with FULL_CI=true, or
     # when the workflow is run manually. Otherwise only the gate step runs.
     runs-on: ubuntu-latest
     # go test has a 60 minute timeout; this keeps a hung Docker build from holding a runner for GitHub's six hours
@@ -497,11 +497,12 @@ jobs:
           HEAD: ${{ github.sha }}
         run: |
           # Dockerfiles; the manifest of flagd-full and the Builder that builds it; flagd, which holds flagd-full's main
-          # and its list of components; the differential's own test, the reference Dockerfile and its image tests, and this workflow
+          # and its list of components; the differential's own test, the reference Dockerfile and its image tests, and this workflow.
+          # Any Go source or module file too: a change under core/, service/, sync/, runtime/ or evaluator/ changes flagd-full.
           # A pull request's own changes are its merge commit against the first parent: the base as it is now. The
           # base sha is where the pull request was opened, so base..merge commit also holds what the base gained since.
           if [ "$EVENT" = pull_request ]; then BASE=$(git rev-parse "$HEAD^1"); fi
-          pattern='(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^flagd/|^test/upgrade/|^builder/reference/|^test/image/|^\.github/workflows/build\.yaml$'
+          pattern='\.go$|(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^flagd/|^test/upgrade/|^builder/reference/|^test/image/|^\.github/workflows/build\.yaml$'
           run=false
           if [ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]; then
             run=true
@@ -513,10 +514,10 @@ jobs:
             hits=$(printf '%s\n' "$changed" | grep -E "$pattern" || true)
             if [ -n "$hits" ]; then
               run=true
-              echo "::notice::The differential runs: this change touches a Dockerfile or the build."
+              echo "::notice::The differential runs: this change touches Go code, a Dockerfile or the build."
               printf '%s\n' "$hits" | head -10
             else
-              echo "::notice::The differential is skipped: no Dockerfile or build file changed. Set FULL_CI or run the workflow manually to run it."
+              echo "::notice::The differential is skipped: no Go code, Dockerfile or build file changed. Set FULL_CI or run the workflow manually to run it."
             fi
           fi
           echo "run=$run" >> "$GITHUB_OUTPUT"

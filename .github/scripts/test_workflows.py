@@ -198,6 +198,18 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIn("make testbed-contract-both", job)
         self.assertIn("make testbed-suites", job)
 
+    def test_upgrade_differential_runs_on_any_go_change(self):
+        """Coverage gap 1: a change under core/, service/, sync/ or runtime/ changes flagd-full, so it runs the differential."""
+        job = self.all_jobs()["upgrade-test"]
+        pattern = re.search(r"pattern='([^']*)'", job).group(1)
+        for path in ("core/pkg/evaluator/x.go", "service/ofrep/x.go", "sync/http/go.mod", "runtime/go.sum", "go.sum",
+                     "flagd/build.Dockerfile", "distributions/flagd-full/manifest.yaml", "builder/main.go"):
+            with self.subTest(path=path):
+                self.assertTrue(re.search(pattern, path), path)
+        for path in ("README.md", "docs/vision.md", "Makefile"):
+            with self.subTest(path=path):
+                self.assertFalse(re.search(pattern, path), path)
+
     def test_outage_job_compares_both_images(self):
         """UC-022 Q16: the gated job runs the RPC suite with the outage scenarios against both images."""
         self.assertIn("make testbed-rpc-outages", self.job("testbed-rpc-outages"))
