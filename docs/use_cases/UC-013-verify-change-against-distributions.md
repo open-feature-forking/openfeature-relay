@@ -190,7 +190,7 @@ Every pull request that changes more than documentation runs the 60-second concu
 
 ## Delivered by Later Use Cases
 
-This use case is `Implemented`: the build of every standard distribution from its manifest; the dependency boundaries of NFR-004 and NFR-005; the Test Harness suites against the flagd-full image with a pinned tag selection; the verdict of flagd-sync against flagd-full for the set of flag configurations; and the allocs/op comparison with the pull request's base commit, with time deviations beyond 5% reported. The checks are listed in [Status and roadmap](../relay/status.md). These parts are accepted gaps of this use case:
+This use case is `Tested` (TC-007): the build of every standard distribution from its manifest; the dependency boundaries of NFR-004 and NFR-005; the Test Harness suites against the flagd-full image with a pinned tag selection; the verdict of flagd-sync against flagd-full for the set of flag configurations; and the allocs/op comparison with the pull request's base commit, with time deviations beyond 5% reported. The checks are listed in [Status and roadmap](../relay/status.md). These parts are accepted gaps of this use case:
 
 | Gap | Delivered by |
 |-----|--------------|
