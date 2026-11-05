@@ -78,40 +78,11 @@ func Run(ctx context.Context, m *manifest.Manifest, opts Options) (Result, error
 		return res, err
 	}
 
-	items := generate.Items(m)
-	components := make([]gotool.Component, len(items))
-	for i, it := range items {
-		components[i] = gotool.Component{Group: string(it.Group), Module: it.Module, Version: it.Version,
-			Import: it.Import, Alias: it.Alias, Replaced: it.Replaced}
-	}
-	if m.Cmd != nil {
-		// main.go calls its Execute; a compile error that names runtimecmd concerns this module
-		replaced := false
-		for _, r := range m.Replaces {
-			replaced = replaced || r.Module == m.Cmd.Module
-		}
-		importPath := m.Cmd.Import
-		if importPath == "" {
-			importPath = m.Cmd.Module
-		}
-		components = append(components, gotool.Component{Group: "cmd", Module: m.Cmd.Module, Version: m.Cmd.Version,
-			Import: importPath, Alias: "runtimecmd", Replaced: replaced})
-	}
+	components := componentsOf(m)
 	tool := opts.Tool
 
 	if !opts.SkipGetModules {
-		if err := tool.Tidy(ctx, res.SourceDir, components); err != nil {
-			return res, err
-		}
-		resolved, err := tool.List(ctx, res.SourceDir)
-		if err != nil {
-			return res, err
-		}
-		graph, err := tool.ModGraph(ctx, res.SourceDir)
-		if err != nil {
-			return res, err
-		}
-		warnings, err := gotool.CheckVersions(components, resolved, graph, opts.SkipStrictVersioning)
+		warnings, err := getModules(ctx, tool, res.SourceDir, components, opts.SkipStrictVersioning)
 		if err != nil {
 			return res, err
 		}
@@ -152,6 +123,48 @@ func Run(ctx context.Context, m *manifest.Manifest, opts Options) (Result, error
 	}
 	res.Binary = binary
 	return res, nil
+}
+
+// componentsOf lists the component modules of the manifest, and its cmd module when it names one.
+func componentsOf(m *manifest.Manifest) []gotool.Component {
+	items := generate.Items(m)
+	components := make([]gotool.Component, len(items))
+	for i, it := range items {
+		components[i] = gotool.Component{Group: string(it.Group), Module: it.Module, Version: it.Version,
+			Import: it.Import, Alias: it.Alias, Replaced: it.Replaced}
+	}
+	if m.Cmd != nil {
+		// main.go calls its Execute; a compile error that names runtimecmd concerns this module
+		replaced := false
+		for _, r := range m.Replaces {
+			replaced = replaced || r.Module == m.Cmd.Module
+		}
+		importPath := m.Cmd.Import
+		if importPath == "" {
+			importPath = m.Cmd.Module
+		}
+		components = append(components, gotool.Component{Group: "cmd", Module: m.Cmd.Module, Version: m.Cmd.Version,
+			Import: importPath, Alias: "runtimecmd", Replaced: replaced})
+	}
+	return components
+}
+
+// getModules resolves the component modules in dir and checks the versions the Go Toolchain selected.
+func getModules(
+	ctx context.Context, tool gotool.Tool, dir string, components []gotool.Component, skipStrictVersioning bool,
+) ([]string, error) {
+	if err := tool.Tidy(ctx, dir, components); err != nil {
+		return nil, err
+	}
+	resolved, err := tool.List(ctx, dir)
+	if err != nil {
+		return nil, err
+	}
+	graph, err := tool.ModGraph(ctx, dir)
+	if err != nil {
+		return nil, err
+	}
+	return gotool.CheckVersions(components, resolved, graph, skipStrictVersioning)
 }
 
 func hasSource(dir string) bool {

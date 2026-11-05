@@ -7,7 +7,7 @@
 **Primary Actor:** Extension Author  
 **Goal:** Learn, before the component is built into any distribution, whether a component behaves as flagd expects of its component type.  
 **Trigger:** Extension Author asks to verify a component against the contract of its component type  
-**Status:** Implemented  
+**Status:** Tested  
 
 **Requirements:** [FR-015, FR-014, FR-036, FR-045, FR-054, FR-055, NFR-013, C-001](../requirements.md)
 

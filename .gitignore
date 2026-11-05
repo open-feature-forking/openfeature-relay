@@ -31,3 +31,4 @@ benchmark.txt
 /.flagd-generated/
 /.flagd-full-build/
 /.flagsmith-build/
+/distributions/*/build/
