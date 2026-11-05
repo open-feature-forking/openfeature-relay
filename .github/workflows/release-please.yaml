@@ -7,6 +7,11 @@ concurrency:
   group: release-please-${{ github.ref }}
   cancel-in-progress: false
 
+# Inert here (every job is gated to open-feature/flagd). The jobs that publish assets ask for contents: write; pushing images
+# would need write access to packages, which no workflow in this repository grants.
+permissions:
+  contents: read
+
 env:
   # Stringified list of items that should be published
   PUBLISHABLE_ITEMS: '["flagd","flagd-proxy"]'
@@ -70,6 +75,8 @@ jobs:
     needs: release-please
     environment: publish
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     if: ${{ needs.release-please.outputs.items_to_publish != '' && toJson(fromJson(needs.release-please.outputs.items_to_publish)) != '[]' }}
     strategy:
       matrix:
@@ -169,6 +176,8 @@ jobs:
     name: Create and publish binaries to GitHub
     needs: release-please
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     if: ${{ needs.release-please.outputs.items_to_publish != '' && toJson(fromJson(needs.release-please.outputs.items_to_publish)) != '[]' }}
     strategy:
       matrix:
