@@ -209,6 +209,7 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 	rt.Evaluator = inputs.evaluator()
 	wrapHTTP, err := httpMiddleware(logger, tp, components.Middleware)
 	if err != nil {
+		_ = inputs.close()
 		return nil, err
 	}
 	for _, factory := range components.Endpoints {
@@ -242,6 +243,11 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 	rt.Syncs = iSyncs
 	staleLimits, err := staleLimitsOf(syncProviders, iSyncs)
 	if err != nil {
+		for _, s := range iSyncs {
+			if closer, ok := s.(io.Closer); ok {
+				_ = closer.Close()
+			}
+		}
 		return nil, err
 	}
 	rt.staleLimits = staleLimits

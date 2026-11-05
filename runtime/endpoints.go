@@ -99,3 +99,11 @@ func (in *endpointInputs) evaluator() evaluator.IEvaluator {
 	}
 	return stateless{in.resolver()}
 }
+
+// close releases the evaluators the router holds; a runtime that is not built calls it.
+func (in *endpointInputs) close() error {
+	if in.router == nil {
+		return nil
+	}
+	return in.router.Close()
+}
