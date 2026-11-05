@@ -30,14 +30,15 @@ env:
   GOTOOLCHAIN: local
 
 jobs:
-  # Report-only (step 15, P1): which modules the change affects, and later whether `make test` failed outside them.
-  # Nothing waits on it yet; the per-module matrix replaces the serial `test` once the reports show no miss.
+  # Which modules the change affects (step 15): the test-module matrix runs them, and `test` waits for them.
+  # If ci-modules.py itself fails, it runs every module instead of failing the pull request.
   changes:
     runs-on: ubuntu-latest
     outputs:
       test: ${{ steps.affected.outputs.test }}
       all: ${{ steps.affected.outputs.all }}
       lint-all: ${{ steps.affected.outputs.lint-all }}
+      predicted: ${{ steps.affected.outputs.predicted }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
@@ -183,8 +184,19 @@ jobs:
           key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
 
-  test:
+  # One entry per module the change can break (step 15, P2). `changes` lists them; `make test-module` runs each with the
+  # flags `make test` has always used. The entries only restore the Go caches: the push run on main saves them, from the
+  # flagd entry, whose module closure is the largest.
+  test-module:
+    name: ${{ matrix.name }}
+    needs: changes
+    if: needs.changes.outputs.test != '[]'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        include: ${{ fromJSON(needs.changes.outputs.test) }}
     env:
       GOPATH: /home/runner/work/open-feature/flagd
       GOBIN: /home/runner/work/open-feature/flagd/bin
@@ -203,14 +215,17 @@ jobs:
           path: |
             ${{ env.GOPATH }}/pkg/mod
             ~/.cache/go-build
-          key: go-test-${{ hashFiles('**/go.sum') }}
-          restore-keys: go-test-
-      - name: Fetch the testbed's evaluator suite
-        run: git submodule update --init test-harness
+          key: go-test-module-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-test-module-
+      # the modules that read the evaluator suite of the testbed (runtime, the evaluator testkit)
+      - name: Fetch the submodule the module reads
+        if: matrix.submodule != ''
+        run: git submodule update --init -- "${{ matrix.submodule }}"
       - run: make workspace-init
-      # shell: bash makes the pipe fail with make; the log feeds the miss report
-      - run: make test 2>&1 | tee test.log
+      # shell: bash makes the pipe fail with the test; the log feeds the miss report
+      - name: Test
         shell: bash
+        run: ${{ matrix.run }} 2>&1 | tee ${{ matrix.artifact }}.test.log
         env:
           # test/contract-external.sh fetches core at this commit; a pull request's merge commit is on no branch
           CONTRACT_EXTERNAL_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -218,13 +233,20 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: test-log
-          path: test.log
+          name: test-log-${{ matrix.artifact }}
+          path: "*.test.log"
           if-no-files-found: ignore
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044 # v4
+      # The module's profile (<module>-coverage.out, written by make test-module); a skipped module keeps no new one.
+      - name: Keep the coverage profile
+        if: success() && matrix.coverage
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage-profiles-${{ matrix.artifact }}
+          path: "*-coverage.out"
+          retention-days: 30
+          if-no-files-found: warn
       - name: Save the Go caches
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        if: matrix.module == 'flagd' && github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
           path: |
@@ -232,35 +254,57 @@ jobs:
             ~/.cache/go-build
           key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
+  # The check the repository requires. Red unless every affected module passed, or nothing was affected and the set was
+  # computed: a skipped matrix is green only for an empty set when `all` is false, so a missing set is never green.
+  test:
+    needs: [changes, test-module]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every affected module passed
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          MODULES: ${{ needs.test-module.result }}
+          AFFECTED: ${{ needs.changes.outputs.test }}
+          ALL: ${{ needs.changes.outputs.all }}
+        run: |
+          echo "changes: $CHANGES; test-module: $MODULES; affected: $AFFECTED; all: $ALL"
+          if [ "$CHANGES" != success ]; then echo "::error::the affected modules could not be computed"; exit 1; fi
+          if [ "$MODULES" = success ]; then exit 0; fi
+          if [ "$MODULES" = skipped ] && [ "$AFFECTED" = '[]' ] && [ "$ALL" = false ]; then
+            echo "::notice::No module is affected by this change."
+            exit 0
+          fi
+          echo "::error::a module test is $MODULES"
+          exit 1
 
-  # Report-only: a module that failed in `make test` outside the affected set is a miss. Never fails the run.
+  # A module that fails on main outside the set its pull request would have run is a miss: the pull request went green
+  # without it. Report-only; it never fails the run. A pull request cannot miss, because it runs only the affected set.
   miss-report:
-    needs: [changes, test]
-    if: always() && needs.changes.result == 'success'
+    needs: [changes, test-module]
+    if: always() && needs.changes.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
-      - name: Fetch the test log
+      - name: Fetch the test logs
         continue-on-error: true
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: test-log
+          pattern: test-log-*
+          merge-multiple: true
+          path: logs
       - name: Setup go
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
         with:
           go-version-file: 'flagd/go.mod'
       - name: Workspace for the dependency oracle
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: make workspace-init
       - name: Miss report
         continue-on-error: true
         env:
-          TESTED: ${{ needs.changes.outputs.test }}
-          ALL: ${{ needs.changes.outputs.all }}
-          ORACLE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && '--oracle' || '' }}
-        run: python3 .github/scripts/ci-modules.py miss-report --log test.log --tested "$TESTED" --all "$ALL" $ORACLE --summary "$GITHUB_STEP_SUMMARY"
+          PREDICTED: ${{ needs.changes.outputs.predicted }}
+        run: python3 .github/scripts/ci-modules.py miss-report --log "logs/*.test.log" --tested "$PREDICTED" --oracle --summary "$GITHUB_STEP_SUMMARY"
 
   builder-e2e:
     name: Builder end to end

@@ -7,6 +7,8 @@ import hashlib
 import os
 import pathlib
 import re
+import shutil
+import subprocess
 import shlex
 import tempfile
 import unittest
@@ -83,25 +85,83 @@ class BuildWorkflow(unittest.TestCase):
     def test_jobs(self):
         names = re.findall(r"^  ([a-z][a-z0-9-]*):[ \t]*(?:#.*)?\n", self.text.split("\njobs:\n", 1)[1], re.M)
         self.assertEqual(
-            ["changes", "lint", "benchmark", "docs-check", "test", "miss-report", "builder-e2e", "fips", "docker-local", "integration-test",
+            ["changes", "lint", "benchmark", "docs-check", "test-module", "test", "miss-report", "builder-e2e", "fips", "docker-local", "integration-test",
              "upgrade-test", "release-dry-run", "testbed", "testbed-rpc-outages", "testbed-grpc-sync"], names)
 
-    def test_changes_is_report_only(self):
-        """P1: the affected-module report runs beside today's jobs; nothing but the miss report waits on it."""
-        self.assertEqual([], [n for n in ("lint", "test", "builder-e2e", "integration-test", "upgrade-test", "release-dry-run")
+    def test_changes_feeds_the_matrix(self):
+        """P2: only the matrix, the aggregate and the miss report wait on `changes`."""
+        self.assertEqual([], [n for n in ("lint", "builder-e2e", "integration-test", "upgrade-test", "release-dry-run")
                               if re.search(r"needs:.*\bchanges\b", self.job(n))])
-        self.assertIn("fetch-depth: 2", self.job("changes"))
-        self.assertIn("python3 .github/scripts/ci-modules.py changes", self.job("changes"))
-        report = self.job("miss-report")
-        self.assertIn("needs: [changes, test]", report)
-        self.assertIn("if: always() && needs.changes.result == 'success'", report)
-        self.assertIn("continue-on-error: true", report)
+        changes = self.job("changes")
+        self.assertIn("fetch-depth: 2", changes)
+        self.assertIn("python3 .github/scripts/ci-modules.py changes", changes)
+        self.assertIn("predicted: ${{ steps.affected.outputs.predicted }}", changes)
 
-    def test_test_still_runs_make_test_and_keeps_its_log(self):
-        job = self.job("test")
-        self.assertIn("- run: make test 2>&1 | tee test.log\n        shell: bash", job)
+    def test_matrix_guarded(self):
+        job = self.job("test-module")
+        self.assertIn("name: ${{ matrix.name }}", job)
+        self.assertIn("needs: changes\n", job)
+        self.assertIn("if: needs.changes.outputs.test != '[]'", job)
+        self.assertIn("fail-fast: false", job)
+        self.assertIn("max-parallel: 10", job)
+        self.assertIn("include: ${{ fromJSON(needs.changes.outputs.test) }}", job)
+
+    def test_matrix_runs_the_table_command_and_keeps_log_and_profile(self):
+        job = self.job("test-module")
+        self.assertIn("run: ${{ matrix.run }} 2>&1 | tee ${{ matrix.artifact }}.test.log", job)
+        self.assertIn("shell: bash", job)
         self.assertIn("CONTRACT_EXTERNAL_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}", job)
-        self.assertIn("path: test.log", job)
+        self.assertIn("if: matrix.submodule != ''", job)
+        self.assertIn("name: test-log-${{ matrix.artifact }}", job)
+        self.assertIn("if: success() && matrix.coverage", job)
+        self.assertIn("name: coverage-profiles-${{ matrix.artifact }}", job)
+        self.assertNotIn("codecov", job)
+
+    def test_matrix_only_restores_the_cache_and_the_flagd_entry_saves_it(self):
+        job = self.job("test-module")
+        self.assertEqual(1, job.count("uses: actions/cache/restore@"))
+        save = job.split("- name: Save the Go caches", 1)[1]
+        self.assertIn("if: matrix.module == 'flagd' && github.ref == 'refs/heads/main' && github.event_name == 'push'", save)
+
+    AGGREGATE = (
+        # changes, test-module, affected, all -> the aggregate passes
+        ("success", "success", "[{}]", "false", True),
+        ("success", "success", "[{}]", "true", True),
+        ("success", "failure", "[{}]", "false", False),
+        ("success", "cancelled", "[{}]", "false", False),
+        ("success", "skipped", "[]", "false", True),
+        ("success", "skipped", "[]", "true", False),
+        ("success", "skipped", "", "false", False),
+        ("failure", "skipped", "", "", False),
+        ("cancelled", "skipped", "", "", False),
+    )
+
+    def test_aggregate_test(self):
+        """The required check: red on a failed or cancelled module and on a skipped matrix, except for an empty set."""
+        job = self.job("test")
+        self.assertIn("needs: [changes, test-module]", job)
+        self.assertIn("if: always()", job)
+        try:
+            import yaml
+        except ImportError:
+            self.skipTest("PyYAML is not installed")
+        script = yaml.safe_load(self.text)["jobs"]["test"]["steps"][0]["run"]
+        bash = shutil.which("bash")
+        if not bash:
+            self.skipTest("bash is not available")
+        for changes, modules, affected, everything, green in self.AGGREGATE:
+            with self.subTest(changes=changes, modules=modules, affected=affected, all=everything):
+                prelude = f"CHANGES='{changes}'; MODULES='{modules}'; AFFECTED='{affected}'; ALL='{everything}'; "
+                done = subprocess.run([bash, "-c", prelude + script], capture_output=True, text=True)
+                self.assertEqual(0 if green else 1, done.returncode, done.stdout + done.stderr)
+
+    def test_miss_report_watches_main(self):
+        report = self.job("miss-report")
+        self.assertIn("needs: [changes, test-module]", report)
+        self.assertIn("if: always() && needs.changes.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main'", report)
+        self.assertIn("pattern: test-log-*", report)
+        self.assertIn("PREDICTED: ${{ needs.changes.outputs.predicted }}", report)
+        self.assertIn("continue-on-error: true", report)
 
     def test_lint_runs_the_module_table_tests(self):
         """C1 and C2 are the parity gate for make test and make lint: CI has to run them."""
@@ -138,7 +198,7 @@ class BuildWorkflow(unittest.TestCase):
         parts = re.split(r"(?m)^(?=  [a-z][a-z0-9-]*:[^\n]*\n)", jobs)
         return {m.group(1): part for part in parts if (m := re.match(r"  ([a-z0-9-]+):", part))}
 
-    CACHED_JOBS = ("lint", "docs-check", "test", "builder-e2e", "fips", "integration-test", "upgrade-test", "release-dry-run")
+    CACHED_JOBS = ("lint", "docs-check", "test-module", "builder-e2e", "fips", "integration-test", "upgrade-test", "release-dry-run")
     GATED_CACHED_JOBS = ("upgrade-test", "release-dry-run")
     ON_MAIN = "github.ref == 'refs/heads/main' && github.event_name == 'push'"
 
@@ -162,6 +222,7 @@ class BuildWorkflow(unittest.TestCase):
                 self.assertEqual(1, job.count("uses: actions/cache/save@"))
                 self.assertIn("cache: false", job)
                 gate = "steps.gate.outputs.run == 'true' && " if name in self.GATED_CACHED_JOBS else ""
+                gate += "matrix.module == 'flagd' && " if name == "test-module" else ""
                 save = job.split("- name: Save the Go caches\n", 1)[1]
                 self.assertIn(f"if: {gate}{self.ON_MAIN} && steps.go-cache.outputs.cache-hit != 'true'", save)
                 self.assertIn("~/.cache/go-build", save)

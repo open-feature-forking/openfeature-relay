@@ -341,5 +341,99 @@ class TestChangesCommand(unittest.TestCase):
         self.assertIn("Everything runs", summary)
 
 
+class TestPredictedSet(unittest.TestCase):
+    def merge_commit(self, repo):
+        git(repo, "init", "-q", "-b", "main")
+        (repo / "a.txt").write_text("a")
+        git(repo, "add", "a.txt")
+        git(repo, "commit", "-q", "-m", "a")
+        git(repo, "checkout", "-q", "-b", "pr")
+        (repo / "sync" / "sse").mkdir(parents=True)
+        (repo / "sync" / "sse" / "x.go").write_text("x")
+        git(repo, "add", "sync/sse/x.go")
+        git(repo, "commit", "-q", "-m", "pr")
+        git(repo, "checkout", "-q", "main")
+        (repo / "later.txt").write_text("y")
+        git(repo, "add", "later.txt")
+        git(repo, "commit", "-q", "-m", "main moved")
+        git(repo, "merge", "-q", "--no-ff", "-m", "merge", "pr")
+        return git(repo, "rev-parse", "HEAD")
+
+    def test_a_push_to_main_is_compared_with_what_its_pull_request_would_have_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = pathlib.Path(tmp)
+            sha = self.merge_commit(repo)
+            everything = cm.matrix(cm.Result(True, "a push to main", {}), GRAPH, TABLE, ROOT)[0]
+            guess = cm.predicted(repo, GRAPH, TABLE, [], sha, everything)
+            self.assertEqual(affected(["sync/sse/x.go"])[1], {e["module"] for e in guess})
+            self.assertLess(len(guess), len(everything))
+
+    def test_without_a_first_parent_the_selected_entries_are_the_prediction(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = pathlib.Path(tmp)
+            git(repo, "init", "-q", "-b", "main")
+            (repo / "a.txt").write_text("a")
+            git(repo, "add", "a.txt")
+            git(repo, "commit", "-q", "-m", "a")
+            self.assertEqual(["sentinel"], cm.predicted(repo, GRAPH, TABLE, [], git(repo, "rev-parse", "HEAD"), ["sentinel"]))
+
+
+class TestChangesFallback(unittest.TestCase):
+    def test_a_crash_runs_every_module_and_does_not_fail(self):
+        real = cm.load
+        cm.load = lambda root: (_ for _ in ()).throw(RuntimeError("boom"))
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                out, summary = pathlib.Path(tmp) / "out", pathlib.Path(tmp) / "summary.md"
+                rc = cm.main(["--root", str(ROOT), "changes", "--event", "pull_request", "--sha", "HEAD",
+                              "--github-output", str(out), "--summary", str(summary)])
+                outputs = dict(l.split("=", 1) for l in out.read_text().splitlines())
+                self.assertEqual(0, rc)
+                self.assertEqual("true", outputs["all"])
+                self.assertIn("boom", summary.read_text())
+        finally:
+            cm.load = real
+        _, table, _ = real(ROOT)
+        want = {d for d, e in table["modules"].items() if e["test"]} | {"contract-external"}
+        entries = json.loads(outputs["test"])
+        self.assertEqual(want, {e["module"] for e in entries})
+        self.assertEqual(entries, json.loads(outputs["predicted"]))
+
+    def test_a_table_without_an_entry_still_fails(self):
+        real = cm.load
+        _, table, graph = real(ROOT)
+        table = {**table, "modules": {d: e for d, e in table["modules"].items() if d != "core"}}
+        cm.load = lambda root: ([], table, graph)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                rc = cm.main(["--root", str(ROOT), "changes", "--event", "workflow_dispatch", "--sha", "HEAD",
+                              "--github-output", str(pathlib.Path(tmp) / "out")])
+            self.assertEqual(1, rc)
+        finally:
+            cm.load = real
+
+
+class TestEntriesAndLogs(unittest.TestCase):
+    def test_every_entry_has_an_artifact_name_without_slashes(self):
+        _, table, graph = cm.load(ROOT)
+        entries = cm.matrix(cm.Result(True, "x", {}), graph, table, ROOT)[0]
+        self.assertTrue(entries)
+        for e in entries:
+            with self.subTest(module=e["module"]):
+                self.assertNotIn("/", e["artifact"])
+                self.assertEqual(e["module"].replace("/", "-"), e["artifact"])
+
+    def test_the_miss_report_reads_every_log_of_a_glob(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for n in ("a", "b"):
+                (pathlib.Path(tmp) / f"{n}.test.log").write_text("FAIL" + chr(9) + RELAY + ("sync/s3" if n == "a" else "sync/sse") + chr(9) + "1s" + chr(10))
+            summary = pathlib.Path(tmp) / "summary.md"
+            rc = cm.main(["--root", str(ROOT), "miss-report", "--log", str(pathlib.Path(tmp) / "*.test.log"), "--tested", "[]",
+                          "--summary", str(summary)])
+            self.assertEqual(0, rc)
+            self.assertIn("`sync/s3`", summary.read_text())
+            self.assertIn("`sync/sse`", summary.read_text())
+
+
 if __name__ == "__main__":
     unittest.main()

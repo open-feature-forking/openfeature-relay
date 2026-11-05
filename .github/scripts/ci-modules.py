@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Which Go modules does a change affect, and which of the `make test` failures did that set miss (step 15, slice P1).
+"""Which Go modules does a change affect, and which test failures did that set miss (step 15, slices P1 and P2).
 
 Standard library only. The module set is the Makefile's ALL_GO_MOD_DIRS; ci-modules.json says how each module is
-tested. `changes` prints the matrix of the modules a pull request or push can break; it does not gate anything yet.
+tested. `changes` prints the matrix of the modules a pull request or push can break; the `test-module` job runs it.
 """
 import argparse
 import fnmatch
+import glob
 import json
 import os
 import pathlib
@@ -231,12 +232,13 @@ def matrix(result, graph, table, root):
         if e["test"] is None:
             notes[d] = f"{why[d]}; not tested: {e['reason']}"
             continue
-        entries.append({"name": f"test ({d})", "module": d, "run": e["test"], "coverage": bool(e.get("coverage")),
-                        "submodule": submodule_of(root, d, graph.paths)})
+        entries.append({"name": f"test ({d})", "module": d, "artifact": d.replace("/", "-"), "run": e["test"],
+                        "coverage": bool(e.get("coverage")), "submodule": submodule_of(root, d, graph.paths)})
         notes[d] = why[d]
     if result.everything or why:
         for name, e in table.get("pseudo", {}).items():
-            entries.append({"name": f"test ({name})", "module": name, "run": e["test"], "coverage": False, "submodule": ""})
+            entries.append({"name": f"test ({name})", "module": name, "artifact": name, "run": e["test"], "coverage": False,
+                            "submodule": ""})
             notes[name] = "always runs when anything is affected"
     return entries, notes
 
@@ -318,7 +320,28 @@ def write(path, text):
             f.write(text)
 
 
-def cmd_changes(a):
+def predicted(root, graph, table, prune, sha, entries):
+    """The entries a pull request with the same change would have run: the push to main against its first parent.
+    `entries` is what the run selected, the answer when there is no first parent to compare with."""
+    base = git(root, "rev-parse", "--verify", "-q", f"{sha}^1")
+    if base.returncode:
+        return entries
+    base = base.stdout.strip()
+    out = subprocess.run(["git", "diff", "--name-only", "--no-renames", "-z", base, sha], cwd=root, capture_output=True, check=True).stdout
+    changed = [p.decode() for p in out.split(b"\0") if p]
+    result = compute(changed, graph, table, module_dirs(list_files(root, base), prune))
+    return matrix(result, graph, table, root)[0]
+
+
+def emit(a, entries, everything, summary, predicted_entries=None):
+    print(summary)
+    write(a.summary, summary)
+    dump = lambda v: json.dumps(v, separators=(",", ":"))
+    write(a.github_output, f"test={dump(entries)}\nall={str(everything).lower()}\nlint-all=true\n"
+                           f"predicted={dump(entries if predicted_entries is None else predicted_entries)}\n")
+
+
+def changes(a):
     root = pathlib.Path(a.root)
     prune, table, graph = load(root)
     changed, force, base = change_set(root, a.event, a.ref, a.sha, a.before, os.environ.get("FULL_CI", ""))
@@ -333,26 +356,49 @@ def cmd_changes(a):
     if result.everything:
         lines.append(f"Everything runs: {result.reason}.")
     lines += [f"- `{d}`: {w}" for d, w in sorted(notes.items())]
-    summary = "\n".join(lines) + "\n"
-    print(summary)
-    write(a.summary, summary)
-    write(a.github_output, f"test={json.dumps(entries, separators=(',', ':'))}\nall={str(result.everything).lower()}\nlint-all=true\n")
+    guess = None
+    if a.event == "push" and a.ref == "refs/heads/main":
+        guess = predicted(root, graph, table, prune, a.sha, entries)
+        lines += ["", f"A pull request with this change would have run {len(guess)} entries; the miss report compares the failures with them."]
+    emit(a, entries, result.everything, "\n".join(lines) + "\n", guess)
     return 0
+
+
+def everything_from_the_table(root, why):
+    """Every entry with a test command, from the table alone, for when the affected set cannot be computed."""
+    table = json.loads((pathlib.Path(root) / ".github" / "scripts" / "ci-modules.json").read_text(encoding="utf-8"))
+    entries = [{"name": f"test ({d})", "module": d, "artifact": d.replace("/", "-"), "run": e["test"],
+                "coverage": bool(e.get("coverage")), "submodule": SUBMODULE}
+               for d, e in sorted(table["modules"].items()) if e["test"]]
+    entries += [{"name": f"test ({n})", "module": n, "artifact": n, "run": e["test"], "coverage": False, "submodule": SUBMODULE}
+                for n, e in sorted(table.get("pseudo", {}).items())]
+    return entries
+
+
+def cmd_changes(a):
+    """A bug in the computation must not turn a pull request red: it runs everything instead, and says so."""
+    try:
+        return changes(a)
+    except Exception as e:  # noqa: BLE001 (any failure of the computation, not only the ones anticipated)
+        print(f"::warning::ci-modules.py failed ({type(e).__name__}: {e}); every module runs")
+        entries = everything_from_the_table(a.root, str(e))
+        emit(a, entries, True, f"## Affected modules (all)\n\nEverything runs: ci-modules.py failed with `{type(e).__name__}: {e}`.\n")
+        return 0
 
 
 def cmd_miss_report(a):
     _, _, graph = load(a.root)
-    log = pathlib.Path(a.log).read_text(encoding="utf-8", errors="replace") if a.log and os.path.exists(a.log) else ""
+    log = "".join(pathlib.Path(f).read_text(encoding="utf-8", errors="replace") for f in sorted(glob.glob(a.log))) if a.log else ""
     tested = {e["module"] for e in json.loads(a.tested or "[]")}
     found = {} if a.all == "true" else misses(log, graph, tested)
-    lines = ["## Miss report (report-only)", ""]
+    lines = ["## Miss report", ""]
     if not log:
-        lines.append("No `make test` log: nothing to compare.")
+        lines.append("No test log: nothing to compare.")
     elif found:
-        lines.append("**MISS**: these modules failed in `make test` but are outside the affected set.")
+        lines.append("**MISS**: these modules failed but are outside the set a pull request with this change would have run.")
         lines += [f"- `{d}`: {', '.join(p)}" for d, p in sorted(found.items())]
         for d in sorted(found):
-            print(f"::warning::miss: {d} failed in make test but is outside the affected set")
+            print(f"::warning::miss: {d} failed but is outside the affected set")
     else:
         lines.append("No miss: every failing module is in the affected set" + (" (everything was selected)." if a.all == "true" else "."))
     if a.oracle:
@@ -381,8 +427,8 @@ def main(argv=None):
     c.add_argument("--summary")
     c.set_defaults(fn=cmd_changes)
     m = sub.add_parser("miss-report")
-    m.add_argument("--log")
-    m.add_argument("--tested", help="the `test` output of the changes job")
+    m.add_argument("--log", help="a path or glob of go test logs")
+    m.add_argument("--tested", help="the `predicted` output of the changes job")
     m.add_argument("--all", default="false")
     m.add_argument("--oracle", action="store_true", help="also compare the require closure with go list -deps -test")
     m.add_argument("--summary")
