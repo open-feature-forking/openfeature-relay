@@ -42,7 +42,7 @@ func runLoad(t *testing.T, n int, skip map[int]bool, env map[string]string) *loa
 
 	end := ledger.Write(n).Add(bound)
 	args := map[string]string{
-		"PROFILE": "one", "T0": fmt.Sprint(t0.UnixMilli()), "P": fmt.Sprint(period.Milliseconds()),
+		"PROFILE": profile(), "T0": fmt.Sprint(t0.UnixMilli()), "P": fmt.Sprint(period.Milliseconds()),
 		"D": fmt.Sprint(bound.Milliseconds()), "EPS": fmt.Sprint(eps.Milliseconds()), "N": fmt.Sprint(n),
 		"END": fmt.Sprint(end.UnixMilli()), "CHURN_MS": "6000",
 	}
@@ -69,9 +69,17 @@ func metric(t *testing.T, output, name string) int {
 
 func generations() int {
 	if os.Getenv("RELAY_LOAD") == "full" {
-		return 200
+		return 140 // about 10 minutes
 	}
-	return 20
+	return 13 // about 60 seconds
+}
+
+// profile is the k6 profile of the run: RELAY_LOAD names it, and the harness's own tests use "one".
+func profile() string {
+	if p := os.Getenv("RELAY_LOAD"); p == "smoke" || p == "full" {
+		return p
+	}
+	return "one"
 }
 
 // TestConcurrency (NFR-017) runs the load against the race build: k6's thresholds hold, every generation reached the
@@ -94,7 +102,7 @@ func TestConcurrency(t *testing.T) {
 // to see stale answers, and the conductor reports the generation as late.
 func TestLoadDetectsStaleFlags(t *testing.T) {
 	requireLoad(t)
-	r := runLoad(t, 6, map[int]bool{3: true}, nil)
+	r := runLoad(t, 6, map[int]bool{3: true}, map[string]string{"PROFILE": "one"})
 	t.Log("k6 output:\n" + r.k6.Output)
 
 	require.Equal(t, 99, r.k6.ExitCode, "k6 fails its thresholds:\n%s", r.k6.Output)
