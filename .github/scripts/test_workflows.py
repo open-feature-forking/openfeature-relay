@@ -121,7 +121,8 @@ class BuildWorkflow(unittest.TestCase):
     def test_testbed_runs_when_go_code_or_the_testbed_changes(self):
         """UC-022 Q14: the relay testbed has a gate step: FULL_CI, a manual run, or a change outside docs/ and .claude/."""
         job = self.job("testbed")
-        self.assertNotIn("\n    if:", job)
+        # only the label event skips it; its gate step decides the rest
+        self.assertIn("\n    if: github.event.action != 'labeled'\n", job)
         self.assertIn('[ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]', job)
         self.assertIn(r"grep -Ev '^(docs|\.claude)/'", job)
         self.assertIn(r"\.go$|(^|/)go\.(mod|sum)$", job)
