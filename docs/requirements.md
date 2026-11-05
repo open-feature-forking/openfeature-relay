@@ -88,6 +88,7 @@ Derived from [vision.md](vision.md). Terms follow [glossary.md](glossary.md).
 | NFR-014 | Drop-In Testbed               | Provider suites that pass against the flagd-testbed image run unchanged against the relay testbed and pass the same scenarios. | Compatibility   | High     | Implemented |
 | NFR-015 | Test-Only Components          | No standard distribution manifest contains a module under `testbed/`. | Maintainability | Medium   | Implemented |
 | NFR-016 | Drop-In Upstream Sync         | Without a `grpc` object, a `grpc` source behaves as before: the same schedule, fail-fast connection, retries, keepalive, dial options and request metadata. | Compatibility   | High     | Open   |
+| NFR-017 | Correct Under Concurrent Load | Under concurrent OFREP, flag evaluation and flag sync clients, while its flags change, flagd-minimal answers every request from a flag generation inside the change window (one written between the apply bound before the request and the moment the answer returns), delivers to every flag sync stream and evaluation event stream every generation written while it is connected (a stream that lags more than one change interval fails), and shows no data race. Proven by `make test-load` (gated in CI) and `make test-load-smoke` (every build). | Reliability | High     | Open   |
 
 ## Constraints
 
