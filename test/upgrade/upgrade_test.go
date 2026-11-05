@@ -191,7 +191,7 @@ func scenarioSigterm(t *testing.T, image string) Transcript {
 	return tr
 }
 
-// The three event streams: the first messages each sends, in the order they arrive. The OFREP event stream is
+// The event streams, schema.v1 included: the first messages each sends, in the order they arrive. The OFREP event stream is
 // subscribed on the channel of an empty selector.
 func scenarioStreams(t *testing.T, image string) Transcript {
 	r := startFile(t, image)
@@ -200,6 +200,7 @@ func scenarioStreams(t *testing.T, image string) Transcript {
 	for _, c := range []struct{ name, port, path string }{
 		{"evaluation-v1", portEvaluation, "/flagd.evaluation.v1.Service/EventStream"},
 		{"evaluation-v2", portEvaluation, "/flagd.evaluation.v2.Service/EventStream"},
+		{"evaluation-schema-v1", portEvaluation, "/schema.v1.Service/EventStream"},
 		{"sync", portSync, "/flagd.sync.v1.FlagSyncService/SyncFlags"},
 	} {
 		status, h, body, err := r.stream(http.MethodPost, c.port, c.path, frame(`{}`), connect, 3*time.Second)
