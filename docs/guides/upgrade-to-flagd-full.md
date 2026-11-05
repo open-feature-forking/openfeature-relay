@@ -63,12 +63,6 @@ The keys are matched as written, in lower case; `Event-Sinks` is still ignored, 
 A file that holds the keys with no entries, as `event-sinks: []`, starts as before.
 If your configuration file has these keys for another purpose, remove them before you upgrade.
 
-### Visible to clients, unlikely to break them
-
-#### Flag sync's `Last-Modified` moves only on a configuration change
-
-The `Last-Modified` of the flag sync service endpoint changes when the flag configuration changes, and not on every reload.
-
 #### flagd-full links two more modules and the `event-collector` key is no longer ignored
 
 flagd-full now contains the webhook event sink, `eventsink/webhook`, and the event collector, `service/event-collector`, so `go version -m` and the SBOM list two more modules.
@@ -76,6 +70,20 @@ Neither does anything until you configure it: the sink subscribes to nothing wit
 The `event-collector` key of the configuration file used to be ignored. Now `event-collector: {port: 8017}` opens the collector's port, and an unknown setting under it stops startup with an error that names it.
 The collector takes `--cors-origin`, `--max-request-body` and `--max-request-header` as OFREP does; a setting under `event-collector` or `endpoint-settings` wins over a flag.
 If your configuration file has an `event-collector` key for another purpose, remove it before you upgrade.
+
+#### A `grpc` object on a source is read and validated
+
+A key named `grpc` on a source used to be ignored, like any key flagd does not know.
+It now holds the opt-in settings of a `grpc` source ([syncing from an upstream flag sync endpoint](../relay/grpc-source.md)).
+flagd stops at startup, naming the source, when the object holds an unknown key, a value of the wrong type or an invalid setting, or sits on a source whose provider is not `grpc`.
+Keys named as the flagd providers document them, such as `keepAliveTime`, set directly on a source, stay ignored.
+If a source carries a `grpc` key for another purpose, remove it before you upgrade.
+
+### Visible to clients, unlikely to break them
+
+#### Flag sync's `Last-Modified` moves only on a configuration change
+
+The `Last-Modified` of the flag sync service endpoint changes when the flag configuration changes, and not on every reload.
 
 #### OFREP `flagConfigEtag` values change
 
