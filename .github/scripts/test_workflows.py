@@ -126,9 +126,14 @@ class BuildWorkflow(unittest.TestCase):
         for name in self.CACHED_JOBS:
             with self.subTest(job=name):
                 job = jobs[name]
-                key = f"key: go-{name}-${{{{ hashFiles('**/go.sum') }}}}"
-                self.assertEqual(2, job.count(key))
-                self.assertIn(f"restore-keys: go-{name}-\n", job)
+                # the dry-run parts run in parallel from one job: each restores and saves a key of its own
+                part = "${{ matrix.part }}-" if name == "release-dry-run" else ""
+                key = f"key: go-{name}-{part}${{{{ hashFiles('**/go.sum') }}}}"
+                self.assertEqual(1, job.count(key))
+                self.assertIn(f"restore-keys: go-{name}-{part}\n", job)
+                # the save step uses the key the restore step computed: hashFiles of the tree after the build would
+                # see go.sum files the build generated (distributions/*/build)
+                self.assertEqual(1, job.count("key: ${{ steps.go-cache.outputs.cache-primary-key }}"))
                 self.assertEqual(1, job.count("uses: actions/cache/restore@"))
                 self.assertEqual(1, job.count("uses: actions/cache/save@"))
                 self.assertIn("cache: false", job)

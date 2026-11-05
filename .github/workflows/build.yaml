@@ -111,7 +111,7 @@ jobs:
             ~/.cache/go-build
             ${{ env.GOBIN }}/golangci-lint
             ~/.cache/golangci-lint
-          key: go-lint-${{ hashFiles('**/go.sum') }}
+          key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
 
   # Allocations per operation (NFR-001) of the library benchmarks, on the pull request's merge commit and on its base.
@@ -176,7 +176,7 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: go-docs-check-${{ hashFiles('**/go.sum') }}
+          key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
 
   test:
@@ -226,7 +226,7 @@ jobs:
           path: |
             ${{ env.GOPATH }}/pkg/mod
             ~/.cache/go-build
-          key: go-test-${{ hashFiles('**/go.sum') }}
+          key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
 
   # Report-only: a module that failed in `make test` outside the affected set is a miss. Never fails the run.
@@ -288,7 +288,7 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: go-builder-e2e-${{ hashFiles('**/go.sum') }}
+          key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
 
   fips:
@@ -378,7 +378,7 @@ jobs:
           path: |
             ${{ env.GOPATH }}/pkg/mod
             ~/.cache/go-build
-          key: go-fips-${{ hashFiles('**/go.sum') }}
+          key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
 
   docker-local:
@@ -466,7 +466,7 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: go-integration-test-${{ hashFiles('**/go.sum') }}
+          key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
 
   upgrade-test:
@@ -545,7 +545,7 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: go-upgrade-test-${{ hashFiles('**/go.sum') }}
+          key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
 
   release-dry-run:
@@ -627,8 +627,8 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: go-release-dry-run-${{ hashFiles('**/go.sum') }}
-          restore-keys: go-release-dry-run-
+          key: go-release-dry-run-${{ matrix.part }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-release-dry-run-${{ matrix.part }}-
       - name: Install cyclonedx-gomod
         if: steps.gate.outputs.run == 'true'
         # The release's action resolves its version through the GitHub API, which rate-limits a runner without a token.
@@ -652,5 +652,5 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: go-release-dry-run-${{ hashFiles('**/go.sum') }}
+          key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
