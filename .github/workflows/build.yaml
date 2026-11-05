@@ -223,20 +223,10 @@ jobs:
         env:
           # test/contract-external.sh fetches core at this commit; a pull request's merge commit is on no branch
           CONTRACT_EXTERNAL_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
-      # Report-only (#190): each failed test, and whether the change edits its module or it is a candidate flake.
+      # Report-only (#190): each failed test with its package, time and first error.
       - name: Summarize the failed tests
         if: failure()
-        env:
-          EVENT: ${{ github.event_name }}
-          BEFORE: ${{ github.event.before }}
-        run: |
-          base=
-          if [ "$EVENT" = pull_request ]; then
-            git fetch --no-tags --depth=2 origin "$GITHUB_SHA" && base=$(git rev-parse HEAD^1) || base=
-          elif [ -n "$BEFORE" ] && git fetch --no-tags --depth=1 origin "$BEFORE"; then
-            base=$BEFORE
-          fi
-          python3 .github/scripts/test-failures.py --log test.log --job test --base "$base" --summary "$GITHUB_STEP_SUMMARY"
+        run: python3 .github/scripts/test-failures.py --log test.log --job test --summary "$GITHUB_STEP_SUMMARY"
       - name: Keep the test log for the miss report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -405,14 +395,7 @@ jobs:
         shell: bash
       - name: Summarize the failed tests
         if: failure() && steps.gate.outputs.run == 'true'
-        env:
-          EVENT: ${{ github.event_name }}
-          BEFORE: ${{ github.event.before }}
-        run: |
-          base=$BEFORE
-          if [ "$EVENT" = pull_request ]; then base=$(git rev-parse HEAD^1 2>/dev/null || true); fi
-          git cat-file -e "$base^{commit}" 2>/dev/null || base=
-          python3 .github/scripts/test-failures.py --log test-fips.log --job "FIPS 140-3" --base "$base" --summary "$GITHUB_STEP_SUMMARY"
+        run: python3 .github/scripts/test-failures.py --log test-fips.log --job "FIPS 140-3" --summary "$GITHUB_STEP_SUMMARY"
 
       - name: Build both variants
         if: steps.gate.outputs.run == 'true'

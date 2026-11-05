@@ -2,7 +2,6 @@
 
 import importlib.util
 import pathlib
-import tempfile
 import unittest
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -68,44 +67,41 @@ class Failures(unittest.TestCase):
                            "Received unexpected error: building flagd-upgrade-baseline: exit status 1")],
                          tf.failures(VERBOSE))
 
+    def test_without_an_assertion_the_last_located_line(self):
+        log = f"""--- FAIL: TestResetRepeatedly (1.12s)
+    cycle_test.go:262: 200 resets, slowest 14.757123ms
+    cycle_test.go:266: found unexpected goroutines:
+        [Goroutine 6546 in state IO wait, with internal/poll.runtime_pollWait on top of the stack:
+FAIL
+FAIL\t{RELAY}/runtime\t28.465s
+"""
+        self.assertEqual([("TestResetRepeatedly", f"{RELAY}/runtime", "1.12",
+                           "cycle_test.go:266: found unexpected goroutines:")], tf.failures(log))
+
     def test_timeout(self):
         self.assertEqual([("TestClientReconnectsAfterRestart", f"{RELAY}/test/distributions", "",
                            "timed out after 10m0s")], tf.failures(TIMEOUT))
 
 
 class Report(unittest.TestCase):
-    MODS = {RELAY: "", f"{RELAY}/runtime": "runtime", f"{RELAY}/runtime/managementport": "runtime/managementport",
-            f"{RELAY}/sync/flagd-grpc": "sync/flagd-grpc"}
+    def test_table(self):
+        self.assertEqual([
+            "## Failed tests (FIPS 140-3)",
+            "",
+            "| Test | Package | Time | First error |",
+            "|---|---|---|---|",
+            f'| `TestManagementPort` | `{RELAY}/runtime/managementport` | 1.57 s | Not equal: expected: "a" |',
+            f'| `TestResetRepeatedly` | `{RELAY}/runtime` | 1.10 s | "15" is not less than or equal to "14": '
+            "file descriptors leaked |",
+            f"| `-` | `{RELAY}/sync/flagd-grpc` |  | [build failed] |",
+        ], tf.report(tf.failures(PLAIN), "FIPS 140-3").splitlines())
 
-    def test_module_dir_is_the_longest_prefix(self):
-        self.assertEqual("runtime/managementport", tf.module_dir(f"{RELAY}/runtime/managementport", self.MODS))
-        self.assertEqual("runtime", tf.module_dir(f"{RELAY}/runtime/fromconfig_test", self.MODS))
-        self.assertIsNone(tf.module_dir("integration_test", {}))
-
-    def test_verdicts(self):
-        text = tf.report(tf.failures(PLAIN), self.MODS, ["runtime/cycle_test.go"], "test")
-        self.assertIn("| `TestResetRepeatedly` | `" + RELAY + "/runtime` | 1.10 s |", text)
-        rows = {line.split("|")[1].strip(): line.split("|")[5].strip() for line in text.splitlines()
-                if line.startswith("| `")}
-        self.assertEqual({"`TestManagementPort`": "**no: candidate flake**", "`TestResetRepeatedly`": "yes",
-                          "`-`": "build failure, not a flake"}, rows)
-        self.assertIn("1 failure(s) in modules this change does not edit", text)
-
-    def test_unknown_change_set(self):
-        text = tf.report(tf.failures(PLAIN), self.MODS, None, "test")
-        self.assertIn("| unknown |", text)
-        self.assertIn("No base commit to compare with", text)
+    def test_a_pipe_in_the_error_does_not_split_the_row(self):
+        text = tf.report([("TestX", "p", "1.00", "a | b")], "test")
+        self.assertIn(r"| a \| b |", text)
 
     def test_no_failure(self):
-        self.assertIn("No `--- FAIL` or `FAIL` package line", tf.report([], {}, [], "test"))
-
-    def test_modules_reads_go_mod(self):
-        with tempfile.TemporaryDirectory() as d:
-            root = pathlib.Path(d)
-            (root / "a" / "b").mkdir(parents=True)
-            (root / "go.mod").write_text("module example.test/root\n")
-            (root / "a" / "b" / "go.mod").write_text("// x\nmodule example.test/root/a/b\n")
-            self.assertEqual({"example.test/root": "", "example.test/root/a/b": "a/b"}, tf.modules(root))
+        self.assertIn("No `--- FAIL` or `FAIL` package line", tf.report([], "test"))
 
 
 if __name__ == "__main__":
