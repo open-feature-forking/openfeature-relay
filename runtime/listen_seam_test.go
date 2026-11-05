@@ -7,10 +7,12 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
@@ -56,6 +58,8 @@ func TestListenSeamUsedByEveryEndpoint(t *testing.T) {
 			fmt.Sprintf("tcp :%d", p.service), fmt.Sprintf("tcp :%d", p.sync),
 		}
 		sort.Strings(want)
+		// readiness does not wait for every endpoint to listen
+		require.Eventually(t, func() bool { return slices.Equal(want, rec.opened()) }, 10*time.Second, 10*time.Millisecond)
 		require.Equal(t, want, rec.opened())
 	})
 
@@ -78,6 +82,8 @@ func TestListenSeamUsedByEveryEndpoint(t *testing.T) {
 			"unix " + cfg.ServiceSocketPath, "unix " + cfg.SyncServiceSocketPath,
 		}
 		sort.Strings(want)
+		// readiness does not wait for every endpoint to listen
+		require.Eventually(t, func() bool { return slices.Equal(want, rec.opened()) }, 10*time.Second, 10*time.Millisecond)
 		require.Equal(t, want, rec.opened())
 	})
 }
