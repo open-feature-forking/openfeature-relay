@@ -53,7 +53,7 @@ var retryDelays = []time.Duration{2 * time.Second, 5 * time.Second}
 
 // transient matches the output of a call that failed because the module proxy or the network dropped a request; a
 // call that failed for another reason, such as a compile error or a module the proxy answers 404 for, is not repeated.
-var transient = regexp.MustCompile(`stream error|INTERNAL_ERROR|i/o timeout|TLS handshake|connection reset|proxy\.golang\.org\S*: 5\d\d `)
+var transient = regexp.MustCompile(`stream error|INTERNAL_ERROR|i/o timeout|TLS handshake|connection reset|error reading from server: EOF|no such host|proxy\.golang\.org\S*: 5\d\d `)
 
 // run runs the go binary, again after a wait when it failed on the network (see transient).
 func (t Tool) run(ctx context.Context, dir string, env []string, args ...string) ([]byte, []byte, error) {

@@ -151,7 +151,7 @@ func buildFlagdImage(ctx context.Context, buildContext string) (string, error) {
 }
 
 // transient matches the output of a build that failed because the module proxy or the network dropped a request.
-var transient = regexp.MustCompile(`stream error|INTERNAL_ERROR|i/o timeout|TLS handshake|connection reset|proxy\.golang\.org\S*: 5\d\d `)
+var transient = regexp.MustCompile(`stream error|INTERNAL_ERROR|i/o timeout|TLS handshake|connection reset|error reading from server: EOF|no such host|proxy\.golang\.org\S*: 5\d\d `)
 
 func buildTestbedImage(ctx context.Context, buildContext, flagdImage string) error {
 	// Suppress testcontainers output by redirecting stderr to Discard
