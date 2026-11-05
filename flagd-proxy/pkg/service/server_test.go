@@ -18,19 +18,36 @@ import (
 	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
+// issuedPorts are the ports freePort has handed out in this process. A port is free again the moment it is closed, so
+// the next call can get the same one, and one start would listen twice on it.
+var issuedPorts sync.Map
+
 // freePort reserves an ephemeral TCP port from the kernel and returns it after
 // closing the listener, so the server under test can bind to it.
 func freePort(t *testing.T) uint16 {
 	t.Helper()
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to reserve a free port: %v", err)
+	// a port the kernel hands out again stays open until a new one comes, so the next listen cannot get it
+	var held []net.Listener
+	defer func() {
+		for _, h := range held {
+			_ = h.Close()
+		}
+	}()
+	for {
+		lis, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatalf("failed to reserve a free port: %v", err)
+		}
+		port := lis.Addr().(*net.TCPAddr).Port
+		if _, taken := issuedPorts.LoadOrStore(port, true); taken {
+			held = append(held, lis)
+			continue
+		}
+		if err := lis.Close(); err != nil {
+			t.Fatalf("failed to release reserved port: %v", err)
+		}
+		return uint16(port)
 	}
-	port := lis.Addr().(*net.TCPAddr).Port
-	if err := lis.Close(); err != nil {
-		t.Fatalf("failed to release reserved port: %v", err)
-	}
-	return uint16(port)
 }
 
 // waitForListener blocks until a TCP connection to addr succeeds or the

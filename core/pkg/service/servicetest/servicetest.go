@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -319,13 +320,31 @@ type running struct {
 	ended  <-chan struct{}
 }
 
+// issuedPorts are the ports freePort has handed out in this process. A port is free again the moment it is closed, so
+// the next call can get the same one, and one start would listen twice on it.
+var issuedPorts sync.Map
+
 func freePort() (int, error) {
-	l, err := net.Listen("tcp", ":0")
-	if err != nil {
-		return 0, err
+	// a port the kernel hands out again stays open until a new one comes, so the next listen cannot get it
+	var held []net.Listener
+	defer func() {
+		for _, h := range held {
+			_ = h.Close()
+		}
+	}()
+	for {
+		l, err := net.Listen("tcp", ":0")
+		if err != nil {
+			return 0, err
+		}
+		port := l.Addr().(*net.TCPAddr).Port
+		if _, taken := issuedPorts.LoadOrStore(port, true); taken {
+			held = append(held, l)
+			continue
+		}
+		_ = l.Close()
+		return port, nil
 	}
-	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port, nil
 }
 
 func (e *env) create(port int, mutate func(*service.Settings)) (service.Endpoint, string, error) {
