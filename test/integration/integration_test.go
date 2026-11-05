@@ -52,6 +52,25 @@ const (
 	inProcessTags = "@in-process && ~@unixsocket && ~@metadata && ~@contextEnrichment && ~@customCert && ~@forbidden && ~@sync-port && ~@sync-payload && ~@fractional-v1 && ~@fractional-v2 && ~@deprecated"
 )
 
+// rpcOutageTags is rpcTags with the scenarios that stop and restart the testbed (@reconnect, @events and @grace) included.
+// TESTBED_RPC_OUTAGES=true selects it for the gated testbed-rpc-outages job (UC-022 Q16); the default tags stay as they are.
+const rpcOutageTags = "@rpc && ~@unixsocket && ~@targetURI && ~@sync && ~@metadata && ~@customCert && ~@caching && ~@forbidden && ~@fractional-v1 && ~@fractional-v2 && ~@deprecated"
+
+// testbedImageEnv names a testbed image, as name:tag, to run the suites against. When it is unset, TestMain builds
+// flagd from this checkout into the upstream testbed image, as it always has (UC-022 Q14).
+const testbedImageEnv = "FLAGD_TESTBED_IMAGE"
+
+// testbedImage is the image and the tag the suites run against.
+func testbedImage() (image, tag string) {
+	if named := os.Getenv(testbedImageEnv); named != "" {
+		if i := strings.LastIndex(named, ":"); i > strings.LastIndex(named, "/") {
+			return named[:i], named[i+1:]
+		}
+		return named, "latest"
+	}
+	return "local-testbed-image", getGitCommitNative()
+}
+
 func TestMain(m *testing.M) {
 	flag.Parse()
 
@@ -71,6 +90,9 @@ func TestMain(m *testing.M) {
 }
 
 func setupFlagdTestbed(ctx context.Context) error {
+	if os.Getenv(testbedImageEnv) != "" {
+		return nil
+	}
 	// Build the testbed image with local flagd
 	buildContext, err := filepath.Abs("../../") // Adjust path to your project root
 	if err != nil {
@@ -156,12 +178,13 @@ func buildTestbedImage(ctx context.Context, buildContext, flagdImage string) err
 func TestRPC(t *testing.T) {
 
 	// Setup testbed runner for RPC provider
+	image, tag := testbedImage()
 	runner := testframework.NewTestbedRunner(testframework.TestbedConfig{
 		ResolverType:  testframework.RPC,
 		TestbedConfig: "default", // Use default testbed configuration
 		TestbedDir:    "../../test-harness",
-		Image:         "local-testbed-image",
-		Tag:           getGitCommitNative(),
+		Image:         image,
+		Tag:           tag,
 		// needed to speed up reconnection to make reconnection tests faster
 		ExtraOptions: []flagd.ProviderOption{
 			flagd.WithRetryBackoffMs(100),
@@ -177,6 +200,9 @@ func TestRPC(t *testing.T) {
 
 	// Run tests with RPC-specific tags - exclude connection/event issues we won't tackle
 	tags := rpcTags
+	if os.Getenv("TESTBED_RPC_OUTAGES") == "true" {
+		tags = rpcOutageTags
+	}
 
 	if err := runner.RunGherkinTestsWithSubtests(t, featurePaths, tags); err != nil {
 		t.Fatalf("Gherkin tests failed: %v", err)
@@ -186,12 +212,13 @@ func TestRPC(t *testing.T) {
 func TestInProcess(t *testing.T) {
 
 	// Setup testbed runner for InProcess provider
+	image, tag := testbedImage()
 	runner := testframework.NewTestbedRunner(testframework.TestbedConfig{
 		ResolverType:  testframework.InProcess,
 		TestbedConfig: "default", // Use default testbed configuration
 		TestbedDir:    "../../test-harness",
-		Image:         "local-testbed-image",
-		Tag:           getGitCommitNative(),
+		Image:         image,
+		Tag:           tag,
 		// needed to speed up reconnection to make reconnection tests faster
 		ExtraOptions: []flagd.ProviderOption{
 			flagd.WithRetryBackoffMs(100),

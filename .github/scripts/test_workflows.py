@@ -4,6 +4,7 @@ The hashes are of the files with line endings normalised to LF. A change to a pi
 new hash in the same commit.
 """
 import hashlib
+import os
 import pathlib
 import re
 import shlex
@@ -48,6 +49,17 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIsNotNone(match, f"job {name} is missing")
         return match.group(1)
 
+    def test_parses_as_yaml(self):
+        # GitHub drops every trigger of a workflow it cannot parse, without failing any check.
+        try:
+            import yaml
+        except ImportError:
+            if os.environ.get("GITHUB_ACTIONS") == "true":
+                self.fail("PyYAML is not installed on the runner, so this test cannot catch a workflow GitHub cannot parse")
+            self.skipTest("PyYAML is not installed")
+        jobs = yaml.safe_load(self.text)["jobs"]
+        self.assertIn("test", jobs)
+
     def test_paths_ignore_docs_on_push_and_pull_request(self):
         block = '    paths-ignore:\n      - "**/*.md"\n      - "docs/**"\n      - ".claude/**"\n'
         self.assertEqual(2, self.text.count(block))
@@ -70,7 +82,7 @@ class BuildWorkflow(unittest.TestCase):
         names = re.findall(r"^  ([a-z][a-z0-9-]*):[ \t]*(?:#.*)?\n", self.text.split("\njobs:\n", 1)[1], re.M)
         self.assertEqual(
             ["changes", "lint", "benchmark", "docs-check", "test", "miss-report", "builder-e2e", "fips", "docker-local", "integration-test",
-             "upgrade-test", "release-dry-run"], names)
+             "upgrade-test", "release-dry-run", "testbed", "testbed-rpc-outages"], names)
 
     def test_changes_is_report_only(self):
         """P1: the affected-module report runs beside today's jobs; nothing but the miss report waits on it."""
@@ -95,7 +107,7 @@ class BuildWorkflow(unittest.TestCase):
 
     def test_gated_jobs(self):
         gate = "if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'"
-        for name in ("fips", "docker-local"):
+        for name in ("fips", "docker-local", "testbed-rpc-outages"):
             with self.subTest(job=name):
                 self.assertIn(gate, self.job(name))
         self.assertIn("if: github.event_name == 'pull_request'", self.job("benchmark"))
@@ -107,6 +119,21 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIn('[ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]', job)
         self.assertIn(r"^\.github/scripts/testdata/|^\.github/workflows/release-please\.yaml$|^builder/|^distributions/|Dockerfile$", job)
         self.assertIn("if: steps.gate.outputs.run == 'true'", job)
+
+    def test_testbed_runs_when_go_code_or_the_testbed_changes(self):
+        """UC-022 Q14: the relay testbed has a gate step: FULL_CI, a manual run, or a change outside docs/ and .claude/."""
+        job = self.job("testbed")
+        self.assertNotIn("\n    if:", job)
+        self.assertIn('[ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]', job)
+        self.assertIn(r"grep -Ev '^(docs|\.claude)/'", job)
+        self.assertIn(r"\.go$|(^|/)go\.(mod|sum)$", job)
+        self.assertIn("if: steps.gate.outputs.run == 'true'", job)
+        self.assertIn("make testbed-contract-both", job)
+        self.assertIn("make testbed-suites", job)
+
+    def test_outage_job_compares_both_images(self):
+        """UC-022 Q16: the gated job runs the RPC suite with the outage scenarios against both images."""
+        self.assertIn("make testbed-rpc-outages", self.job("testbed-rpc-outages"))
 
     def test_release_dry_run_parts(self):
         """Slice R: the dry run is a matrix of parts; a pull request builds the reduced set, `main`, FULL_CI and a manual run the full one."""
