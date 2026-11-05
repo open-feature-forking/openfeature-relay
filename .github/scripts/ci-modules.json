@@ -172,7 +172,8 @@
       "coverage": true
     },
     "test/porttest": {
-      "test": "make test-module MODULE=test/porttest"
+      "test": "make test-module MODULE=test/porttest",
+      "coverage": true
     },
     "test/release": {
       "test": "make test-module MODULE=test/release",
