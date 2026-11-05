@@ -82,7 +82,7 @@
 **Trigger:** An external system refuses or does not answer a delivery (step 11)  
 **Flow:**
 
-1. The event sink keeps the undelivered events in its buffer and retries the delivery.
+1. The core module keeps the undelivered batch and retries it with backoff; once its retries are exhausted, it drops and counts the batch (UC-020 BR-002, A2).
 2. System keeps answering evaluations and keeps reporting readiness unchanged.
 3. Use case continues at step 11; once the buffer is full, A5 applies.
 
@@ -107,7 +107,7 @@ Publishing an evaluation event never blocks evaluation: a full event sink buffer
 
 ### BR-002: No Event Sink, No Cost
 
-With no event sink selected, publishing evaluation events adds no allocation to the evaluator benchmarks (NFR-013).
+With no event sink selected, publishing evaluation events adds no allocation to the endpoint benchmarks of the flag evaluation and OFREP service endpoints (NFR-013).
 
 ### BR-003: One Event per Resolved Flag
 

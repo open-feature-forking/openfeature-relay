@@ -110,7 +110,7 @@ A configuration format keeps the flag configurations it accepted in the store as
 
 ### BR-003: Validation Belongs to the Configuration Format
 
-Only the configuration format validates flag configurations and turns them into its documents; sync providers deliver them unchanged (UC-003 BR-008), and evaluators and service endpoints read only what the configuration format kept in the store (UC-007 BR-003). The same configuration format therefore serves a distribution with an evaluator and a configuration proxy alike.
+Only the configuration format validates flag configurations and turns them into its documents; sync providers deliver them unchanged (UC-003 BR-010), and evaluators and service endpoints read only what the configuration format kept in the store (UC-007 BR-003). The same configuration format therefore serves a distribution with an evaluator and a configuration proxy alike.
 
 ### BR-004: A Source Names Its Configuration Format
 
@@ -154,6 +154,3 @@ A source that names a configuration format the distribution does not contain is 
 This use case is `Implemented` for the configuration format side: the interface, the store's documents, flagd's own format, sources naming a format, the contract and an example format. These parts are delivered by the use cases named here, and are accepted gaps of this one:
 
 - Main scenario steps 8–9 and BR-007 (tag and publish the module, select it in a manifest by module path and version): UC-001 Build Custom Distribution and UC-012.
-
-- BR-003 for the Kubernetes sync provider, which shapes the flag configuration from the FeatureFlag CRD instead of delivering it unchanged: UC-003.
-- The module split: the `configformat` packages stay in the core module for now: UC-014 and phase 4.
