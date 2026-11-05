@@ -41,19 +41,11 @@ type Server struct {
 	addr   string
 }
 
-// Option configures a Server.
-type Option func(*Server)
-
-// WithLogger sets the logger. The default is slog.Default().
-func WithLogger(log *slog.Logger) Option { return func(s *Server) { s.log = log } }
-
-// New returns the control server for the target. Serve reads the raw flags and starts the target.
-func New(cfg Config, target Target, opts ...Option) *Server {
+// New returns the control server for the target. Serve reads the raw flags and starts the target. It logs to
+// slog.Default().
+func New(cfg Config, target Target) *Server {
 	s := &Server{cfg: cfg.WithDefaults(), target: target, log: slog.Default()}
 	s.current = s.cfg.DefaultConfig
-	for _, opt := range opts {
-		opt(s)
-	}
 	return s
 }
 
