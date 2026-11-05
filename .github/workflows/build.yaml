@@ -760,27 +760,24 @@ jobs:
           EVENT: ${{ github.event_name }}
           REF: ${{ github.ref }}
           REPOSITORY: ${{ github.repository }}
-          BEFORE: ${{ github.event.before }}
           HEAD: ${{ github.sha }}
         run: |
           # image inputs: Go code, modules, Dockerfiles, the distributions and the Builder, the testbed and its data, the
           # scripts that build and check the images, and this workflow
           pattern='\.go$|(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^testbed/|^test-harness|^\.github/scripts/(image-|oci-layout|publish-|release-)|^\.github/workflows/build\.yaml$'
           changed=false
-          if [ "$EVENT" = push ]; then
-            if [ -z "$BEFORE" ] || [ "$BEFORE" = 0000000000000000000000000000000000000000 ]; then
+          if [ "$EVENT" = schedule ]; then
+            # The nightly run publishes when image inputs changed since the commit :main was built from. flagd-minimal is
+            # the canary: every image is published together. No package yet, or a commit this clone lacks, is a change.
+            built=$(docker buildx imagetools inspect --raw ghcr.io/open-feature-forking/flagd-minimal:main 2>/dev/null \
+              | jq -r '.annotations["org.opencontainers.image.revision"] // empty' 2>/dev/null || true)
+            if [ -z "$built" ] || ! git cat-file -e "$built^{commit}" 2>/dev/null; then
               changed=true
-            elif git diff --name-only "$BEFORE" "$HEAD" | grep -Eq "$pattern"; then
+            elif git diff --name-only "$built" "$HEAD" | grep -Eq "$pattern"; then
               changed=true
             fi
           fi
-          created=""
-          if [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]; then
-            # flagd-minimal is the canary: every image is published together. No package yet is an empty answer.
-            created=$(docker buildx imagetools inspect --raw ghcr.io/open-feature-forking/flagd-minimal:main 2>/dev/null \
-              | jq -r '.annotations["org.opencontainers.image.created"] // empty' 2>/dev/null || true)
-          fi
-          INPUTS_CHANGED="$changed" MAIN_CREATED="$created" .github/scripts/publish-gate.sh | tee -a "$GITHUB_OUTPUT"
+          INPUTS_CHANGED="$changed" .github/scripts/publish-gate.sh | tee -a "$GITHUB_OUTPUT"
 
   release-dry-run:
     name: Release dry run (${{ matrix.part }})

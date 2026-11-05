@@ -357,15 +357,15 @@ class BuildWorkflow(unittest.TestCase):
 
     def test_image_build_parts_cover_the_other_five_distributions(self):
         """Step 17: flagd-minimal is built by the distributions part and the testbed by its job; the rest by image-build,
-        each in the two variants, as layouts checked as layouts and run from the layout."""
+        as layouts checked as layouts and run from the layout. FIPS is not published."""
         job = self.job("image-build")
         listed = " ".join(re.findall(r'distributions: "([^"]+)"', job)).split()
         self.assertEqual(["flagd-cloud", "flagd-full", "flagd-kubernetes", "flagd-minimal-otel", "flagd-sync"], sorted(listed))
         self.assertIn(".github/scripts/image-build.sh", job)
         self.assertIn('"0.0.0-main.${GITHUB_SHA::7}"', job)
         script = (ROOT / ".github" / "scripts" / "image-build.sh").read_text(encoding="utf-8")
-        for variant in ("standard", "fips"):
-            self.assertIn(variant, script)
+        # no FIPS image is published: the build has one variant and no FIPS build argument
+        self.assertNotIn("fips", script.lower().replace("no fips images", ""))
         self.assertIn("check_layout", script)
         self.assertIn("check_runtime", script)
         self.assertIn('source_dir=flagd\n', script)

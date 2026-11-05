@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds the images of standard distributions as two-platform OCI layouts, standard and FIPS, and checks them (step 17):
+# Builds the images of standard distributions as two-platform OCI layouts and checks them (step 17; no FIPS images):
 # the layout, and the amd64 image run from the layout. flagd-minimal is built by release-dry-run-distributions.sh with the
 # rest of its full path. Nothing is pushed; publish-images.sh pushes the layouts.
 #
@@ -40,13 +40,10 @@ for d in "$@"; do
     source_dir="distributions/${d}/build"
     GOWORK=off "${out}/relay-builder" --manifest "distributions/${d}/manifest.yaml" --skip-compile >/dev/null
   fi
-  for variant in standard fips; do
-    if [ "${variant}" = fips ]; then fips=on; suffix="-fips"; else fips=off; suffix=""; fi
-    build_layout "${d}" "${suffix}" -f builder/reference/Dockerfile --build-arg "DIST_PATH=${source_dir}" \
-      --build-arg "VERSION=v${version}" --build-arg "COMMIT=${commit}" --build-arg "DATE=${date}" --build-arg "FIPS=${fips}"
-    check_layout "${d}" "${suffix}"
-    check_runtime "${d}" "${suffix}" "${d}"
-  done
+  build_layout "${d}" "" -f builder/reference/Dockerfile --build-arg "DIST_PATH=${source_dir}" \
+    --build-arg "VERSION=v${version}" --build-arg "COMMIT=${commit}" --build-arg "DATE=${date}"
+  check_layout "${d}" ""
+  check_runtime "${d}" "" "${d}"
 done
 
 if [ "${failures}" -gt 0 ]; then exit 1; fi

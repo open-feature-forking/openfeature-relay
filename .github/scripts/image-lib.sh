@@ -19,7 +19,8 @@ new_builder() { # sets `builder` to a throwaway container builder that is remove
   trap 'docker buildx rm "${builder}" >/dev/null 2>&1 || true' EXIT
 }
 
-# build_layout <name> <suffix: empty or -fips> <extra buildx arguments...>: the tags are :main<suffix> and :sha-<short><suffix>
+# build_layout <name> <suffix> <extra buildx arguments...>: the tags are :main<suffix> and :sha-<short><suffix>; the suffix is
+# empty, as no FIPS image is published
 build_layout() {
   local name="$1" suffix="$2" kv
   local meta=()

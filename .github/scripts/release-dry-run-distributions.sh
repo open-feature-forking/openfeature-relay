@@ -121,17 +121,14 @@ else
   note "- ok: ${name}: the FIPS binary refuses GODEBUG=fips140=off"
 fi
 
-# the images: standard and FIPS, both platforms, as OCI layouts with provenance, an SBOM and the proof-of-concept marking
+# the image: both platforms, as an OCI layout with provenance, an SBOM and the proof-of-concept marking
 # (Q6, Q11, step 17). The layouts are what publish-images.sh pushes; the amd64 image is run from the layout. The default
 # driver cannot export OCI, so a throwaway container builder does.
 new_builder
-for variant in standard fips; do
-  if [ "${variant}" = fips ]; then fips=on; suffix="-fips"; else fips=off; suffix=""; fi
-  build_layout "${name}" "${suffix}" -f builder/reference/Dockerfile --build-arg "DIST_PATH=distributions/${d}/build" \
-    --build-arg "VERSION=v${version}" --build-arg "COMMIT=${commit}" --build-arg "DATE=${date}" --build-arg "FIPS=${fips}"
-  check_layout "${name}" "${suffix}"
-  check_runtime "${name}" "${suffix}" "${name}"
-done
+build_layout "${name}" "" -f builder/reference/Dockerfile --build-arg "DIST_PATH=distributions/${d}/build" \
+  --build-arg "VERSION=v${version}" --build-arg "COMMIT=${commit}" --build-arg "DATE=${date}"
+check_layout "${name}" ""
+check_runtime "${name}" "" "${name}"
 fi
 
 # the other four: only what differs from flagd-minimal
