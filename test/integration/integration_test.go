@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -117,7 +118,7 @@ func setupFlagdTestbed(ctx context.Context) error {
 func buildFlagdImage(ctx context.Context, buildContext string) (string, error) {
 	imageName := "flagd:test-local"
 
-	// The build downloads modules; it is retried because the module proxy fails a request now and then.
+	// The build downloads modules; a build that failed on the network (see transient) is retried, another failure is not.
 	var err error
 	for attempt := 1; attempt <= 3; attempt++ {
 		// Execute the docker buildx command
@@ -140,11 +141,17 @@ func buildFlagdImage(ctx context.Context, buildContext string) (string, error) {
 			return imageName, nil
 		}
 		err = fmt.Errorf("docker buildx failed: %v\nOutput: %s", buildErr, output)
-		fmt.Printf("attempt %d of 3: %v\n", attempt, err)
+		if !transient.Match(output) {
+			return imageName, err
+		}
+		fmt.Printf("failed on the network, attempt %d of 3: %v\n", attempt, err)
 	}
 
 	return imageName, err
 }
+
+// transient matches the output of a build that failed because the module proxy or the network dropped a request.
+var transient = regexp.MustCompile(`stream error|INTERNAL_ERROR|i/o timeout|TLS handshake|connection reset|proxy\.golang\.org\S*: 5\d\d `)
 
 func buildTestbedImage(ctx context.Context, buildContext, flagdImage string) error {
 	// Suppress testcontainers output by redirecting stderr to Discard
