@@ -85,7 +85,7 @@ class BuildWorkflow(unittest.TestCase):
     def test_jobs(self):
         names = re.findall(r"^  ([a-z][a-z0-9-]*):[ \t]*(?:#.*)?\n", self.text.split("\njobs:\n", 1)[1], re.M)
         self.assertEqual(
-            ["changes", "lint", "benchmark", "docs-check", "test-module", "test", "miss-report", "builder-e2e", "fips", "docker-local", "integration-test",
+            ["changes", "lint", "repo-checks", "benchmark", "docs-check", "test-module", "test", "miss-report", "builder-e2e", "fips", "docker-local", "integration-test",
              "upgrade-test", "release-dry-run", "testbed", "testbed-rpc-outages", "testbed-grpc-sync"], names)
 
     def test_changes_feeds_the_matrix(self):
@@ -163,9 +163,40 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIn("PREDICTED: ${{ needs.changes.outputs.predicted }}", report)
         self.assertIn("continue-on-error: true", report)
 
-    def test_lint_runs_the_module_table_tests(self):
-        """C1 and C2 are the parity gate for make test and make lint: CI has to run them."""
-        self.assertIn("run: python3 .github/scripts/test_ci_modules.py\n", self.job("lint"))
+    # what the one lint job checked before P3: `make lint` and then each step below, now split in two jobs
+    LINT_COMMANDS = ("make lint-modules", "go install -v github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0")
+    REPO_CHECKS_COMMANDS = (
+        "make check-flagd-full-generated",
+        "make check-package-coverage",
+        "make check-flagd-full-modules",
+        "python3 .github/scripts/test_workflows.py",
+        "python3 .github/scripts/test_compare_allocs.py",
+        "python3 .github/scripts/test_ci_modules.py",
+        "python3 .github/scripts/test_ci_modules_affected.py",
+        "python3 .github/scripts/test_compare_pass_sets.py",
+        "make check-module-boundary check-evaluator-boundary",
+        "grep -rln 'golang.org/x/exp' --include=*.go .",
+        "grep -rn 'golang.org/x/exp' --include=go.mod . | grep -v indirect",
+    )
+
+    def test_repo_checks_job(self):
+        """P3: every check of the old lint job runs in `lint` or in `repo-checks`, and each job runs only its own."""
+        lint, checks = self.job("lint"), self.job("repo-checks")
+        for command in self.LINT_COMMANDS:
+            with self.subTest(job="lint", command=command):
+                self.assertIn(command, lint)
+                self.assertNotIn(command, checks)
+        for command in self.REPO_CHECKS_COMMANDS:
+            with self.subTest(job="repo-checks", command=command):
+                self.assertIn(command, checks)
+                self.assertNotIn(command, lint)
+        self.assertNotIn("golangci", checks)
+        self.assertNotRegex(self.text, r"needs:.*repo-checks")
+
+    def test_lint_installs_the_version_make_lint_installs(self):
+        makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+        version = re.search(r"go install -v (github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v[0-9.]+)", makefile).group(1)
+        self.assertIn(f"go install -v {version}", self.job("lint"))
 
     def test_gated_jobs(self):
         gate = "if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'"
@@ -198,7 +229,7 @@ class BuildWorkflow(unittest.TestCase):
         parts = re.split(r"(?m)^(?=  [a-z][a-z0-9-]*:[^\n]*\n)", jobs)
         return {m.group(1): part for part in parts if (m := re.match(r"  ([a-z0-9-]+):", part))}
 
-    CACHED_JOBS = ("lint", "docs-check", "test-module", "builder-e2e", "fips", "integration-test", "upgrade-test", "release-dry-run")
+    CACHED_JOBS = ("lint", "repo-checks", "docs-check", "test-module", "builder-e2e", "fips", "integration-test", "upgrade-test", "release-dry-run")
     GATED_CACHED_JOBS = ("upgrade-test", "release-dry-run")
     ON_MAIN = "github.ref == 'refs/heads/main' && github.event_name == 'push'"
 

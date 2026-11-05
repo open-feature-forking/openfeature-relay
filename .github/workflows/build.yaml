@@ -57,6 +57,7 @@ jobs:
           --before "${{ github.event.before }}"
           --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
 
+  # golangci-lint over every module (step 15, P3). The binary and its cache directory are cached with the Go caches.
   lint:
     runs-on: ubuntu-latest
     env:
@@ -82,7 +83,42 @@ jobs:
           key: go-lint-${{ hashFiles('**/go.sum') }}
           restore-keys: go-lint-
       - run: make workspace-init
-      - run: make lint
+      # the version `make lint` installs
+      - run: go install -v github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
+      - run: make lint-modules
+      - name: Save the Go caches
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ${{ env.GOPATH }}/pkg/mod
+            ~/.cache/go-build
+            ${{ env.GOBIN }}/golangci-lint
+            ~/.cache/golangci-lint
+          key: ${{ steps.go-cache.outputs.cache-primary-key }}
+
+  # Everything the old lint job checked besides golangci-lint, beside it and gating nothing else (step 15, P3).
+  repo-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - name: Setup go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
+        with:
+          go-version-file: 'flagd/go.mod'
+          cache: false
+      - name: Restore the Go caches
+        id: go-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-repo-checks-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-repo-checks-
+      - run: make workspace-init
+      - run: make check-flagd-full-generated
       - run: make check-package-coverage
       - run: make check-flagd-full-modules
       - name: Test the workflow characterization
@@ -94,6 +130,8 @@ jobs:
       # C1 and C2: the module table and the Makefile targets that `make test` and `make lint` run.
       - name: Test the module table against the Makefile
         run: python3 .github/scripts/test_ci_modules.py
+      - name: Test the affected-module computation
+        run: python3 .github/scripts/test_ci_modules_affected.py
       - name: Test the comparison of the pass sets of the testbed suites
         run: python3 .github/scripts/test_compare_pass_sets.py
       # The module boundary tables include the evaluator boundary (NFR-005), which check-evaluator-boundary names.
@@ -112,10 +150,8 @@ jobs:
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
           path: |
-            ${{ env.GOPATH }}/pkg/mod
+            ~/go/pkg/mod
             ~/.cache/go-build
-            ${{ env.GOBIN }}/golangci-lint
-            ~/.cache/golangci-lint
           key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
 
