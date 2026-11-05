@@ -33,7 +33,7 @@ func freePort(t *testing.T) uint16 {
 			_ = h.Close()
 		}
 	}()
-	for {
+	for range 1000 {
 		lis, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Fatalf("failed to reserve a free port: %v", err)
@@ -48,6 +48,8 @@ func freePort(t *testing.T) uint16 {
 		}
 		return uint16(port)
 	}
+	t.Fatal("no free port that was not handed out before")
+	return 0
 }
 
 // waitForListener blocks until a TCP connection to addr succeeds or the

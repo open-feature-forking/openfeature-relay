@@ -5,6 +5,10 @@
 // A case applies according to what the factory declares (its Needs) and to the inputs the author supplies for
 // the features the endpoint has: documents, a cache validator, announcements, relayed events. No case can be
 // skipped: an applicable case whose input is missing fails, naming the input.
+//
+// An endpoint opens every listener through Settings.Listen, never by calling net.Listen itself (UC-004 BR-012): the
+// harness hands it an open listener on a free port that way, so nothing can take the port between choosing and binding
+// it, and the case "opens its listeners through Settings.Listen" fails an endpoint that binds without it.
 package servicetest
 
 import (
@@ -18,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -153,6 +158,9 @@ func (f Feature) supplied(in Inputs) bool {
 
 var always = func(service.Needs, Inputs) bool { return true }
 
+// hasPort applies a case to an endpoint that listens on a port the harness chooses.
+func hasPort(_ service.Needs, in Inputs) bool { return in.PortKey != "" }
+
 func resolves(n service.Needs, _ Inputs) bool { return n.Router || n.Format != "" }
 
 // Check runs the cases and returns the report, without failing a test. A case of a feature the author named in Without
@@ -164,6 +172,7 @@ func Check(_ testing.TB, f service.Factory, in Inputs) contracttest.Report {
 		{"creates from what it declared", always, caseCreates, ""},
 		{"serves and returns within the budget with its connections ended", always, caseServesAndStops, ""},
 		{"a serve error is returned", always, caseServeError, ""},
+		{"opens its listeners through Settings.Listen", hasPort, caseOpensThroughListen, ""},
 		{"resolves through the injected resolver with the effective selector", resolves, caseResolvesThroughInjection, ""},
 		{"publishes one evaluation event per resolved flag", resolves, caseOneEvaluationEvent, ""},
 		{"serves the documents of the requested format, unchanged, with versions", always, caseDocuments, FeatureDocuments},
@@ -318,13 +327,17 @@ type running struct {
 	cancel context.CancelFunc
 	done   chan error
 	ended  <-chan struct{}
+	// viaListen is whether the endpoint opened its listener through Settings.Listen (UC-004 BR-012)
+	viaListen bool
 }
 
-// issuedPorts are the ports freePort has handed out in this process. A port is free again the moment it is closed, so
+// issuedPorts are the ports reservePort has handed out in this process. A port is free again the moment it is closed, so
 // the next call can get the same one, and one start would listen twice on it.
 var issuedPorts sync.Map
 
-func freePort() (int, error) {
+// reservePort opens a listener on a free port that no call returned before and keeps it open, so nothing can take the
+// port between the choice and the bind. The endpoint is handed the listener through Settings.Listen (handOver).
+func reservePort() (net.Listener, error) {
 	// a port the kernel hands out again stays open until a new one comes, so the next listen cannot get it
 	var held []net.Listener
 	defer func() {
@@ -332,19 +345,37 @@ func freePort() (int, error) {
 			_ = h.Close()
 		}
 	}()
-	for {
+	for range 1000 {
 		l, err := net.Listen("tcp", ":0")
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
-		port := l.Addr().(*net.TCPAddr).Port
-		if _, taken := issuedPorts.LoadOrStore(port, true); taken {
+		if _, taken := issuedPorts.LoadOrStore(l.Addr().(*net.TCPAddr).Port, true); taken {
 			held = append(held, l)
 			continue
 		}
-		_ = l.Close()
-		return port, nil
+		return l, nil
 	}
+	return nil, errors.New("no free port that was not handed out before")
+}
+
+// handOver is a service.ListenFunc that returns l for the first listen of its port and listens as net.Listen does for
+// any other. took tells whether the endpoint asked for l.
+func handOver(l net.Listener) (listen service.ListenFunc, took func() bool) {
+	var once sync.Once
+	var given atomic.Bool
+	port := strconv.Itoa(l.Addr().(*net.TCPAddr).Port)
+	return func(network, address string) (net.Listener, error) {
+			if _, p, err := net.SplitHostPort(address); err == nil && p == port {
+				var first bool
+				once.Do(func() { first = true })
+				if first {
+					given.Store(true)
+					return l, nil
+				}
+			}
+			return net.Listen(network, address)
+		}, given.Load
 }
 
 func (e *env) create(port int, mutate func(*service.Settings)) (service.Endpoint, string, error) {
@@ -367,21 +398,62 @@ func (e *env) create(port int, mutate func(*service.Settings)) (service.Endpoint
 	return endpoint, addr, err
 }
 
-// start creates the endpoint, serves it and waits until a client can connect.
+// start creates the endpoint, serves it and waits until a client can connect. The endpoint is handed an open listener
+// through Settings.Listen. One that never asks for it (UC-004 BR-012) is served on a port chosen the old way instead,
+// so that only the case of that rule fails, and running.viaListen says which it was.
 func (e *env) start(mutate func(*service.Settings)) (*running, error) {
+	r, took, err := e.startOn(mutate, true)
+	if err == nil {
+		r.viaListen = took()
+		return r, nil
+	}
+	if e.in.PortKey == "" || took() {
+		return nil, err
+	}
+	r, _, retryErr := e.startOn(mutate, false)
+	if retryErr != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
+// startOn is start with the listener handed over (viaListen) or with a port that is free when the endpoint binds it.
+func (e *env) startOn(mutate func(*service.Settings), viaListen bool) (_ *running, took func() bool, startErr error) {
+	took = func() bool { return true }
 	port := 0
 	if e.in.PortKey != "" {
-		var err error
-		if port, err = freePort(); err != nil {
-			return nil, err
+		reserved, err := reservePort()
+		if err != nil {
+			return nil, took, err
+		}
+		port = reserved.Addr().(*net.TCPAddr).Port
+		if viaListen {
+			var listen service.ListenFunc
+			listen, took = handOver(reserved)
+			user := mutate
+			mutate = func(s *service.Settings) {
+				s.Listen = listen
+				if user != nil {
+					user(s)
+				}
+			}
+			// the endpoint closes the listener it was handed; one it never took is closed here when the start fails
+			defer func() {
+				if startErr != nil {
+					_ = reserved.Close()
+				}
+			}()
+		} else {
+			took = func() bool { return false }
+			_ = reserved.Close()
 		}
 	}
 	endpoint, addr, err := e.create(port, mutate)
 	if err != nil {
-		return nil, fmt.Errorf("expected Create to succeed with what the factory declared\nobserved: %w", err)
+		return nil, took, fmt.Errorf("expected Create to succeed with what the factory declared\nobserved: %w", err)
 	}
 	if e.in.Connect == nil {
-		return nil, errors.New("the input Connect is required: the harness connects to learn that the endpoint serves")
+		return nil, took, errors.New("the input Connect is required: the harness connects to learn that the endpoint serves")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -396,24 +468,40 @@ func (e *env) start(mutate func(*service.Settings)) (*running, error) {
 			var conn net.Conn
 			if conn, err = net.DialTimeout("tcp", addr, time.Second); err == nil {
 				conn.Close()
-				return r, nil
+				return r, took, nil
 			}
 		} else {
-			var ended <-chan struct{}
-			if ended, err = e.in.Connect(context.Background(), addr); err == nil {
-				r.ended = ended
-				return r, nil
+			// the listener the endpoint was handed accepts connections before it serves them, so an attempt that has
+			// no deadline of its own would wait for an endpoint that never took the listener
+			// (a Connect need not honour its context, so the attempt is abandoned instead)
+			type connected struct {
+				ended <-chan struct{}
+				err   error
+			}
+			result := make(chan connected, 1)
+			go func() {
+				ended, err := e.in.Connect(context.Background(), addr)
+				result <- connected{ended, err}
+			}()
+			select {
+			case c := <-result:
+				if err = c.err; err == nil {
+					r.ended = c.ended
+					return r, took, nil
+				}
+			case <-time.After(2 * time.Second):
+				err = errors.New("the connection attempt did not answer within 2s")
 			}
 		}
 		select {
 		case serveErr := <-r.done:
 			cancel()
-			return nil, fmt.Errorf("expected Serve to keep serving\nobserved: it returned %v", serveErr)
+			return nil, took, fmt.Errorf("expected Serve to keep serving\nobserved: it returned %v", serveErr)
 		default:
 		}
 		if time.Now().After(deadline) {
 			cancel()
-			return nil, fmt.Errorf("expected a client to connect within %v\nobserved: %w", Budget, err)
+			return nil, took, fmt.Errorf("expected a client to connect within %v\nobserved: %w", Budget, err)
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
@@ -468,19 +556,31 @@ func caseServesAndStops(e *env) error {
 	return nil
 }
 
+// caseOpensThroughListen is UC-004 BR-012: an endpoint opens its listeners through Settings.Listen. The testbed's listener
+// gate and an embedder that hands over a listener it opened earlier rely on it, so an endpoint that binds its port itself
+// fails here, with this message, and not with a port in use.
+func caseOpensThroughListen(e *env) error {
+	r, err := e.start(nil)
+	if err != nil {
+		return err
+	}
+	defer r.stop() //nolint:errcheck // the stop is the case of its own
+	if !r.viaListen {
+		return errors.New("expected the endpoint to open its listeners through Settings.Listen (UC-004 BR-012)\nobserved: it listened on its port without calling Settings.Listen, so a listener handed to it, as the testbed's listener gate does, is not used")
+	}
+	return nil
+}
+
 func caseServeError(e *env) error {
 	if e.in.PortKey == "" {
 		return errors.New("the input PortKey is required: the harness occupies the endpoint's port to see Serve fail")
 	}
-	port, err := freePort()
-	if err != nil {
-		return err
-	}
-	busy, err := net.Listen("tcp", ":"+strconv.Itoa(port))
+	busy, err := reservePort()
 	if err != nil {
 		return err
 	}
 	defer busy.Close()
+	port := busy.Addr().(*net.TCPAddr).Port
 
 	endpoint, _, err := e.create(port, nil)
 	if err != nil {

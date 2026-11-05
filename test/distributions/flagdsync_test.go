@@ -414,7 +414,7 @@ func startOnFileOnce(t *testing.T, name string, portFlags []string, content, ext
 
 	var lines []string
 	for _, line := range strings.Split(p.out.String(), "\n") {
-		if strings.Contains(line, `"level":"warn"`) || strings.Contains(line, `"level":"error"`) {
+		if strings.Contains(line, `"level":"warn"`) || strings.Contains(line, `"level":"error"`) || strings.Contains(line, `"level":"fatal"`) {
 			line = regexp.MustCompile(`"ts":[^,]+,`).ReplaceAllString(line, "")
 			line = regexp.MustCompile(`"caller":"[^"]+",?`).ReplaceAllString(line, "")
 			lines = append(lines, orderless(strings.ReplaceAll(line, dir, "<dir>")))

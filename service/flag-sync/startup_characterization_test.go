@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"fmt"
+	"net"
 	"testing"
 	"time"
 
@@ -62,12 +63,19 @@ func TestServingStartsAfterFiveSeconds(t *testing.T) {
 // TestCancelledStartStopsWithoutWaiting: a start whose context ends while no source has delivered, as when another
 // endpoint fails to bind, stops at once, without the timeout warning and without serving.
 func TestCancelledStartStopsWithoutWaiting(t *testing.T) {
-	const port = 18084
+	// the service is handed an open listener on a free port, so no other process can hold the port the test asserts on
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = listener.Close() })
+	port := listener.Addr().(*net.TCPAddr).Port
 	core, logs := observer.New(zap.WarnLevel)
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	_, _, _, done := startSyncService(t, ctx, SvcConfigurations{Port: port, Logger: logger.NewLogger(zap.New(core), false)})
+	_, _, _, done := startSyncService(t, ctx, SvcConfigurations{
+		Port: uint16(port), Logger: logger.NewLogger(zap.New(core), false),
+		Listen: func(string, string) (net.Listener, error) { return listener, nil },
+	})
 
 	time.Sleep(200 * time.Millisecond)
 	cancel()

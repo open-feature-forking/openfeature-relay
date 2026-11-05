@@ -7,13 +7,16 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/porttest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -27,7 +30,7 @@ func (r *recordingListen) listen(network, address string) (net.Listener, error) 
 	r.mu.Lock()
 	r.calls = append(r.calls, network+" "+address)
 	r.mu.Unlock()
-	return net.Listen(network, address)
+	return porttest.Listen(network, address)
 }
 
 func (r *recordingListen) opened() []string {
@@ -55,6 +58,8 @@ func TestListenSeamUsedByEveryEndpoint(t *testing.T) {
 			fmt.Sprintf("tcp :%d", p.service), fmt.Sprintf("tcp :%d", p.sync),
 		}
 		sort.Strings(want)
+		// readiness does not wait for every endpoint to listen
+		require.Eventually(t, func() bool { return slices.Equal(want, rec.opened()) }, 10*time.Second, 10*time.Millisecond)
 		require.Equal(t, want, rec.opened())
 	})
 
@@ -77,6 +82,8 @@ func TestListenSeamUsedByEveryEndpoint(t *testing.T) {
 			"unix " + cfg.ServiceSocketPath, "unix " + cfg.SyncServiceSocketPath,
 		}
 		sort.Strings(want)
+		// readiness does not wait for every endpoint to listen
+		require.Eventually(t, func() bool { return slices.Equal(want, rec.opened()) }, 10*time.Second, 10*time.Millisecond)
 		require.Equal(t, want, rec.opened())
 	})
 }
@@ -91,7 +98,7 @@ func TestListenSeamRefusalStopsTheRuntime(t *testing.T) {
 		if strings.HasSuffix(address, fmt.Sprintf(":%d", p.sync)) {
 			return nil, fmt.Errorf("listen refused: %s %s", network, address)
 		}
-		return net.Listen(network, address)
+		return porttest.Listen(network, address)
 	}
 	rt, err := FromConfig(logger.NewLogger(nil, false), "test", characterizedConfig(t, p), components)
 	require.Error(t, err, "flag sync listens when the endpoint is created")

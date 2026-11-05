@@ -194,3 +194,7 @@ replace (
 	github.com/open-feature-forking/openfeature-relay/service/ofrep => ../../../service/ofrep
 	github.com/open-feature-forking/openfeature-relay/service/transport => ../../../service/transport
 )
+
+require github.com/open-feature-forking/openfeature-relay/test/porttest v0.0.0
+
+replace github.com/open-feature-forking/openfeature-relay/test/porttest => ../../porttest

@@ -36,11 +36,11 @@ func acceptRuntime(t *testing.T) (rt *Runtime, changes *events.Subscription, fla
 		{URI: vendorSource, Provider: "file", Format: "versioned"},
 	}
 	var err error
-	rt, err = FromConfig(logger.NewLogger(nil, false), "test", cfg, Components{
+	rt, err = FromConfig(logger.NewLogger(nil, false), "test", cfg, listening(Components{
 		Sync:                 officialset.Components().Sync,
 		ConfigurationFormats: append(officialset.Components().ConfigurationFormats, versionedFactory{}),
 		Evaluators:           officialset.Components().Evaluators,
-	})
+	}))
 	require.NoError(t, err)
 	changes = rt.Bus.Subscribe(events.SubscribeOptions{Kinds: []events.Kind{events.KindConfigurationChange}, Buffer: 16})
 	t.Cleanup(changes.Close)

@@ -71,11 +71,13 @@ func (f *fixture) deliver(t *testing.T, flagSet, version string) {
 	})
 }
 
-// issuedPorts are the ports freePort has handed out in this process. A port is free again the moment it is closed, so
+// issuedPorts are the ports reservePort has handed out in this process. A port is free again the moment it is closed, so
 // the next call can get the same one, and one start would listen twice on it.
 var issuedPorts sync.Map
 
-func freePort(t *testing.T) int {
+// reservePort opens a listener on a free port no call returned before and keeps it open; the endpoint is handed it
+// through Settings.Listen, so nothing can take the port between the choice and the bind.
+func reservePort(t *testing.T) net.Listener {
 	t.Helper()
 	// a port the kernel hands out again stays open until a new one comes, so the next listen cannot get it
 	var held []net.Listener
@@ -84,17 +86,18 @@ func freePort(t *testing.T) int {
 			_ = h.Close()
 		}
 	}()
-	for {
+	for range 1000 {
 		l, err := net.Listen("tcp", ":0")
 		require.NoError(t, err)
-		port := l.Addr().(*net.TCPAddr).Port
-		if _, taken := issuedPorts.LoadOrStore(port, true); taken {
+		if _, taken := issuedPorts.LoadOrStore(l.Addr().(*net.TCPAddr).Port, true); taken {
 			held = append(held, l)
 			continue
 		}
-		_ = l.Close()
-		return int(port)
+		t.Cleanup(func() { _ = l.Close() })
+		return l
 	}
+	t.Fatal("no free port that was not handed out before")
+	return nil
 }
 
 // serve starts the endpoint; bound is the selector the distribution's middleware binds, if any.
@@ -107,8 +110,10 @@ func serve(t *testing.T, bound string) *fixture {
 	f.deliver(t, setA, "v1")
 	f.deliver(t, setB, "v1")
 
-	port := freePort(t)
+	reserved := reservePort(t)
+	port := reserved.Addr().(*net.TCPAddr).Port
 	settings := service.Settings{
+		Listen: func(string, string) (net.Listener, error) { return reserved, nil },
 		Store: st, Bus: f.bus, Logger: log, Resolver: typed.New(f.eval, typed.WithObserver(events.EvaluationObserver(f.bus, Type))),
 		Config: map[string]any{"port": port, "formats": []string{"flagd"}, "sources": []string{src}},
 		HTTPMiddleware: func(next http.Handler) http.Handler {
