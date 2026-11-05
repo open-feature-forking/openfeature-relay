@@ -67,6 +67,9 @@ accepted:
   - kind: "#78"
     item: "Telemetry is flushed on shutdown"
     covered_by: ["runtime shutdown_order_test.go"]
+  - kind: "#78"
+    item: "A failed start stops at once"
+    covered_by: ["service/flag-sync TestCancelledStartStopsWithoutWaiting"]
   - kind: known-break
     item: "go install github.com/open-feature/flagd/flagd@<version> fails: flagd/go.mod carries local replace directives"
     owner: UC-012

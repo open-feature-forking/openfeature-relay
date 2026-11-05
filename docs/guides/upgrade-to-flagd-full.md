@@ -146,6 +146,12 @@ It stays off unless you set it.
 
 Spans and metrics that are still buffered are exported before flagd exits.
 
+#### A failed start stops at once
+
+When an endpoint cannot open its port, or another step of the startup fails, flagd exits with that error at once.
+Before, the flag sync service held the exit for up to 5 seconds and logged `timeout while waiting for all sync sources to complete their initial sync` first.
+The exit code and the error are the same.
+
 ## Known breaks
 
 - **`go install github.com/open-feature/flagd/flagd@<version>` fails.**

@@ -8,7 +8,10 @@ import (
 
 	syncv1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/sync/v1"
 	"connectrpc.com/connect"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 // answers reports whether the endpoint answers a flag fetch within a second; before the service serves,
@@ -54,6 +57,27 @@ func TestServingStartsAfterFiveSeconds(t *testing.T) {
 	require.Eventually(t, func() bool { return answers(t, port) }, 4*time.Second, 100*time.Millisecond,
 		"serving after the timeout")
 	require.GreaterOrEqual(t, time.Since(began), 5*time.Second)
+}
+
+// TestCancelledStartStopsWithoutWaiting: a start whose context ends while no source has delivered, as when another
+// endpoint fails to bind, stops at once, without the timeout warning and without serving.
+func TestCancelledStartStopsWithoutWaiting(t *testing.T) {
+	const port = 18084
+	core, logs := observer.New(zap.WarnLevel)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	_, _, _, done := startSyncService(t, ctx, SvcConfigurations{Port: port, Logger: logger.NewLogger(zap.New(core), false)})
+
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the start did not stop within 2 s of its context ending")
+	}
+	require.Zero(t, logs.FilterMessageSnippet("timeout while waiting for all sync sources").Len())
+	require.False(t, answers(t, port), "serving after the start stopped")
 }
 
 // TestLastModifiedMovesOnUnchangedRedelivery pins that the service stamps Last-Modified on every Emit, an unchanged
