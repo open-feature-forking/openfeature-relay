@@ -145,11 +145,15 @@ func newBed(t *testing.T, startTimeout time.Duration, extra map[string]string) *
 		}
 		b.target.shutdown()
 	})
-	require.Eventually(t, func() bool { return b.server.Addr() != "" }, 5*time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool { return b.server.Addr() != "" }, bedReadyTimeout, 10*time.Millisecond)
 	b.control = "http://" + b.server.Addr()
 	b.requireServing()
 	return b
 }
+
+// bedReadyTimeout bounds the default start, after which the control port opens; a CI run with -race needs far more than a
+// local one.
+const bedReadyTimeout = 30 * time.Second
 
 // get calls the control API.
 func (b *bed) get(path string) (int, string) {
