@@ -3,10 +3,10 @@ module github.com/open-feature-forking/openfeature-relay/test/concurrency
 go 1.27
 
 require (
-	buf.build/gen/go/open-feature/flagd/grpc/go v1.6.2-20260824202443-4824facda674.1
-	buf.build/gen/go/open-feature/flagd/protocolbuffers/go v1.36.11-20260824202443-4824facda674.1
+	buf.build/gen/go/open-feature/flagd/grpc/go v1.6.1-20260217192757-1388a552fc3c.1
+	buf.build/gen/go/open-feature/flagd/protocolbuffers/go v1.36.11-20260217192757-1388a552fc3c.1
 	github.com/stretchr/testify v1.12.1
-	google.golang.org/grpc v1.85.0
+	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
 )
 
