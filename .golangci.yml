@@ -91,6 +91,9 @@ linters:
             - "**/service/flag-sync/**"
             - "**/service/event-collector/**"
             - "**/runtime/**"
+            # runtime/runtimetest is a separate test-helper module whose purpose is to hold components; the package-graph
+            # boundary row for the runtime module keeps the runtime itself honest.
+            - "!**/runtime/runtimetest/**"
           deny:
             - pkg: go.opentelemetry.io
               desc: record spans and metrics through the injected telemetry provider
@@ -106,6 +109,7 @@ linters:
           files:
             - "!$test"
             - "**/runtime/**"
+            - "!**/runtime/runtimetest/**"
           deny:
             - pkg: github.com/open-feature-forking/openfeature-relay/sync/file
               desc: the runtime holds no sync provider; the distribution passes Components.Sync

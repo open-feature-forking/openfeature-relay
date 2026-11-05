@@ -12,7 +12,7 @@ require (
 	github.com/open-feature-forking/openfeature-relay/configformat/flagd v0.1.0
 	github.com/open-feature-forking/openfeature-relay/core v0.20.0
 	github.com/open-feature-forking/openfeature-relay/evaluator/flagd v0.1.0
-	github.com/open-feature-forking/openfeature-relay/runtime/runtimetest v0.0.0
+	github.com/open-feature-forking/openfeature-relay/runtime/runtimetest v0.1.0
 	github.com/open-feature-forking/openfeature-relay/service/flag-evaluation v0.1.0
 	github.com/open-feature-forking/openfeature-relay/service/flag-sync v0.1.0
 	github.com/open-feature-forking/openfeature-relay/service/ofrep v0.1.0
