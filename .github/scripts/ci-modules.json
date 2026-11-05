@@ -157,6 +157,9 @@
     "test/middleware-example/distribution": {
       "test": "make test-module MODULE=test/middleware-example/distribution"
     },
+    "test/porttest": {
+      "test": "make test-module MODULE=test/porttest"
+    },
     "test/release": {
       "test": "make test-module MODULE=test/release",
       "always": true

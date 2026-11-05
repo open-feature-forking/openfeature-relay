@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -17,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/open-feature-forking/openfeature-relay/test/porttest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -102,30 +102,10 @@ func k6ImageName() string {
 	return k6Image
 }
 
-// issuedPorts are the ports freePort has handed out in this process. A port is free again the moment it is closed, so
-// the next call can get the same one, and one start would listen twice on it.
-var issuedPorts sync.Map
-
+// freePort is a free port no call has returned before: see porttest.
 func freePort(t *testing.T) int {
 	t.Helper()
-	// a port the kernel hands out again stays open until a new one comes, so the next listen cannot get it
-	var held []net.Listener
-	defer func() {
-		for _, h := range held {
-			_ = h.Close()
-		}
-	}()
-	for {
-		l, err := net.Listen("tcp", "127.0.0.1:0")
-		require.NoError(t, err)
-		port := l.Addr().(*net.TCPAddr).Port
-		if _, taken := issuedPorts.LoadOrStore(port, true); taken {
-			held = append(held, l)
-			continue
-		}
-		_ = l.Close()
-		return int(port)
-	}
+	return porttest.Free(t)
 }
 
 type flagdProc struct {

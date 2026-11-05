@@ -104,6 +104,7 @@ TEST_TARGETS += test-contract-external
 TEST_TARGETS += test-middleware-example
 TEST_TARGETS += test-release
 TEST_TARGETS += test-concurrency
+TEST_TARGETS += test-porttest
 test: $(TEST_TARGETS)
 test-core: test-modules
 # The loops below and CI's matrix (.github/scripts/ci-modules.json) run the same recipe, test-module.
@@ -123,7 +124,7 @@ UNCOVERED_MODULES := $(patsubst ./%,%,$(CONTRIB_MODULE_DIRS) $(TESTBED_MODULE_DI
 PLAIN_TEST_MODULES := builder test/release test/service-example test/sync-example test/evaluator-testkit \
     test/configformat-example test/configformat-example/distribution test/eventsink-example test/eventsink-example/distribution \
     test/middleware-example test/middleware-example/distribution test/telemetry-example test/telemetry-example/distribution \
-    test/inprocess-example/file test/inprocess-example/filegrpc test/inprocess-example/engine
+    test/inprocess-example/file test/inprocess-example/filegrpc test/inprocess-example/engine test/porttest
 .PHONY: test-module
 test-module:
 ifneq ($(filter $(TEST_MODULE),$(COVERED_MODULES)),)
@@ -184,6 +185,9 @@ test-builder:
 # The concurrency module's Docker-free tests; its load tests run only when RELAY_LOAD is set (NFR-017).
 test-concurrency:
 	go test -race -count=1 ./test/concurrency/...
+# The shared port helpers of the test modules.
+test-porttest:
+	go test -race -short -count=1 ./test/porttest/...
 test-distributions:
 	cd test/distributions && go test -count=1 -timeout 30m ./...
 test-flagd-proxy:
