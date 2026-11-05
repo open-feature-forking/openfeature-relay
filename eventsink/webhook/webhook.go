@@ -163,7 +163,6 @@ func parseHeaders(raw any) (http.Header, error) {
 	return h, nil
 }
 
-// validHeaderName reports whether name is an RFC 9110 token.
 // Webhook posts batches of events to a URL.
 type Webhook struct {
 	url     string
