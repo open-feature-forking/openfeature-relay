@@ -61,6 +61,12 @@ class BuildWorkflow(unittest.TestCase):
         jobs = yaml.safe_load(self.text)["jobs"]
         self.assertIn("test", jobs)
 
+    def test_every_action_is_pinned_to_a_commit(self):
+        """A mangled `uses:` (a stray character in place of the @) is still valid YAML, and GitHub rejects the workflow."""
+        for text in (self.text, RELEASE_CHECK.read_text(encoding="utf-8")):
+            for ref in re.findall(r"^\s*(?:- )?uses: (\S+)", text, re.M):
+                self.assertRegex(ref, r"^[\w./-]+@[0-9a-f]{40}$")
+
     def test_paths_ignore_docs_on_push_and_pull_request(self):
         block = '    paths-ignore:\n      - "**/*.md"\n      - "docs/**"\n      - ".claude/**"\n'
         self.assertEqual(2, self.text.count(block))
