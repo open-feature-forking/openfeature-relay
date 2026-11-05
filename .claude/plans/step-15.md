@@ -2,15 +2,11 @@
 
 **Status: revision 3, final. The project lead has decided QA–QD, and added the spec lint as a CI gate (slice L).**
 
-**Open: QE and QF, for slice R (the release dry run).**
-- **QE, the shape of the dry run:**
-  - (a) the parts in parallel, full set everywhere: ~11 min;
-  - (b) a reduced set on PRs, serial: ~21 min;
-  - (c) **(a) and (b) together: ~8–9 min on a PR, ~11 min on `main` and with `FULL_CI` (recommended)**;
-  - today: 43–71 min.
-- **QF, `go build -a`:**
-  - (a) **keep it (recommended).** Removing it means editing `release-build.sh` and both Dockerfiles, which the release uses, and K3's hashes; its gain inside an item is small (section 2, "Release dry run");
-  - (b) drop it, with a byte-identity check of the binaries. This saves part of flagd-proxy's archive time, unmeasured, and goes beyond "what release-please builds stays the same".
+**Slice R (the release dry run), decided:**
+- **QE (c):** the parts in parallel, and a reduced set on PRs. The full set runs on `main`, with `FULL_CI`, and on `workflow_dispatch`. That is ~8–9 min on a PR and ~11 min on `main`, against 43–71 min today.
+- **QF (a):** `go build -a` stays.
+
+R is ready to implement, from `main`, in parallel with the others. Open: none.
 - Revision 2 resolved `step-15-opposer.md` (1 blocker, 4 major, 6 minor; section 8).
 - Revision 3 records the decisions and the markdown rule that QD added.
 - Open: none.
@@ -326,14 +322,15 @@ The parts are 6 jobs against the 20-job limit. Each needs ~30 s of setup and the
 | C | implementer | `main` | C1–C3; `ci-modules.json`; `test-module` and `lint-modules`, with `test-modules`, `test-flagd` and `test-contrib` looping over `test-module`. `make test` and `make lint` run what they run today | now |
 | P4 | implementer | `main` | QD: the `concurrency` group, the new `paths-ignore`, `docs-check.yaml` with `docs-check` and `upgrade-guide`, and the K2 pins | now |
 | L | implementer | `main` | The spec lint: the three vendored aiup-core 2.28.0 scripts in their layout, `spec-lint.yaml`, `test_spec_lint_workflow` | now |
-| R | implementer | P0 (the first-parent gate) | QE: `release-dry-run` as a matrix over `part`, with `DRY_RUN_PART` in `release-dry-run.sh`, the `scope` output, and the reduced set on PRs. `release-please.yaml`, `release-build.sh` and the Dockerfiles stay unchanged. Dry runs: a PR touching `builder/` (reduced, every distribution), one touching `distributions/flagd-sync/` (reduced, that one), and a `workflow_dispatch` (full, every check of today green). `test_release_dry_run_parts` pins the parts and that `full` covers today's archive and image lists | after P0 |
+| R | implementer | `main` (if P0 merges first, its first-parent `BASE` line is merged in mechanically) | QE (c): `release-dry-run` as a matrix over `part`, with `DRY_RUN_PART` in `release-dry-run.sh`, the `scope` output, and the reduced set on PRs. `release-please.yaml`, `release-build.sh` and the Dockerfiles stay unchanged. Dry runs: a PR touching `builder/` (reduced, every distribution), one touching `distributions/flagd-sync/` (reduced, that one), and a `workflow_dispatch` (full, every check of today green). `test_release_dry_run_parts` pins the parts and that `full` covers today's archive and image lists | now |
+| R2 | implementer | `main` | When the dry run runs: only on a push to `main`, `FULL_CI=true`, `workflow_dispatch`, or a pull request labelled `release-check` (with `labeled` added to the `pull_request` types). Never by default on a PR, and the input-path gate no longer selects PRs. On `main` it keeps R's full set; a labelled PR gets R's reduced scope. K2's `test_release_dry_run_runs_when_its_inputs_change` is updated deliberately | now |
 | P1 | implementer | C | `ci-modules.py` (ownership, change set, edges, `extraEdges`, the `go.mod` rule) and the `TestAffected*` tests; the `changes` job in **report-only mode** with the miss report, beside today's `test` and `lint` | after C |
 | P2 | implementer | P1, and P0 merged | the `test-module` matrix and the aggregate `test`; per-module coverage and `codecov.yml`; the restore-only cache for the matrix; K2's job list | after P1 has reported ten PR runs with no miss |
 | P3 | implementer | P2 | `lint` over `lint-modules` and `repo-checks` (QB (a)); K2's job list | after P2 |
 | S | mechanic | `main` (straight to `main`) | `CLAUDE.md` "Local runs and CI": the affected-module matrix, `repo-checks`, everything on `main`, the markdown-only run, and the spec lint now in CI (the Spec gate row and the implementer's "the one gate CI does not run" line) | after P3 |
 
 **The critical path is C → P1 → (the ten reports) → P2 → P3.**
-- P0, C, P4 and L start now, in parallel. L touches no existing workflow.
+- P0, C, P4, L, R and R2 start now, in parallel (R2 edits R's gate step, so it merges after R or onto it). L touches no existing workflow; R touches only the `release-dry-run` job and its scripts.
 - They touch different parts of `build.yaml`, so their merges into the stack are mechanical; `test_workflows.py` takes one new test per PR.
 - P2 needs P0's cache on `main` before its matrix is measured.
 
@@ -371,7 +368,7 @@ No Go code changes, so no Go gate runs locally.
 - **R5, the aggregate goes green on a skipped job.** It is green only for an empty set with `all` false. Pinned by `test_aggregate_test`.
 - **R6, coverage noise.** Splitting `flagd-coverage.out` and carrying flags forward changes how Codecov groups coverage, once. The upload doesn't fail CI, as today.
 - **R7, markdown that Go reads.** Only two readers exist today: the generated CLI reference and the upgrade guide, and `docs-check.yaml` covers both. A new `go:embed` of a `.md` file, or a new test reading one, would be a third. `TestNoEmbeddedMarkdown` in P4 fails on a `go:embed` pattern that matches `.md`; a test that reads markdown has to be added to `docs-check.yaml`, which R7 says.
-- **R11, a reduced dry run on PRs misses a broken non-Linux or arm64 archive** until the full set runs on `main`. A darwin or Windows build failure surfaces after the merge. Releases are disabled here, so nothing ships from it; `FULL_CI` or a manual run gives a PR the full set.
+- **R11 (with R2: a release-build break is found on `main`, after the merge, and fixed forward; release-please is disabled here). A reduced dry run on a labelled PR misses a broken non-Linux or arm64 archive** until the full set runs on `main`. A darwin or Windows build failure surfaces after the merge. Releases are disabled here, so nothing ships from it; `FULL_CI` or a manual run gives a PR the full set.
 - **R10, the vendored spec lint drifts from the plugin.** The header records the version and the sha256. A local run with a newer plugin can disagree with CI until L's files are re-vendored; the CI copy is the gate. The sibling scripts are pinned to exist, so the lint can't silently lose the use-case validator.
 - **R8, K2's job regex.** It already misses two jobs (C3); C fixes it.
 - **R9, drop-in (C-003).** Nothing observable by operators or clients changes; only CI does.
@@ -394,7 +391,9 @@ No Go code changes, so no Go gate runs locally.
 | QA | (b), not the recommendation | The affected-module matrix, with every fix of the opposer: the `go.mod`/`go.sum` rule, `extraEdges`, the derived submodule flag, path-keyed edges, report-only mode with the miss report, and green on an empty set only with `all` false. Section 2 rewritten; P1–P3 restored; per-module coverage with carryforward, as #176 asks |
 | QB | (a), as recommended | One `lint` job over all modules, and `repo-checks` beside it |
 | QC | (c), as recommended | No gate. The compile gate (b) was considered with QA (b) in view and declined (section 7) |
-| Release dry run (later request) | open: QE, QF (section 0) | Slice R, measured: the parts in parallel, and a reduced set on PRs |
+| QE (release dry run) | (c), as recommended | Slice R: `release-dry-run` as a matrix over six parts; a reduced scope on PRs; full on `main`, with `FULL_CI` and on `workflow_dispatch` |
+| QF (release dry run) | (a), as recommended | `go build -a` stays; `release-build.sh`, `release-please.yaml` and both Dockerfiles stay unchanged |
+| R2 (release dry run, later decision) | runs only on `main`, `FULL_CI`, a manual run or a `release-check` label | Slice R2. A PR no longer runs the dry run by default; a break is fixed forward on `main` |
 | Spec lint in CI (later decision) | vendored, gating on errors | Slice L: aiup-core 2.28.0's `spec_lint.py` and its two sibling scripts, vendored in the plugin's layout; `spec-lint.yaml` on the spec files; fails on ERROR, not on WARN; K2 pin |
 | QD | (a), plus markdown | The `concurrency` group and everything on `main`. `paths-ignore` grows to `**/*.md`, `docs/**` and `.claude/**`. A new `docs-check.yaml` runs `docs-check` and the upgrade-guide test on markdown and `docs/` changes, with `.claude/` excluded. K2 pins the new block and the workflow. All in P4 |
 

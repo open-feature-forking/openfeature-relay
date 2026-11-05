@@ -322,6 +322,7 @@ func TestTestbedContract(t *testing.T) {
 	t.Run("files", testFiles)
 	t.Run("configs", testConfigs)
 	t.Run("change-after-restart", testChangeAfterRestart)
+	t.Run("control-port-opens-ready", testControlPortOpensReady)
 }
 
 // testAPI (C1): the four calls, with GET and POST: status code, content type and exact body.
@@ -592,4 +593,31 @@ func testChangeAfterRestart(t *testing.T) {
 	eventually("bar")
 	require.Equal(t, 200, b.call(http.MethodGet, "/change").code)
 	eventually("foo")
+}
+
+// testControlPortOpensReady: the control port never opens before the default configuration has started. From the start of
+// the container the port is polled, and the moment it first accepts, the management port must already be ready. (The
+// other cases wait for readiness first, and so cannot see a control port that opens early.)
+func testControlPortOpensReady(t *testing.T) {
+	image := os.Getenv("TESTBED_IMAGE")
+	if image == "" {
+		t.Skip("the testbed contract needs a testbed image; make testbed-contract IMAGE=<image> sets TESTBED_IMAGE")
+	}
+	id := docker(t, "run", "-d", "-v", t.TempDir()+":/flags", image)
+	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", id).Run() })
+	ip := docker(t, "inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", id)
+	require.NotEmpty(t, ip, "the container has no address")
+	b := &bed{t: t, id: id, ip: ip}
+
+	deadline := time.Now().Add(60 * time.Second)
+	for {
+		conn, err := net.DialTimeout("tcp", b.addr(portControl), time.Second)
+		if err == nil {
+			conn.Close()
+			break
+		}
+		require.True(t, time.Now().Before(deadline), "the control port never opens")
+		time.Sleep(2 * time.Millisecond)
+	}
+	require.True(t, b.ready(), "the control port accepted before flagd was ready")
 }

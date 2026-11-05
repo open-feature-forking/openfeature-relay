@@ -111,7 +111,7 @@ flagd-full reaches readiness within 10% of the time the previous flagd needs wit
 
 ### BR-006: Same Trace Shape
 
-The flag evaluation and OFREP service endpoints record one evaluation span per flag evaluation in every distribution with an OpenTelemetry telemetry provider, flagd-full included, so that an Operator's traces keep the shape the previous flagd's evaluator gave them (FR-033).
+The flag evaluation and OFREP service endpoints record one evaluation span per evaluation request, a bulk request included, in every distribution with an OpenTelemetry telemetry provider, flagd-full included, so that an Operator's traces keep the shape the previous flagd's evaluator gave them (FR-033).
 
 ### BR-007: Release Names
 

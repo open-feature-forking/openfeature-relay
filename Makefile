@@ -16,9 +16,9 @@ FLAGD_MODULE_DIRS := ./flagd ./runtime ./service/transport ./service/flag-evalua
 # test-fips.
 CONTRIB_MODULE_DIRS := ./contrib/flagsmith/engine ./contrib/flagsmith/middleware ./contrib/flagsmith/sync
 
-# The testbed's modules (UC-022): the control API, a library for the test suites of providers, and the runtime pieces of
-# the test harness. Tested and pinned like the contrib modules, and in no standard distribution.
-TESTBED_MODULE_DIRS := ./testbed/control ./testbed/source
+# The testbed modules (UC-022): libraries for the test suites of providers, which no distribution links. They are tested
+# and pinned like the library modules.
+TESTBED_MODULE_DIRS := ./testbed/control ./testbed/source ./testbed/cmd
 
 # The FIPS variant builds against the CMVP-certified Go Cryptographic Module
 # v1.0.0 (certificate #5247). The literal version is required; the
@@ -379,13 +379,16 @@ generate-flagd-full:
 # (NFR-008 asks for under three minutes). Run it with a warm module cache. The binary and the pins that run against it
 # stay out of flagd/.
 FLAGD_FULL_BUILD_DIR := .flagd-full-build
+# NFR-008: a warm build of flagd-full finishes within three minutes.
+FLAGD_FULL_BUILD_LIMIT ?= 180
 .PHONY: build-flagd-full
 build-flagd-full:
 	cd builder && go build -o ../bin/relay-builder ./cmd/relay-builder
 	rm -rf $(FLAGD_FULL_BUILD_DIR)
 	start=$$(date +%s); \
 	GOWORK=off ./bin/relay-builder --manifest distributions/flagd-full/manifest.yaml --output $(FLAGD_FULL_BUILD_DIR) || exit 1; \
-	echo "flagd-full built in $$(( $$(date +%s) - start ))s"
+	took=$$(( $$(date +%s) - start )); echo "flagd-full built in $${took}s"; \
+	if [ "$${took}" -gt "$(FLAGD_FULL_BUILD_LIMIT)" ]; then echo "NFR-008: flagd-full took $${took}s, over $(FLAGD_FULL_BUILD_LIMIT)s"; exit 1; fi
 	test -x $(FLAGD_FULL_BUILD_DIR)/flagd
 	cd flagd && FLAGD_BINARY=$$(cd ../$(FLAGD_FULL_BUILD_DIR) && pwd)/flagd go test -count=1 -run "TestCLICharacterization|TestStartupLogCharacterization" ./
 
@@ -433,3 +436,27 @@ testbed-launchpad-image:
 testbed-contract:
 	@test -n "$(IMAGE)" || { echo "usage: make testbed-contract IMAGE=<image> [KIND=launchpad|relay]"; exit 1; }
 	cd test/testbed && TESTBED_IMAGE=$(IMAGE) TESTBED_KIND=$(or $(KIND),launchpad) go test -count=1 -timeout 30m -v ./...
+
+# The relay testbed image: the testbed distribution, which the Builder generates from its manifest (UC-022).
+.PHONY: testbed-relay-image testbed-contract-both testbed-suites testbed-rpc-outages
+testbed-relay-image:
+	docker build -f distributions/flagd-testbed/Dockerfile -t flagd-testbed:local .
+# The contract against both images: the launchpad as it is, the relay testbed with its quirks fixed.
+testbed-contract-both: testbed-launchpad-image testbed-relay-image
+	$(MAKE) testbed-contract IMAGE=testbed-launchpad:local KIND=launchpad
+	$(MAKE) testbed-contract IMAGE=flagd-testbed:local KIND=relay
+# TestRPC and TestInProcess against both images, which must pass the same scenarios (UC-022 Q14). The outage scenarios
+# (@reconnect, @events, @grace) are included by testbed-rpc-outages (Q16).
+testbed-suites: testbed-launchpad-image testbed-relay-image
+	.github/scripts/testbed-suites.sh
+testbed-rpc-outages: testbed-launchpad-image testbed-relay-image
+	.github/scripts/testbed-suites.sh outages
+
+# UC-023 (Q14): flagd-full with a grpc source against the relay testbed. It builds both images, so it needs Docker and
+# stays out of `make test`; the test skips without TESTBED_FLAGD_IMAGE.
+.PHONY: testbed-grpc-sync
+testbed-grpc-sync:
+	docker build -f distributions/flagd-testbed/Dockerfile -t testbed-relay:grpc-sync .
+	docker build -f flagd/build.Dockerfile -t flagd-full:grpc-sync .
+	cd test/testbed && TESTBED_IMAGE=testbed-relay:grpc-sync TESTBED_KIND=relay TESTBED_FLAGD_IMAGE=flagd-full:grpc-sync \
+		go test -count=1 -timeout 30m -v -run 'TestGRPCSource' ./...
