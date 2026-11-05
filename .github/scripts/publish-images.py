@@ -6,7 +6,7 @@
   publish-images.py move-main --short <7 hex> --sha <full commit> [--names n1,n2] [--force]
       Moves the main tags to the sha-<short> images, only if the commit :main points at is an ancestor of --sha. A commit
       this checkout does not have (main was force-pushed) is no ancestor, so :main would stay where it is for good: --force
-      moves it anyway.
+      moves it anyway, but only for a commit this checkout lacks: a commit it has that is no ancestor keeps :main.
 
 There is one image per name: no FIPS variant is published.
 
@@ -245,9 +245,12 @@ def move_main(args, log=print):
             if revision == args.sha:
                 log(f"- {repository}:main already holds {args.sha[:7]}")
                 continue
-            if not getattr(args, "force", False) and (not revision or not is_ancestor(revision, args.sha)):
+            lacks = bool(revision) and not has_commit(revision)
+            # --force only covers a revision this checkout lacks (main was force-pushed); a commit it has that is no
+            # ancestor of --sha (an older or a sibling commit) keeps :main either way.
+            if not (getattr(args, "force", False) and lacks) and (not revision or not is_ancestor(revision, args.sha)):
                 hint = ""
-                if revision and not has_commit(revision):
+                if lacks:
                     hint = " (this checkout lacks it: was main force-pushed? run the build manually with move-main-anyway)"
                 log(f"- kept {repository}:main: it holds {revision[:7] or 'an unknown commit'}, which is not an ancestor of {args.sha[:7]}{hint}")
                 continue

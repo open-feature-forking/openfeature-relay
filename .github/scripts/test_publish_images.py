@@ -275,6 +275,9 @@ class PublishImages(unittest.TestCase):
         old = git("rev-parse", "HEAD")
         git("commit", "-q", "--allow-empty", "-m", "new")
         new = git("rev-parse", "HEAD")
+        if revision_of_old == "side":  # a commit this checkout has, which is no ancestor of new
+            tree = git("rev-parse", "HEAD^{tree}")
+            revision_of_old = git("commit-tree", tree, "-p", old, "-m", "side")
         for sha, revision in ((old, revision_of_old or old), (new, new)):
             directory = pathlib.Path(self.dir.name) / f"layouts-{sha[:7]}"
             directory.mkdir()
@@ -298,6 +301,17 @@ class PublishImages(unittest.TestCase):
         self.assertTrue(any("force-pushed" in m for m in self.messages), self.messages)
         move(force=True)
         self.assertEqual(FakeRegistry.tags[("open-feature-forking/flagd-sync", f"sha-{new[:7]}")], FakeRegistry.tags[main])
+
+    def test_force_does_not_move_main_back_to_a_commit_the_checkout_has(self):
+        """--force covers a missing revision only: :main holding an existing commit that is no ancestor stays."""
+        new = self.history("side")
+        main = ("open-feature-forking/flagd-sync", "main")
+        before = FakeRegistry.tags[main]
+        for kw in ({}, {"force": True}):
+            self.messages.clear()
+            publish.move_main(argparse.Namespace(short=new[:7], sha=new, names="flagd-sync", **kw), self.messages.append)
+            self.assertEqual(before, FakeRegistry.tags[main], kw)
+            self.assertTrue(any(m.startswith("- kept open-feature-forking/flagd-sync:main") for m in self.messages), self.messages)
 
     def test_a_main_tag_that_does_not_hold_the_pushed_digest_is_an_error(self):
         new = self.history(None)

@@ -136,6 +136,23 @@ class BuildWorkflow(unittest.TestCase):
         self.assertEqual(2, self.text.count("packages: write"))
         self.assertNotRegex(self.text.split("\njobs:\n", 1)[0], r"packages:")
 
+    def test_move_main_anyway_input(self):
+        """Step 17: the dispatch input that lets move-main pass --force is a boolean off by default, read only in the
+        move-main job through the environment, and --force is passed only when it is true."""
+        head = self.text.split("\njobs:\n", 1)[0]
+        self.assertRegex(head, r"workflow_dispatch:\n    inputs:\n      move-main-anyway:\n(?:        description: .*\n)?"
+                               r"        type: boolean\n        default: false\n")
+        self.assertEqual(1, head.count("move-main-anyway"))
+        jobs = self.text.split("\njobs:\n", 1)[1]
+        self.assertEqual(1, jobs.count("move-main-anyway"))
+        move = self.job("move-main")
+        self.assertRegex(move, r"env:\n(?:          .*\n)*?          ANYWAY: \$\{\{ inputs\.move-main-anyway \}\}\n")
+        run = move.split("run: |\n", 1)[1]
+        self.assertNotIn("inputs.", run)
+        self.assertEqual(1, self.text.count("--force"))
+        self.assertIn('if [ "$ANYWAY" = true ]; then force=(--force); fi', run)
+        self.assertIn('"${force[@]}"', run)
+
     def test_jobs(self):
         names = re.findall(r"^  ([a-z][a-z0-9-]*):[ \t]*(?:#.*)?\n", self.text.split("\njobs:\n", 1)[1], re.M)
         self.assertEqual(
