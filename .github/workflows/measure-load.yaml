@@ -1,0 +1,42 @@
+name: measure-load
+
+# Manual only: measures, on a GitHub runner, what the concurrency load's rates and apply bound D were set from
+# (test/concurrency, NFR-017). Run it from the Actions tab; the numbers are in the job log.
+on:
+  workflow_dispatch:
+    inputs:
+      rates:
+        description: "Requests per second of each of ofrep-single and rpc-unary to try, comma separated"
+        default: "20,50,100,150,200"
+
+env:
+  GOTOOLCHAIN: local
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - name: Setup go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
+        with:
+          go-version-file: 'flagd/go.mod'
+      - run: make workspace-init
+
+      # flagd's CPU cores and what k6 saw at each rate: pick the rates where flagd stays below about 60 % of the runner.
+      - name: Measure the request rates
+        env:
+          RELAY_MEASURE_RATES: ${{ inputs.rates }}
+        run: |
+          set -euo pipefail
+          K6_IMAGE=$(make -s -p | sed -n 's/^K6_IMAGE.*= //p' | head -1)
+          K6_IMAGE=$K6_IMAGE RELAY_LOAD=smoke go test -count=1 -v -timeout 40m -run TestMeasureRates ./test/concurrency/...
+
+      # The apply bound: the worst apply latency over the smoke's generations, to set D (three times the worst case).
+      - name: Measure the apply latency
+        run: |
+          set -euo pipefail
+          K6_IMAGE=$(make -s -p | sed -n 's/^K6_IMAGE.*= //p' | head -1)
+          K6_IMAGE=$K6_IMAGE RELAY_LOAD=full go test -count=1 -v -timeout 40m -run 'TestConcurrency$' ./test/concurrency/... | grep -E 'apply latency|^(---|ok|FAIL)'
