@@ -31,10 +31,9 @@ env:
   GOTOOLCHAIN: local
 
 jobs:
-  # The generated CLI reference under docs/ matches the commands.
+  # The generated CLI reference under docs/ matches the commands, and TestGuideCoversAcceptedItems, which reads
+  # docs/guides/upgrade-to-flagd-full.md, passes.
   docs-check:
-    # build.yaml has a job of the same id; a change that runs both would otherwise show two checks named docs-check.
-    name: docs-check (markdown run)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -48,16 +47,5 @@ jobs:
       - name: Check no diff
         run: |
           if [ ! -z "$(git status --porcelain)" ]; then echo "Doc generation produced diff. Run 'make generate-docs' and commit results."; exit 1; fi
-
-  # TestGuideCoversAcceptedItems reads docs/guides/upgrade-to-flagd-full.md.
-  upgrade-guide:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
-      - name: Setup go
-        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
-        with:
-          go-version-file: 'flagd/go.mod'
-      - run: make workspace-init
       - run: make test-upgrade-accepted
+        if: ${{ !cancelled() }}
