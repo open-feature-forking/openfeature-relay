@@ -30,6 +30,8 @@ surfaces:
     covered_by: ["TestSpans"]
   - surface: "version, help, unknown scheme and deprecated flags"
     scenario: version
+  - surface: "an invalid port setting: exit code and error line"
+    scenario: invalid-port
   - surface: "shutdown"
     scenario: sigterm
   - surface: "flagd-proxy: a file source, one subscriber, the metric of the open streams, a source that is missing or cannot be reached"

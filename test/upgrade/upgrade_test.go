@@ -43,6 +43,7 @@ var scenarios = map[string]scenario{
 	"version":              scenarioVersion,
 	"unknown-scheme":       scenarioUnknownScheme,
 	"deprecated-keepalive": scenarioDeprecatedKeepAlive,
+	"invalid-port":         scenarioInvalidPort,
 	"resolve":              scenarioResolve,
 	"management":           scenarioManagement,
 	"unreachable-source":   scenarioUnreachableSource,
@@ -74,6 +75,24 @@ func scenarioUnknownScheme(t *testing.T, image string) Transcript {
 		if strings.Contains(line, "nope://x") {
 			tr.add("first-error-line", Text(stripJSONFields(line)))
 			break
+		}
+	}
+	return tr
+}
+
+// A port setting that is no integer in [0, 65535] ends flagd with the same exit code and the same error line, where
+// flagd used to listen on an ephemeral port (upstream 3fa8064e).
+func scenarioInvalidPort(t *testing.T, image string) Transcript {
+	var tr Transcript
+	for _, setting := range []string{"FLAGD_PORT=tcp://10.0.0.1:8015", "FLAGD_MANAGEMENT_PORT=abc", "FLAGD_OFREP_PORT=70000"} {
+		name, value, _ := strings.Cut(setting, "=")
+		code, out := once(t, image, []string{"start"}, map[string]string{name: value}, nil)
+		tr.add(name+"/exit-code", fmt.Sprint(code))
+		for _, line := range strings.Split(out, "\n") {
+			if i := strings.Index(line, "invalid port value"); i >= 0 {
+				tr.add(name+"/first-error-line", Text(line[i:]))
+				break
+			}
 		}
 	}
 	return tr

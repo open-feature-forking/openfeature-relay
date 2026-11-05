@@ -62,7 +62,11 @@ func LoadConfig(path string, components distribution.Components, rewrites []Sour
 	if err != nil {
 		return runtime.Config{}, components, err
 	}
-	return runtimeConfig(v, sources, extensions), withTelemetryConfigFrom(v, extensions.components), nil
+	cfg, err := runtimeConfig(v, sources, extensions)
+	if err != nil {
+		return runtime.Config{}, components, err
+	}
+	return cfg, withTelemetryConfigFrom(v, extensions.components), nil
 }
 
 // fileKeys returns the keys the configuration file at path holds, read on their own: the merged view of viper cannot
