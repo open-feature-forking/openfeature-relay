@@ -35,7 +35,6 @@ rectangle "OpenFeature Relay" {
     usecase "UC-013\nVerify Change Against Distributions" as UC013
 
     usecase "UC-014\nEmbed Evaluator in In-Process Provider" as UC014
-    usecase "UC-015\nMigrate Provider to Component Modules" as UC015
 
     usecase "UC-016\nRecover From Snapshot" as UC016
 
@@ -80,7 +79,6 @@ maintainer --> UC012
 maintainer --> UC013
 
 provider --> UC014
-provider --> UC015
 provider --> UC022
 
 UC001 --> go
@@ -91,8 +89,6 @@ UC012 --> registry
 UC013 --> ci
 UC013 --> harness
 UC014 --> harness
-UC015 --> harness
-UC015 --> maintainer
 UC017 --> inproc
 UC019 --> vendor
 UC022 --> ci

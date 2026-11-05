@@ -102,7 +102,6 @@ nav:
       - 'UC-012 Release Distributions and Component Modules': 'use_cases/UC-012-release-distributions-and-component-modules.md'
       - 'UC-013 Verify Change Against Distributions': 'use_cases/UC-013-verify-change-against-distributions.md'
       - 'UC-014 Embed Evaluator in In-Process Provider': 'use_cases/UC-014-embed-evaluator-in-in-process-provider.md'
-      - 'UC-015 Migrate Provider to Component Modules': 'use_cases/UC-015-migrate-provider-to-component-modules.md'
       - 'UC-016 Recover From Snapshot': 'use_cases/UC-016-recover-from-snapshot.md'
       - 'UC-017 Run Configuration Proxy': 'use_cases/UC-017-run-configuration-proxy.md'
       - 'UC-018 Develop Configuration Format Extension': 'use_cases/UC-018-develop-configuration-format-extension.md'

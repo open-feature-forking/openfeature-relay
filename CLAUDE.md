@@ -35,7 +35,7 @@ Each phase runs plan → oppose → implement → review, one role per agent in 
 4. Module split into component modules (NFR-004, NFR-006, C-004).
 5. Builder CLI, manifest, code generation (FR-001..FR-009, FR-017, FR-018).
 6. Standard distributions, images, CI (FR-021, FR-030..FR-032, NFR-003, NFR-009, NFR-011).
-7. Contract tests, example extension, migration guide (FR-015, FR-043, NFR-010).
+7. Contract tests, example extension (FR-015, NFR-010; the migration guide moves to #156).
 
 ## Issues
 
@@ -64,7 +64,7 @@ After phase 1 (C1, C2, D), work proceeds one use case at a time, in this order. 
 | 13 | UC-022 Run Provider Test Suites Against the Testbed | flagd-testbed as a relay-builder distribution, listener gate, control module |
 | 14 | UC-023 Sync From an Upstream Flag Sync Endpoint | the Go flagd provider's gRPC sync features in `sync/flagd-grpc`, opt-in per source |
 
-UC-015 and UC-016 stay Deferred. For UC-015 the proof of concept only checks that today's providers keep working: `make flagd-integration-test` runs the released Go flagd provider, unchanged, in RPC and in-process mode against flagd built from this repository.
+UC-016 stays Deferred. Provider migration (formerly UC-015) is out of scope: #156. The proof of concept only checks that today's providers keep working: `make flagd-integration-test` runs the released Go flagd provider, unchanged, in RPC and in-process mode against flagd built from this repository.
 
 A use case is done when its main success scenario and every alternative flow have an automated test, the reviewer's verdict is `ready`, the PR is merged, and its `**Status:**` line moves to `Implemented` (to `Tested` once a test case under `docs/test_cases/` covers it). This is a proof of concept: upstream reviewability (C-006) is a preference, not a gate. When a later use case delivers part of it, the use case still moves to `Implemented` once its own scope is done, provided every such step and rule is listed as an accepted gap naming the use case that delivers it, and the requirements it shares move to `In Progress` so the spec lint shows no drift.
 
