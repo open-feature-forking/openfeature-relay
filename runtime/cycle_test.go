@@ -22,9 +22,8 @@ import (
 // cycles is how many times a test builds or resets a runtime.
 const cycles = 200
 
-// readyWithin is the longest a rebuilt or reset runtime may take to be ready. A cycle that blocks takes the whole of
-// it, so it is sized for a loaded -race runner, and stays under the 10 s waitReady gives up at.
-const readyWithin = 8 * time.Second
+// readyWithin is the longest a rebuilt or reset runtime may take to be ready.
+const readyWithin = time.Second
 
 func openFDs(t *testing.T) int {
 	t.Helper()
@@ -172,7 +171,7 @@ func TestFromConfigRepeatedly(t *testing.T) {
 	requireNoFDLeak(t, fds)
 }
 
-// Resetting one runtime over and over is as clean, and each reset has the runtime ready again within readyWithin.
+// Resetting one runtime over and over is as clean, and each reset has the runtime ready again within the second.
 func TestResetRepeatedly(t *testing.T) {
 	p := newPorts(t)
 	rt, stop := build(t, twoSourceConfig(t, p))
