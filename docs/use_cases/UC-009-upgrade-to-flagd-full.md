@@ -7,7 +7,7 @@
 **Primary Actor:** Operator  
 **Goal:** Replace a running flagd from before the builder with flagd-full without changing the start command, configuration file, environment variables, ports or image name, and keep the same evaluation results.  
 **Trigger:** Operator decides to move a flagd deployment to the first release built as flagd-full  
-**Status:** Implemented  
+**Status:** Tested  
 
 **Requirements:** [FR-020, FR-033, FR-034, FR-052, NFR-002, NFR-007, C-003](../requirements.md)
 

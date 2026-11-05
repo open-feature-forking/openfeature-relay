@@ -1,0 +1,54 @@
+# flagd-testbed: the flagd that the provider test suites run against (UC-022). It holds only what the pinned suites use
+# (BR-005, Q15); a component added here without a suite that needs it fails TestTestbedManifestIsMinimal. It is a test
+# harness: no standard distribution lists a testbed module (NFR-015).
+dist:
+  name: flagd-testbed
+  version: 0.0.0
+  output_path: ./build
+  module: github.com/open-feature-forking/openfeature-relay/distributions/flagd-testbed
+  binary: flagd
+  # the suites check flagd's error texts
+  components_hint: false
+sync_providers:
+  # selector-flags.json and the metadata configuration's source, in every configuration
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/file, version: v0.0.0}
+  # the combined flags that default, ssl and sync-payload name as flags/allFlags.json (Q23)
+  - {module: github.com/open-feature-forking/openfeature-relay/testbed/source, version: v0.0.0}
+configuration_formats:
+  # every source's flag configuration
+  - {module: github.com/open-feature-forking/openfeature-relay/configformat/flagd, version: v0.0.0}
+evaluators:
+  # TestRPC: every evaluation through port 8013
+  - {module: github.com/open-feature-forking/openfeature-relay/evaluator/flagd, version: v0.0.0}
+service_endpoints:
+  # TestRPC (port 8013) and the rpc.service route of envoy
+  - {module: github.com/open-feature-forking/openfeature-relay/service/flag-evaluation, version: v0.0.0}
+  # TestInProcess (port 8015) and the sync.service route of envoy (@targetURI)
+  - {module: github.com/open-feature-forking/openfeature-relay/service/flag-sync, version: v0.0.0}
+# the control API and the flagd target
+cmd: {module: github.com/open-feature-forking/openfeature-relay/testbed/cmd, version: v0.0.0}
+runtime: {module: github.com/open-feature-forking/openfeature-relay/runtime, version: v0.0.0}
+replaces:
+  - {module: github.com/open-feature-forking/openfeature-relay/configformat/flagd, path: ../../configformat/flagd}
+  - {module: github.com/open-feature-forking/openfeature-relay/core, path: ../../core}
+  - {module: github.com/open-feature-forking/openfeature-relay/evaluator/flagd, path: ../../evaluator/flagd}
+  - {module: github.com/open-feature-forking/openfeature-relay/eventsink/webhook, path: ../../eventsink/webhook}
+  - {module: github.com/open-feature-forking/openfeature-relay/runtime, path: ../../runtime}
+  - {module: github.com/open-feature-forking/openfeature-relay/service/event-collector, path: ../../service/event-collector}
+  - {module: github.com/open-feature-forking/openfeature-relay/service/flag-evaluation, path: ../../service/flag-evaluation}
+  - {module: github.com/open-feature-forking/openfeature-relay/service/flag-sync, path: ../../service/flag-sync}
+  - {module: github.com/open-feature-forking/openfeature-relay/service/ofrep, path: ../../service/ofrep}
+  - {module: github.com/open-feature-forking/openfeature-relay/service/transport, path: ../../service/transport}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/azblob, path: ../../sync/azblob}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/builder, path: ../../sync/builder}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/file, path: ../../sync/file}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc, path: ../../sync/flagd-grpc}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/gcs, path: ../../sync/gcs}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/http, path: ../../sync/http}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/openfeature-operator, path: ../../sync/openfeature-operator}
+  - {module: github.com/open-feature-forking/openfeature-relay/sync/s3, path: ../../sync/s3}
+  - {module: github.com/open-feature-forking/openfeature-relay/telemetry/otel, path: ../../telemetry/otel}
+  - {module: github.com/open-feature-forking/openfeature-relay/testbed/cmd, path: ../../testbed/cmd}
+  - {module: github.com/open-feature-forking/openfeature-relay/testbed/control, path: ../../testbed/control}
+  - {module: github.com/open-feature-forking/openfeature-relay/testbed/source, path: ../../testbed/source}
+  - {module: github.com/open-feature/flagd/flagd, path: ../../flagd}
