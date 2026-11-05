@@ -86,6 +86,17 @@ def report(rows, job):
     return "\n".join(lines) + "\n"
 
 
+def annotation(name, pkg, err):
+    """The ::error workflow command of a failure, its data and its title property escaped as GitHub reads them."""
+    def data(s):
+        return s.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+    def prop(s):
+        return data(s).replace(":", "%3A").replace(",", "%2C")
+
+    return f"::error title={prop('FAIL ' + name)}::{data(pkg + ': ' + err)}"
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--log", required=True)
@@ -97,7 +108,7 @@ def main(argv=None):
     text = report(rows, a.job)
     print(text)
     for name, pkg, _, err in rows:
-        print(f"::error title=FAIL {name}::{pkg}: {err}")
+        print(annotation(name, pkg, err))
     if a.summary:
         with open(a.summary, "a", encoding="utf-8") as f:
             f.write(text)

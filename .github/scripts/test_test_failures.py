@@ -104,5 +104,17 @@ class Report(unittest.TestCase):
         self.assertIn("No `--- FAIL` or `FAIL` package line", tf.report([], "test"))
 
 
+class Annotation(unittest.TestCase):
+    def test_escapes_the_workflow_command(self):
+        """GitHub's rules: %, CR and LF in the data; the same plus : and , in a property such as the title."""
+        self.assertEqual(
+            "::error title=FAIL TestX/a%3Ab%2Cc%25::example.test/p: 100%25 off%0D%0Anext line: a, b",
+            tf.annotation("TestX/a:b,c%", "example.test/p", "100% off\r\nnext line: a, b"))
+
+    def test_plain_failure(self):
+        self.assertEqual("::error title=FAIL TestX::example.test/p: Not equal:",
+                         tf.annotation("TestX", "example.test/p", "Not equal:"))
+
+
 if __name__ == "__main__":
     unittest.main()
