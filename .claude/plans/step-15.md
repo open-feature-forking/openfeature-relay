@@ -1,6 +1,6 @@
 # Step 15 plan: a test job per affected module, one lint job, a lighter build for markdown (issue #176)
 
-**Status: revision 3, final. The project lead has decided QA–QD.**
+**Status: revision 3, final. The project lead has decided QA–QD, and added the spec lint as a CI gate (slice L).**
 - Revision 2 resolved `step-15-opposer.md` (1 blocker, 4 major, 6 minor; section 8).
 - Revision 3 records the decisions and the markdown rule that QD added.
 - Open: none.
@@ -168,8 +168,35 @@ While today's serial `test` still runs in full, `changes` also:
 - **an external link checker:** links to other sites are flaky in CI, and `mkdocs --strict` already checks the internal ones;
 - **the spec lint:** it runs from the aiup plugin cache, not from the repository. It stays a local gate, as `CLAUDE.md` says.
 
+### Spec lint (the project lead's later decision)
+
+**The spec lint becomes a CI gate.** Today it is a local gate only (`CLAUDE.md`).
+
+**The script, vendored from aiup-core 2.28.0** (`~/.claude/plugins/cache/ai-unified-process-marketplace/aiup-core/2.28.0/skills/`):
+- `spec_lint.py` needs only the standard library.
+- It loads two sibling scripts from `<skills>/*use-case-spec/scripts/validate_use_case.py` and `<skills>/*test-case/scripts/bpmn_paths.py`, and silently drops them when they're missing.
+- Copied flat into `.github/scripts/`, it reports 7 info findings on `main` instead of 6, and skips the use-case validator's checks.
+- So the three files are vendored **in the plugin's own layout**, unmodified apart from a header comment that names the source path, the version 2.28.0 and the upstream file's sha256:
+  - `.github/scripts/aiup/spec-review/scripts/spec_lint.py`;
+  - `.github/scripts/aiup/use-case-spec/scripts/validate_use_case.py`;
+  - `.github/scripts/aiup/test-case/scripts/bpmn_paths.py`.
+- On `main` @ 0066517e, the vendored tree gives `0 error(s), 5 warning(s), 6 info(s)`, the same as the plugin's copy. `--self-test` passes.
+
+**The job:** a new workflow, `.github/workflows/spec-lint.yaml`, with one job `spec-lint`.
+- **Steps:**
+  - `python3 -I .github/scripts/aiup/spec-review/scripts/spec_lint.py --self-test`;
+  - `python3 -I .github/scripts/aiup/spec-review/scripts/spec_lint.py --docs docs`, without `--strict`. Exit 1 on an ERROR fails the job; warnings don't.
+- **Triggers:** push to `main` and pull request, with `paths:`
+  - `docs/vision.md`, `docs/requirements.md`, `docs/glossary.md`, `docs/use_cases.puml`, `docs/use_cases/**`, `docs/test_cases/**`;
+  - `docs/.spec-lint-baseline.json`, for when a baseline is added;
+  - `.github/scripts/aiup/**`;
+  - `.github/workflows/spec-lint.yaml`.
+- **Why a workflow of its own:** its paths are exact, without a gate step. `build.yaml` ignores all of them (`docs/**`, `**/*.md`), and `docs-check.yaml` triggers on them too, so a spec-only PR runs the markdown light set and the spec lint, and nothing else.
+- **Updating the script:** a new aiup-core version means re-vendoring all three files and their header comments in one commit.
+
 **K2:**
 - `test_paths_ignore_docs_on_push_and_pull_request` pins the new three-line block, twice;
+- `test_spec_lint_workflow` pins `spec-lint.yaml`'s paths, the command without `--strict`, and that the two sibling scripts exist where `load_sibling` looks;
 - `test_docs_check_workflow` pins `docs-check.yaml`'s paths and its two jobs;
 - `test_jobs` is unchanged by this part.
 
@@ -234,13 +261,14 @@ While today's serial `test` still runs in full, `changes` also:
 | P0 | implementer | `main` | The cache: one key per job, saved only on `main`; golangci-lint's binary and cache directory; the first-parent `BASE` in the `upgrade-test` and `release-dry-run` gates. Reports the cache's size and restore time, and O | now |
 | C | implementer | `main` | C1–C3; `ci-modules.json`; `test-module` and `lint-modules`, with `test-modules`, `test-flagd` and `test-contrib` looping over `test-module`. `make test` and `make lint` run what they run today | now |
 | P4 | implementer | `main` | QD: the `concurrency` group, the new `paths-ignore`, `docs-check.yaml` with `docs-check` and `upgrade-guide`, and the K2 pins | now |
+| L | implementer | `main` | The spec lint: the three vendored aiup-core 2.28.0 scripts in their layout, `spec-lint.yaml`, `test_spec_lint_workflow` | now |
 | P1 | implementer | C | `ci-modules.py` (ownership, change set, edges, `extraEdges`, the `go.mod` rule) and the `TestAffected*` tests; the `changes` job in **report-only mode** with the miss report, beside today's `test` and `lint` | after C |
 | P2 | implementer | P1, and P0 merged | the `test-module` matrix and the aggregate `test`; per-module coverage and `codecov.yml`; the restore-only cache for the matrix; K2's job list | after P1 has reported ten PR runs with no miss |
 | P3 | implementer | P2 | `lint` over `lint-modules` and `repo-checks` (QB (a)); K2's job list | after P2 |
-| S | mechanic | `main` (straight to `main`) | `CLAUDE.md` "Local runs and CI": the affected-module matrix, `repo-checks`, everything on `main`, the markdown-only run | after P3 |
+| S | mechanic | `main` (straight to `main`) | `CLAUDE.md` "Local runs and CI": the affected-module matrix, `repo-checks`, everything on `main`, the markdown-only run, and the spec lint now in CI (the Spec gate row and the implementer's "the one gate CI does not run" line) | after P3 |
 
 **The critical path is C → P1 → (the ten reports) → P2 → P3.**
-- P0, C and P4 start now, in parallel.
+- P0, C, P4 and L start now, in parallel. L touches no existing workflow.
 - They touch different parts of `build.yaml`, so their merges into the stack are mechanical; `test_workflows.py` takes one new test per PR.
 - P2 needs P0's cache on `main` before its matrix is measured.
 
@@ -253,6 +281,8 @@ While today's serial `test` still runs in full, `changes` also:
 | The workflow itself | CI on the PR, and the dry runs of section 3 | P0, P2, P3, P4 |
 | Full run | `workflow_dispatch` on the branch, every module green | P2, P3 |
 | No miss | P1's reports on ten PR runs | before P2 merges |
+| Spec lint parity | the vendored script and the plugin's copy give the same summary line on `main`, recorded in the PR description | L |
+| Spec lint in CI | a dry-run PR with a broken use case link (ERROR, red) and one with a weak word (WARN, green) | L |
 
 No Go code changes, so no Go gate runs locally.
 
@@ -276,6 +306,7 @@ No Go code changes, so no Go gate runs locally.
 - **R5, the aggregate goes green on a skipped job.** It is green only for an empty set with `all` false. Pinned by `test_aggregate_test`.
 - **R6, coverage noise.** Splitting `flagd-coverage.out` and carrying flags forward changes how Codecov groups coverage, once. The upload doesn't fail CI, as today.
 - **R7, markdown that Go reads.** Only two readers exist today: the generated CLI reference and the upgrade guide, and `docs-check.yaml` covers both. A new `go:embed` of a `.md` file, or a new test reading one, would be a third. `TestNoEmbeddedMarkdown` in P4 fails on a `go:embed` pattern that matches `.md`; a test that reads markdown has to be added to `docs-check.yaml`, which R7 says.
+- **R10, the vendored spec lint drifts from the plugin.** The header records the version and the sha256. A local run with a newer plugin can disagree with CI until L's files are re-vendored; the CI copy is the gate. The sibling scripts are pinned to exist, so the lint can't silently lose the use-case validator.
 - **R8, K2's job regex.** It already misses two jobs (C3); C fixes it.
 - **R9, drop-in (C-003).** Nothing observable by operators or clients changes; only CI does.
 
@@ -297,6 +328,7 @@ No Go code changes, so no Go gate runs locally.
 | QA | (b), not the recommendation | The affected-module matrix, with every fix of the opposer: the `go.mod`/`go.sum` rule, `extraEdges`, the derived submodule flag, path-keyed edges, report-only mode with the miss report, and green on an empty set only with `all` false. Section 2 rewritten; P1–P3 restored; per-module coverage with carryforward, as #176 asks |
 | QB | (a), as recommended | One `lint` job over all modules, and `repo-checks` beside it |
 | QC | (c), as recommended | No gate. The compile gate (b) was considered with QA (b) in view and declined (section 7) |
+| Spec lint in CI (later decision) | vendored, gating on errors | Slice L: aiup-core 2.28.0's `spec_lint.py` and its two sibling scripts, vendored in the plugin's layout; `spec-lint.yaml` on the spec files; fails on ERROR, not on WARN; K2 pin |
 | QD | (a), plus markdown | The `concurrency` group and everything on `main`. `paths-ignore` grows to `**/*.md`, `docs/**` and `.claude/**`. A new `docs-check.yaml` runs `docs-check` and the upgrade-guide test on markdown and `docs/` changes, with `.claude/` excluded. K2 pins the new block and the workflow. All in P4 |
 
 ### Revision 2 (`step-15-opposer.md`; the project lead's ordering input)
