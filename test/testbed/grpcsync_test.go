@@ -78,11 +78,22 @@ type node struct {
 func startFlagd(t *testing.T, image, uri, settings string, extra ...string) *node {
 	t.Helper()
 	source := fmt.Sprintf(`[{"uri":%q,"provider":"grpc","grpc":{%s}}]`, uri, settings)
-	id := docker(t, append([]string{"run", "-d", image, "start", "--sources", source}, extra...)...)
+	id := dockerRun(t, append([]string{"run", "-d", image, "start", "--sources", source}, extra...)...)
 	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", id).Run() })
 	ip := docker(t, "inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", id)
 	require.NotEmpty(t, ip, "the container has no address")
 	return &node{t: t, id: id, ip: ip}
+}
+
+// dockerRun runs `docker run -d` and returns the container id from stdout alone, whatever else docker prints.
+func dockerRun(t *testing.T, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("docker", args...)
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	require.NoError(t, err, "docker %s: %s", strings.Join(args, " "), stderr.String())
+	return strings.TrimSpace(string(out))
 }
 
 func containerIP(t *testing.T, id string) string {
@@ -219,7 +230,9 @@ func TestGRPCSourceFatalCode(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "envoy.yaml"), []byte(envoyPermissionDenied), 0o644))
 	require.NoError(t, os.Chmod(dir, 0o755))
-	envoy := docker(t, "run", "-d", "-v", dir+":/etc/envoy-test:ro", envoyImage, "-c", "/etc/envoy-test/envoy.yaml")
+	// the pull is separate: `docker run` on a missing image prints its progress next to the id
+	docker(t, "pull", "--quiet", envoyImage)
+	envoy := dockerRun(t, "run", "-d", "-v", dir+":/etc/envoy-test:ro", envoyImage, "-c", "/etc/envoy-test/envoy.yaml")
 	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", envoy).Run() })
 	upstream := net.JoinHostPort(containerIP(t, envoy), fmt.Sprint(portPermissionDenied))
 	require.Eventually(t, func() bool {
