@@ -270,7 +270,7 @@ jobs:
           output: "trivy-results.sarif"
           severity: "CRITICAL,HIGH"
         env:
-          # use an alternative trivvy db to avoid rate limits
+          # use an alternative trivy db to avoid rate limits
           TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2
 
       - name: Upload Trivy scan results to GitHub Security tab
@@ -414,7 +414,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
         with:
-          fetch-depth: 0
+          # the full history is for the nightly's diff against the commit :main was built from; no other run reads it
+          fetch-depth: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 0 || 1 }}
       - name: Build and publish the images?
         id: gate
         env:
@@ -549,7 +550,7 @@ jobs:
           exit-code: "0"
         env:
           TRIVY_PLATFORM: linux/amd64
-          # use an alternative trivvy db to avoid rate limits
+          # use an alternative trivy db to avoid rate limits
           TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2
       - name: Scan the other layouts (report only)
         continue-on-error: true
