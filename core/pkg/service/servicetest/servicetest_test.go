@@ -577,7 +577,7 @@ func evaluatorRequest(key string, selector store.Selector) evaluator.Request {
 }
 
 // TestLeavingAnInputOutFails is the fail-closed rule: a feature that is neither supplied nor named in Without
-// fails its case, naming the input, and a feature both supplied and named is reported.
+// fails its case, naming the input; a feature both supplied and named, or a name that is no feature, aborts the run.
 func TestLeavingAnInputOutFails(t *testing.T) {
 	in := inputsFor(serverFeatures, false)
 	in.Documents = nil
@@ -595,11 +595,14 @@ func TestLeavingAnInputOutFails(t *testing.T) {
 	in = inputsFor(serverFeatures, false)
 	in.Without = append(in.Without, FeatureValidator)
 	results = Check(t, stub{typeName: "x", features: serverFeatures}, in)
-	require.Contains(t, failed(results), "inputs")
+	require.Contains(t, results.Aborted, "Validator")
+	require.Empty(t, results.Cases)
 
 	in = inputsFor(features{}, false)
 	in.Without = append(in.Without, "Colour")
-	require.Contains(t, failed(Check(t, stub{typeName: "x"}, in)), "inputs")
+	results = Check(t, stub{typeName: "x"}, in)
+	require.Contains(t, results.Aborted, "Colour")
+	require.Empty(t, results.Cases)
 }
 
 // TestResolverNeedsDeclaresHTTP pins that an endpoint that resolves flags says whether it serves HTTP.

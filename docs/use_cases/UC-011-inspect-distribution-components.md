@@ -19,7 +19,7 @@
 
 1. Operator runs `flagd components` with the binary or image to inspect.
 2. System identifies the distribution by its name and manifest version.
-3. System lists the components compiled into the binary, grouped by component type: sync providers, configuration formats, evaluators, service endpoints, telemetry providers and middleware.
+3. System lists the components compiled into the binary, grouped by component type: sync providers, configuration formats, evaluators, service endpoints, event sinks, telemetry providers and middleware.
 4. System shows, for every sync provider, the schemes it handles.
 5. System shows, for every component, the component module and version it comes from.
 6. Operator compares the list with the schemes of the deployment's sources, the configuration format of its flag configurations, the service endpoints its clients use and its telemetry needs, and knows whether the distribution supports the deployment.
@@ -54,7 +54,7 @@
 
 ### A4: Required Component Missing
 
-**Trigger:** A scheme, configuration format, evaluator, service endpoint or telemetry provider the deployment needs is not in the list (step 6)  
+**Trigger:** A scheme, configuration format, evaluator, service endpoint, event sink or telemetry provider the deployment needs is not in the list (step 6)  
 **Flow:**
 
 1. Operator selects a standard distribution that contains it (UC-010) or asks a Distribution Builder for a custom distribution (UC-001).

@@ -80,6 +80,7 @@ nav:
   - 'Architecture': 'relay/architecture.md'
   - 'Distributions': 'relay/distributions.md'
   - 'Syncing from an upstream': 'relay/grpc-source.md'
+  - 'The testbed': 'relay/testbed.md'
   - 'Contract tests': 'reference/contract-tests.md'
   - 'Status and roadmap': 'relay/status.md'
   - 'Try it': 'relay/try-it.md'
@@ -108,6 +109,8 @@ nav:
       - 'UC-019 Serve Vendor Flags': 'use_cases/UC-019-serve-vendor-flags.md'
       - 'UC-020 Develop Event Sink Extension': 'use_cases/UC-020-develop-event-sink-extension.md'
       - 'UC-021 Export Evaluation Data': 'use_cases/UC-021-export-evaluation-data.md'
+      - 'UC-022 Run Provider Test Suites Against the Testbed': 'use_cases/UC-022-run-provider-test-suites-against-the-testbed.md'
+      - 'UC-023 Sync From an Upstream Flag Sync Endpoint': 'use_cases/UC-023-sync-from-an-upstream-flag-sync-endpoint.md'
     - 'Test cases':
       - 'TC-001 Custom Distribution as Image': 'test_cases/TC-001-custom-distribution-as-image.md'
       - 'TC-002 Extension Components in a Distribution': 'test_cases/TC-002-extension-components-in-a-distribution.md'

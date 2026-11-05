@@ -1,8 +1,9 @@
 # Step 16 plan: flagd-minimal stays correct under concurrent OFREP, RPC and sync clients (issue #183)
 
-**Status: revision 2. Four questions are open for the project lead (section 0).**
-- Revision 2 resolves `step-16-opposer.md` (0 blockers, 4 major, 8 minor; section 8). Every finding was adopted.
-- The opposer found that all four recommendations stand; the fixes change how they are carried out, not the choice.
+**Status: revision 2, final. The project lead has decided all four questions, each as recommended.**
+- Revision 2 resolved `step-16-opposer.md` (0 blockers, 4 major, 8 minor; section 8). Every finding was adopted.
+- Decided: Q1 (a), with (c) as the fallback; Q2 (a); Q3 (a); Q4 (a).
+- Open: none.
 
 **Decided by the project lead (#183):**
 - **Goal:** correctness under concurrency, pass/fail. Not a benchmark: no latency or throughput threshold.
@@ -29,33 +30,35 @@
 - k6: `k6/net/grpc` `Stream` (core since v0.49.0, stable since v1.0) exposes `on`, `write` and `end`; a stream has no default deadline; `loadProtoset` runs in the init context and doesn't walk imports.
 - The precedents `test/loadtest/sample_k6.js` and `flagd-proxy/tests/loadtest` stay as they are.
 
-## 0. Questions for the project lead
+## 0. Questions for the project lead (all decided)
+
+Each question keeps its options; every decision is the recommended one.
 
 - **Q1, the flag sync stream in k6.**
   - (a) **k6 core `k6/net/grpc` `Stream`.** One script for every client kind. The protoset is written from the Go generated packages flagd links, closed over every import (well-known types included). C's spike proves it first.
   - (b) An xk6 extension: our own k6 build on every run, for nothing core lacks.
   - (c) A Go sidecar holding the sync streams, k6 for OFREP and RPC only.
-  - **Recommended: (a)**, with (c) as the fallback if the spike fails.
+  - **Decided, as recommended: (a)**, with (c) as the fallback if the spike fails.
 
 - **Q2, changing the flags during the run.**
   - (a) **The conductor rewrites the flag file by atomic rename on a fixed schedule,** as Kubernetes and `testbed/control` do.
   - (b) As (a), alternating with in-place writes. A half-written file makes "no errors" ambiguous.
   - (c) The testbed control's `/change`: one flag, and the testbed distribution instead of flagd-minimal.
   - (d) As (a), plus an `http` source, so two sources merge under load.
-  - **Recommended: (a).** (d) is a follow-up.
+  - **Decided, as recommended: (a).** (d) is a follow-up.
 
 - **Q3, what "matches the current flags" means while a change is in flight.**
   - (a) **A clock window.** An answer is correct if it matches a generation written between "`D` before the request" and "when the answer came back". `D` is the apply bound, measured on a GitHub runner in C and set to three times the worst case. The conductor checks every generation against it and reports a late one as "slow" (`apply_late`), not "wrong".
   - (b) The conductor marks each generation applied, and k6 asks it per check.
   - (c) Check only between changes; blind to the moment of the swap.
-  - **Recommended: (a).**
+  - **Decided, as recommended: (a).**
 
 - **Q4, where the smoke runs, and the race build.**
   - (a) **`load-smoke` on every build (60 s), `load-test` gated (10 min), both with `-race`.** The smoke's cost is measured in L before W puts it on every PR.
   - (b) The smoke gated too.
   - (c) The smoke in step 15's affected-module matrix, run only when flagd-minimal's modules change.
   - (d) As (a), with the full run on a normal build and `-race` only in the smoke.
-  - **Recommended: (a).**
+  - **Decided, as recommended: (a).**
 
 ## 1. Design
 
@@ -210,6 +213,15 @@ The critical path is C → L → W. A failure L's full run finds is filed as an 
 - **Shared keys across flag sets** as a case: the sync payload can't tell them apart, so the oracle would be ambiguous. Left out.
 
 ## 8. Changelog
+
+### Final decisions (project lead)
+
+| Question | Decision | Change |
+|---|---|---|
+| Q1 | (a), as recommended, with (c) as the fallback | k6 core `Stream` with a closed protoset; if C's spike fails, a Go sidecar holds the sync streams with the same checks |
+| Q2 | (a), as recommended | The conductor's atomic rename on a fixed schedule; a second source (d) stays a follow-up |
+| Q3 | (a), as recommended | The clock window with `D` measured in C, ×3 |
+| Q4 | (a), as recommended | `load-smoke` on every build, `load-test` gated, both `-race`; the smoke's cost measured in L |
 
 ### Revision 2 (`step-16-opposer.md`)
 

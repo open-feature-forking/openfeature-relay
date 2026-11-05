@@ -82,7 +82,7 @@
 **Trigger:** An external system refuses or does not answer a delivery (step 11)  
 **Flow:**
 
-1. The event sink keeps the undelivered events in its buffer and retries the delivery.
+1. The core module keeps the undelivered batch and retries it with backoff; once its retries are exhausted, it drops and counts the batch (UC-020 BR-002, A2).
 2. System keeps answering evaluations and keeps reporting readiness unchanged.
 3. Use case continues at step 11; once the buffer is full, A5 applies.
 
@@ -107,11 +107,11 @@ Publishing an evaluation event never blocks evaluation: a full event sink buffer
 
 ### BR-002: No Event Sink, No Cost
 
-With no event sink selected, publishing evaluation events adds no allocation to the evaluator benchmarks (NFR-013).
+With no event sink selected, publishing evaluation events adds no allocation to the endpoint benchmarks of the flag evaluation and OFREP service endpoints (NFR-013).
 
 ### BR-003: One Event per Resolved Flag
 
-The flag evaluation and OFREP service endpoints resolve through the injected evaluation router, which publishes one evaluation event for every flag it resolves, including each flag of a bulk evaluation; a service endpoint that uses a configuration format's evaluator directly publishes them itself; the evaluator publishes nothing (FR-037).
+The flag evaluation and OFREP service endpoints resolve through the injected evaluation router and publish one evaluation event for every flag they resolve, including each flag of a bulk evaluation, through the observer of their typed adapter (`events.EvaluationObserver`); the router and the evaluator never see the event bus (FR-037).
 
 ### BR-004: Change Events Only for Accepted Changes
 

@@ -502,3 +502,21 @@ jobs:
           go-version-file: 'flagd/go.mod'
       - name: TestRPC with the @reconnect, @events and @grace scenarios, against both images
         run: make testbed-rpc-outages
+
+  testbed-grpc-sync:
+    name: Testbed gRPC source
+    # Gated during the proof of concept: set the repository variable FULL_CI=true, or run the workflow manually.
+    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+        with:
+          submodules: recursive
+      - name: Setup go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
+        with:
+          go-version-file: 'flagd/go.mod'
+      - name: A grpc source against the relay testbed - reconnects, a fatal status code and a stream deadline (UC-023)
+        run: make testbed-grpc-sync
