@@ -154,7 +154,7 @@ func TestFailedAndValidBuildsAlternate(t *testing.T) {
 	cycle()
 	check.client.CloseIdleConnections()
 	ignore := goleak.IgnoreCurrent()
-	fds := openFDs(t)
+	fds := settledFDs(t)
 
 	for range 100 {
 		cycle()
@@ -162,5 +162,5 @@ func TestFailedAndValidBuildsAlternate(t *testing.T) {
 
 	check.client.CloseIdleConnections()
 	goleak.VerifyNone(t, ignore)
-	require.LessOrEqual(t, openFDs(t), fds, "file descriptors leaked")
+	requireNoFDLeak(t, fds)
 }

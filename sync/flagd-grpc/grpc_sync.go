@@ -70,6 +70,11 @@ type Sync struct {
 	client FlagSyncServiceClient
 	ready  atomic.Bool
 
+	// after returns the channel that fires once the delay is over; time.After when nil. Tests replace it.
+	after func(time.Duration) <-chan time.Time
+	// dialRecorder, when non-nil, receives the options the client connection is created with. Tests set it.
+	dialRecorder func([]grpc.DialOption)
+
 	streamOpen  atomic.Bool
 	lastContact atomic.Int64 // unix nanoseconds at which the last stream ended; zero before the first
 }
@@ -85,6 +90,7 @@ func (g *Sync) Init(_ context.Context) error {
 		opts := make([]grpc.DialOption, 0, len(g.GrpcDialOptionsOverride)+len(g.DialOptions))
 		opts = append(opts, g.GrpcDialOptionsOverride...)
 		opts = append(opts, g.DialOptions...)
+		g.recordDial(opts)
 		rpcCon, err = grpc.NewClient(g.URI, opts...)
 	} else {
 		var tCredentials credentials.TransportCredentials
@@ -102,6 +108,7 @@ func (g *Sync) Init(_ context.Context) error {
 			opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(g.MaxMsgSize)))
 		}
 		opts = append(opts, g.DialOptions...)
+		g.recordDial(opts)
 		rpcCon, err = grpc.NewClient(g.URI, opts...)
 	}
 
@@ -115,6 +122,12 @@ func (g *Sync) Init(_ context.Context) error {
 	g.client = syncv1grpc.NewFlagSyncServiceClient(rpcCon)
 
 	return nil
+}
+
+func (g *Sync) recordDial(opts []grpc.DialOption) {
+	if g.dialRecorder != nil {
+		g.dialRecorder(opts)
+	}
 }
 
 func (g *Sync) contextWithHeaders(ctx context.Context) context.Context {
@@ -208,6 +221,13 @@ func (g *Sync) Sync(ctx context.Context, dataSync chan<- sync.DataSync) error {
 	}
 }
 
+func (g *Sync) afterFunc() func(time.Duration) <-chan time.Time {
+	if g.after != nil {
+		return g.after
+	}
+	return time.After
+}
+
 // connectWithRetry is a helper that performs exponential back off after retrying connection attempts periodically until
 // a successful connection is established. Caller must not expect an error. Hence, errors are handled, logged
 // internally. However, if the provided context is done, method exit with a non-ok state which must be verified by the
@@ -228,7 +248,7 @@ func (g *Sync) connectWithRetry(
 
 		// Block the next connection attempt and check the context
 		select {
-		case <-time.After(sleep):
+		case <-g.afterFunc()(sleep):
 			break
 		case <-ctx.Done():
 			// context done means we shall exit

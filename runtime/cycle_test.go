@@ -32,6 +32,35 @@ func openFDs(t *testing.T) int {
 	return len(entries)
 }
 
+// settledFDs is the descriptor count once it has stopped moving. The count is the process's, and what other tests left
+// running, such as a client closing a connection or a server finishing a handshake, changes it for a moment.
+func settledFDs(t *testing.T) int {
+	t.Helper()
+	const stableFor = 10
+	deadline := time.Now().Add(5 * time.Second)
+	last, same := openFDs(t), 0
+	for same < stableFor && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+		if n := openFDs(t); n == last {
+			same++
+		} else {
+			last, same = n, 0
+		}
+	}
+	return last
+}
+
+// requireNoFDLeak fails unless the descriptor count comes back to the baseline within a few seconds. A leak does not
+// close, so it fails after the wait; a descriptor of another test that is closing does not.
+func requireNoFDLeak(t *testing.T, baseline int) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for openFDs(t) > baseline && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	require.LessOrEqual(t, openFDs(t), baseline, "file descriptors leaked")
+}
+
 // probe asks the management port whether the runtime is ready, without keeping connections.
 type probe struct {
 	client *http.Client
@@ -127,7 +156,7 @@ func TestFromConfigRepeatedly(t *testing.T) {
 	cycle() // the first cycle starts what the libraries start once
 	check.client.CloseIdleConnections()
 	ignore := goleak.IgnoreCurrent()
-	fds := openFDs(t)
+	fds := settledFDs(t)
 
 	var slowest time.Duration
 	for i := range cycles {
@@ -139,7 +168,7 @@ func TestFromConfigRepeatedly(t *testing.T) {
 
 	check.client.CloseIdleConnections()
 	goleak.VerifyNone(t, ignore)
-	require.LessOrEqual(t, openFDs(t), fds, "file descriptors leaked")
+	requireNoFDLeak(t, fds)
 }
 
 // Resetting one runtime over and over is as clean, and each reset has the runtime ready again within the second.
@@ -167,7 +196,7 @@ func TestResetRepeatedly(t *testing.T) {
 	reset()
 	check.client.CloseIdleConnections()
 	ignore := goleak.IgnoreCurrent()
-	fds := openFDs(t)
+	fds := settledFDs(t)
 
 	var slowest time.Duration
 	for i := range cycles {
@@ -178,7 +207,7 @@ func TestResetRepeatedly(t *testing.T) {
 	t.Logf("%d resets, slowest %s", cycles, slowest)
 
 	check.client.CloseIdleConnections()
-	require.LessOrEqual(t, openFDs(t), fds, "file descriptors leaked")
+	requireNoFDLeak(t, fds)
 	goleak.VerifyNone(t, ignore)
 	stop()
 }
