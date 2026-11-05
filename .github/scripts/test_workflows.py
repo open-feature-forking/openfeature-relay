@@ -109,6 +109,16 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIn("CONTRACT_EXTERNAL_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}", job)
         self.assertIn("path: test.log", job)
 
+    def test_test_and_fips_summarize_their_failed_tests(self):
+        """#190: a failed test job lists each failed test and whether the change edits its module; report-only."""
+        self.assertIn("if: failure()", self.job("test"))
+        self.assertIn("test-failures.py --log test.log", self.job("test"))
+        fips = self.all_jobs()["fips"]
+        self.assertIn("run: make test-fips 2>&1 | tee test-fips.log\n        shell: bash", fips)
+        self.assertIn("if: failure() && steps.gate.outputs.run == 'true'", fips)
+        self.assertIn("test-failures.py --log test-fips.log", fips)
+        self.assertIn("run: python3 .github/scripts/test_test_failures.py\n", self.job("lint"))
+
     def test_lint_runs_the_module_table_tests(self):
         """C1 and C2 are the parity gate for make test and make lint: CI has to run them."""
         self.assertIn("run: python3 .github/scripts/test_ci_modules.py\n", self.job("lint"))
