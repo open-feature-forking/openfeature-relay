@@ -109,7 +109,7 @@ class BuildWorkflow(unittest.TestCase):
 
     def test_gated_jobs(self):
         gate = "if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'"
-        for name in ("docker-local", "testbed-rpc-outages", "testbed-grpc-sync"):
+        for name in ("testbed-rpc-outages", "testbed-grpc-sync"):
             with self.subTest(job=name):
                 self.assertIn(gate, self.job(name))
         self.assertIn("if: github.event_name == 'pull_request'", self.job("benchmark"))
@@ -176,7 +176,7 @@ class BuildWorkflow(unittest.TestCase):
         """P0: a pull request's change set is its merge commit against the first parent. base.sha is where the pull
         request was opened and holds what the base gained since."""
         jobs = self.all_jobs()
-        for name in ("upgrade-test", "testbed", "fips"):
+        for name in ("upgrade-test", "testbed", "fips", "docker-local"):
             with self.subTest(job=name):
                 job = jobs[name]
                 self.assertIn("BASE: ${{ github.event.before }}\n", job)
@@ -226,6 +226,26 @@ class BuildWorkflow(unittest.TestCase):
         ungated = [s.splitlines()[0] for s in steps if "steps.gate.outputs.run == 'true'" not in s]
         self.assertEqual(["name: Checkout repository", "name: Fetch the commit before the push",
                           "name: Does the FIPS job apply to this change?"], ungated)
+
+    def test_image_build_and_scan_run_on_dependency_and_dockerfile_changes(self):
+        """Coverage gap 6: docker-local and Trivy run on a push to main, FULL_CI, a manual run, and a pull request that
+        changes go.mod, go.sum or a Dockerfile; every step after the checkout waits for the gate."""
+        job = self.all_jobs()["docker-local"]
+        self.assertNotRegex(job, r"\n    if:")
+        pattern = re.search(r"pattern='([^']*)'", job).group(1)
+        for path in ("go.sum", "core/go.mod", "flagd/build.Dockerfile", "distributions/flagd-full/Dockerfile"):
+            with self.subTest(path=path):
+                self.assertTrue(re.search(pattern, path), path)
+        for path in ("core/pkg/x.go", "README.md"):
+            with self.subTest(path=path):
+                self.assertFalse(re.search(pattern, path), path)
+        self.assertIn('[ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]', job)
+        self.assertIn("security-events: write", job)
+        steps = re.split(r"(?m)^      - ", job.split("\n    steps:\n", 1)[1])[1:]
+        ungated = [s.splitlines()[0] for s in steps if "steps.gate.outputs.run == 'true'" not in s]
+        self.assertEqual(["name: Checkout", "name: Fetch the commit before the push",
+                          "name: Does the image build and scan apply to this change?"], ungated)
+        self.assertIn("aquasecurity/trivy-action", job)
 
     def test_outage_job_compares_both_images(self):
         """UC-022 Q16: the gated job runs the RPC suite with the outage scenarios against both images."""

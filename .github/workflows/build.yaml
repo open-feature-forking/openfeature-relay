@@ -439,31 +439,76 @@ jobs:
 
 
   docker-local:
-    # Gated during the proof of concept: set the repository variable FULL_CI=true, or run the workflow manually.
-    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'
+    # Runs on a push to main, with FULL_CI=true, manually, and on a pull request that changes go.mod, go.sum or a Dockerfile
+    # (the pattern in the gate step). Otherwise only the gate step runs. Trivy reports to the Security tab, so the job
+    # may write security events.
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
 
     steps:
       - name: Checkout
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+        uses: actions/checkout\b4ffde65f46336ab88eb53be808477a3936bae11 # v4
         with:
           submodules: recursive
-
+          fetch-depth: 2
+      - name: Fetch the commit before the push
+        if: github.event_name == 'push'
+        run: git fetch --no-tags --depth=1 origin "${{ github.event.before }}" || true
+      - name: Does the image build and scan apply to this change?
+        id: gate
+        env:
+          FULL_CI: ${{ vars.FULL_CI }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          # for a push, the commits it brought
+          BASE: ${{ github.event.before }}
+          HEAD: ${{ github.sha }}
+        run: |
+          # A pull request's own changes are its merge commit against the first parent: the base as it is now.
+          if [ "$EVENT" = pull_request ]; then BASE=$(git rev-parse "$HEAD^1"); fi
+          # what goes into the image besides the Go sources: dependencies and Dockerfiles
+          pattern='(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^\.github/workflows/build\.yaml$'
+          run=false
+          if [ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]; then
+            run=true
+            echo "::notice::The image build and scan run: FULL_CI or a manual run."
+          elif [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]; then
+            run=true
+            echo "::notice::The image build and scan run: a push to main."
+          elif [ -z "$BASE" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "::notice::No base to compare with: the image build and scan are skipped. Run the workflow manually or set FULL_CI."
+          else
+            hits=$(git diff --name-only "$BASE" "$HEAD" | grep -E "$pattern" || true)
+            if [ -n "$hits" ]; then
+              run=true
+              echo "::notice::The image build and scan run: this change touches dependencies or a Dockerfile."
+              printf '%s\n' "$hits" | head -10
+            else
+              echo "::notice::The image build and scan are skipped: no go.mod, go.sum or Dockerfile changed. Set FULL_CI or run the workflow manually to run them."
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
       - name: Setup go
+        if: steps.gate.outputs.run == 'true'
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
         with:
           go-version-file: 'flagd/go.mod'
 
       - name: Set up QEMU
+        if: steps.gate.outputs.run == 'true'
         uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
         with:
           platforms: all
 
       - name: Set up Docker Buildx
+        if: steps.gate.outputs.run == 'true'
         id: buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Build
+        if: steps.gate.outputs.run == 'true'
         uses: docker/build-push-action@4a13e500e55cf31b7a5d59a38ab2040ab0f42f56 # v5
         with:
           context: .
@@ -472,6 +517,7 @@ jobs:
           tags: flagd-local:test
 
       - name: Run Trivy vulnerability scanner
+        if: steps.gate.outputs.run == 'true'
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
         with:
           input: ${{ github.workspace }}/flagd-local.tar
@@ -483,6 +529,7 @@ jobs:
           TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2
 
       - name: Upload Trivy scan results to GitHub Security tab
+        if: steps.gate.outputs.run == 'true'
         uses: github/codeql-action/upload-sarif@e8893c57a1f3a2b659b6b55564fdfdbbd2982911 # v3
         with:
           sarif_file: "trivy-results.sarif"
