@@ -35,19 +35,18 @@ FLAG_PATTERNS = {
     "deps": r"(^|/)go\.(mod|sum)$",
     "dockerfile": r"(^|/)[^/]*Dockerfile$",
     "benchmark": r"\.go$|(^|/)go\.(mod|sum)$|^\.github/scripts/(run-benchmarks|compare-allocs)",
-    "fips": r"\.go$|(^|/)go\.(mod|sum)$|^Makefile$|^\.github/workflows/build\.yaml$",
     "image": r"(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^\.github/workflows/build\.yaml$",
+    # the reference Dockerfile of the Builder and the tests that build images from it
+    "reference": r"^builder/reference/|^test/image/|(^|/)[^/]*Dockerfile$|^\.github/workflows/build\.yaml$",
     # Dockerfiles; the manifest of flagd-full and the Builder that builds it; flagd, which holds flagd-full's main and its
-    # list of components; the differential's own test, the reference Dockerfile and its image tests; any Go source or
-    # module file, because a change under core/, service/, sync/, runtime/ or evaluator/ changes flagd-full.
+    # list of components; the differential's own test; any Go source or module file, because a change under core/,
+    # service/, sync/, runtime/ or evaluator/ changes flagd-full.
     "upgrade": r"\.go$|(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^flagd/|^test/upgrade/|"
-               r"^builder/reference/|^test/image/|^\.github/workflows/build\.yaml$",
+               r"^\.github/workflows/build\.yaml$",
     # the same, and the testbed, its distribution and the suites
     "testbed": r"\.go$|(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^flagd/|^testbed/|"
                r"^test/(testbed|integration|upgrade)/|^\.github/scripts/(testbed|compare-pass)|^\.github/workflows/build\.yaml$",
 }
-# The flags a push to main sets whatever it changed.
-FORCED_ON_MAIN = ("fips", "image")
 
 
 class TableError(Exception):
@@ -306,12 +305,9 @@ def flag_change_set(root, event, sha, before, full_ci=""):
     return [p.decode() for p in out.split(b"\0") if p]
 
 
-def flags(changed, event="", ref=""):
+def flags(changed):
     """flag -> bool for the changed paths (None: all true)."""
-    out = {n: changed is None or any(re.search(p, f) for f in changed) for n, p in FLAG_PATTERNS.items()}
-    if event == "push" and ref == "refs/heads/main":
-        out.update({n: True for n in FORCED_ON_MAIN})
-    return out
+    return {n: changed is None or any(re.search(p, f) for f in changed) for n, p in FLAG_PATTERNS.items()}
 
 
 def flag_lines(values):
@@ -380,7 +376,7 @@ def changes(a):
         print(f"::error::{e}")
         return 1
     entries, notes = matrix(result, graph, table, root)
-    values = flags(flag_change_set(root, a.event, a.sha, a.before, full_ci), a.event, a.ref)
+    values = flags(flag_change_set(root, a.event, a.sha, a.before, full_ci))
     lines = [f"## Affected modules ({'all' if result.everything else len(entries)})", ""]
     if result.everything:
         lines.append(f"Everything runs: {result.reason}.")

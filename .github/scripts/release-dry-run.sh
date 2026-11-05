@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Runs the build steps of a release without publishing or signing anything, and checks what a release would produce
 # against what upstream flagd's release produces (UC-009 BR-007): the archives of flagd and flagd-proxy by name and
-# content, the version line, the build info path and the FIPS tags, and the image of flagd with its tags, entrypoint and
+# content, the version line and the build info path, and the image of flagd with its tags, entrypoint and
 # user, and the standard distributions (release-dry-run-distributions.sh). The names are literal, not derived from the repository this runs in, which would render other names here.
 #
 # usage: [DRY_RUN_ITEMS="flagd"] [DRY_RUN_PART=all] [DRY_RUN_SCOPE=full] [DRY_RUN_DISTS="flagd-sync ..."] #          release-dry-run.sh [version without v] [commit] [date]
 #
-# DRY_RUN_PART runs one part of the dry run, so CI can run the parts as parallel jobs: <item>-standard or <item>-fips for
+# DRY_RUN_PART runs one part of the dry run, so CI can run the parts as parallel jobs: <item>-standard for
 # the archives of flagd and flagd-proxy, images, distributions, or all (the default, every part in order). DRY_RUN_SCOPE=reduced
 # builds the linux/amd64 archives only and, in the distributions part, only the distributions named in DRY_RUN_DISTS (default:
 # every one); the images are built in full either way. full is what a release builds.
@@ -39,14 +39,12 @@ add_size() { # <name> <binary>
 }
 
 note "### Release dry run: ${part} (version v${version}, commit ${commit})"
-[ "${scope}" != reduced ] || note "Reduced: linux/amd64 archives and the distributions this change touches; the full set runs on \`main\`."
+[ "${scope}" != reduced ] || note "Reduced: linux/amd64 archives and the distributions this change touches; the full set runs nightly."
 note ""
 
 for item in ${DRY_RUN_ITEMS:-flagd flagd-proxy}; do
-  variants=""
-  for variant in standard fips; do want "${item}-${variant}" && variants="${variants} ${variant}"; done
-  [ -n "${variants}" ] || continue
-  variants="${variants# }"
+  want "${item}-standard" || continue
+  variants="standard"
   dir="${out}/${item}"
   RELEASE_PLATFORMS="${platforms}" RELEASE_VARIANTS="${variants}"     .github/scripts/release-build.sh "${item}" "${version}" "${commit}" "${date}" "${dir}"
 
@@ -57,14 +55,6 @@ for item in ${DRY_RUN_ITEMS:-flagd flagd-proxy}; do
       else
         for label in Darwin_arm64 Darwin_x86_64 Linux_arm64 Linux_x86_64; do echo "${item}_${version}_${label}.tar.gz"; done
         for label in Windows_x86_64 Windows_i386; do echo "${item}_${version}_${label}.zip"; done
-      fi
-    fi
-    if [[ " ${variants} " == *" fips "* ]]; then
-      if [ -n "${platforms}" ]; then
-        echo "${item}-fips_${version}_Linux_x86_64.tar.gz"
-      else
-        for label in Darwin_arm64 Darwin_x86_64 Linux_arm64 Linux_x86_64; do echo "${item}-fips_${version}_${label}.tar.gz"; done
-        echo "${item}-fips_${version}_Windows_x86_64.zip"
       fi
     fi
   )"
@@ -93,10 +83,6 @@ for item in ${DRY_RUN_ITEMS:-flagd flagd-proxy}; do
       expect_equal "flagd version" "flagd: v${version} (${commit}), built at: ${date}"         "$("${dir}/flagd_linux_x86_64" version | grep '^flagd:')"
     fi
   fi
-  if [[ " ${variants} " == *" fips "* ]]; then
-    tar -xzf "${dir}/${item}-fips_${version}_Linux_x86_64.tar.gz" -C "${dir}" "./${item}-fips_linux_amd64"
-    go version -m "${dir}/${item}-fips_linux_amd64" | grep -q -- '-tags=fips140,fips140v1.0'       && note "- ok: ${item}: the FIPS build carries the tags fips140 and fips140v1.0"       || fail "${item}: the FIPS archive is not a FIPS 140-3 build"
-  fi
   note "- built ${item} (${variants}): $(wc -l <<<"${got}") archives"
 done
 
@@ -107,7 +93,7 @@ workflow=.github/workflows/release-please.yaml
 grep -q 'REGISTRY: ghcr.io' "${workflow}" || fail "the release registry is not ghcr.io"
 prefix='${{ env.REGISTRY }}/${{ env.REPO_OWNER }}/${{ matrix.path }}'
 pushed="$(grep -F -- "${prefix}:" "${workflow}" | tr -d '\r' | sed 's/^ *//')"
-for suffix in ':latest' ':${{ env.VERSION }}' ':latest-fips' ':${{ env.VERSION }}-fips'; do
+for suffix in ':latest' ':${{ env.VERSION }}'; do
   grep -Fxq -- "${prefix}${suffix}" <<<"${pushed}" || fail "the release workflow does not push a tag ending in ${suffix}"
 done
 grep -q "github.repository == 'open-feature/flagd'" "${workflow}" || fail "the release is not gated to open-feature/flagd"
@@ -120,8 +106,7 @@ build_image() { # <variant arg> <tag> <tag>
     --build-arg "FIPS=${fips}" -t "$1" -t "$2" .
 }
 build_image off "ghcr.io/open-feature/flagd:v${version}" "ghcr.io/open-feature/flagd:latest" >/dev/null
-build_image on "ghcr.io/open-feature/flagd:v${version}-fips" "ghcr.io/open-feature/flagd:latest-fips" >/dev/null
-for tag in "v${version}" latest "v${version}-fips" latest-fips; do
+for tag in "v${version}" latest; do
   image="ghcr.io/open-feature/flagd:${tag}"
   expect_equal "${image}: entrypoint" "[/flagd-build]" "$(docker image inspect "${image}" --format '{{.Config.Entrypoint}}')"
   expect_equal "${image}: user" "65532:65532" "$(docker image inspect "${image}" --format '{{.Config.User}}')"
@@ -133,7 +118,7 @@ image_config() { # <image>
     echo "${field}: $(docker image inspect "$1" --format "{{json .Config.${field}}}")"
   done
 }
-for tag in "v${version}" "v${version}-fips"; do
+for tag in "v${version}"; do
   image="ghcr.io/open-feature/flagd:${tag}"
   expect_equal "${image}: image configuration" "${golden}" "$(image_config "${image}")"
   if docker run --rm --entrypoint /bin/sh "${image}" -c true >/dev/null 2>&1; then fail "${image} holds a shell"; else note "- ok: ${image}: no /bin/sh"; fi

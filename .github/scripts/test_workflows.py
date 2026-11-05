@@ -95,14 +95,14 @@ class BuildWorkflow(unittest.TestCase):
     def test_jobs(self):
         names = re.findall(r"^  ([a-z][a-z0-9-]*):[ \t]*(?:#.*)?\n", self.text.split("\njobs:\n", 1)[1], re.M)
         self.assertEqual(
-            ["changes", "lint", "benchmark", "test", "fips", "docker-local", "integration-test", "upgrade-test", "release-dry-run",
-             "testbed", "testbed-rpc-outages", "testbed-grpc-sync", "load-smoke", "load-test"], names)
+            ["changes", "lint", "benchmark", "test", "docker-local", "integration-test", "upgrade-test", "image-test",
+             "release-dry-run", "testbed", "testbed-rpc-outages", "testbed-grpc-sync", "load-smoke", "load-test"], names)
 
     GATED = {
         "benchmark": "github.event_name == 'pull_request' && needs.changes.outputs.benchmark == 'true'",
-        "fips": "needs.changes.outputs.fips == 'true'",
         "docker-local": "needs.changes.outputs.image == 'true'",
         "upgrade-test": "needs.changes.outputs.upgrade == 'true'",
+        "image-test": "needs.changes.outputs.reference == 'true'",
         "testbed": "needs.changes.outputs.testbed == 'true'",
     }
 
@@ -156,9 +156,10 @@ class BuildWorkflow(unittest.TestCase):
             self.assertTrue(on("upgrade", path), path)
         for path in ("README.md", "docs/vision.md", "Makefile"):
             self.assertFalse(on("upgrade", path), path)
-        for path in ("core/pkg/x.go", "sync/http/go.sum", "Makefile", ".github/workflows/build.yaml"):
-            self.assertTrue(on("fips", path), path)
-        self.assertFalse(on("fips", "README.md"))
+        for path in ("builder/reference/Dockerfile", "test/image/x_test.go", "flagd/build.Dockerfile"):
+            self.assertTrue(on("reference", path), path)
+        for path in ("core/pkg/x.go", "README.md", "test/upgrade/x_test.go"):
+            self.assertFalse(on("reference", path), path)
         for path in ("go.sum", "core/go.mod", "flagd/build.Dockerfile", "distributions/flagd-full/Dockerfile"):
             self.assertTrue(on("image", path), path)
         for path in ("core/pkg/x.go", "README.md"):
@@ -169,11 +170,23 @@ class BuildWorkflow(unittest.TestCase):
         self.assertTrue(on("benchmark", "core/pkg/evaluator/x.go"))
         self.assertFalse(on("benchmark", "docs/guides/x.md"))
 
-    def test_every_flag_is_true_without_a_diff_and_a_push_to_main_forces_two(self):
+    def test_every_flag_is_true_without_a_diff_and_none_is_true_for_a_change_that_touches_nothing(self):
         self.assertEqual({n: True for n in FLAGS}, cm.flags(None))
-        pushed = cm.flags([], "push", "refs/heads/main")
-        self.assertEqual(sorted(cm.FORCED_ON_MAIN), sorted(n for n, v in pushed.items() if v))
-        self.assertFalse(any(cm.flags([], "pull_request", "refs/pull/1/merge").values()))
+        self.assertFalse(any(cm.flags([]).values()))
+
+    def test_fips_is_not_run_in_ci(self):
+        """FIPS is a documented build with relay-builder, not a job, a flag or a leg of the dry run; the test target and the
+        Dockerfile's build arg stay for the guide."""
+        self.assertNotIn("fips", FLAGS)
+        self.assertNotIn("fips", self.text.lower())
+        self.assertNotIn("fips", RELEASE_CHECK.read_text(encoding="utf-8").lower())
+        for script in ("release-dry-run.sh", "release-dry-run-distributions.sh"):
+            with self.subTest(script=script):
+                lines = [l for l in (ROOT / ".github" / "scripts" / script).read_text(encoding="utf-8").splitlines()
+                         if "fips" in l.lower() and "${fips}" not in l and "FIPS=" not in l and 'local fips="$1"' not in l and "fips=off" not in l]
+                self.assertEqual([], lines)
+        self.assertRegex((ROOT / "Makefile").read_text(encoding="utf-8"), r"(?m)^test-fips:")
+        self.assertRegex((ROOT / "flagd" / "build.Dockerfile").read_text(encoding="utf-8"), r"(?m)^ARG FIPS")
 
     def test_lint_runs_the_module_table_tests(self):
         """C1 and C2 are the parity gate for make test and make lint: CI has to run them."""
@@ -187,12 +200,11 @@ class BuildWorkflow(unittest.TestCase):
                 self.assertIn(gate, self.job(name))
         self.assertIn("if: github.event_name == 'pull_request'", self.job("benchmark"))
 
-    def test_load_smoke_runs_on_every_build_and_load_test_is_gated(self):
-        """W: the 60 s race-build smoke is on every build, the 10 min run is gated, and both keep their logs on failure."""
+    def test_load_smoke_runs_on_every_build_and_load_test_runs_nightly(self):
+        """W: the 60 s race-build smoke is on every build, the 10 min run is nightly, and both keep their logs on failure."""
         self.assertNotIn("if:", self.job("load-smoke").split("steps:", 1)[0])
         self.assertIn("run: make test-load-smoke", self.job("load-smoke"))
-        self.assertIn("if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'", self.job("load-test"))
-        self.assertNotIn("schedule", self.job("load-test").split("steps:", 1)[0])
+        self.assertIn(self.NIGHTLY, self.job("load-test"))
         self.assertRegex(self.job("load-test"), r"run: make test-load\s")
         for name in ("load-smoke", "load-test"):
             with self.subTest(job=name):
@@ -217,16 +229,36 @@ class BuildWorkflow(unittest.TestCase):
         self.assertNotIn("github.event.label", self.text)
         self.assertNotIn("types:", self.text)
 
-    def test_release_dry_run_runs_when_its_inputs_change(self):
-        """build.yaml's dry run is the full set: a push to `main`, FULL_CI or a manual run. A pull request gets the reduced
-        set from release-check.yaml, when it carries the label; a change to the release's inputs alone starts nothing."""
+    NIGHTLY = "if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'"
+
+    def test_release_dry_run_runs_nightly(self):
+        """build.yaml's dry run is the full set: nightly, FULL_CI or a manual run, and not on a push to main. A pull request
+        gets the reduced set from release-check.yaml, when it carries the label."""
         job = self.job("release-dry-run")
-        self.assertNotIn("\n    if:", job)
-        self.assertIn('[ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]', job)
-        self.assertIn('[ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]', job)
-        for gone in ("git diff", "BASE", "DRY_RUN_SCOPE", "DRY_RUN_DISTS", "pull_request"):
-            self.assertNotIn(gone, job.replace("A pull request opts into the reduced set", ""))
-        self.assertIn("if: steps.gate.outputs.run == 'true'", job)
+        self.assertIn("    " + self.NIGHTLY + "\n", job)
+        for gone in ("steps.gate", "git diff", "BASE", "DRY_RUN_SCOPE", "DRY_RUN_DISTS"):
+            self.assertNotIn(gone, job)
+
+    def test_every_job_that_moved_to_the_nightly_run_accepts_the_schedule_event(self):
+        """A job whose condition lacks `schedule` silently skips there. The jobs behind a flag run because every flag is
+        true without a diff, and the cache of the nightly run is saved."""
+        for name in ("release-dry-run", "load-test", "testbed-rpc-outages", "testbed-grpc-sync"):
+            with self.subTest(job=name):
+                self.assertIn(self.NIGHTLY, self.job(name))
+        for name in self.GATED:
+            with self.subTest(job=name):
+                self.assertNotIn("schedule", self.all_jobs()[name].split("steps:", 1)[0].replace("on the schedule", ""))
+        self.assertIsNone(cm.flag_change_set(ROOT, "schedule", "HEAD", ""))
+        self.assertIn("(github.event_name == 'push' || github.event_name == 'schedule')", self.all_jobs()["release-dry-run"])
+
+    def test_image_tests_are_their_own_job_and_docker_local_has_no_qemu(self):
+        upgrade = self.all_jobs()["upgrade-test"]
+        self.assertIn("make upgrade-test", upgrade)
+        self.assertNotIn("make image-test", upgrade)
+        image = self.all_jobs()["image-test"]
+        self.assertIn("run: make image-test", image)
+        self.assertIn("timeout-minutes: 75", image)
+        self.assertNotIn("qemu", self.all_jobs()["docker-local"].lower())
 
     def all_jobs(self):
         """Every job's text by id, including ids with digits that job() cannot reach."""
@@ -234,9 +266,10 @@ class BuildWorkflow(unittest.TestCase):
         parts = re.split(r"(?m)^(?=  [a-z][a-z0-9-]*:[^\n]*\n)", jobs)
         return {m.group(1): part for part in parts if (m := re.match(r"  ([a-z0-9-]+):", part))}
 
-    CACHED_JOBS = ("lint", "test", "fips", "integration-test", "upgrade-test", "release-dry-run", "load-smoke", "load-test")
-    GATED_CACHED_JOBS = ("release-dry-run",)
-    ON_MAIN = "github.ref == 'refs/heads/main' && github.event_name == 'push'"
+    CACHED_JOBS = ("lint", "test", "integration-test", "upgrade-test", "image-test", "release-dry-run", "load-smoke", "load-test")
+    GATED_CACHED_JOBS = ()
+    # the nightly run saves the caches of the jobs that run there
+    ON_MAIN = "github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule')"
 
     def test_go_caches_are_saved_only_on_main(self):
         """P0: one key per job; every job restores it, and only the push to main saves it. setup-go's own cache has no
@@ -285,9 +318,6 @@ class BuildWorkflow(unittest.TestCase):
         testbed = self.all_jobs()["testbed"]
         self.assertIn("make testbed-contract-both", testbed)
         self.assertIn("make testbed-suites", testbed)
-        fips = self.all_jobs()["fips"]
-        # runtime/cmd's tests read the evaluator suite from the test-harness submodule
-        self.assertLess(fips.index("git submodule update --init test-harness"), fips.index("make test-fips"))
         docker = self.all_jobs()["docker-local"]
         self.assertIn("security-events: write", docker)
         self.assertIn("aquasecurity/trivy-action", docker)
@@ -314,10 +344,10 @@ class BuildWorkflow(unittest.TestCase):
         """UC-022 Q16: the gated job runs the RPC suite with the outage scenarios against both images."""
         self.assertIn("make testbed-rpc-outages", self.job("testbed-rpc-outages"))
 
-    PARTS = "part: [flagd-standard, flagd-fips, flagd-proxy-standard, flagd-proxy-fips, images, distributions]"
+    PARTS = "part: [flagd-standard, flagd-proxy-standard, images, distributions]"
 
     def test_release_dry_run_parts(self):
-        """Slice R: the dry run is a matrix of parts, the full set on `main`, with FULL_CI and manually."""
+        """Slice R: the dry run is a matrix of parts, the full set nightly, with FULL_CI and manually."""
         job = self.job("release-dry-run")
         self.assertIn(self.PARTS, job)
         self.assertIn("fail-fast: false", job)
@@ -337,25 +367,24 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIn(self.PARTS, text)
         self.assertIn("DRY_RUN_PART: ${{ matrix.part }}\n          DRY_RUN_SCOPE: reduced\n", text)
         self.assertIn("run: .github/scripts/release-dry-run.sh", text)
-        # it reads the cache build.yaml's dry run saves on main and saves nothing itself
+        # it reads the cache build.yaml's dry run saves from the nightly run and saves nothing itself
         self.assertIn("key: go-release-dry-run-${{ matrix.part }}-${{ hashFiles('**/go.sum') }}", text)
         self.assertNotIn("cache/save", text)
         self.assertNotRegex(text, r"push:\s*true")
         self.assertNotIn("docker/login-action", text)
 
     def test_release_dry_run_full_covers_todays_set(self):
-        """Slice R: the parts together build the 11 archives of flagd and flagd-proxy, the images and the five distributions."""
+        """Slice R: the parts together build the standard archives of flagd and flagd-proxy, the image and the five distributions."""
         script = (ROOT / ".github" / "scripts" / "release-dry-run.sh").read_text(encoding="utf-8")
         parts = re.search(r"part: \[(.*)\]", self.job("release-dry-run")).group(1)
         for item in ("flagd", "flagd-proxy"):
-            for variant in ("standard", "fips"):
-                self.assertIn(f"{item}-{variant}", parts)
+            self.assertIn(f"{item}-standard", parts)
         # the default part runs everything, and release-build.sh is told only the platforms the scope narrows
         self.assertIn('part="${DRY_RUN_PART:-all}"', script)
         self.assertIn('[ "${scope}" != reduced ] || platforms="linux/amd64"', script)
         for label in ("Darwin_arm64 Darwin_x86_64 Linux_arm64 Linux_x86_64", "Windows_x86_64 Windows_i386"):
             self.assertIn(label, script)
-        for tag in (":latest", ":${{ env.VERSION }}", ":latest-fips", ":${{ env.VERSION }}-fips"):
+        for tag in (":latest", ":${{ env.VERSION }}"):
             self.assertIn(tag, script)
         dists = (ROOT / ".github" / "scripts" / "release-dry-run-distributions.sh").read_text(encoding="utf-8")
         self.assertIn('others="flagd-minimal-otel flagd-cloud flagd-kubernetes flagd-sync"', dists)
