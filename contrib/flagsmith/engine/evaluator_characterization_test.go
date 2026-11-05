@@ -95,3 +95,23 @@ func TestEvaluateSkipsForeignDocuments(t *testing.T) {
 	require.Equal(t, "hello", r.Value, "the higher-priority source holds no environment, so the other one answers")
 	require.Equal(t, []string{"welcome@ENV"}, keysAndSets(run(t, ev, evaluator.Request{Bulk: true})))
 }
+
+// TestExplicitKeysLaterSourceWins pins that a key two sources hold in different flag sets resolves in the later
+// source's, for explicit keys and a single key alike, whichever flag set sorts first.
+func TestExplicitKeysLaterSourceWins(t *testing.T) {
+	for name, envs := range map[string][2]string{
+		"the later source's flag set sorts last":  {"ENV-A", "ENV-Z"},
+		"the later source's flag set sorts first": {"ENV-Z", "ENV-A"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ev, st := newEvaluator(t, nil, "first", "second")
+			deliver(t, st, "first", envDoc(envs[0], false, feat{"welcome", true, "first"}))
+			deliver(t, st, "second", envDoc(envs[1], false, feat{"welcome", true, "second"}))
+
+			keys := run(t, ev, evaluator.Request{FlagKeys: []string{"welcome"}})
+			require.Equal(t, []string{"welcome@" + envs[1]}, keysAndSets(keys))
+			require.Equal(t, "second", keys[0].Value)
+			require.Equal(t, "second", one(t, ev, "welcome", evaluator.TypeString, nil, nil).Value)
+		})
+	}
+}
