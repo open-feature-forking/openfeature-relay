@@ -62,6 +62,7 @@ After phase 1 (C1, C2, D), work proceeds one use case at a time, in this order. 
 | 11 | UC-019 Serve Vendor Flags | a Flagsmith engine module as the cross-vendor proof |
 | 12 | UC-002, UC-012, UC-013 | image, release, CI verification |
 | 13 | UC-022 Run Provider Test Suites Against the Testbed | flagd-testbed as a relay-builder distribution, listener gate, control module |
+| 14 | UC-023 Sync From an Upstream Flag Sync Endpoint | the Go flagd provider's gRPC sync features in `sync/flagd-grpc`, opt-in per source |
 
 UC-015 and UC-016 stay Deferred. For UC-015 the proof of concept only checks that today's providers keep working: `make flagd-integration-test` runs the released Go flagd provider, unchanged, in RPC and in-process mode against flagd built from this repository.
 
