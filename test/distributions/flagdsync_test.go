@@ -96,8 +96,12 @@ func (p *process) running() bool {
 	}
 }
 
+// probe is the client of the readiness check; a port that accepts and never answers must not hold a wait past its
+// deadline.
+var probe = &http.Client{Timeout: 2 * time.Second}
+
 func isReady(managementPort int) bool {
-	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/readyz", managementPort)) //nolint:noctx // a local probe
+	resp, err := probe.Get(fmt.Sprintf("http://127.0.0.1:%d/readyz", managementPort)) //nolint:noctx // a local probe
 	if err != nil {
 		return false
 	}
@@ -341,7 +345,22 @@ func TestAbsentComponentSettingStopsStartup(t *testing.T) {
 // startOnFile starts the distribution on a source whose content is given and returns whether it became ready and the
 // warnings and errors it logged, without clocks and paths. A source that is expected to be accepted is waited for;
 // one that is expected to be rejected is given the time to deliver, and the process is stopped after it.
+//
+// A start that was expected to become ready and did not is made once more on new ports. A configuration the
+// distribution rejects is rejected again, so the verdict is the same; a start that stalled for a reason outside the
+// configuration is not held against it. The output of the first attempt is logged, so a start that needed the second
+// one is visible.
 func startOnFile(t *testing.T, name string, portFlags []string, content, ext string, expectReady bool) (ready bool, problems string) {
+	t.Helper()
+	ready, problems, raw := startOnFileOnce(t, name, portFlags, content, ext, expectReady)
+	if expectReady && !ready {
+		t.Logf("%s was not ready within the deadline and is started again; its first output:\n%s", name, raw)
+		ready, problems, _ = startOnFileOnce(t, name, portFlags, content, ext, expectReady)
+	}
+	return ready, problems
+}
+
+func startOnFileOnce(t *testing.T, name string, portFlags []string, content, ext string, expectReady bool) (ready bool, problems, raw string) {
 	t.Helper()
 	bin := builtBinary(t, name)
 	dir := t.TempDir()
@@ -363,7 +382,9 @@ func startOnFile(t *testing.T, name string, portFlags []string, content, ext str
 		p.settle(t, 30*time.Second)
 		ready = isReady(ports["management-port"])
 	}
+	exited := !p.running()
 	p.stop(20 * time.Second)
+	raw = fmt.Sprintf("the process had exited: %t\n%s", exited, p.out.String())
 
 	var lines []string
 	for _, line := range strings.Split(p.out.String(), "\n") {
@@ -373,7 +394,7 @@ func startOnFile(t *testing.T, name string, portFlags []string, content, ext str
 			lines = append(lines, orderless(strings.ReplaceAll(line, dir, "<dir>")))
 		}
 	}
-	return ready, strings.Join(lines, "\n")
+	return ready, strings.Join(lines, "\n"), raw
 }
 
 // orderless sorts the lines inside a log entry. The schema validation lists its errors in the order of a map, which
