@@ -58,7 +58,7 @@ func freePort(t *testing.T) string {
 			_ = h.Close()
 		}
 	}()
-	for {
+	for range 1000 {
 		l, err := net.Listen("tcp", "127.0.0.1:0")
 		require.NoError(t, err)
 		port := l.Addr().(*net.TCPAddr).Port
@@ -69,6 +69,8 @@ func freePort(t *testing.T) string {
 		_ = l.Close()
 		return fmt.Sprint(port)
 	}
+	t.Fatal("no free port that was not handed out before")
+	return ""
 }
 
 // renderLogLine reduces one log line to what an operator greps for: level, message and fields. The timestamp and the

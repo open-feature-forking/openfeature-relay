@@ -13,8 +13,9 @@ This guide lists what stays the same, the few behaviours that changed, and how t
 - **Metrics and spans:** the same names, attributes and buckets, and one evaluation span per evaluation request.
 - **`flagd version`:** the output is byte-identical to today's.
     Use `flagd version --verbose` to see that the running binary is flagd-full and which manifest version it was built from.
-- **Image and binaries:** the image stays `ghcr.io/open-feature/flagd`, with the tags `<version>`, `latest`, `<version>-fips` and `latest-fips`.
-    The binary archives keep today's names, `flagd_<version>_<OS>_<arch>` and `flagd-fips_<version>_<OS>_<arch>`, and the same contents.
+- **Image and binaries:** the image stays `ghcr.io/open-feature/flagd`, with the tags `<version>` and `latest`.
+    The binary archives keep today's names, `flagd_<version>_<OS>_<arch>`, and the same contents.
+    The FIPS archives and `-fips` tags are no longer published (below).
 - **Startup time:** flagd-full reaches readiness within 10% of today's flagd with the same sources.
 - **Settings that today's flagd accepts only for compatibility**, such as the keep-alive settings of the flag sync service endpoint, are accepted and ignored.
 
@@ -78,6 +79,13 @@ It now holds the opt-in settings of a `grpc` source ([syncing from an upstream f
 flagd stops at startup, naming the source, when the object holds an unknown key, a value of the wrong type or an invalid setting, or sits on a source whose provider is not `grpc`.
 Keys named as the flagd providers document them, such as `keepAliveTime`, set directly on a source, stay ignored.
 If a source carries a `grpc` key for another purpose, remove it before you upgrade.
+
+#### FIPS archives and images are not published; build one with the builder
+
+Today's flagd publishes a FIPS 140-3 variant of flagd and flagd-proxy: the archives `flagd-fips_<version>_<OS>_<arch>` and `flagd-proxy-fips_<version>_<OS>_<arch>`, and the image tags `<version>-fips` and `latest-fips`.
+The relay's releases publish none of them, for flagd-full or any other distribution.
+If you run the FIPS build, build flagd-full, or the distribution you need, as a FIPS binary or image with the relay builder, as [Build a FIPS distribution](../relay/fips.md) shows, and verify it there before you upgrade.
+The crypto boundary and the TLS restrictions are those of today's FIPS build; CI does not verify a FIPS build.
 
 ### Visible to clients, unlikely to break them
 

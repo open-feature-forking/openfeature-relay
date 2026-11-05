@@ -84,6 +84,8 @@ func BenchmarkEvaluate(b *testing.B) {
 		"single/environment": {FlagKey: "feature-26", TypeHint: evaluator.TypeString},
 		"bulk/identity":      {Bulk: true, Context: identity},
 		"bulk/environment":   {Bulk: true},
+		"keys/identity":      {FlagKeys: []string{"feature-26", "feature-3", "missing"}, Context: identity},
+		"keys/environment":   {FlagKeys: []string{"feature-26", "feature-3", "missing"}},
 	} {
 		b.Run(name, func(b *testing.B) {
 			b.ReportAllocs()

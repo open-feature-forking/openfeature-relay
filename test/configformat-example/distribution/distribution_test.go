@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -23,6 +22,7 @@ import (
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	flagdcomponents "github.com/open-feature/flagd/flagd/components"
 	"github.com/open-feature-forking/openfeature-relay/runtime"
+	"github.com/open-feature-forking/openfeature-relay/test/porttest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -44,18 +44,21 @@ func writeFile(t *testing.T, name, content string) string {
 	return path
 }
 
-// freePorts returns n different free ports. The listeners stay open until every port is chosen, so that no two of them
-// are the same port.
+// freePorts reserves n different ports for the runtime, which is handed them through listening().
 func freePorts(t *testing.T, n int) []uint16 {
 	t.Helper()
 	ports := make([]uint16, 0, n)
-	for len(ports) < n {
-		l, err := net.Listen("tcp", "127.0.0.1:0")
-		require.NoError(t, err)
-		defer l.Close()
-		ports = append(ports, uint16(l.Addr().(*net.TCPAddr).Port))
+	for range n {
+		ports = append(ports, uint16(porttest.Reserve(t)))
 	}
 	return ports
+}
+
+// listening is the official components with the runtime opening its listeners through porttest.
+func listening() runtime.Components {
+	components := flagdcomponents.Components()
+	components.Listen = porttest.Listen
+	return components
 }
 
 // waitReady waits until the readiness probe answers 200. It fails at once, with the error, when the runtime stopped
@@ -114,7 +117,7 @@ func TestTryInDistribution(t *testing.T) {
 			{URI: vendorSource, Provider: "file", Format: keyvalue.Type},
 		},
 		ConfigurationFormats: []configformat.Factory{factory},
-	}, flagdcomponents.Components())
+	}, listening())
 	require.NoError(t, err)
 
 	done := make(chan error, 1)

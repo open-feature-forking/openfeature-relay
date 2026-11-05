@@ -119,13 +119,13 @@ func TestSinkReceivesOneEntryPerDocument(t *testing.T) {
 		{URI: vendorSource, Provider: "file", Format: "versioned"},
 	}
 	sink := &recordingSink{}
-	rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, withFlagd(Components{
+	rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, listening(withFlagd(Components{
 		ConfigurationFormats: []configformat.Factory{versionedFactory{}},
 		EventSinks: []eventsink.Configured{{
 			Factory: recordingSinkFactory{kinds: []events.Kind{events.KindConfigurationChange}, sink: sink},
 			Config:  sinkSettings(),
 		}},
-	}))
+	})))
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		rt.Bus.Close()

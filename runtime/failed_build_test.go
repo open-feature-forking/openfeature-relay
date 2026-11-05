@@ -14,6 +14,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	coresync "github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/porttest"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 )
@@ -32,7 +33,7 @@ func (r *registry) listen(network, address string) (net.Listener, error) {
 	if r.open[key] {
 		return nil, fmt.Errorf("listen %s: already registered", key)
 	}
-	l, err := net.Listen(network, address)
+	l, err := porttest.Listen(network, address)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +123,7 @@ func TestFailedFromConfigReleasesItsListeners(t *testing.T) {
 			stop()
 			require.Empty(t, reg.addresses(), "a runtime that stops holds no listener either")
 
-			held, err := net.Listen("tcp", fmt.Sprintf(":%d", p.sync))
+			held, err := porttest.Listen("tcp", fmt.Sprintf(":%d", p.sync))
 			require.NoError(t, err, "the port is free in the process")
 			require.NoError(t, held.Close())
 		})

@@ -17,6 +17,7 @@ github.com/open-feature-forking/openfeature-relay/core/pkg/events
 github.com/open-feature-forking/openfeature-relay/core/pkg/eventsink
 github.com/open-feature-forking/openfeature-relay/core/pkg/eventsink/eventsinktest
 github.com/open-feature-forking/openfeature-relay/core/pkg/fips
+github.com/open-feature-forking/openfeature-relay/core/pkg/headers
 github.com/open-feature-forking/openfeature-relay/core/pkg/logger
 github.com/open-feature-forking/openfeature-relay/core/pkg/middleware
 github.com/open-feature-forking/openfeature-relay/core/pkg/middleware/middlewaretest
@@ -43,6 +44,7 @@ github.com/open-feature-forking/openfeature-relay/runtime/cmd
 github.com/open-feature-forking/openfeature-relay/runtime/fromconfig_test
 github.com/open-feature-forking/openfeature-relay/runtime/grpcclient_test
 github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset
+github.com/open-feature-forking/openfeature-relay/runtime/internal/porttest
 github.com/open-feature-forking/openfeature-relay/runtime/managementport
 github.com/open-feature-forking/openfeature-relay/runtime/propagation_test
 github.com/open-feature-forking/openfeature-relay/runtime/syncmetrics_test

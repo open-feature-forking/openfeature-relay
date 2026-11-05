@@ -97,6 +97,7 @@ The binary has flagd's command line, so it starts the same way:
 The second command shows what flagd-minimal is made of: the file, HTTP and gRPC sync providers, one configuration format and evaluator, three service endpoints, and no telemetry provider, middleware or event sink.
 `relay-builder --help` lists the flags, among them `--validate-only` to check a manifest and `--skip-compile` to leave the source for your own build.
 `make build-flagd-full` builds flagd-full this way and prints how long it took.
+To build a distribution as a FIPS 140-3 binary or image, see [Build a FIPS distribution](fips.md).
 
 ## Serve another vendor's flags
 

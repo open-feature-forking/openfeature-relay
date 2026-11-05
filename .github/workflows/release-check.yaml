@@ -2,8 +2,8 @@ name: release-check
 
 # The reduced release dry run of a pull request that carries the release-check label. It is a workflow of its own, so a
 # label event never starts build.yaml: its concurrency group would cancel the pull request's running jobs, and the skipped
-# jobs of the label run would be reported under the check names of the real ones. The full set runs from build.yaml on
-# main, with FULL_CI and manually.
+# jobs of the label run would be reported under the check names of the real ones. The full set runs from build.yaml
+# nightly, with FULL_CI and manually.
 on:
   pull_request:
     types: [labeled, synchronize]
@@ -19,7 +19,7 @@ permissions:
   contents: read
 
 env:
-  # The toolchain determines which FIPS snapshots exist, so pin it.
+  # Pin the toolchain.
   GOTOOLCHAIN: local
 
 jobs:
@@ -31,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        part: [flagd-standard, flagd-fips, flagd-proxy-standard, flagd-proxy-fips, images, distributions]
+        part: [flagd-standard, flagd-proxy-standard, images, distributions]
     steps:
       - name: Checkout repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
@@ -68,7 +68,7 @@ jobs:
           go-version-file: 'flagd/go.mod'
           cache: false
       - name: Restore the Go caches
-        # the key build.yaml's dry run saves on main; this workflow only reads it
+        # the key build.yaml's dry run saves from the nightly run on main; this workflow only reads it
         uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
           path: |

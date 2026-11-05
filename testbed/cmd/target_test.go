@@ -62,7 +62,7 @@ func freePort(t *testing.T) int {
 			_ = h.Close()
 		}
 	}()
-	for {
+	for range 1000 {
 		l, err := net.Listen("tcp", "127.0.0.1:0")
 		require.NoError(t, err)
 		port := l.Addr().(*net.TCPAddr).Port
@@ -73,6 +73,8 @@ func freePort(t *testing.T) int {
 		_ = l.Close()
 		return int(port)
 	}
+	t.Fatal("no free port that was not handed out before")
+	return 0
 }
 
 func copyDir(t *testing.T, from, to string) {

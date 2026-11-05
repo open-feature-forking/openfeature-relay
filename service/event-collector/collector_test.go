@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -22,30 +23,45 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// issuedPorts are the ports freePort has handed out in this process. A port is free again the moment it is closed, so
-// the next call can get the same one, and one start would listen twice on it.
-var issuedPorts sync.Map
+// reserved are the listeners freePort opened and nobody has taken yet. The collector opens its listener through
+// Settings.Listen, which hands it the reserved one, so the port is never released between choosing it and binding it.
+var (
+	reservedMu sync.Mutex
+	reserved   = map[int]net.Listener{}
+)
 
 func freePort(t *testing.T) int {
 	t.Helper()
-	// a port the kernel hands out again stays open until a new one comes, so the next listen cannot get it
-	var held []net.Listener
-	defer func() {
-		for _, h := range held {
-			_ = h.Close()
-		}
-	}()
-	for {
-		l, err := net.Listen("tcp", ":0")
-		require.NoError(t, err)
-		port := l.Addr().(*net.TCPAddr).Port
-		if _, taken := issuedPorts.LoadOrStore(port, true); taken {
-			held = append(held, l)
-			continue
-		}
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	port := l.Addr().(*net.TCPAddr).Port
+	reservedMu.Lock()
+	reserved[port] = l
+	reservedMu.Unlock()
+	t.Cleanup(func() {
+		reservedMu.Lock()
+		delete(reserved, port)
+		reservedMu.Unlock()
 		_ = l.Close()
-		return int(port)
+	})
+	return port
+}
+
+// listenReserved is a service.ListenFunc that returns the listener freePort reserved for the port in address, and opens
+// a new one when there is none.
+func listenReserved(network, address string) (net.Listener, error) {
+	if _, p, err := net.SplitHostPort(address); err == nil {
+		if port, err := strconv.Atoi(p); err == nil {
+			reservedMu.Lock()
+			l, ok := reserved[port]
+			delete(reserved, port)
+			reservedMu.Unlock()
+			if ok {
+				return l, nil
+			}
+		}
 	}
+	return net.Listen(network, address)
 }
 
 // started is a collector serving on a free port, with the bus it publishes to.
@@ -70,7 +86,7 @@ func startWith(t *testing.T, config map[string]any, mutate func(*service.Setting
 		settings[k] = v
 	}
 	bus := events.NewBus()
-	injected := service.Settings{Bus: bus, Logger: logger.NewLogger(nil, false), Config: settings}
+	injected := service.Settings{Bus: bus, Logger: logger.NewLogger(nil, false), Config: settings, Listen: listenReserved}
 	if mutate != nil {
 		mutate(&injected)
 	}
@@ -506,7 +522,7 @@ func TestListenSeamUsedByTheCollector(t *testing.T) {
 		mu.Lock()
 		asked = append(asked, network+" "+address)
 		mu.Unlock()
-		return net.Listen(network, address)
+		return listenReserved(network, address)
 	}
 	s := startWith(t, nil, func(settings *service.Settings) { settings.Listen = listen })
 

@@ -86,7 +86,7 @@ FAIL\t{RELAY}/runtime\t28.465s
 class Report(unittest.TestCase):
     def test_table(self):
         self.assertEqual([
-            "## Failed tests (FIPS 140-3)",
+            "## Failed tests (test)",
             "",
             "| Test | Package | Time | First error |",
             "|---|---|---|---|",
@@ -94,7 +94,7 @@ class Report(unittest.TestCase):
             f'| `TestResetRepeatedly` | `{RELAY}/runtime` | 1.10 s | "15" is not less than or equal to "14": '
             "file descriptors leaked |",
             f"| `-` | `{RELAY}/sync/flagd-grpc` |  | [build failed] |",
-        ], tf.report(tf.failures(PLAIN), "FIPS 140-3").splitlines())
+        ], tf.report(tf.failures(PLAIN), "test").splitlines())
 
     def test_a_pipe_in_the_error_does_not_split_the_row(self):
         text = tf.report([("TestX", "p", "1.00", "a | b")], "test")
