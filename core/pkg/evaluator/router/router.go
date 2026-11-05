@@ -76,7 +76,7 @@ func (r *Router) Evaluate(ctx context.Context, req evaluator.Request, dst []eval
 	}
 
 	view := r.store.View()
-	wanted := wantedKeys(req)
+	wanted := req.WantedKeys()
 	entries := r.collect(view, req.Selector, wanted)
 	meta := req.Selector.ToMetadata()
 
@@ -220,20 +220,6 @@ func (r *Router) collect(view store.View, selector store.Selector, wanted map[st
 		}
 	}
 	return entries
-}
-
-func wantedKeys(req evaluator.Request) map[string]struct{} {
-	if req.Bulk && req.FlagKeys == nil {
-		return nil
-	}
-	if req.FlagKeys == nil {
-		return map[string]struct{}{req.FlagKey: {}}
-	}
-	wanted := make(map[string]struct{}, len(req.FlagKeys))
-	for _, key := range req.FlagKeys {
-		wanted[key] = struct{}{}
-	}
-	return wanted
 }
 
 func notFound(key string, meta model.Metadata) evaluator.Result {

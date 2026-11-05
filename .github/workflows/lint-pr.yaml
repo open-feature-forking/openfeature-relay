@@ -7,6 +7,11 @@ on:
       - edited
       - synchronize
 
+# pull_request_target runs with the base repository's token, also for fork pull requests: it may only comment, and no
+# step checks out or runs the pull request's code.
+permissions:
+  pull-requests: write
+
 jobs:
   main:
     name: Validate PR title

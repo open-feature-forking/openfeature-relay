@@ -22,6 +22,7 @@ import (
 	gosync "sync"
 	"time"
 
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/headers"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/secret"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
@@ -159,24 +160,17 @@ func parseURL(config map[string]any) (*url.URL, error) {
 }
 
 func parseHeaders(raw any) (map[string]string, error) {
-	switch h := raw.(type) {
-	case nil:
-		return nil, nil
-	case map[string]string:
-		return checkHeaders(h)
-	case map[string]any:
-		out := make(map[string]string, len(h))
-		for name, value := range h {
-			text, ok := value.(string)
-			if !ok {
-				return nil, fmt.Errorf("the header %q must be text", name)
-			}
-			out[name] = text
-		}
-		return checkHeaders(out)
-	default:
+	h, err := headers.FromSetting(raw)
+	var notText *headers.NotTextError
+	switch {
+	case errors.As(err, &notText):
+		return nil, fmt.Errorf("the header %q must be text", notText.Name)
+	case err != nil:
 		return nil, fmt.Errorf("the setting %q must be a mapping of header names to text", settingHeaders)
+	case h == nil:
+		return nil, nil
 	}
+	return checkHeaders(h)
 }
 
 func parseHeadersFrom(raw any) (map[string]secret.Ref, error) {

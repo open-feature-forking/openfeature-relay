@@ -89,13 +89,10 @@ type config struct {
 //	max-request-header-bytes   a number; 0 means Go's default
 func decodeConfig(settings map[string]any) (config, error) {
 	cfg := config{serviceName: DefaultServiceName, maxRequestBodyBytes: DefaultMaxRequestBodyBytes}
-	err := service.ConfigDecoder{
-		"port":                     service.Set(&cfg.port, service.Uint16),
-		"service-name":             service.Set(&cfg.serviceName, service.String),
-		"cors":                     service.Set(&cfg.cors, service.Strings),
-		"max-request-body-bytes":   service.Set(&cfg.maxRequestBodyBytes, service.Int64),
-		"max-request-header-bytes": service.Set(&cfg.maxRequestHeaderBytes, service.Int64),
-	}.Decode(settings)
+	err := service.EndpointKeys{
+		Port: &cfg.port, ServiceName: &cfg.serviceName, CORS: &cfg.cors,
+		MaxRequestHeaderBytes: &cfg.maxRequestHeaderBytes, MaxRequestBodyBytes: &cfg.maxRequestBodyBytes,
+	}.Decoder(nil).Decode(settings)
 	if err == nil && (cfg.maxRequestBodyBytes < 0 || cfg.maxRequestHeaderBytes < 0) {
 		err = errors.New("the size limits must not be negative")
 	}

@@ -124,7 +124,7 @@ PLAIN_TEST_MODULES := builder test/release test/service-example test/sync-exampl
     test/configformat-example test/configformat-example/distribution test/eventsink-example test/eventsink-example/distribution \
     test/middleware-example test/middleware-example/distribution test/telemetry-example test/telemetry-example/distribution \
     test/inprocess-example/file test/inprocess-example/filegrpc test/inprocess-example/engine test/porttest
-# Every module that leaves a <module>-coverage.out profile; the coverage job and run-coverage.sh read this list.
+# Every module that leaves a <module>-coverage.out profile, uploaded by CI as the coverage-profiles artifact.
 COVERAGE_MODULES := $(COVERED_MODULES) flagd-proxy $(PLAIN_TEST_MODULES)
 .PHONY: test-module
 test-module:

@@ -86,7 +86,7 @@ func (e *Evaluator) Evaluate(_ context.Context, req evaluator.Request, dst []eva
 	meta := req.Selector.ToMetadata()
 	flagSet, named := req.Selector.DocumentFlagSet()
 	onlySource := req.Selector.Source()
-	wanted := wantedKeys(req)
+	wanted := req.WantedKeys()
 	id := identityOf(req.Context)
 	client := req.Attributes[CredentialAttribute] == CredentialClient
 
@@ -153,21 +153,6 @@ func (e *Evaluator) Evaluate(_ context.Context, req evaluator.Request, dst []eva
 		dst = append(dst, found.result)
 	}
 	return dst, meta, nil
-}
-
-// wantedKeys is the set of keys a request asks for; nil means every key of the selector.
-func wantedKeys(req evaluator.Request) map[string]struct{} {
-	if req.Bulk && req.FlagKeys == nil {
-		return nil
-	}
-	wanted := map[string]struct{}{}
-	if req.FlagKeys == nil {
-		wanted[req.FlagKey] = struct{}{}
-	}
-	for _, key := range req.FlagKeys {
-		wanted[key] = struct{}{}
-	}
-	return wanted
 }
 
 type identity struct {
