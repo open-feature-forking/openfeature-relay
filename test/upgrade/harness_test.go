@@ -21,7 +21,7 @@ import (
 // baselineCommit is the upstream merge-base of this repository: the last commit of upstream flagd that the branch
 // carries (UC-009 Q1). Behaviour is compared against flagd built from it with upstream's own Dockerfile. When upstream
 // is merged in, this moves with the merge.
-const baselineCommit = "b23f82ec"
+const baselineCommit = "90255568"
 
 // The same build arguments for both images, so that flagd version prints the same line.
 var buildArgs = []string{"VERSION=v0.0.0-upgrade", "COMMIT=0000000", "DATE=2026-01-01T00:00:00Z"}
