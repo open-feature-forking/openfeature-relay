@@ -451,3 +451,12 @@ testbed-suites: testbed-launchpad-image testbed-relay-image
 	.github/scripts/testbed-suites.sh
 testbed-rpc-outages: testbed-launchpad-image testbed-relay-image
 	.github/scripts/testbed-suites.sh outages
+
+# UC-023 (Q14): flagd-full with a grpc source against the relay testbed. It builds both images, so it needs Docker and
+# stays out of `make test`; the test skips without TESTBED_FLAGD_IMAGE.
+.PHONY: testbed-grpc-sync
+testbed-grpc-sync:
+	docker build -f distributions/flagd-testbed/Dockerfile -t testbed-relay:grpc-sync .
+	docker build -f flagd/build.Dockerfile -t flagd-full:grpc-sync .
+	cd test/testbed && TESTBED_IMAGE=testbed-relay:grpc-sync TESTBED_KIND=relay TESTBED_FLAGD_IMAGE=flagd-full:grpc-sync \
+		go test -count=1 -timeout 30m -v -run 'TestGRPCSource' ./...
