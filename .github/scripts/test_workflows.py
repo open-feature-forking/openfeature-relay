@@ -120,6 +120,57 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIn(r"^\.github/scripts/testdata/|^\.github/workflows/release-please\.yaml$|^builder/|^distributions/|Dockerfile$", job)
         self.assertIn("if: steps.gate.outputs.run == 'true'", job)
 
+    def all_jobs(self):
+        """Every job's text by id, including ids with digits that job() cannot reach."""
+        jobs = self.text.split("\njobs:\n", 1)[1]
+        parts = re.split(r"(?m)^(?=  [a-z][a-z0-9-]*:[^\n]*\n)", jobs)
+        return {m.group(1): part for part in parts if (m := re.match(r"  ([a-z0-9-]+):", part))}
+
+    CACHED_JOBS = ("lint", "docs-check", "test", "builder-e2e", "fips", "integration-test", "upgrade-test", "release-dry-run")
+    GATED_CACHED_JOBS = ("upgrade-test", "release-dry-run")
+    ON_MAIN = "github.ref == 'refs/heads/main' && github.event_name == 'push'"
+
+    def test_go_caches_are_saved_only_on_main(self):
+        """P0: one key per job; every job restores it, and only the push to main saves it. setup-go's own cache has no
+        root go.sum to key on, so it is off."""
+        self.assertNotRegex(self.text, r"uses: actions/cache@")
+        jobs = self.all_jobs()
+        for name in self.CACHED_JOBS:
+            with self.subTest(job=name):
+                job = jobs[name]
+                # the dry-run parts run in parallel from one job: each restores and saves a key of its own
+                part = "${{ matrix.part }}-" if name == "release-dry-run" else ""
+                key = f"key: go-{name}-{part}${{{{ hashFiles('**/go.sum') }}}}"
+                self.assertEqual(1, job.count(key))
+                self.assertIn(f"restore-keys: go-{name}-{part}\n", job)
+                # the save step uses the key the restore step computed: hashFiles of the tree after the build would
+                # see go.sum files the build generated (distributions/*/build)
+                self.assertEqual(1, job.count("key: ${{ steps.go-cache.outputs.cache-primary-key }}"))
+                self.assertEqual(1, job.count("uses: actions/cache/restore@"))
+                self.assertEqual(1, job.count("uses: actions/cache/save@"))
+                self.assertIn("cache: false", job)
+                gate = "steps.gate.outputs.run == 'true' && " if name in self.GATED_CACHED_JOBS else ""
+                save = job.split("- name: Save the Go caches\n", 1)[1]
+                self.assertIn(f"if: {gate}{self.ON_MAIN} && steps.go-cache.outputs.cache-hit != 'true'", save)
+                self.assertIn("~/.cache/go-build", save)
+        self.assertEqual(len(self.CACHED_JOBS), self.text.count("uses: actions/cache/save@"))
+
+    def test_lint_caches_the_golangci_lint_binary_and_cache_directory(self):
+        job = self.all_jobs()["lint"]
+        for path in ("${{ env.GOBIN }}/golangci-lint", "~/.cache/golangci-lint"):
+            self.assertEqual(2, job.count(path), path)
+
+    def test_gates_diff_the_first_parent(self):
+        """P0: a pull request's change set is its merge commit against the first parent. base.sha is where the pull
+        request was opened and holds what the base gained since."""
+        jobs = self.all_jobs()
+        for name in ("upgrade-test", "release-dry-run"):
+            with self.subTest(job=name):
+                job = jobs[name]
+                self.assertIn("BASE: ${{ github.event.before }}\n", job)
+                self.assertNotIn("base.sha", job)
+                self.assertIn('if [ "$EVENT" = pull_request ]; then BASE=$(git rev-parse "$HEAD^1"); fi', job)
+                self.assertIn('git diff --name-only "$BASE" "$HEAD"', job)
     def test_testbed_runs_when_go_code_or_the_testbed_changes(self):
         """UC-022 Q14: the relay testbed has a gate step: FULL_CI, a manual run, or a change outside docs/ and .claude/."""
         job = self.job("testbed")
