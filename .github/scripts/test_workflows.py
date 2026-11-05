@@ -196,6 +196,12 @@ class BuildWorkflow(unittest.TestCase):
         self.assertRegex((ROOT / "Makefile").read_text(encoding="utf-8"), r"(?m)^test-fips:")
         self.assertRegex((ROOT / "flagd" / "build.Dockerfile").read_text(encoding="utf-8"), r"(?m)^ARG FIPS")
 
+    def test_the_test_job_summarizes_its_failed_tests(self):
+        """#190: a failed test job lists each failed test with its package, time and first error; report-only."""
+        self.assertIn("if: failure()", self.job("test"))
+        self.assertIn("test-failures.py --log test.log", self.job("test"))
+        self.assertIn("run: python3 .github/scripts/test_test_failures.py\n", self.job("lint"))
+
     def test_lint_runs_the_module_table_tests(self):
         """C1 and C2 are the parity gate for make test and make lint: CI has to run them."""
         self.assertIn("run: python3 .github/scripts/test_ci_modules.py\n", self.job("lint"))
