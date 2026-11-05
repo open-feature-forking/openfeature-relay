@@ -17,7 +17,7 @@ mkdir -p "${out}"
 
 # Scenarios switched on for both images, on top of the tags test/integration excludes (see TESTBED_ENABLE_TAGS there).
 # Each is a flagd behaviour the relay testbed serves; one tag is added per change, after a run of both suites with it.
-enabled_tags=(@contextEnrichment @sync-port)
+enabled_tags=(@contextEnrichment @sync-port @sync-payload)
 enabled="$(IFS=,; echo "${enabled_tags[*]-}")"
 
 run='TestRPC|TestInProcess'
