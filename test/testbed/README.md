@@ -10,6 +10,9 @@ make testbed-contract IMAGE=testbed-launchpad:local
 make testbed-contract IMAGE=<relay testbed image> KIND=relay
 ```
 
+`make testbed-contract-both` builds both images (`testbed-launchpad:local` and the relay testbed, `flagd-testbed:local`)
+and runs the contract against each, the launchpad as `KIND=launchpad` and the relay testbed as `KIND=relay`.
+
 `KIND` is `launchpad` (the default) or `relay`. Four cases pin quirks of the upstream launchpad that the relay testbed
 fixes on purpose, and each has a branch per kind:
 
