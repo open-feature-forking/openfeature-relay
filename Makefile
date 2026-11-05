@@ -103,6 +103,7 @@ TEST_TARGETS += test-eventsink-example
 TEST_TARGETS += test-contract-external
 TEST_TARGETS += test-middleware-example
 TEST_TARGETS += test-release
+TEST_TARGETS += test-concurrency
 test: $(TEST_TARGETS)
 test-core: test-modules
 # The loops below and CI's matrix (.github/scripts/ci-modules.json) run the same recipe, test-module.
@@ -133,6 +134,8 @@ else ifneq ($(filter $(TEST_MODULE),$(UNCOVERED_MODULES)),)
 	go test -race -covermode=atomic -cover -short ./$(TEST_MODULE)/...
 else ifneq ($(filter $(TEST_MODULE),$(PLAIN_TEST_MODULES)),)
 	go test -race -short -count=1 ./$(TEST_MODULE)/...
+else ifeq ($(TEST_MODULE),test/concurrency)
+	go test -race -count=1 ./test/concurrency/...
 else ifeq ($(TEST_MODULE),test/distributions)
 	cd test/distributions && go test -count=1 -timeout 30m ./...
 else ifeq ($(TEST_MODULE),test/upgrade)
@@ -178,6 +181,9 @@ test-inprocess-example:
 # The Builder is a tool of its own: it imports no relay module (UC-001 Q1).
 test-builder:
 	go test -race -short -count=1 ./builder/...
+# The concurrency module's Docker-free tests; its load tests run only when RELAY_LOAD is set (NFR-017).
+test-concurrency:
+	go test -race -count=1 ./test/concurrency/...
 test-distributions:
 	cd test/distributions && go test -count=1 -timeout 30m ./...
 test-flagd-proxy:

@@ -172,7 +172,8 @@ class TestTableCoversModules(unittest.TestCase):
             ["test-core", "test-flagd", "test-flagd-proxy", "test-contrib", "test-builder", "test-distributions",
              "test-upgrade-accepted", "test-image-pins", "test-configformat-example", "test-service-example",
              "test-evaluator-testkit", "test-inprocess-example", "test-sync-example", "test-telemetry-example",
-             "test-eventsink-example", "test-contract-external", "test-middleware-example", "test-release"],
+             "test-eventsink-example", "test-contract-external", "test-middleware-example", "test-release",
+             "test-concurrency"],
             re.findall(r"^TEST_TARGETS \+= (\S+)", MAKEFILE, re.M))
 
 
