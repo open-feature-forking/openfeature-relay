@@ -135,7 +135,7 @@ The event bus carries three kinds of events: configuration change events, which 
 
 ### BR-003: Resolve Through the Evaluation Router
 
-A service endpoint resolves flags only through the evaluation router, which picks for a selector and flag key the configuration format holding the flag and its evaluator; when two sources within the selector hold the same flag key, today's source precedence decides (FR-035). Typed values and type mismatch errors come from the core's typed adapter, so that every service endpoint reports a type mismatch alike. A service endpoint does not create an evaluator, decode, parse or convert flag configurations or read sources itself, so that every service endpoint of a distribution serves the same flags.
+A service endpoint that declared it needs the evaluation router resolves flags only through it; one that declared the evaluator of one specific configuration format (A2) gets that evaluator from the router. The evaluation router picks for a selector and flag key the configuration format holding the flag and its evaluator; when two sources within the selector hold the same flag key, today's source precedence decides (FR-035). Typed values and type mismatch errors come from the core's typed adapter, so that every service endpoint reports a type mismatch alike. A service endpoint does not create an evaluator, decode, parse or convert flag configurations or read sources itself, so that every service endpoint of a distribution serves the same flags.
 
 ### BR-004: Declared Needs
 

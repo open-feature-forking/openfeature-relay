@@ -154,7 +154,7 @@ The vendor's evaluator is built on the vendor's own evaluation logic, for Flagsm
 
 ### BR-006: OpenFeature Results
 
-The OFREP service endpoint returns the vendor's results with the reasons and error codes of the OpenFeature specification (UC-007 BR-007), and serves ETags and the event stream for the vendor's documents as for flagd's (FR-046).
+The OFREP service endpoint returns the vendor's results with the reasons and error codes of the OpenFeature specification (UC-007 BR-010), and serves ETags and the event stream for the vendor's documents as for flagd's (FR-046).
 
 ### BR-007: Evaluation Context Mapping
 
@@ -174,7 +174,7 @@ A vendor distribution replaces the edge proxy for OpenFeature clients that evalu
 
 ## Inherited Gaps
 
-- A webhook fetch trigger for a source, alongside server-sent events and vendor change events: it is not a service endpoint, because the event bus has no "fetch now" event and a trigger runs per source (moved here from UC-003 and UC-004).
+- A webhook fetch trigger for a source, alongside server-sent events and vendor change events: it is not a service endpoint, because the event bus has no "fetch now" event and a trigger runs per source (moved here from UC-003 and UC-004): #94.
 
 ## Delivered by Later Use Cases
 
@@ -187,7 +187,7 @@ This use case is `Implemented` as a small validation that the relay serves a ven
     - a changed flag configuration, by poll or by an SSE stream, and the OFREP event stream that announces it (main steps 11 and 12, BR-006);
     - an unavailable Vendor Flag Service and a stale source (A3), a paginated environment document, and a stream that is down: the fetcher and the SSE trigger have their own tests;
     - A1 (a scheme not in the distribution), A2 (a refused key, by `TestRefusedBeforeFirstDeliveryEndsProvider`, `TestRefusedAfterDeliveryKeepsServing` and `TestRuntimeExitsOnRefusedSource`), A4 (a rejected flag configuration, by the configuration format contract), A7 (a flag that is missing, disabled or of another type, by the evaluator's tests) and A9 (a configuration format not in the distribution).
-- The test case under `docs/test_cases/` that chains UC-001, UC-003, UC-005 and this use case: #94.
+- TC-003 chains UC-018, UC-007, UC-008 and this use case; the steps through UC-001, UC-003 and UC-005 in the built distribution are TC-003's gaps: #94.
 - Flagsmith's own service endpoint for SDKs in local evaluation, and the Edge Proxy's configuration and health endpoints (A5, BR-010): #94.
 - GO Feature Flag (the second vendor named in the goal and in the preconditions): a later slice. FR-027 stays `In Progress` until then.
 - The command line of the Edge Proxy (`environment_key_pairs`, `api_poll_frequency_seconds`): a `cmd:` module that reads it (the distribution has flagd's command line): #94.
