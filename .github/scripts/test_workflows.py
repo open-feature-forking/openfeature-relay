@@ -79,10 +79,15 @@ class BuildWorkflow(unittest.TestCase):
         self.assertNotIn("docker/login-action", self.text)
 
     def test_jobs(self):
-        names = re.findall(r"^  ([a-z][a-z-]*):\n", self.text.split("\njobs:\n", 1)[1], re.M)
+        names = re.findall(r"^  ([a-z][a-z0-9-]*):[ \t]*(?:#.*)?\n", self.text.split("\njobs:\n", 1)[1], re.M)
         self.assertEqual(
-            ["lint", "benchmark", "docs-check", "test", "fips", "docker-local", "upgrade-test", "release-dry-run", "testbed",
-             "testbed-rpc-outages", "testbed-grpc-sync"], names)
+            ["lint", "benchmark", "docs-check", "test", "builder-e2e", "fips", "docker-local", "integration-test",
+             "upgrade-test", "release-dry-run", "testbed", "testbed-rpc-outages",
+             "testbed-grpc-sync"], names)
+
+    def test_lint_runs_the_module_table_tests(self):
+        """C1 and C2 are the parity gate for make test and make lint: CI has to run them."""
+        self.assertIn("run: python3 .github/scripts/test_ci_modules.py\n", self.job("lint"))
 
     def test_gated_jobs(self):
         gate = "if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'"
