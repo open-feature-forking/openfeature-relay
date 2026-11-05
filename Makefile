@@ -188,6 +188,9 @@ test-concurrency:
 # behaviour of TestStreamSpike. Images are pulled, never pushed.
 K6_IMAGE ?= grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34
 # The load against the race build of flagd-minimal (NFR-017): the smoke runs about 60 seconds of load, the full run 10 minutes.
+.PHONY: print-k6-image
+print-k6-image:
+	@echo $(K6_IMAGE)
 test-load-smoke:
 	K6_IMAGE=$(K6_IMAGE) RELAY_LOAD=smoke go test -count=1 -timeout 30m -run 'TestCheckerSelfTest|TestConcurrency' ./test/concurrency/...
 test-load:
