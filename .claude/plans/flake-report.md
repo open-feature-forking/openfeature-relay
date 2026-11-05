@@ -18,6 +18,7 @@ Source: the last 300 runs of `build.yaml` (2026-11-04 11:06 to 2026-11-05 17:58 
 | 10 | `TestStartupLogCharacterization` | `flagd` | 1 | FIPS | `flagd did not become ready` | port race | #223, #230 |
 | 11 | `TestChangeThroughTrigger` | `testbed/cmd` | 1 | test | `Condition never satisfied` after 5 s | a 5 s bound; seen once, on the PR that added it (#163) | watch; the file is in #230 |
 | 12 | `TestEngineServesBothFormats` | `test/configformat-example/distribution` | 1 | test | `readiness covers both sources` after 20 s | port race (on #134, attempt 2) | #230 |
+| 13 | `TestResetRepeatedly` | `runtime` | 1 | FIPS (#233, run 42088758561) | goleak after 200 resets (`cycle_test.go:266`): `service/ofrep` `ofrep_service.go:150`, `:166`, `sse/service.go:88` and flag evaluation's `Serve` | not an earlier generation: `Reset` leaves the endpoints running. The leak baseline was taken while the runtime's endpoints were still starting (readiness follows the sources); the descriptor baseline has the same gap. No product issue | `fix/flake-goleak-settle`: baselines after every endpoint answers and the goroutine count settles |
 
 ## Not flaky
 
@@ -43,4 +44,4 @@ Source: the last 300 runs of `build.yaml` (2026-11-04 11:06 to 2026-11-05 17:58 
 - **Infrastructure** (row 8): module proxy errors in Docker builds; open.
 - **Product bugs** (row 5): #226. None other found: every remaining signature is in a test or the build.
 
-Since #229 and #223 merged, no flaky test failure has been recorded on a commit that has them, apart from #230's own run.
+Since #229 and #223 merged, the flaky failures recorded on a commit that has them are #230's own run and row 13.
