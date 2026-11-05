@@ -85,12 +85,16 @@ jobs:
       - run: make check-package-coverage
       - run: make check-flagd-full-modules
       - name: Test the workflow characterization
-        run: python3 .github/scripts/test_workflows.py
+        run: |
+          python3 -m pip install pyyaml
+          python3 .github/scripts/test_workflows.py
       - name: Test the benchmark comparison
         run: python3 .github/scripts/test_compare_allocs.py
       # C1 and C2: the module table and the Makefile targets that `make test` and `make lint` run.
       - name: Test the module table against the Makefile
         run: python3 .github/scripts/test_ci_modules.py
+      - name: Test the comparison of the pass sets of the testbed suites
+        run: python3 .github/scripts/test_compare_pass_sets.py
       # The module boundary tables include the evaluator boundary (NFR-005), which check-evaluator-boundary names.
       - run: make check-module-boundary check-evaluator-boundary
       # NFR-012: golang.org/x/exp is gone from the sources and from the direct requirements.
@@ -654,3 +658,75 @@ jobs:
             ~/.cache/go-build
           key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
+
+  testbed:
+    name: Relay testbed
+    # The relay testbed (UC-022) takes the place of the launchpad in the provider test suites, so it is built and compared
+    # with the upstream launchpad image whenever Go code changes outside docs/ and .claude/ (docs/ is ignored above), or
+    # the upgrade differential's inputs, or the testbed itself change. It also runs with FULL_CI=true or a manual run.
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - name: Does the relay testbed apply to this change?
+        id: gate
+        env:
+          FULL_CI: ${{ vars.FULL_CI }}
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.sha }}
+        run: |
+          # any Go source or module file; what the upgrade differential watches; the testbed, its distribution, the suites
+          # and this workflow
+          pattern='\.go$|(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^flagd/|^testbed/|^test/(testbed|integration|upgrade)/|^\.github/scripts/(testbed|compare-pass)|^\.github/workflows/build\.yaml$'
+          run=false
+          if [ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]; then
+            run=true
+            echo "::notice::The relay testbed runs: FULL_CI or a manual run."
+          elif [ -z "$BASE" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ]; then
+            echo "::notice::No base to compare with (a new branch): the relay testbed is skipped. Run the workflow manually or set FULL_CI."
+          else
+            changed=$(git diff --name-only "$BASE" "$HEAD" | grep -Ev '^(docs|\.claude)/' || true)
+            hits=$(printf '%s\n' "$changed" | grep -E "$pattern" || true)
+            if [ -n "$hits" ]; then
+              run=true
+              echo "::notice::The relay testbed runs: this change touches Go code or the testbed."
+              printf '%s\n' "$hits" | head -10
+            else
+              echo "::notice::The relay testbed is skipped: no Go code or testbed file changed. Set FULL_CI or run the workflow manually to run it."
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+      - name: Setup go
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
+        with:
+          go-version-file: 'flagd/go.mod'
+      - name: The launchpad contract against both images (the launchpad quirks on the launchpad only)
+        if: steps.gate.outputs.run == 'true'
+        run: make testbed-contract-both
+      - name: TestRPC and TestInProcess against both images, with the same scenarios passed
+        if: steps.gate.outputs.run == 'true'
+        run: make testbed-suites
+
+  testbed-rpc-outages:
+    name: Testbed RPC outages
+    # Gated during the proof of concept: set the repository variable FULL_CI=true, or run the workflow manually.
+    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+        with:
+          submodules: recursive
+      - name: Setup go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
+        with:
+          go-version-file: 'flagd/go.mod'
+      - name: TestRPC with the @reconnect, @events and @grace scenarios, against both images
+        run: make testbed-rpc-outages
