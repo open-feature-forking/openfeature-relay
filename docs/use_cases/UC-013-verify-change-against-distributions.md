@@ -6,9 +6,9 @@
 **Use Case Name:** Verify Change Against Distributions  
 **Primary Actor:** Maintainer  
 **Secondary Actors:** GitHub Actions, flagd Test Harness  
-**Goal:** Know before a change is merged whether it keeps every standard distribution building, keeps flagd-full compatible with today's flagd, keeps flagd-sync rejecting what flagd-full rejects, and keeps flagd-minimal correct under concurrent clients, and keeps evaluation performance and dependencies within their limits.  
+**Goal:** Know before a change is merged whether it keeps every standard distribution building, keeps flagd-full compatible with today's flagd, keeps flagd-sync rejecting what flagd-full rejects, keeps flagd-minimal correct under concurrent clients, and keeps evaluation performance and dependencies within their limits.  
 **Trigger:** A pull request against main is opened or updated  
-**Status:** Tested  
+**Status:** Implemented  
 
 **Requirements:** [FR-026, FR-032, NFR-001, NFR-004, NFR-005, NFR-007, NFR-011, NFR-012, NFR-017, C-009, C-010](../requirements.md)
 
@@ -190,10 +190,11 @@ Every pull request that changes more than documentation runs the 60-second concu
 
 ## Delivered by Later Use Cases
 
-This use case is `Implemented`: the build of every standard distribution from its manifest, as standard and FIPS build, with a check that each FIPS crypto closure stays inside flagd-full's recorded one; the dependency boundaries of NFR-004 and NFR-005; the Test Harness suites against the flagd-full image with a pinned tag selection; the verdict of flagd-sync against flagd-full for the set of flag configurations; and the allocs/op comparison with the pull request's base commit, with time deviations beyond 5% reported. The checks are listed in [Status and roadmap](../relay/status.md). These parts are accepted gaps of this use case:
+This use case is `Implemented`: the build of every standard distribution from its manifest on every pull request; the dependency boundaries of NFR-004 and NFR-005; the Test Harness suites against the flagd-full image with a pinned tag selection; the verdict of flagd-sync against flagd-full for the set of flag configurations; and the allocs/op comparison with the pull request's base commit, with time deviations beyond 5% reported. The checks are listed in [Status and roadmap](../relay/status.md). These parts are accepted gaps of this use case:
 
 | Gap | Delivered by |
 |-----|--------------|
 | Precondition, "required for merging": branch protection is a repository setting the project lead makes; no workflow enforces it | the project lead, after the proof of concept |
 | BR-005, NFR-001: the allocs/op of the evaluator benchmarks against the upstream commit the work branched from. Every benchmark's package path moved, so `compare-allocs.py` finds no common benchmark without a mapping of old paths to new ones | after the incubator |
+| Step 3, A3, BR-001: the FIPS build on every pull request. A FIPS build is the builder's do-it-yourself build (C-009); CI builds only flagd-full as a FIPS build, nightly, with the check that its crypto closure stays inside the recorded one, so a change that breaks it fails the nightly run after the merge, not the pull request, and the FIPS build of the other standard distributions is not checked | the project lead, after the proof of concept |
 | A6: a setup failure of the Test Harness or the flagd-full image fails the integration test with `failed to build flagd image` before any scenario; no test pins it | the project lead, after the proof of concept |
