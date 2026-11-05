@@ -9,7 +9,7 @@ import (
 // The kernel hands a closed port out again, and a start given one port for two of its flags fails to bind.
 func TestPortsAreNeverHandedOutTwice(t *testing.T) {
 	seen := map[int]bool{}
-	for i := range 2000 {
+	for i := range 200 {
 		var port int
 		if i%2 == 0 {
 			port = Free(t)

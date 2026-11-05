@@ -50,8 +50,9 @@ func TestExtensionTelemetryProvider(t *testing.T) {
 	components.Telemetry = telemetryexample.Factory{}
 	components.TelemetryConfig = map[string]any{telemetryexample.SettingPath: out}
 	ofrepPort := freePort(t)
+	managementPort := freePort(t)
 	rt, err := runtime.FromConfig(logger.NewLogger(nil, false), "test", runtime.Config{
-		ManagementPort:               freePort(t),
+		ManagementPort:               managementPort,
 		ServicePort:                  freePort(t),
 		OfrepServicePort:             ofrepPort,
 		SyncServicePort:              freePort(t),
@@ -64,6 +65,17 @@ func TestExtensionTelemetryProvider(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() { done <- rt.Start() }()
+
+	// the runtime is ready once the source has delivered: an earlier evaluation finds no flag and the provider records its 404
+	readyz := fmt.Sprintf("http://127.0.0.1:%d/readyz", managementPort)
+	require.Eventually(t, func() bool {
+		resp, err := http.Get(readyz) //nolint:gosec,noctx // local test endpoint
+		if err != nil {
+			return false
+		}
+		resp.Body.Close()
+		return resp.StatusCode == http.StatusOK
+	}, 20*time.Second, 50*time.Millisecond, "the runtime becomes ready")
 
 	url := fmt.Sprintf("http://127.0.0.1:%d/ofrep/v1/evaluate/flags/f1", ofrepPort)
 	require.Eventually(t, func() bool {
