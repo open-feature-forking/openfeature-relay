@@ -51,7 +51,8 @@ class BuildWorkflow(unittest.TestCase):
         self.assertEqual(2, self.text.count(block))
         head = self.text.split("\njobs:\n", 1)[0]
         self.assertIn("  push:\n    branches:", head)
-        self.assertIn("  pull_request:\n    branches:", head)
+        self.assertIn("  pull_request:\n", head)
+        self.assertIn("    types: [opened, synchronize, reopened, labeled]\n    branches:", head)
 
     def test_nothing_is_pushed_or_logged_in(self):
         self.assertNotRegex(self.text, r"push:\s*true")
@@ -63,18 +64,36 @@ class BuildWorkflow(unittest.TestCase):
             ["lint", "benchmark", "docs-check", "test", "fips", "docker-local", "upgrade-test", "release-dry-run"], names)
 
     def test_gated_jobs(self):
-        gate = "if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'"
+        gate = "if: (vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch') && github.event.action != 'labeled'"
         for name in ("fips", "docker-local"):
             with self.subTest(job=name):
                 self.assertIn(gate, self.job(name))
-        self.assertIn("if: github.event_name == 'pull_request'", self.job("benchmark"))
+        self.assertIn("if: github.event_name == 'pull_request' && github.event.action != 'labeled'", self.job("benchmark"))
+
+    def test_a_label_event_runs_only_the_release_dry_run(self):
+        """The release-check label starts a run of build.yaml; every job but the dry run skips a labeled event."""
+        jobs = self.text.split("\njobs:\n", 1)[1]
+        blocks = re.split(r"^  ([a-z][a-z0-9-]*):", jobs, flags=re.M)[1:]
+        for name, body in zip(blocks[::2], blocks[1::2]):
+            with self.subTest(job=name):
+                if name == "release-dry-run":
+                    self.assertIn(
+                        "if: github.event.action != 'labeled' || github.event.label.name == 'release-check'", body)
+                else:
+                    self.assertIn("github.event.action != 'labeled'", body)
 
     def test_release_dry_run_runs_when_its_inputs_change(self):
-        """Q16: the job has a gate step, like upgrade-test: FULL_CI, a manual run, or a change to the release's inputs."""
+        """The dry run runs on a push to `main` (full), with FULL_CI or a manual run (full), and on a pull request labeled
+        release-check (reduced). A change to the release's inputs alone no longer starts it."""
         job = self.job("release-dry-run")
-        self.assertNotIn("\n    if:", job)
+        self.assertIn("if: github.event.action != 'labeled' || github.event.label.name == 'release-check'", job)
         self.assertIn('[ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]', job)
+        self.assertIn('[ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]', job)
+        self.assertIn('[ "$EVENT" = pull_request ] && [[ " $LABELS " == *" release-check "* ]]', job)
+        self.assertIn("LABELS: ${{ join(github.event.pull_request.labels.*.name, ' ') }}", job)
+        # the change set only picks the distributions of a labeled run; it no longer decides whether the run happens
         self.assertIn(r"^\.github/scripts/testdata/|^\.github/workflows/release-please\.yaml$|^builder/|^distributions/|Dockerfile$", job)
+        self.assertNotIn("github.event.before", job)
         self.assertIn("if: steps.gate.outputs.run == 'true'", job)
 
     def test_release_dry_run_parts(self):
