@@ -3,6 +3,7 @@ package service
 import (
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -22,7 +23,7 @@ func (d ConfigDecoder) Decode(config map[string]any, accept ...string) error {
 	for _, key := range keys {
 		decode, ok := d[key]
 		if !ok {
-			if contains(accept, key) {
+			if slices.Contains(accept, key) {
 				continue
 			}
 			return fmt.Errorf("unknown setting %q; the settings are: %s", key, strings.Join(d.keys(accept), ", "))
@@ -41,15 +42,6 @@ func (d ConfigDecoder) keys(accept []string) []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-func contains(list []string, s string) bool {
-	for _, v := range list {
-		if v == s {
-			return true
-		}
-	}
-	return false
 }
 
 // Int64 reads a whole number given as any Go integer type, or as the float64 a JSON document yields.
