@@ -31,7 +31,7 @@ func listenLoopback(t testing.TB) net.Listener {
 			_ = l.Close()
 		}
 	}()
-	for range 10000 {
+	for range 1000 {
 		l, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Fatalf("reserving a free port: %v", err)

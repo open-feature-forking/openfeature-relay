@@ -332,7 +332,7 @@ func freePort() (int, error) {
 			_ = h.Close()
 		}
 	}()
-	for {
+	for range 1000 {
 		l, err := net.Listen("tcp", ":0")
 		if err != nil {
 			return 0, err
@@ -345,6 +345,7 @@ func freePort() (int, error) {
 		_ = l.Close()
 		return port, nil
 	}
+	return 0, errors.New("no free port that was not handed out before")
 }
 
 func (e *env) create(port int, mutate func(*service.Settings)) (service.Endpoint, string, error) {
