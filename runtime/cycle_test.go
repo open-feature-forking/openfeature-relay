@@ -255,7 +255,7 @@ func TestResetRepeatedly(t *testing.T) {
 
 	reset()
 	check.client.CloseIdleConnections()
-	ignore := goleak.IgnoreCurrent()
+	ignore := ignoreServing(t, p.service, p.ofrep, p.sync)
 	fds := settledFDs(t)
 
 	var slowest time.Duration
