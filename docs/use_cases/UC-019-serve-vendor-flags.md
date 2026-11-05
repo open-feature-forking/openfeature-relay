@@ -61,7 +61,7 @@
 
 1. System logs an error naming the source and the sync provider keeps retrying.
 2. Until a first flag configuration of the source is accepted, the vendor distribution does not reach readiness.
-3. Afterwards System keeps serving the last accepted flag configuration; once the source's staleness exceeds the configured limit, readiness fails until a new delivery is accepted, so that a load balancer stops routing to the vendor distribution (FR-052).
+3. Afterwards System keeps serving the last accepted flag configuration; once the source's staleness (the time since the last contact) exceeds the configured limit, readiness fails until the source is in contact again, so that a load balancer stops routing to the vendor distribution (FR-052).
 4. Use case continues at step 4.
 
 ### A4: Flag Configuration Rejected

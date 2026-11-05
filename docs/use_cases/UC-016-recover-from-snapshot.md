@@ -81,7 +81,7 @@
 
 ### A7: Source Becomes Stale
 
-**Trigger:** A source has not delivered within its configured staleness limit (step 9)  
+**Trigger:** The last live contact with a source is older than its configured staleness limit (step 9)  
 **Flow:**
 
 1. System reports readiness as failed on the management port, keeps serving the last accepted flag configurations and keeps the snapshot unchanged.
@@ -126,7 +126,7 @@ The snapshot is not a configured source for readiness: flagd serves flags from i
 
 ### BR-006: Snapshot Does Not Reset Staleness
 
-Staleness counts from a source's last accepted live delivery, never from the time its documents were restored from the snapshot (FR-052).
+Staleness counts from a source's last live contact, never from the time its documents were restored from the snapshot (FR-052).
 
 ### BR-007: Restored Versions Are Kept
 

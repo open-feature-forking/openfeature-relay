@@ -1,0 +1,201 @@
+{
+  "modules": {
+    "builder": {
+      "test": "make test-module MODULE=builder",
+      "always": true
+    },
+    "configformat/flagd": {
+      "test": "make test-module MODULE=configformat/flagd",
+      "coverage": true
+    },
+    "contrib/flagsmith/engine": {
+      "test": "make test-module MODULE=contrib/flagsmith/engine"
+    },
+    "contrib/flagsmith/middleware": {
+      "test": "make test-module MODULE=contrib/flagsmith/middleware"
+    },
+    "contrib/flagsmith/sync": {
+      "test": "make test-module MODULE=contrib/flagsmith/sync"
+    },
+    "core": {
+      "test": "make test-module MODULE=core",
+      "coverage": true
+    },
+    "evaluator/flagd": {
+      "test": "make test-module MODULE=evaluator/flagd",
+      "coverage": true
+    },
+    "eventsink/webhook": {
+      "test": "make test-module MODULE=eventsink/webhook",
+      "coverage": true
+    },
+    "flagd": {
+      "test": "make test-module MODULE=flagd",
+      "coverage": true
+    },
+    "flagd-proxy": {
+      "test": "make test-module MODULE=flagd-proxy",
+      "coverage": true
+    },
+    "flagd-proxy/tests/loadtest": {
+      "test": null,
+      "reason": "a load test, run by hand; make test does not run it"
+    },
+    "runtime": {
+      "test": "make test-module MODULE=runtime",
+      "coverage": true
+    },
+    "service/event-collector": {
+      "test": "make test-module MODULE=service/event-collector",
+      "coverage": true
+    },
+    "service/flag-evaluation": {
+      "test": "make test-module MODULE=service/flag-evaluation",
+      "coverage": true
+    },
+    "service/flag-sync": {
+      "test": "make test-module MODULE=service/flag-sync",
+      "coverage": true
+    },
+    "service/ofrep": {
+      "test": "make test-module MODULE=service/ofrep",
+      "coverage": true
+    },
+    "service/transport": {
+      "test": "make test-module MODULE=service/transport",
+      "coverage": true
+    },
+    "sync/azblob": {
+      "test": "make test-module MODULE=sync/azblob",
+      "coverage": true
+    },
+    "sync/builder": {
+      "test": "make test-module MODULE=sync/builder",
+      "coverage": true
+    },
+    "sync/file": {
+      "test": "make test-module MODULE=sync/file",
+      "coverage": true
+    },
+    "sync/flagd-grpc": {
+      "test": "make test-module MODULE=sync/flagd-grpc",
+      "coverage": true
+    },
+    "sync/gcs": {
+      "test": "make test-module MODULE=sync/gcs",
+      "coverage": true
+    },
+    "sync/http": {
+      "test": "make test-module MODULE=sync/http",
+      "coverage": true
+    },
+    "sync/openfeature-operator": {
+      "test": "make test-module MODULE=sync/openfeature-operator",
+      "coverage": true
+    },
+    "sync/s3": {
+      "test": "make test-module MODULE=sync/s3",
+      "coverage": true
+    },
+    "sync/sse": {
+      "test": "make test-module MODULE=sync/sse",
+      "coverage": true
+    },
+    "telemetry/otel": {
+      "test": "make test-module MODULE=telemetry/otel",
+      "coverage": true
+    },
+    "test/configformat-example": {
+      "test": "make test-module MODULE=test/configformat-example"
+    },
+    "test/configformat-example/distribution": {
+      "test": "make test-module MODULE=test/configformat-example/distribution"
+    },
+    "test/distributions": {
+      "test": "make test-module MODULE=test/distributions"
+    },
+    "test/distributions/example/cmd": {
+      "test": null,
+      "reason": "built by test/distributions from its manifests; no tests of its own"
+    },
+    "test/distributions/sync-vendor/cmd": {
+      "test": null,
+      "reason": "built by test/distributions from its manifests; no tests of its own"
+    },
+    "test/evaluator-testkit": {
+      "test": "make test-module MODULE=test/evaluator-testkit"
+    },
+    "test/eventsink-example": {
+      "test": "make test-module MODULE=test/eventsink-example"
+    },
+    "test/eventsink-example/distribution": {
+      "test": "make test-module MODULE=test/eventsink-example/distribution"
+    },
+    "test/image": {
+      "test": "make test-module MODULE=test/image",
+      "always": true
+    },
+    "test/inprocess-example/engine": {
+      "test": "make test-module MODULE=test/inprocess-example/engine"
+    },
+    "test/inprocess-example/file": {
+      "test": "make test-module MODULE=test/inprocess-example/file"
+    },
+    "test/inprocess-example/filegrpc": {
+      "test": "make test-module MODULE=test/inprocess-example/filegrpc"
+    },
+    "test/loadtest": {
+      "test": null,
+      "reason": "a load test, run by hand; make test does not run it"
+    },
+    "test/middleware-example": {
+      "test": "make test-module MODULE=test/middleware-example"
+    },
+    "test/middleware-example/distribution": {
+      "test": "make test-module MODULE=test/middleware-example/distribution"
+    },
+    "test/release": {
+      "test": "make test-module MODULE=test/release",
+      "always": true
+    },
+    "test/service-example": {
+      "test": "make test-module MODULE=test/service-example"
+    },
+    "test/sync-example": {
+      "test": "make test-module MODULE=test/sync-example"
+    },
+    "test/telemetry-example": {
+      "test": "make test-module MODULE=test/telemetry-example"
+    },
+    "test/telemetry-example/distribution": {
+      "test": "make test-module MODULE=test/telemetry-example/distribution"
+    },
+    "test/testbed": {
+      "test": null,
+      "reason": "needs a testbed image (make testbed-contract IMAGE=...); make test does not run it"
+    },
+    "test/upgrade": {
+      "test": "make test-module MODULE=test/upgrade",
+      "always": true
+    },
+    "test/zero-downtime-flagd-proxy": {
+      "test": null,
+      "reason": "a Kubernetes test (make run-flagd-proxy-zd-test); make test does not run it"
+    },
+    "testbed/cmd": {
+      "test": "make test-module MODULE=testbed/cmd"
+    },
+    "testbed/control": {
+      "test": "make test-module MODULE=testbed/control"
+    },
+    "testbed/source": {
+      "test": "make test-module MODULE=testbed/source"
+    }
+  },
+  "pseudo": {
+    "contract-external": {
+      "test": "make test-contract-external",
+      "always": true
+    }
+  }
+}
