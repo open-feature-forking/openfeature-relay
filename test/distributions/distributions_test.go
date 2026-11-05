@@ -244,12 +244,40 @@ func TestManifestMissingAReplaceIsReported(t *testing.T) {
 	require.Contains(t, b.out, "replaces")
 }
 
+// portSet hands out free ports, each once. A port is free again once its listener closes, and the kernel hands it out
+// again, so a start could get one port for two of its flags, or the port of a process still running.
+type portSet struct {
+	mu    sync.Mutex
+	given map[int]bool
+}
+
+var testPorts = &portSet{}
+
+// free returns a port that is free and that the set has not returned before.
+func (s *portSet) free(t *testing.T) int {
+	t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.given == nil {
+		s.given = map[int]bool{}
+	}
+	for range 1000 {
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		require.NoError(t, err)
+		port := l.Addr().(*net.TCPAddr).Port
+		_ = l.Close()
+		if !s.given[port] {
+			s.given[port] = true
+			return port
+		}
+	}
+	t.Fatal("no free port that was not handed out before")
+	return 0
+}
+
 func freePort(t *testing.T) int {
 	t.Helper()
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port
+	return testPorts.free(t)
 }
 
 // TestBuildExampleDistribution (NFR-010) builds the example distribution, which brings its own command line, starts it
