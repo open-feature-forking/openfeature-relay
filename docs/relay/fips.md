@@ -4,7 +4,8 @@ description: Build any distribution as a FIPS 140-3 binary or image with the rel
 
 # Build a FIPS distribution
 
-Any distribution, standard or custom, can be built as a FIPS 140-3 binary or image with the relay builder (C-009).
+OpenFeature Relay's releases and images ship no FIPS 140-3 build, unlike today's flagd.
+Any distribution, standard or custom, can be built as a FIPS 140-3 binary or image with the relay builder instead (C-009).
 The FIPS build is compiled against the Go Cryptographic Module v1.0.0 (CMVP certificate #5247) and runs it in approved mode, with the same crypto boundary as flagd's own FIPS build.
 What the FIPS build restricts, TLS above all, is in the [FIPS 140-3 reference](../reference/fips-140-3.md).
 
