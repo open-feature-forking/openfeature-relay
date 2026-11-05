@@ -46,6 +46,8 @@ check_layout() {
     --revision "${commit}" --version "main-${short}" --created "${date}" 2>&1 || true)
   if [ "${checks}" -gt 0 ]; then
     note "- ok: ${name}${suffix}: the layout (${checks} checks: tags, platforms, attestations, marking)"
+  else
+    fail "${name}${suffix}: the layout check printed no result"
   fi
 }
 
