@@ -169,6 +169,10 @@ The service endpoint stops accepting clients when the distribution shuts down, e
 
 An extension is referenced in a manifest by Go module path and version in the same way as an official service endpoint; no registration with the Maintainers is needed.
 
+### BR-012: Listeners Open Through Settings.Listen
+
+A service endpoint opens every listener it serves on through `Settings.Listen`, never by calling `net.Listen` itself. The testbed's listener gate (UC-022) decides when and whether an address is bound, and an embedder may hand over a listener it opened earlier, so an endpoint that binds its port itself cannot be used in either. The contract tests fail such an endpoint with this rule, not with a port in use.
+
 ## Delivered by Later Use Cases
 
 This use case is `Implemented` for the service endpoint side: the factory, settings and declared needs, the event bus, the runtime registry that serves any set of endpoints, the contract tests, the OFREP event stream and validators from document versions, and `test/service-example` with a test endpoint for a vendor client API. These parts are delivered by the use cases named here, and are accepted gaps of this one:
