@@ -2,11 +2,13 @@ package sync
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
 
 	syncv1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/sync/v1"
+	"connectrpc.com/connect"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
@@ -106,4 +108,35 @@ func TestStreamEndSendsNoEmptyConfiguration(t *testing.T) {
 			}
 		})
 	}
+}
+
+// failingStore closes the watcher at once, as the store does when it cannot read the flags.
+type failingStore struct{ *store.Store }
+
+func (failingStore) Watch(_ context.Context, _ *store.Selector, watcher chan<- store.FlagQueryResult) {
+	close(watcher)
+}
+
+// TestStoreErrorEndsStreamWithDataLoss pins that a watcher the store closes while the stream's context is live ends the
+// stream with DataLoss, and sends nothing.
+func TestStoreErrorEndsStreamWithDataLoss(t *testing.T) {
+	flagStore, err := store.NewStore(logger.NewLogger(nil, false), []string{})
+	require.NoError(t, err)
+	handler := syncHandler{
+		store:           failingStore{flagStore},
+		log:             logger.NewLogger(nil, false),
+		metricsRecorder: flagdService.NoopMetrics(),
+	}
+	stream := &endingStream{end: func() {}}
+	done := make(chan error, 1)
+	go func() { done <- handler.syncFlags(context.Background(), nil, "", "", stream) }()
+	select {
+	case err = <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the stream did not end")
+	}
+	var connectErr *connect.Error
+	require.True(t, errors.As(err, &connectErr), "%v", err)
+	require.Equal(t, connect.CodeDataLoss, connectErr.Code())
+	require.Empty(t, stream.configurations())
 }

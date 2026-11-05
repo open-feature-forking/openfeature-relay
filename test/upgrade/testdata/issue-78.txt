@@ -25,6 +25,7 @@ flagd built from this repository is a drop-in replacement for today's flagd: int
 - [ ] `incrementalUpdates`, which is experimental and opt-in, is honoured for http, file and blob sources (#54).
 - [ ] Telemetry is flushed on shutdown (step 6 T3).
 - [ ] A failed start stops at once: when an endpoint cannot open its port or another startup step fails, flag sync no longer holds the exit for up to 5 s and no longer logs its initial-sync timeout first (#175).
+- [ ] A SyncFlags stream sends no empty configuration at its end: when the stream's server-side deadline or the client ends it, flag sync no longer sends `{"flags":{}}` first, and the stream's duration metric records `normal_close` for a stream the client ends, where it was sometimes `client_disconnect`; when the store cannot read the flags, the stream ends with `DataLoss` instead of sending empty configurations in a loop (#226, #233).
 
 **Unchanged and pinned by tests:** CLI flags, ports, endpoints, management paths and status codes, payloads, metric and span names. Tick an item once the migration guide covers it.
 
