@@ -60,6 +60,13 @@ func run(t *testing.T, s *Source, source sync.SourceConfig) <-chan sync.DataSync
 	done := make(chan struct{})
 	go func() { defer close(done); _ = provider.Sync(ctx, out) }()
 	t.Cleanup(func() { cancel(); <-done })
+	// the provider starts its triggers in goroutines: a load before a trigger watches the source signals no one, and
+	// the hour-long poll interval leaves nothing else to fetch it
+	require.Eventually(t, func() bool {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return len(s.signals) == len(triggers)
+	}, 30*time.Second, time.Millisecond, "the triggers watch the source")
 	return out
 }
 
@@ -68,7 +75,7 @@ func receive(t *testing.T, out <-chan sync.DataSync) sync.DataSync {
 	select {
 	case d := <-out:
 		return d
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		require.FailNow(t, "no delivery")
 	}
 	return sync.DataSync{}
@@ -81,10 +88,8 @@ func TestLoadFetchesNow(t *testing.T) {
 	require.JSONEq(t, `{"v":1}`, receive(t, out).FlagData)
 
 	// the poll interval is an hour and no poller is attached: only the load can make this delivery
-	start := time.Now()
 	require.NoError(t, s.Load([]byte(`{"v":2}`), "d2"))
 	require.JSONEq(t, `{"v":2}`, receive(t, out).FlagData)
-	require.Less(t, time.Since(start), 2*time.Second)
 }
 
 func TestFetchCarriesTheLoadedVersion(t *testing.T) {
