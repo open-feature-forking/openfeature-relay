@@ -320,11 +320,13 @@ type running struct {
 	ended  <-chan struct{}
 }
 
-// issuedPorts are the ports freePort has handed out in this process. A port is free again the moment it is closed, so
+// issuedPorts are the ports reservePort has handed out in this process. A port is free again the moment it is closed, so
 // the next call can get the same one, and one start would listen twice on it.
 var issuedPorts sync.Map
 
-func freePort() (int, error) {
+// reservePort opens a listener on a free port that no call returned before and keeps it open, so nothing can take the
+// port between the choice and the bind. The endpoint is handed the listener through Settings.Listen (handOver).
+func reservePort() (net.Listener, error) {
 	// a port the kernel hands out again stays open until a new one comes, so the next listen cannot get it
 	var held []net.Listener
 	defer func() {
@@ -335,17 +337,32 @@ func freePort() (int, error) {
 	for range 1000 {
 		l, err := net.Listen("tcp", ":0")
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
-		port := l.Addr().(*net.TCPAddr).Port
-		if _, taken := issuedPorts.LoadOrStore(port, true); taken {
+		if _, taken := issuedPorts.LoadOrStore(l.Addr().(*net.TCPAddr).Port, true); taken {
 			held = append(held, l)
 			continue
 		}
-		_ = l.Close()
-		return port, nil
+		return l, nil
 	}
-	return 0, errors.New("no free port that was not handed out before")
+	return nil, errors.New("no free port that was not handed out before")
+}
+
+// handOver is a service.ListenFunc that returns l for the first listen of its port and listens as net.Listen does for
+// any other.
+func handOver(l net.Listener) service.ListenFunc {
+	var once sync.Once
+	port := strconv.Itoa(l.Addr().(*net.TCPAddr).Port)
+	return func(network, address string) (net.Listener, error) {
+		if _, p, err := net.SplitHostPort(address); err == nil && p == port {
+			var given net.Listener
+			once.Do(func() { given = l })
+			if given != nil {
+				return given, nil
+			}
+		}
+		return net.Listen(network, address)
+	}
 }
 
 func (e *env) create(port int, mutate func(*service.Settings)) (service.Endpoint, string, error) {
@@ -369,13 +386,28 @@ func (e *env) create(port int, mutate func(*service.Settings)) (service.Endpoint
 }
 
 // start creates the endpoint, serves it and waits until a client can connect.
-func (e *env) start(mutate func(*service.Settings)) (*running, error) {
+func (e *env) start(mutate func(*service.Settings)) (_ *running, startErr error) {
 	port := 0
 	if e.in.PortKey != "" {
-		var err error
-		if port, err = freePort(); err != nil {
+		reserved, err := reservePort()
+		if err != nil {
 			return nil, err
 		}
+		port = reserved.Addr().(*net.TCPAddr).Port
+		// the endpoint binds the listener that is already open; one that does not use Settings.Listen finds its port taken
+		listen, user := handOver(reserved), mutate
+		mutate = func(s *service.Settings) {
+			s.Listen = listen
+			if user != nil {
+				user(s)
+			}
+		}
+		// the endpoint closes the listener it was handed; one it never took is closed here when the start fails
+		defer func() {
+			if startErr != nil {
+				_ = reserved.Close()
+			}
+		}()
 	}
 	endpoint, addr, err := e.create(port, mutate)
 	if err != nil {
@@ -473,15 +505,12 @@ func caseServeError(e *env) error {
 	if e.in.PortKey == "" {
 		return errors.New("the input PortKey is required: the harness occupies the endpoint's port to see Serve fail")
 	}
-	port, err := freePort()
-	if err != nil {
-		return err
-	}
-	busy, err := net.Listen("tcp", ":"+strconv.Itoa(port))
+	busy, err := reservePort()
 	if err != nil {
 		return err
 	}
 	defer busy.Close()
+	port := busy.Addr().(*net.TCPAddr).Port
 
 	endpoint, _, err := e.create(port, nil)
 	if err != nil {

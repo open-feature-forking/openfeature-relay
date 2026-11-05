@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"strconv"
 	"testing"
@@ -49,7 +48,7 @@ type stubEndpoint struct {
 
 func (e *stubEndpoint) Serve(ctx context.Context) error {
 	port, _ := e.settings.Config["port"].(int)
-	listener, err := net.Listen("tcp", ":"+strconv.Itoa(port))
+	listener, err := e.settings.Listen.Or()("tcp", ":"+strconv.Itoa(port))
 	if err != nil {
 		if e.broken == "swallows serve error" {
 			return nil
