@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/open-feature-forking/openfeature-relay/tools/ci/internal/allocs"
+	"github.com/open-feature-forking/openfeature-relay/tools/ci/internal/passsets"
 )
 
 const usage = `usage: relay-ci <subcommand> [arguments]
@@ -30,6 +31,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 0
 	case "compare-allocs":
 		return allocs.Run(args[1:], stdout, stderr)
+	case "compare-pass-sets":
+		return passsets.Run(args[1:], stdout, stderr)
 	default:
 		_, _ = fmt.Fprintf(stderr, "relay-ci: unknown subcommand %q\n\n%s", args[0], usage)
 		return 2
