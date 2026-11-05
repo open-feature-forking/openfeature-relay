@@ -56,7 +56,7 @@ A newer push to a pull request cancels its running build.
 | 60 s of concurrent OFREP, RPC and flag sync clients against a race build of flagd-minimal while its flags change | `load-smoke`, every build | NFR-017 |
 | the same for 10 min with more clients | `load-test`, with `FULL_CI` or a manual run | NFR-017 |
 
-No check builds or tests a FIPS build: it is documented for the builder, not verified in CI ([Build a FIPS distribution](fips.md), C-009).
+No check builds or tests a FIPS build of a distribution: it is documented for the builder, not verified in CI ([Build a FIPS distribution](fips.md), C-009).
 Branch protection is not set: the project lead decides which of these checks are required for merging.
 NFR-001 against the upstream commit the work branched from is not compared yet (`compare-allocs.py` would need a mapping of the old package paths to the new ones), so NFR-001 stays `In Progress`.
 
