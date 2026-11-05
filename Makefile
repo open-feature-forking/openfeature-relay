@@ -105,14 +105,43 @@ TEST_TARGETS += test-middleware-example
 TEST_TARGETS += test-release
 test: $(TEST_TARGETS)
 test-core: test-modules
+# The loops below and CI's matrix (.github/scripts/ci-modules.json) run the same recipe, test-module.
 test-modules:
-	@rc=0; for m in $(GO_LIB_MODULE_DIRS); do \
-		go test -race -covermode=atomic -cover -short $$m/... -coverprofile=$$(echo $$m | sed 's#^\./##; s#/#-#g')-coverage.out || rc=1; \
-	done; exit $$rc
+	@rc=0; $(foreach m,$(GO_LIB_MODULE_DIRS),$(MAKE) --no-print-directory test-module MODULE=$(m) || rc=1;) exit $$rc
 test-contrib:
-	go test -race -covermode=atomic -cover -short $(addsuffix /...,$(CONTRIB_MODULE_DIRS) $(TESTBED_MODULE_DIRS))
+	@rc=0; $(foreach m,$(CONTRIB_MODULE_DIRS) $(TESTBED_MODULE_DIRS),$(MAKE) --no-print-directory test-module MODULE=$(m) || rc=1;) exit $$rc
 test-flagd:
-	go test -race -covermode=atomic -cover -short $(addsuffix /...,$(FLAGD_MODULE_DIRS)) -coverprofile=flagd-coverage.out
+	@rc=0; $(foreach m,$(FLAGD_MODULE_DIRS),$(MAKE) --no-print-directory test-module MODULE=$(m) || rc=1;) exit $$rc
+
+# The tests of one module (MODULE=core, with or without the leading ./), with the flags that `make test` has always
+# used for it. The recipes of the single-module targets below are the same ones; test_ci_modules.py pins that.
+TEST_MODULE := $(patsubst ./%,%,$(MODULE))
+COVERED_MODULES := $(patsubst ./%,%,$(GO_LIB_MODULE_DIRS) $(FLAGD_MODULE_DIRS))
+UNCOVERED_MODULES := $(patsubst ./%,%,$(CONTRIB_MODULE_DIRS) $(TESTBED_MODULE_DIRS))
+# Modules whose tests run as `go test -race -short -count=1 ./<module>/...`.
+PLAIN_TEST_MODULES := builder test/release test/service-example test/sync-example test/evaluator-testkit \
+    test/configformat-example test/configformat-example/distribution test/eventsink-example test/eventsink-example/distribution \
+    test/middleware-example test/middleware-example/distribution test/telemetry-example test/telemetry-example/distribution \
+    test/inprocess-example/file test/inprocess-example/filegrpc test/inprocess-example/engine
+.PHONY: test-module
+test-module:
+ifneq ($(filter $(TEST_MODULE),$(COVERED_MODULES)),)
+	go test -race -covermode=atomic -cover -short ./$(TEST_MODULE)/... -coverprofile=$(subst /,-,$(TEST_MODULE))-coverage.out
+else ifeq ($(TEST_MODULE),flagd-proxy)
+	go test -race -covermode=atomic -cover -short ./flagd-proxy/pkg/... -coverprofile=flagd-proxy-coverage.out
+else ifneq ($(filter $(TEST_MODULE),$(UNCOVERED_MODULES)),)
+	go test -race -covermode=atomic -cover -short ./$(TEST_MODULE)/...
+else ifneq ($(filter $(TEST_MODULE),$(PLAIN_TEST_MODULES)),)
+	go test -race -short -count=1 ./$(TEST_MODULE)/...
+else ifeq ($(TEST_MODULE),test/distributions)
+	cd test/distributions && go test -count=1 -timeout 30m ./...
+else ifeq ($(TEST_MODULE),test/upgrade)
+	cd test/upgrade && go test -count=1 -run 'TestAcceptedMatchesIssue|TestSurfaces|TestGuideCoversAcceptedItems' ./...
+else ifeq ($(TEST_MODULE),test/image)
+	cd test/image && go test -count=1 -run TestReferenceDockerfilePins ./...
+else
+	@echo "test-module: no test recipe for MODULE=$(MODULE); ci-modules.json lists the modules that have one"; exit 1
+endif
 test-sync-example:
 	go test -race -short -count=1 ./test/sync-example/...
 test-telemetry-example:
@@ -219,6 +248,10 @@ uninstall:
 lint:
 	$(MAKE) check-flagd-full-generated
 	go install -v github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
+	$(MAKE) lint-modules
+# golangci-lint over every module; the binary is ${GOPATH}/bin/golangci-lint.
+.PHONY: lint-modules
+lint-modules:
 	rc=0; $(foreach module, $(ALL_GO_MOD_DIRS), ${GOPATH}/bin/golangci-lint run $(module)/... || rc=1;) exit $$rc
 lint-fix:
 	go install -v github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
