@@ -4,7 +4,7 @@ package runtime
 
 import (
 	"fmt"
-	flagdcomponents "github.com/open-feature/flagd/flagd/components"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -45,7 +45,7 @@ func TestSinkReceivesOneEntryPerFlag(t *testing.T) {
 	cfg.SyncProviders = []coresync.SourceConfig{{URI: source, Provider: "file"}}
 	sink := &recordingSink{}
 	startRuntimeWith(t, cfg, withFlagd(Components{
-		Endpoints:  flagdcomponents.Components().Endpoints,
+		Endpoints:  officialset.Components().Endpoints,
 		EventSinks: []eventsink.Configured{{Factory: recordingSinkFactory{sink: sink}, Config: sinkSettings()}},
 	}))
 

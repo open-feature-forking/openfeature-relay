@@ -4,7 +4,7 @@ package runtime
 
 import (
 	"context"
-	flagdcomponents "github.com/open-feature/flagd/flagd/components"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
 	"os"
 	"path/filepath"
 	"testing"
@@ -37,9 +37,9 @@ func acceptRuntime(t *testing.T) (rt *Runtime, changes *events.Subscription, fla
 	}
 	var err error
 	rt, err = FromConfig(logger.NewLogger(nil, false), "test", cfg, Components{
-		Sync:                 flagdcomponents.Components().Sync,
-		ConfigurationFormats: append(flagdcomponents.Components().ConfigurationFormats, versionedFactory{}),
-		Evaluators:           flagdcomponents.Components().Evaluators,
+		Sync:                 officialset.Components().Sync,
+		ConfigurationFormats: append(officialset.Components().ConfigurationFormats, versionedFactory{}),
+		Evaluators:           officialset.Components().Evaluators,
 	})
 	require.NoError(t, err)
 	changes = rt.Bus.Subscribe(events.SubscribeOptions{Kinds: []events.Kind{events.KindConfigurationChange}, Buffer: 16})

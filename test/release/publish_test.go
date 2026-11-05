@@ -25,8 +25,8 @@ import (
 // <module directory>/<testVersion> (UC-012 BR-001); nothing is tagged, the module proxy below serves what the tag would.
 const testVersion = "v0.0.1-test"
 
-// flagdModule is the module of the flagd binary, which keeps the upstream module path. runtime requires it for its tests,
-// so a runtime release can only be consumed when a flagd module is served too (see TestRuntimeRequiresTheFlagdModule).
+// flagdModule is the module of the flagd binary, which keeps the upstream module path. no tag of this repository resolves to it,
+// so no module may require it but the binary itself (see TestRuntimeDoesNotRequireTheFlagdModule).
 const flagdModule = "github.com/open-feature/flagd/flagd"
 
 // representatives are the component modules the pinned manifest selects: one of each component type that has a module
@@ -100,8 +100,36 @@ func releasedGoMod(src string) string {
 	return strings.Join(out, "\n")
 }
 
-// moduleZip packs the module in dir the way the go command expects: every file below <module>@<version>/, without the
-// modules nested below it, version control metadata and vendored code, and with the go.mod that is published.
+// trackedFiles lists the files of the module in dir that a release contains: the ones git tracks, which is what a tag
+// holds, so a file left in the working tree (a build output, a coverage profile) is never packed. The modules nested
+// below it, vendored code and the go.mod, which is published separately, are left out.
+func trackedFiles(t *testing.T, dir string) []string {
+	t.Helper()
+	cmd := exec.Command("git", "ls-files", "-z", "--", ".")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	require.NoError(t, err, "git ls-files in %s", dir)
+	var files []string
+	for _, rel := range strings.Split(string(out), "\x00") {
+		if rel == "" || rel == "go.mod" || strings.HasPrefix(rel, "vendor/") {
+			continue
+		}
+		nested := false
+		for parent := path.Dir(rel); parent != "."; parent = path.Dir(parent) {
+			if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(parent), "go.mod")); err == nil {
+				nested = true
+				break
+			}
+		}
+		if !nested {
+			files = append(files, rel)
+		}
+	}
+	return files
+}
+
+// moduleZip packs the module in dir the way the go command expects: every file below <module>@<version>/ that
+// trackedFiles lists, and the go.mod that is published.
 func moduleZip(t *testing.T, dir, module, gomod string) []byte {
 	t.Helper()
 	var buf bytes.Buffer
@@ -113,28 +141,11 @@ func moduleZip(t *testing.T, dir, module, gomod string) []byte {
 		_, err = w.Write(data)
 		require.NoError(t, err)
 	}
-	require.NoError(t, filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, _ := filepath.Rel(dir, p)
-		rel = filepath.ToSlash(rel)
-		if d.IsDir() {
-			if rel == "." {
-				return nil
-			}
-			if _, nested := os.Stat(filepath.Join(p, "go.mod")); nested == nil || d.Name() == ".git" || d.Name() == "vendor" {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if rel == "go.mod" || !d.Type().IsRegular() || strings.HasSuffix(rel, "-coverage.out") {
-			return nil
-		}
-		data, err := os.ReadFile(p)
+	for _, rel := range trackedFiles(t, dir) {
+		data, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(rel)))
+		require.NoError(t, err)
 		write(rel, data)
-		return err
-	}))
+	}
 	write("go.mod", []byte(gomod))
 	require.NoError(t, zw.Close())
 	return buf.Bytes()
@@ -211,7 +222,8 @@ func hostGo(t *testing.T, dir string, args ...string) string {
 
 // newGoTool returns the tool for a proxy. The tests skip without a Go toolchain, and when the third-party modules of
 // the build are neither in the module cache nor downloadable: the build itself runs offline, so the cache is filled
-// first, which costs nothing when it holds them.
+// first, which costs nothing when it holds them. On CI (CI is set) a cache that cannot be filled
+// fails the tests instead.
 func newGoTool(t *testing.T, proxy string) goTool {
 	t.Helper()
 	if _, err := exec.LookPath("go"); err != nil {
@@ -288,6 +300,9 @@ func warmModuleCache(t *testing.T) {
 		}
 	})
 	if warmErr != nil {
+		if os.Getenv("CI") != "" {
+			t.Fatal(warmErr)
+		}
 		t.Skip(warmErr)
 	}
 }
@@ -436,10 +451,9 @@ func TestUnresolvableModulesAreReported(t *testing.T) {
 	})
 }
 
-// TestRuntimeRequiresTheFlagdModule pins an accepted gap of the release: the tests of the runtime module import the
-// flagd module, which keeps the upstream module path github.com/open-feature/flagd/flagd and which no tag of this
-// repository can resolve to, so a runtime release can be consumed only where something serves that module (the proxy
-// above does). When the runtime no longer requires it, drop the flagd module from publish and this test.
-func TestRuntimeRequiresTheFlagdModule(t *testing.T) {
-	require.Contains(t, componentDirs(t)["runtime"], flagdModule+" v")
+// TestRuntimeDoesNotRequireTheFlagdModule keeps a runtime release consumable: the flagd module keeps the upstream module
+// path github.com/open-feature/flagd/flagd, which no tag of this repository can resolve to, so a runtime that required it
+// (as its tests once did) could be consumed only where something else served that module.
+func TestRuntimeDoesNotRequireTheFlagdModule(t *testing.T) {
+	require.NotContains(t, componentDirs(t)["runtime"], flagdModule)
 }

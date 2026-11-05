@@ -13,7 +13,7 @@ import (
 	"testing"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
-	flagdcomponents "github.com/open-feature/flagd/flagd/components"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
 	"github.com/stretchr/testify/require"
 )
 
@@ -45,7 +45,7 @@ func TestListenSeamUsedByEveryEndpoint(t *testing.T) {
 	t.Run("ports", func(t *testing.T) {
 		p := newPorts(t)
 		rec := &recordingListen{}
-		components := flagdcomponents.Components()
+		components := officialset.Components()
 		components.Telemetry = nil
 		components.Listen = rec.listen
 		startRuntimeWith(t, characterizedConfig(t, p), components)
@@ -67,7 +67,7 @@ func TestListenSeamUsedByEveryEndpoint(t *testing.T) {
 		cfg.ServiceSocketPath = filepath.Join(dir, "evaluation.sock")
 		cfg.SyncServiceSocketPath = filepath.Join(dir, "sync.sock")
 		rec := &recordingListen{}
-		components := flagdcomponents.Components()
+		components := officialset.Components()
 		components.Telemetry = nil
 		components.Listen = rec.listen
 		startRuntimeWith(t, cfg, components)
@@ -85,7 +85,7 @@ func TestListenSeamUsedByEveryEndpoint(t *testing.T) {
 // error, as a port in use does.
 func TestListenSeamRefusalStopsTheRuntime(t *testing.T) {
 	p := newPorts(t)
-	components := flagdcomponents.Components()
+	components := officialset.Components()
 	components.Telemetry = nil
 	components.Listen = func(network, address string) (net.Listener, error) {
 		if strings.HasSuffix(address, fmt.Sprintf(":%d", p.sync)) {

@@ -5,7 +5,7 @@ package runtime
 import (
 	"context"
 	"fmt"
-	flagdcomponents "github.com/open-feature/flagd/flagd/components"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/officialset"
 	"net"
 	"testing"
 	"time"
@@ -53,7 +53,7 @@ func TestPortInUse(t *testing.T) {
 			require.NoError(t, err)
 			defer l.Close()
 
-			rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, flagdcomponents.Components())
+			rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, officialset.Components())
 			if tt.fromConfig != "" {
 				require.EqualError(t, err, fmt.Sprintf(tt.fromConfig, *busy))
 				return
