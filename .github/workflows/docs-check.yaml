@@ -30,6 +30,8 @@ env:
 jobs:
   # The generated CLI reference under docs/ matches the commands.
   docs-check:
+    # build.yaml has a job of the same id; a change that runs both would otherwise show two checks named docs-check.
+    name: docs-check (markdown run)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
