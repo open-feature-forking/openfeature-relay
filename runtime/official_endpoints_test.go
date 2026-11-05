@@ -29,6 +29,7 @@ import (
 	flageval "github.com/open-feature-forking/openfeature-relay/service/flag-evaluation"
 	flagsync "github.com/open-feature-forking/openfeature-relay/service/flag-sync"
 	"github.com/open-feature-forking/openfeature-relay/service/ofrep"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/porttest"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/http2"
 )
@@ -61,6 +62,9 @@ func officialSettings(t *testing.T, factory service.Factory) (service.Settings, 
 
 func serveFactory(t *testing.T, factory service.Factory, settings service.Settings) {
 	t.Helper()
+	if settings.Listen == nil {
+		settings.Listen = porttest.Listen
+	}
 	endpoint, err := factory.Create(settings)
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(context.Background())
