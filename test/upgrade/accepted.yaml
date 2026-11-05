@@ -74,6 +74,9 @@ accepted:
   - kind: "#78"
     item: "A failed start stops at once"
     covered_by: ["service/flag-sync TestCancelledStartStopsWithoutWaiting"]
+  - kind: "#78"
+    item: "A SyncFlags stream sends no empty configuration at its end"
+    covered_by: ["service/flag-sync TestStreamEndSendsNoEmptyConfiguration", "service/flag-sync TestStoreErrorEndsStreamWithDataLoss"]
   - kind: known-break
     item: "go install github.com/open-feature/flagd/flagd@<version> fails: flagd/go.mod carries local replace directives"
     owner: UC-012

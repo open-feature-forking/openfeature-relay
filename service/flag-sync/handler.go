@@ -112,7 +112,11 @@ func (s syncHandler) syncFlags(
 
 	for {
 		select {
-		case payload := <-watcher:
+		case payload, ok := <-watcher:
+			if !ok {
+				// the store closes the watcher when ctx ends, or when it cannot read the flags
+				return s.endStream(ctx, &exitReason)
+			}
 			flags, err := generateResponse(payload.Flags)
 			if err != nil {
 				s.log.Error(fmt.Sprintf("error retrieving flags from store: %v", err))
@@ -127,16 +131,25 @@ func (s syncHandler) syncFlags(
 				return fmt.Errorf("error sending stream response: %w", err)
 			}
 		case <-ctx.Done():
-			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				s.log.Debug(fmt.Sprintf("server-side deadline of %s exceeded, exiting stream request with grpc error code 4", s.deadline.String()))
-				exitReason = "deadline_exceeded"
-				return connect.NewError(connect.CodeDeadlineExceeded, errors.New("stream closed due to server-side timeout"))
-			}
-			s.log.Debug("context complete and exiting stream request")
-			exitReason = "normal_close"
-			return nil
+			return s.endStream(ctx, &exitReason)
 		}
 	}
+}
+
+// endStream ends a SyncFlags stream whose watcher closed or whose context ended.
+func (s syncHandler) endStream(ctx context.Context, exitReason *string) error {
+	switch {
+	case ctx.Err() == nil:
+		*exitReason = "error"
+		return connect.NewError(connect.CodeDataLoss, errors.New("error retrieving flags from store"))
+	case errors.Is(ctx.Err(), context.DeadlineExceeded):
+		s.log.Debug(fmt.Sprintf("server-side deadline of %s exceeded, exiting stream request with grpc error code 4", s.deadline.String()))
+		*exitReason = "deadline_exceeded"
+		return connect.NewError(connect.CodeDeadlineExceeded, errors.New("stream closed due to server-side timeout"))
+	}
+	s.log.Debug("context complete and exiting stream request")
+	*exitReason = "normal_close"
+	return nil
 }
 
 func (s syncHandler) FetchAllFlags(ctx context.Context, req *connect.Request[syncv1.FetchAllFlagsRequest]) (
