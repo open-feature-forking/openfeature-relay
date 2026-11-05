@@ -96,14 +96,14 @@ class BuildWorkflow(unittest.TestCase):
         names = re.findall(r"^  ([a-z][a-z0-9-]*):[ \t]*(?:#.*)?\n", self.text.split("\njobs:\n", 1)[1], re.M)
         self.assertEqual(
             ["changes", "lint", "benchmark", "test", "docker-local", "integration-test", "upgrade-test", "image-test",
-             "release-dry-run", "testbed", "testbed-rpc-outages", "testbed-grpc-sync", "load-smoke", "load-test"], names)
+             "publish-gate", "release-dry-run", "image-build", "testbed", "testbed-rpc-outages", "testbed-grpc-sync",
+             "load-smoke", "load-test"], names)
 
     GATED = {
         "benchmark": "github.event_name == 'pull_request' && needs.changes.outputs.benchmark == 'true'",
         "docker-local": "needs.changes.outputs.image == 'true'",
         "upgrade-test": "needs.changes.outputs.upgrade == 'true'",
         "image-test": "needs.changes.outputs.reference == 'true'",
-        "testbed": "needs.changes.outputs.testbed == 'true'",
     }
 
     def test_changes_is_the_single_gate(self):
@@ -392,6 +392,55 @@ class BuildWorkflow(unittest.TestCase):
         self.assertNotIn("cache/save", text)
         self.assertNotRegex(text, r"push:\s*true")
         self.assertNotIn("docker/login-action", text)
+
+    def test_publish_gate_job(self):
+        """Step 17: one small job decides whether a run builds and publishes the images; the image jobs wait for it."""
+        gate = self.job("publish-gate")
+        self.assertNotIn("permissions:", gate)
+        self.assertIn(".github/scripts/publish-gate.sh", gate)
+        self.assertIn("build: ${{ steps.gate.outputs.build }}", gate)
+        self.assertIn("publish: ${{ steps.gate.outputs.publish }}", gate)
+        for name in ("release-dry-run", "image-build"):
+            with self.subTest(job=name):
+                self.assertIn("needs: publish-gate\n", self.job(name))
+        # the testbed runs for a change to it, and for a run that builds the images, whose layout it tests
+        testbed = self.job("testbed")
+        self.assertIn("    needs: [changes, publish-gate]\n", testbed)
+        self.assertIn("    if: needs.changes.outputs.testbed == 'true' || needs.publish-gate.outputs.build == 'true'\n", testbed)
+        self.assertIn("if: needs.publish-gate.outputs.build == 'true'", self.job("image-build"))
+
+    def test_image_build_parts_cover_the_other_five_distributions(self):
+        """Step 17: flagd-minimal is built by the distributions part and the testbed by its job; the rest by image-build,
+        as layouts checked as layouts and run from the layout. FIPS is not published."""
+        job = self.job("image-build")
+        listed = " ".join(re.findall(r'distributions: "([^"]+)"', job)).split()
+        self.assertEqual(["flagd-cloud", "flagd-full", "flagd-kubernetes", "flagd-minimal-otel", "flagd-sync"], sorted(listed))
+        self.assertIn(".github/scripts/image-build.sh", job)
+        self.assertIn('"0.0.0-main.${GITHUB_SHA::7}"', job)
+        script = (ROOT / ".github" / "scripts" / "image-build.sh").read_text(encoding="utf-8")
+        # no FIPS image is published: the build has one variant and no FIPS build argument
+        self.assertNotIn("fips", script.lower().replace("no fips images", ""))
+        self.assertIn("check_layout", script)
+        self.assertIn("check_runtime", script)
+        self.assertIn('source_dir=flagd\n', script)
+
+    def test_the_testbed_runs_on_the_layout_that_is_published(self):
+        job = self.job("testbed")
+        self.assertIn(".github/scripts/image-testbed.sh", job)
+        self.assertIn("make testbed-contract-both TESTBED_RELAY_IMAGE=flagd-testbed:layout", job)
+        self.assertIn("make testbed-suites TESTBED_RELAY_IMAGE=flagd-testbed:layout", job)
+        self.assertIn("name: layouts-flagd-testbed", job)
+
+    def test_images_are_marked_as_a_proof_of_concept(self):
+        """Q4: labels and annotations come from the build scripts, never from flagd's or flagd-proxy's Dockerfile (K3)."""
+        layout = (ROOT / ".github" / "scripts" / "oci-layout.py").read_text(encoding="utf-8")
+        self.assertIn("Proof of concept from the OpenFeature Relay incubator, built from main. ", layout)
+        self.assertIn("Not an official OpenFeature image; not for production.", layout)
+        self.assertNotIn("vendor", layout)
+        lib = (ROOT / ".github" / "scripts" / "image-lib.sh").read_text(encoding="utf-8")
+        self.assertIn('--label "${kv}" --annotation "index:${kv}" --annotation "manifest:${kv}"', lib)
+        for dockerfile in ("flagd/build.Dockerfile", "flagd-proxy/build.Dockerfile"):
+            self.assertNotIn("org.opencontainers.image", (ROOT / dockerfile).read_text(encoding="utf-8"))
 
     def test_release_dry_run_full_covers_todays_set(self):
         """Slice R: the parts together build the standard archives of flagd and flagd-proxy, the image and the five distributions."""

@@ -120,6 +120,8 @@ jobs:
         run: python3 .github/scripts/test_ci_modules_affected.py
       - name: Test the comparison of the pass sets of the testbed suites
         run: python3 .github/scripts/test_compare_pass_sets.py
+      - name: Test the publish gate
+        run: python3 .github/scripts/test_publish_gate.py
       - name: Test the summary of failed tests
         run: python3 .github/scripts/test_test_failures.py
       # The module boundary tables include the evaluator boundary (NFR-005), which check-evaluator-boundary names.
@@ -271,7 +273,7 @@ jobs:
           output: "trivy-results.sarif"
           severity: "CRITICAL,HIGH"
         env:
-          # use an alternative trivvy db to avoid rate limits
+          # use an alternative trivy db to avoid rate limits
           TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2
 
       - name: Upload Trivy scan results to GitHub Security tab
@@ -403,8 +405,49 @@ jobs:
           key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
 
+  # Step 17: does this run build the images, and does it publish them? The gate reads :main anonymously, so it needs no
+  # permission beyond the default read.
+  publish-gate:
+    name: Publish gate
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.gate.outputs.build }}
+      publish: ${{ steps.gate.outputs.publish }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+        with:
+          # the full history is for the nightly's diff against the commit :main was built from; no other run reads it
+          fetch-depth: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 0 || 1 }}
+      - name: Build and publish the images?
+        id: gate
+        env:
+          FULL_CI: ${{ vars.FULL_CI }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          REPOSITORY: ${{ github.repository }}
+          HEAD: ${{ github.sha }}
+        run: |
+          # image inputs: Go code, modules, Dockerfiles, the distributions and the Builder, the testbed and its data, the
+          # scripts that build and check the images, and this workflow
+          pattern='\.go$|(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^testbed/|^test-harness|^\.github/scripts/(image-|oci-layout|publish-|release-)|^\.github/workflows/build\.yaml$'
+          changed=false
+          if [ "$EVENT" = schedule ]; then
+            # The nightly run publishes when image inputs changed since the commit :main was built from. flagd-minimal is
+            # the canary: every image is published together. No package yet, or a commit this clone lacks, is a change.
+            built=$(docker buildx imagetools inspect --raw ghcr.io/open-feature-forking/flagd-minimal:main 2>/dev/null \
+              | jq -r '.annotations["org.opencontainers.image.revision"] // empty' 2>/dev/null || true)
+            if [ -z "$built" ] || ! git cat-file -e "$built^{commit}" 2>/dev/null; then
+              changed=true
+            elif git diff --name-only "$built" "$HEAD" | grep -Eq "$pattern"; then
+              changed=true
+            fi
+          fi
+          INPUTS_CHANGED="$changed" .github/scripts/publish-gate.sh | tee -a "$GITHUB_OUTPUT"
+
   release-dry-run:
     name: Release dry run (${{ matrix.part }})
+    needs: publish-gate
     # Runs the full set nightly, with FULL_CI=true and when the workflow is run manually. A pull request opts into the
     # reduced set with the release-check label (release-check.yaml). One job per part, in parallel.
     if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
@@ -443,7 +486,23 @@ jobs:
       - name: The release's build steps, without publishing or signing anything (UC-009, UC-012)
         env:
           DRY_RUN_PART: ${{ matrix.part }}
-        run: .github/scripts/release-dry-run.sh
+          DRY_RUN_LAYOUTS: ${{ runner.temp }}/layouts
+          IMAGE_BUILD: ${{ needs.publish-gate.outputs.build }}
+        run: |
+          # On a build run the images of flagd-minimal are the published ones: stamped as Q4 says, built once.
+          if [ "$IMAGE_BUILD" = true ] && [ "$DRY_RUN_PART" = distributions ]; then
+            .github/scripts/release-dry-run.sh "0.0.0-main.${GITHUB_SHA::7}" "$GITHUB_SHA" "$(date -u +%FT%TZ)"
+          else
+            .github/scripts/release-dry-run.sh
+          fi
+      - name: Keep the layouts for the push
+        if: needs.publish-gate.outputs.publish == 'true' && matrix.part == 'distributions'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: layouts-flagd-minimal
+          path: ${{ runner.temp }}/layouts/*.tar
+          retention-days: 1
+          if-no-files-found: error
       - name: Save the Go caches
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.go-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
@@ -454,13 +513,70 @@ jobs:
           key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
 
+  # Step 17: the images of the other standard distributions as two-platform layouts, built once and
+  # checked as layouts and run from the layout. flagd-minimal is built by the distributions part above, the testbed by its job.
+  image-build:
+    name: Images (${{ matrix.part }})
+    needs: publish-gate
+    if: needs.publish-gate.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {part: A, distributions: "flagd-full flagd-sync", scan_first: flagd-full.tar}
+          - {part: B, distributions: "flagd-cloud flagd-kubernetes flagd-minimal-otel", scan_first: flagd-cloud.tar}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - name: Setup go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
+        with:
+          go-version-file: 'flagd/go.mod'
+          cache: false
+      - name: Build the layouts and check them
+        env:
+          DISTRIBUTIONS: ${{ matrix.distributions }}
+          DRY_RUN_LAYOUTS: ${{ runner.temp }}/layouts
+        run: |
+          # stamped as Q4 says: a pre-release that sorts below every release
+          # shellcheck disable=SC2086
+          .github/scripts/image-build.sh "0.0.0-main.${GITHUB_SHA::7}" "$GITHUB_SHA" "$(date -u +%FT%TZ)" "$RUNNER_TEMP/image-build" $DISTRIBUTIONS
+      - name: Scan the first layout (report only)
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          input: ${{ runner.temp }}/layouts/${{ matrix.scan_first }}
+          format: table
+          severity: "CRITICAL,HIGH"
+          exit-code: "0"
+        env:
+          TRIVY_PLATFORM: linux/amd64
+          # use an alternative trivy db to avoid rate limits
+          TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2
+      - name: Scan the other layouts (report only)
+        continue-on-error: true
+        env:
+          FIRST: ${{ matrix.scan_first }}
+        run: .github/scripts/image-scan.sh "$RUNNER_TEMP/layouts" "$FIRST"
+      - name: Keep the layouts for the push
+        if: needs.publish-gate.outputs.publish == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: layouts-${{ matrix.part }}
+          path: ${{ runner.temp }}/layouts/*.tar
+          retention-days: 1
+          if-no-files-found: error
+
   testbed:
     name: Relay testbed
     # The relay testbed (UC-022) takes the place of the launchpad in the provider test suites, so it is built and compared
     # with the upstream launchpad image whenever Go code, the upgrade differential's inputs or the testbed itself change
     # (the `testbed` flag of the changes job). It also runs with FULL_CI=true or a manual run.
-    needs: changes
-    if: needs.changes.outputs.testbed == 'true'
+    # A run that builds the images runs it as well: the layout that is published is tested here.
+    needs: [changes, publish-gate]
+    if: needs.changes.outputs.testbed == 'true' || needs.publish-gate.outputs.build == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -473,9 +589,43 @@ jobs:
         with:
           go-version-file: 'flagd/go.mod'
       - name: The launchpad contract against both images (the launchpad quirks on the launchpad only)
+        if: needs.publish-gate.outputs.build != 'true'
         run: make testbed-contract-both
       - name: TestRPC and TestInProcess against both images, with the same scenarios passed
+        if: needs.publish-gate.outputs.build != 'true'
         run: make testbed-suites
+      # A run that builds the images builds the testbed once, as the layout that is published; the tests run on its amd64 image.
+      - name: Build the testbed layout and check it
+        if: needs.publish-gate.outputs.build == 'true'
+        env:
+          DRY_RUN_LAYOUTS: ${{ runner.temp }}/layouts
+        run: .github/scripts/image-testbed.sh "0.0.0-main.${GITHUB_SHA::7}" "$GITHUB_SHA" "$(date -u +%FT%TZ)" "$RUNNER_TEMP/image-testbed"
+      - name: The launchpad contract, on the testbed image of the layout
+        if: needs.publish-gate.outputs.build == 'true'
+        run: make testbed-contract-both TESTBED_RELAY_IMAGE=flagd-testbed:layout
+      - name: TestRPC and TestInProcess, on the testbed image of the layout
+        if: needs.publish-gate.outputs.build == 'true'
+        run: make testbed-suites TESTBED_RELAY_IMAGE=flagd-testbed:layout
+      - name: Scan the testbed layout (report only)
+        if: needs.publish-gate.outputs.build == 'true'
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          input: ${{ runner.temp }}/layouts/flagd-testbed.tar
+          format: table
+          severity: "CRITICAL,HIGH"
+          exit-code: "0"
+        env:
+          TRIVY_PLATFORM: linux/amd64
+          TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2
+      - name: Keep the layout for the push
+        if: needs.publish-gate.outputs.publish == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: layouts-flagd-testbed
+          path: ${{ runner.temp }}/layouts/flagd-testbed.tar
+          retention-days: 1
+          if-no-files-found: error
 
   testbed-rpc-outages:
     name: Testbed RPC outages
