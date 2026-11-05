@@ -133,22 +133,28 @@ func TestFailedFromConfigReleasesItsListeners(t *testing.T) {
 // Builds that fail and builds that work, one after the other on one gate, leave nothing behind and each one listens:
 // the testbed switches configurations this way, and an invalid one is among them.
 func TestFailedAndValidBuildsAlternate(t *testing.T) {
-	p := newPorts(t)
 	reg := &registry{}
 	components := officialComponents()
 	components.Listen = reg.listen
-	check := newProbe(p.management)
+	var check probe
 
-	failing := characterizedConfig(t, p)
-	failing.SyncProviders = append(failing.SyncProviders, coresync.SourceConfig{URI: "nope://flags", Provider: "nope"})
-	valid := characterizedConfig(t, p)
-
+	// Each build reserves its own ports: a port a build has released is free to every other process, so reusing it
+	// would race with them. What is pinned is that no listener of the gate outlives a build.
 	cycle := func() {
+		fp := newPorts(t)
+		failing := characterizedConfig(t, fp)
+		failing.SyncProviders = append(failing.SyncProviders, coresync.SourceConfig{URI: "nope://flags", Provider: "nope"})
+		p := newPorts(t)
+		valid := characterizedConfig(t, p)
+		check = newProbe(p.management)
+
 		_, err := FromConfig(logger.NewLogger(nil, false), "test", failing, components)
 		require.Error(t, err)
 		_, stop := buildWith(t, valid, components)
 		check.waitReady(t, time.Now())
 		stop()
+		// the ports nothing asked for would stay open until the test ends
+		porttest.Release(fp.management, fp.service, fp.ofrep, fp.sync, p.management, p.service, p.ofrep, p.sync)
 		require.Empty(t, reg.addresses())
 	}
 
