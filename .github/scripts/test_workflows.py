@@ -45,7 +45,7 @@ class BuildWorkflow(unittest.TestCase):
     def job(self, name):
         """The text of one top-level job."""
         jobs = self.text.split("\njobs:\n", 1)[1]
-        match = re.search(rf"^  {re.escape(name)}:\n(.*?)(?=^  [a-z][a-z-]*:\n|\Z)", jobs, re.S | re.M)
+        match = re.search(rf"^  {re.escape(name)}:[ \t]*(?:#.*)?\n(.*?)(?=^  [a-z][a-z0-9-]*:[ \t]*(?:#.*)?\n|\Z)", jobs, re.S | re.M)
         self.assertIsNotNone(match, f"job {name} is missing")
         return match.group(1)
 
@@ -81,9 +81,25 @@ class BuildWorkflow(unittest.TestCase):
     def test_jobs(self):
         names = re.findall(r"^  ([a-z][a-z0-9-]*):[ \t]*(?:#.*)?\n", self.text.split("\njobs:\n", 1)[1], re.M)
         self.assertEqual(
-            ["lint", "benchmark", "docs-check", "test", "builder-e2e", "fips", "docker-local", "integration-test",
-             "upgrade-test", "release-dry-run", "testbed", "testbed-rpc-outages",
-             "testbed-grpc-sync"], names)
+            ["changes", "lint", "benchmark", "docs-check", "test", "miss-report", "builder-e2e", "fips", "docker-local", "integration-test",
+             "upgrade-test", "release-dry-run", "testbed", "testbed-rpc-outages", "testbed-grpc-sync"], names)
+
+    def test_changes_is_report_only(self):
+        """P1: the affected-module report runs beside today's jobs; nothing but the miss report waits on it."""
+        self.assertEqual([], [n for n in ("lint", "test", "builder-e2e", "integration-test", "upgrade-test", "release-dry-run")
+                              if re.search(r"needs:.*\bchanges\b", self.job(n))])
+        self.assertIn("fetch-depth: 2", self.job("changes"))
+        self.assertIn("python3 .github/scripts/ci-modules.py changes", self.job("changes"))
+        report = self.job("miss-report")
+        self.assertIn("needs: [changes, test]", report)
+        self.assertIn("if: always() && needs.changes.result == 'success'", report)
+        self.assertIn("continue-on-error: true", report)
+
+    def test_test_still_runs_make_test_and_keeps_its_log(self):
+        job = self.job("test")
+        self.assertIn("- run: make test 2>&1 | tee test.log\n        shell: bash", job)
+        self.assertIn("CONTRACT_EXTERNAL_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}", job)
+        self.assertIn("path: test.log", job)
 
     def test_lint_runs_the_module_table_tests(self):
         """C1 and C2 are the parity gate for make test and make lint: CI has to run them."""
