@@ -333,11 +333,16 @@ jobs:
         run: make image-test
 
   release-dry-run:
-    name: Release dry run
+    name: Release dry run (${{ matrix.part }})
     # Runs when the release's inputs change (the pattern in the gate step), or with FULL_CI=true, or when the workflow is
-    # run manually. Otherwise only the gate step runs.
+    # run manually. Otherwise only the gate step runs. One job per part, in parallel: a pull request builds the reduced set
+    # (the scope output), `main`, FULL_CI and a manual run the full one.
     runs-on: ubuntu-latest
     timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [flagd-standard, flagd-fips, flagd-proxy-standard, flagd-proxy-fips, images, distributions]
     steps:
       - name: Checkout repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
@@ -350,11 +355,17 @@ jobs:
           EVENT: ${{ github.event_name }}
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD: ${{ github.sha }}
+          REF: ${{ github.ref }}
         run: |
           # the release scripts and the goldens they compare, the release workflow the dry run reads, the Builder and its reference
           # Dockerfile, the distributions and every Dockerfile
           pattern='^\.github/scripts/release-|^\.github/scripts/render-|^\.github/scripts/testdata/|^\.github/workflows/release-please\.yaml$|^builder/|^distributions/|Dockerfile$'
           run=false
+          # full: what a release builds. reduced: linux/amd64 archives and the distributions the change touches.
+          scope=reduced
+          if [ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ] || [ "$REF" = refs/heads/main ]; then scope=full; fi
+          all_dists="flagd-minimal flagd-minimal-otel flagd-cloud flagd-kubernetes flagd-sync"
+          dists="$all_dists"
           if [ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]; then
             run=true
             echo "::notice::The release dry run runs: FULL_CI or a manual run."
@@ -367,11 +378,22 @@ jobs:
               run=true
               echo "::notice::The release dry run runs: this change touches the release or what it builds."
               printf '%s\n' "$hits" | head -10
+              # a reduced run checks only the distributions the change names; a change to anything shared checks them all.
+              # flagd-full is released under flagd's names, so the flagd parts cover it.
+              if [ "$scope" = reduced ] && ! printf '%s\n' "$hits" | grep -qvE '^distributions/(flagd-full|'"${all_dists// /|}"')/'; then
+                dists=""
+                for d in $all_dists; do
+                  ! printf '%s\n' "$hits" | grep -q "^distributions/$d/" || dists="$dists $d"
+                done
+                dists="${dists# }"
+              fi
             else
               echo "::notice::The release dry run is skipped: no release input changed. Set FULL_CI or run the workflow manually to run it."
             fi
           fi
           echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "scope=$scope" >> "$GITHUB_OUTPUT"
+          echo "dists=$dists" >> "$GITHUB_OUTPUT"
       - name: Setup go
         if: steps.gate.outputs.run == 'true'
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
@@ -386,5 +408,10 @@ jobs:
           gobin="$(go env GOBIN)"
           echo "${gobin:-$(go env GOPATH)/bin}" >> "$GITHUB_PATH"
       - name: The release's build steps, without publishing or signing anything (UC-009, UC-012)
-        if: steps.gate.outputs.run == 'true'
+        # the distributions part has nothing to check when a reduced run touches no distribution
+        if: steps.gate.outputs.run == 'true' && (matrix.part != 'distributions' || steps.gate.outputs.dists != '')
+        env:
+          DRY_RUN_PART: ${{ matrix.part }}
+          DRY_RUN_SCOPE: ${{ steps.gate.outputs.scope }}
+          DRY_RUN_DISTS: ${{ steps.gate.outputs.dists }}
         run: .github/scripts/release-dry-run.sh
