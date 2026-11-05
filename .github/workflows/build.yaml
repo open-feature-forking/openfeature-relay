@@ -34,6 +34,18 @@ jobs:
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
         with:
           go-version-file: 'flagd/go.mod'
+          cache: false
+      - name: Restore the Go caches
+        id: go-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ${{ env.GOPATH }}/pkg/mod
+            ~/.cache/go-build
+            ${{ env.GOBIN }}/golangci-lint
+            ~/.cache/golangci-lint
+          key: go-lint-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-lint-
       - run: make workspace-init
       - run: make lint
       - run: make check-package-coverage
@@ -53,6 +65,17 @@ jobs:
         run: |
           found=$(grep -rn 'golang.org/x/exp' --include=go.mod . | grep -v indirect || true)
           if [ -n "$found" ]; then echo "::error::golang.org/x/exp is a direct requirement in:"; echo "$found"; exit 1; fi
+      - name: Save the Go caches
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ${{ env.GOPATH }}/pkg/mod
+            ~/.cache/go-build
+            ${{ env.GOBIN }}/golangci-lint
+            ~/.cache/golangci-lint
+          key: go-lint-${{ hashFiles('**/go.sum') }}
+
 
   # Allocations per operation (NFR-001) of the library benchmarks, on the pull request's merge commit and on its base.
   # The merge commit carries the scripts below even when the branch was cut before they existed.
@@ -94,11 +117,30 @@ jobs:
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
         with:
           go-version-file: 'flagd/go.mod'
+          cache: false
+      - name: Restore the Go caches
+        id: go-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-docs-check-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-docs-check-
       - run: make workspace-init
       - run: make generate-docs
       - name: Check no diff
         run: |
           if [ ! -z "$(git status --porcelain)" ]; then echo "Doc generation produced diff. Run 'make generate-docs' and commit results."; exit 1; fi
+      - name: Save the Go caches
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-docs-check-${{ hashFiles('**/go.sum') }}
+
 
   test:
     runs-on: ubuntu-latest
@@ -112,6 +154,16 @@ jobs:
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
         with:
           go-version-file: 'flagd/go.mod'
+          cache: false
+      - name: Restore the Go caches
+        id: go-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ${{ env.GOPATH }}/pkg/mod
+            ~/.cache/go-build
+          key: go-test-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-test-
       - name: Fetch the testbed's evaluator suite
         run: git submodule update --init test-harness
       - run: make workspace-init
@@ -121,6 +173,15 @@ jobs:
           CONTRACT_EXTERNAL_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044 # v4
+      - name: Save the Go caches
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ${{ env.GOPATH }}/pkg/mod
+            ~/.cache/go-build
+          key: go-test-${{ hashFiles('**/go.sum') }}
+
 
   builder-e2e:
     name: Builder end to end
@@ -132,9 +193,28 @@ jobs:
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
         with:
           go-version-file: 'flagd/go.mod'
+          cache: false
+      - name: Restore the Go caches
+        id: go-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-builder-e2e-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-builder-e2e-
       - run: make workspace-init
       - name: Build flagd-full from its manifest, check its components and run the CLI pins against it
         run: make builder-e2e
+      - name: Save the Go caches
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-builder-e2e-${{ hashFiles('**/go.sum') }}
+
 
   fips:
     name: FIPS 140-3
@@ -151,6 +231,16 @@ jobs:
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
         with:
           go-version-file: 'flagd/go.mod'
+          cache: false
+      - name: Restore the Go caches
+        id: go-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ${{ env.GOPATH }}/pkg/mod
+            ~/.cache/go-build
+          key: go-fips-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-fips-
       - run: make workspace-init
 
       # Fails if any tested code path reaches a non-approved algorithm.
@@ -206,6 +296,15 @@ jobs:
           make fips-closure
           git diff --exit-code docs/reference/fips-crypto-closure.txt \
             || { echo "::error::cryptographic dependency closure changed; review docs/reference/fips-140-3.md and commit the regenerated closure"; exit 1; }
+      - name: Save the Go caches
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ${{ env.GOPATH }}/pkg/mod
+            ~/.cache/go-build
+          key: go-fips-${{ hashFiles('**/go.sum') }}
+
 
   docker-local:
     # Gated during the proof of concept: set the repository variable FULL_CI=true, or run the workflow manually.
@@ -269,12 +368,31 @@ jobs:
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
         with:
           go-version-file: 'flagd/go.mod'
+          cache: false
+      - name: Restore the Go caches
+        id: go-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-integration-test-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-integration-test-
 
       - name: The flagd module is what the Builder generates from the manifest of flagd-full
         run: make check-flagd-full-generated
 
       - name: Run test suite
         run: make workspace-clean && cd test/integration && go clean -testcache && go test -cover
+      - name: Save the Go caches
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-integration-test-${{ hashFiles('**/go.sum') }}
+
 
   upgrade-test:
     name: Upgrade differential
@@ -295,12 +413,15 @@ jobs:
         env:
           FULL_CI: ${{ vars.FULL_CI }}
           EVENT: ${{ github.event_name }}
-          # a pull request's own changes are base..merge commit; for a push, the commits it brought
-          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          # for a push, the commits it brought
+          BASE: ${{ github.event.before }}
           HEAD: ${{ github.sha }}
         run: |
           # Dockerfiles; the manifest of flagd-full and the Builder that builds it; flagd, which holds flagd-full's main
           # and its list of components; the differential's own test, the reference Dockerfile and its image tests, and this workflow
+          # A pull request's own changes are its merge commit against the first parent: the base as it is now. The
+          # base sha is where the pull request was opened, so base..merge commit also holds what the base gained since.
+          if [ "$EVENT" = pull_request ]; then BASE=$(git rev-parse "$HEAD^1"); fi
           pattern='(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^flagd/|^test/upgrade/|^builder/reference/|^test/image/|^\.github/workflows/build\.yaml$'
           run=false
           if [ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]; then
@@ -325,12 +446,32 @@ jobs:
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
         with:
           go-version-file: 'flagd/go.mod'
+          cache: false
+      - name: Restore the Go caches
+        id: go-cache
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-upgrade-test-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-upgrade-test-
       - name: Today's flagd and the flagd-full the Builder made, side by side (UC-009)
         if: steps.gate.outputs.run == 'true'
         run: make upgrade-test
       - name: The reference Dockerfile's images, as OCI layouts and loaded locally (UC-002)
         if: steps.gate.outputs.run == 'true'
         run: make image-test
+      - name: Save the Go caches
+        if: steps.gate.outputs.run == 'true' && github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-upgrade-test-${{ hashFiles('**/go.sum') }}
+
 
   release-dry-run:
     name: Release dry run
@@ -348,9 +489,12 @@ jobs:
         env:
           FULL_CI: ${{ vars.FULL_CI }}
           EVENT: ${{ github.event_name }}
-          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          BASE: ${{ github.event.before }}
           HEAD: ${{ github.sha }}
         run: |
+          # A pull request's own changes are its merge commit against the first parent: the base as it is now. The
+          # base sha is where the pull request was opened, so base..merge commit also holds what the base gained since.
+          if [ "$EVENT" = pull_request ]; then BASE=$(git rev-parse "$HEAD^1"); fi
           # the release scripts and the goldens they compare, the release workflow the dry run reads, the Builder and its reference
           # Dockerfile, the distributions and every Dockerfile
           pattern='^\.github/scripts/release-|^\.github/scripts/render-|^\.github/scripts/testdata/|^\.github/workflows/release-please\.yaml$|^builder/|^distributions/|Dockerfile$'
@@ -377,6 +521,17 @@ jobs:
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
         with:
           go-version-file: 'flagd/go.mod'
+          cache: false
+      - name: Restore the Go caches
+        id: go-cache
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-release-dry-run-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-release-dry-run-
       - name: Install cyclonedx-gomod
         if: steps.gate.outputs.run == 'true'
         # The release's action resolves its version through the GitHub API, which rate-limits a runner without a token.
@@ -388,3 +543,12 @@ jobs:
       - name: The release's build steps, without publishing or signing anything (UC-009, UC-012)
         if: steps.gate.outputs.run == 'true'
         run: .github/scripts/release-dry-run.sh
+      - name: Save the Go caches
+        if: steps.gate.outputs.run == 'true' && github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-release-dry-run-${{ hashFiles('**/go.sum') }}
+
