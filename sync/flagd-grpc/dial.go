@@ -56,9 +56,6 @@ func retryServiceConfig(initial, largest time.Duration) string {
 	return string(out)
 }
 
-// retryOptedIn reports whether the source asked for the provider's retry policy.
-func (o Options) retryOptedIn() bool { return o.RetryBackoff != 0 || o.RetryBackoffMax != 0 }
-
 // keepAliveParameters are the parameters of the keepalive the source asked for, and whether it asked.
 func (o Options) keepAliveParameters() (keepalive.ClientParameters, bool) {
 	if o.KeepAliveTime <= 0 {

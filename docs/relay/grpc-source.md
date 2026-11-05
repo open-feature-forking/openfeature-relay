@@ -4,8 +4,6 @@ description: Settings of a gRPC source that syncs from an upstream flag sync end
 
 # Syncing from an upstream flag sync endpoint
 
-Planned ([UC-023](../use_cases/UC-023-sync-from-an-upstream-flag-sync-endpoint.md) is `Draft`): until the step 14 changes land, flagd ignores the `grpc` object.
-
 A `grpc` source reads its flag configuration from another flag sync endpoint: flagd, a configuration proxy, flagd-proxy or a vendor's.
 Without further settings it behaves as it always has.
 A `grpc` object on the source opts into the behaviour the Go flagd provider has ([UC-023](../use_cases/UC-023-sync-from-an-upstream-flag-sync-endpoint.md)).
