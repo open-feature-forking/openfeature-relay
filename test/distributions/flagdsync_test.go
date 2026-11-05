@@ -355,9 +355,26 @@ func startOnFile(t *testing.T, name string, portFlags []string, content, ext str
 	ready, problems, raw := startOnFileOnce(t, name, portFlags, content, ext, expectReady)
 	if expectReady && !ready {
 		t.Logf("%s was not ready within the deadline and is started again; its first output:\n%s", name, raw)
+		reportStall(t, name, raw)
 		ready, problems, _ = startOnFileOnce(t, name, portFlags, content, ext, expectReady)
 	}
 	return ready, problems
+}
+
+// reportStall appends a start that needed its second attempt to the job summary of GitHub Actions, where it shows
+// although the passing subtest prints nothing (the tests run without -v).
+func reportStall(t *testing.T, name, raw string) {
+	path := os.Getenv("GITHUB_STEP_SUMMARY")
+	if path == "" {
+		return
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o644)
+	if err != nil {
+		t.Logf("the job summary cannot be written: %v", err)
+		return
+	}
+	defer f.Close()
+	_, _ = fmt.Fprintf(f, "### %s: %s was not ready in time and started again\n\n```\n%s\n```\n\n", t.Name(), name, raw)
 }
 
 func startOnFileOnce(t *testing.T, name string, portFlags []string, content, ext string, expectReady bool) (ready bool, problems, raw string) {
