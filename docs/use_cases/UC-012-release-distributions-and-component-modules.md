@@ -74,7 +74,7 @@
 
 ### A5: Distribution Build Fails
 
-**Trigger:** A standard distribution does not build for one OS and architecture, (step 7)  
+**Trigger:** A standard distribution does not build for one OS and architecture (step 7)  
 **Flow:**
 
 1. GitHub Actions publishes no binary and no image of that standard distribution and names the distribution, platform and variant that failed.

@@ -75,6 +75,5 @@ In a checkout of this repository, `make test-fips` runs the tests of the compone
 
 ## Not tested in CI
 
-CI does not build or test a FIPS build of any distribution (C-009).
-The image tests only check that the reference Dockerfile's `FIPS=on` produces a binary with both tags, for a test distribution, when the Dockerfile changes and nightly.
+CI builds and tests no FIPS build of a standard or custom distribution; only the image tests build one FIPS image of a test distribution, to check the reference Dockerfile's `FIPS=on` (C-009).
 A FIPS build of any distribution, flagd-full included, is yours to build and verify as above.
