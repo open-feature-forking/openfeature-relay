@@ -42,6 +42,7 @@ rectangle "OpenFeature Relay" {
     usecase "UC-019\nServe Vendor Flags" as UC019
     usecase "UC-020\nDevelop Event Sink Extension" as UC020
     usecase "UC-021\nExport Evaluation Data" as UC021
+    usecase "UC-022\nRun Provider Test Suites Against the Testbed" as UC022
 }
 
 builder --> UC001
@@ -75,6 +76,7 @@ maintainer --> UC012
 maintainer --> UC013
 
 provider --> UC014
+provider --> UC022
 
 UC001 --> go
 UC002 --> imagebuild
@@ -86,6 +88,8 @@ UC013 --> harness
 UC014 --> harness
 UC017 --> inproc
 UC019 --> vendor
+UC022 --> ci
+UC022 --> harness
 
 note right of UC016
   Deferred: FR-050, FR-051

@@ -420,3 +420,12 @@ test-upgrade-accepted:
 # Refreshes the list of behaviour changes that accepted.yaml has to cover.
 refresh-issue-78:
 	gh issue view 78 --repo open-feature-forking/openfeature-relay --json body --jq .body > test/upgrade/testdata/issue-78.txt
+
+# UC-022: the launchpad contract of a flagd testbed image. testbed-launchpad-image builds today's upstream image from the
+# test-harness submodule (git submodule update --init test-harness); KIND is launchpad or relay.
+.PHONY: testbed-launchpad-image testbed-contract
+testbed-launchpad-image:
+	docker build -f test-harness/flagd/Dockerfile -t testbed-launchpad:local test-harness
+testbed-contract:
+	@test -n "$(IMAGE)" || { echo "usage: make testbed-contract IMAGE=<image> [KIND=launchpad|relay]"; exit 1; }
+	cd test/testbed && TESTBED_IMAGE=$(IMAGE) TESTBED_KIND=$(or $(KIND),launchpad) go test -count=1 -timeout 30m -v ./...

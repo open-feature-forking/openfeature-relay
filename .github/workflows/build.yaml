@@ -377,11 +377,14 @@ jobs:
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
         with:
           go-version-file: 'flagd/go.mod'
-      - name: Download cyclonedx-gomod
+      - name: Install cyclonedx-gomod
         if: steps.gate.outputs.run == 'true'
-        uses: CycloneDX/gh-gomod-generate-sbom@efc74245d6802c8cefd925620515442756c70d8f # v2
-        with:
-          version: v1
+        # The release's action resolves its version through the GitHub API, which rate-limits a runner without a token.
+        # v1.12.0 is what that action's `version: v1` resolves to; the module proxy needs no GitHub API.
+        run: |
+          go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.12.0
+          gobin="$(go env GOBIN)"
+          echo "${gobin:-$(go env GOPATH)/bin}" >> "$GITHUB_PATH"
       - name: The release's build steps, without publishing or signing anything (UC-009, UC-012)
         if: steps.gate.outputs.run == 'true'
         run: .github/scripts/release-dry-run.sh
