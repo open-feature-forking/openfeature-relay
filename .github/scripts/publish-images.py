@@ -6,6 +6,8 @@
   publish-images.py move-main --short <7 hex> --sha <full commit> [--names n1,n2]
       Moves the main tags to the sha-<short> images, only if the commit :main points at is an ancestor of --sha.
 
+There is one image per name: no FIPS variant is published.
+
 The destinations are the seven names below under ghcr.io/open-feature-forking/ and nothing else. A layout names two refs
 under ghcr.io/open-feature/..., which are never read as destinations. Every layout is checked against the allowlist before
 the first byte is pushed. The registry host is ghcr.io; REGISTRY_HOST may name a local registry (localhost or 127.0.0.1,
@@ -30,7 +32,7 @@ NAMESPACE = "open-feature-forking"
 DISTRIBUTIONS = ("flagd-full", "flagd-minimal", "flagd-minimal-otel", "flagd-cloud", "flagd-kubernetes", "flagd-sync")
 TESTBED = "flagd-testbed"
 NAMES = DISTRIBUTIONS + (TESTBED,)
-TAG = re.compile(r"^(main|sha-[0-9a-f]{7})(-fips)?$")
+TAG = re.compile(r"^(main|sha-[0-9a-f]{7})$")
 REVISION = "org.opencontainers.image.revision"
 INDEX_TYPES = ("application/vnd.oci.image.index.v1+json", "application/vnd.docker.distribution.manifest.list.v2+json")
 ACCEPT = ", ".join(INDEX_TYPES + ("application/vnd.oci.image.manifest.v1+json",
@@ -46,27 +48,25 @@ class Refused(Exception):
 
 
 def layout_files(directory, names):
-    """name + suffix -> path of the layouts to push, and the optional ones that are missing."""
+    """name -> path of the layouts to push, and the optional ones that are missing."""
     found, missing = {}, []
     for name in names:
-        for suffix in ("",) if name == TESTBED else ("", "-fips"):
-            path = pathlib.Path(directory) / f"{name}{suffix}.tar"
-            if path.exists():
-                found[name + suffix] = path
-            elif name == TESTBED:
-                missing.append(name)
-            else:
-                raise Refused(f"the layout of {name}{suffix} is missing: {path}")
+        path = pathlib.Path(directory) / f"{name}.tar"
+        if path.exists():
+            found[name] = path
+        elif name == TESTBED:
+            missing.append(name)
+        else:
+            raise Refused(f"the layout of {name} is missing: {path}")
     return found, missing
 
 
 def check_destinations(key, layout, short):
     """Every ref the layout carries must be the image's own repository under the allowlist, with an allowed tag."""
-    name = key[:-5] if key.endswith("-fips") else key
-    suffix = "-fips" if key.endswith("-fips") else ""
+    name = key
     if name not in NAMES:
         raise Refused(f"{key} is not one of the images to publish")
-    want = {f"ghcr.io/{NAMESPACE}/{name}:main{suffix}", f"ghcr.io/{NAMESPACE}/{name}:sha-{short}{suffix}"}
+    want = {f"ghcr.io/{NAMESPACE}/{name}:main", f"ghcr.io/{NAMESPACE}/{name}:sha-{short}"}
     refs = set(layout.refs())
     for ref in refs:
         repository, _, tag = ref.rpartition(":")
@@ -156,10 +156,9 @@ class Registry:
 
 
 def push_layout(registry, key, layout, short, log):
-    name = key[:-5] if key.endswith("-fips") else key
-    suffix = "-fips" if key.endswith("-fips") else ""
+    name = key
     repository = f"{NAMESPACE}/{name}"
-    ref = f"ghcr.io/{repository}:sha-{short}{suffix}"
+    ref = f"ghcr.io/{repository}:sha-{short}"
     descriptor = layout.refs()[ref]
     index_digest = descriptor["digest"]
     index = layout.blob(index_digest)
@@ -182,10 +181,10 @@ def push_layout(registry, key, layout, short, log):
     got = registry.push_manifest(repository, index_digest, descriptor["mediaType"], raw)
     if got != index_digest:
         raise RuntimeError(f"{repository}: pushed {index_digest}, the registry stored {got}")
-    got = registry.push_manifest(repository, f"sha-{short}{suffix}", descriptor["mediaType"], raw)
+    got = registry.push_manifest(repository, f"sha-{short}", descriptor["mediaType"], raw)
     if got != index_digest:
-        raise RuntimeError(f"{repository}: the tag sha-{short}{suffix} holds {got}, not {index_digest}")
-    log(f"- pushed {repository}:sha-{short}{suffix} = {index_digest}")
+        raise RuntimeError(f"{repository}: the tag sha-{short} holds {got}, not {index_digest}")
+    log(f"- pushed {repository}:sha-{short} = {index_digest}")
     return index_digest
 
 
@@ -229,22 +228,21 @@ def move_main(args, log=print):
         if name not in NAMES:
             raise Refused(f"{name} is not one of the images to publish")
         repository = f"{NAMESPACE}/{name}"
-        for suffix in ("",) if name == TESTBED else ("", "-fips"):
-            new = registry.get_manifest(repository, f"sha-{args.short}{suffix}")
-            if new is None:
-                log(f"- kept {repository}:main{suffix}: sha-{args.short}{suffix} was not published")
+        new = registry.get_manifest(repository, f"sha-{args.short}")
+        if new is None:
+            log(f"- kept {repository}:main: sha-{args.short} was not published")
+            continue
+        current = registry.get_manifest(repository, "main")
+        if current is not None:
+            revision = json.loads(current[1]).get("annotations", {}).get(REVISION, "")
+            if revision == args.sha:
+                log(f"- {repository}:main already holds {args.sha[:7]}")
                 continue
-            current = registry.get_manifest(repository, f"main{suffix}")
-            if current is not None:
-                revision = json.loads(current[1]).get("annotations", {}).get(REVISION, "")
-                if revision == args.sha:
-                    log(f"- {repository}:main{suffix} already holds {args.sha[:7]}")
-                    continue
-                if not revision or not is_ancestor(revision, args.sha):
-                    log(f"- kept {repository}:main{suffix}: it holds {revision[:7] or 'an unknown commit'}, which is not an ancestor of {args.sha[:7]}")
-                    continue
-            registry.push_manifest(repository, f"main{suffix}", new[0], new[1])
-            log(f"- moved {repository}:main{suffix} to {args.sha[:7]}")
+            if not revision or not is_ancestor(revision, args.sha):
+                log(f"- kept {repository}:main: it holds {revision[:7] or 'an unknown commit'}, which is not an ancestor of {args.sha[:7]}")
+                continue
+        registry.push_manifest(repository, "main", new[0], new[1])
+        log(f"- moved {repository}:main to {args.sha[:7]}")
     return 0
 
 

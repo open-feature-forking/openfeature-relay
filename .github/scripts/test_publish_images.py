@@ -132,8 +132,8 @@ def write_layout(path, refs, revision):
     return top
 
 
-def refs_for(name, suffix, short):
-    return [f"ghcr.io/open-feature-forking/{name}:main{suffix}", f"ghcr.io/open-feature-forking/{name}:sha-{short}{suffix}"]
+def refs_for(name, short):
+    return [f"ghcr.io/open-feature-forking/{name}:main", f"ghcr.io/open-feature-forking/{name}:sha-{short}"]
 
 
 class PublishImages(unittest.TestCase):
@@ -159,12 +159,8 @@ class PublishImages(unittest.TestCase):
         self.messages = []
 
     def layouts(self, short, revision, names=publish.NAMES):
-        digests = {}
-        for name in names:
-            for suffix in ("",) if name == publish.TESTBED else ("", "-fips"):
-                digests[name + suffix] = write_layout(pathlib.Path(self.dir.name) / f"{name}{suffix}.tar",
-                                                      refs_for(name, suffix, short), revision)
-        return digests
+        return {name: write_layout(pathlib.Path(self.dir.name) / f"{name}.tar", refs_for(name, short), revision)
+                for name in names}
 
     def push(self, short="abc1234", **kwargs):
         args = argparse.Namespace(layouts=self.dir.name, short=short, names=kwargs.get("names"), outputs=kwargs.get("outputs"))
@@ -173,18 +169,16 @@ class PublishImages(unittest.TestCase):
     def test_pushes_by_digest_and_under_the_sha_tag_and_never_under_main(self):
         digests = self.layouts("abc1234", FULL_OLD)
         self.push()
-        for key, want in digests.items():
-            name = key[:-5] if key.endswith("-fips") else key
-            suffix = "-fips" if key.endswith("-fips") else ""
+        for name, want in digests.items():
             repo = f"open-feature-forking/{name}"
-            self.assertEqual(want, FakeRegistry.tags[(repo, f"sha-abc1234{suffix}")], key)
+            self.assertEqual(want, FakeRegistry.tags[(repo, "sha-abc1234")], name)
             # the index, both platform manifests and the attestation manifest are stored by digest
             index = json.loads(FakeRegistry.manifests[(repo, want)][1])
             self.assertEqual(3, len(index["manifests"]))
             for child in index["manifests"]:
                 self.assertIn((repo, child["digest"]), FakeRegistry.manifests)
         self.assertEqual([], [t for t in FakeRegistry.tags if t[1].startswith("main")])
-        self.assertEqual(13, len([m for m in self.messages if m.startswith("- pushed ")]))
+        self.assertEqual(7, len([m for m in self.messages if m.startswith("- pushed ")]))
 
     def test_outputs_carry_each_pushed_digest(self):
         digests = self.layouts("abc1234", FULL_OLD)
@@ -204,7 +198,7 @@ class PublishImages(unittest.TestCase):
 
     def test_a_layout_cannot_publish_into_another_images_repository(self):
         self.layouts("abc1234", FULL_OLD)
-        write_layout(pathlib.Path(self.dir.name) / "flagd-sync.tar", refs_for("flagd-cloud", "", "abc1234"), FULL_OLD)
+        write_layout(pathlib.Path(self.dir.name) / "flagd-sync.tar", refs_for("flagd-cloud", "abc1234"), FULL_OLD)
         with self.assertRaises(publish.Refused):
             self.push()
         self.assertEqual([], FakeRegistry.log)
@@ -221,11 +215,11 @@ class PublishImages(unittest.TestCase):
         (pathlib.Path(self.dir.name) / "flagd-testbed.tar").unlink()
         self.push()
         self.assertIn("- skipped flagd-testbed: no layout was built in this run", self.messages)
-        self.assertEqual(12, len([m for m in self.messages if m.startswith("- pushed ")]))
+        self.assertEqual(6, len([m for m in self.messages if m.startswith("- pushed ")]))
 
     def test_a_missing_distribution_layout_is_an_error(self):
         self.layouts("abc1234", FULL_OLD)
-        (pathlib.Path(self.dir.name) / "flagd-sync-fips.tar").unlink()
+        (pathlib.Path(self.dir.name) / "flagd-sync.tar").unlink()
         with self.assertRaises(publish.Refused):
             self.push()
         self.assertEqual([], FakeRegistry.log)
@@ -251,8 +245,7 @@ class PublishImages(unittest.TestCase):
         for sha in (new, old):
             shutil_dir = pathlib.Path(self.dir.name) / f"layouts-{sha[:7]}"
             shutil_dir.mkdir()
-            for suffix in ("", "-fips"):
-                write_layout(shutil_dir / f"flagd-sync{suffix}.tar", refs_for("flagd-sync", suffix, sha[:7]), sha)
+            write_layout(shutil_dir / "flagd-sync.tar", refs_for("flagd-sync", sha[:7]), sha)
             publish.push(argparse.Namespace(layouts=str(shutil_dir), short=sha[:7], names="flagd-sync", outputs=None), lambda m: None)
         cwd = os.getcwd()
         os.chdir(repo)
@@ -269,9 +262,14 @@ class PublishImages(unittest.TestCase):
         self.assertEqual(FakeRegistry.tags[("open-feature-forking/flagd-sync", f"sha-{new[:7]}")],
                          FakeRegistry.tags[("open-feature-forking/flagd-sync", "main")])
         self.assertTrue(any(m.startswith("- kept open-feature-forking/flagd-sync:main") for m in self.messages), self.messages)
-        # the fips tag moved along with the standard one
-        self.assertEqual(FakeRegistry.tags[("open-feature-forking/flagd-sync", f"sha-{new[:7]}-fips")],
-                         FakeRegistry.tags[("open-feature-forking/flagd-sync", "main-fips")])
+
+    def test_no_fips_tag_is_a_destination(self):
+        self.layouts("abc1234", FULL_OLD)
+        write_layout(pathlib.Path(self.dir.name) / "flagd-sync.tar",
+                     ["ghcr.io/open-feature-forking/flagd-sync:main-fips", "ghcr.io/open-feature-forking/flagd-sync:sha-abc1234-fips"], FULL_OLD)
+        with self.assertRaises(publish.Refused):
+            self.push()
+        self.assertEqual([], FakeRegistry.log)
 
 
 if __name__ == "__main__":

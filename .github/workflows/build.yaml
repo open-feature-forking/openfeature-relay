@@ -950,8 +950,8 @@ jobs:
           if-no-files-found: error
 
   # Step 17: the only job that pushes. It builds nothing: it takes the layouts the build jobs checked and pushes them by
-  # digest under their sha- tags, then attests each digest. Only a push or a manual run on the main branch of this repository
-  # gets here, and only after publish-gate said so and every build job passed (a skipped testbed does not hold the rest back).
+  # digest under their sha- tags, then attests each digest. Only the nightly run or a manual run on the main branch of this
+  # repository gets here, and only after publish-gate said so and every build job passed (a skipped testbed does not hold the rest back).
   # The script holds the destinations: the seven images of #216 under ghcr.io/open-feature-forking/ and no other.
   publish-images:
     name: Publish images
@@ -959,7 +959,7 @@ jobs:
     if: >-
       ${{ always() && needs.publish-gate.outputs.publish == 'true'
       && github.ref == 'refs/heads/main' && github.repository == 'open-feature-forking/openfeature-relay'
-      && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
       && needs.release-dry-run.result == 'success' && needs.image-build.result == 'success'
       && (needs.testbed.result == 'success' || needs.testbed.result == 'skipped') }}
     runs-on: ubuntu-latest
@@ -999,26 +999,12 @@ jobs:
           subject-name: ghcr.io/open-feature-forking/flagd-full
           subject-digest: ${{ steps.push.outputs.flagd_full }}
           push-to-registry: true
-      - name: Attest flagd-full-fips
-        if: steps.push.outputs.flagd_full_fips != ''
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
-        with:
-          subject-name: ghcr.io/open-feature-forking/flagd-full
-          subject-digest: ${{ steps.push.outputs.flagd_full_fips }}
-          push-to-registry: true
       - name: Attest flagd-minimal
         if: steps.push.outputs.flagd_minimal != ''
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-name: ghcr.io/open-feature-forking/flagd-minimal
           subject-digest: ${{ steps.push.outputs.flagd_minimal }}
-          push-to-registry: true
-      - name: Attest flagd-minimal-fips
-        if: steps.push.outputs.flagd_minimal_fips != ''
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
-        with:
-          subject-name: ghcr.io/open-feature-forking/flagd-minimal
-          subject-digest: ${{ steps.push.outputs.flagd_minimal_fips }}
           push-to-registry: true
       - name: Attest flagd-minimal-otel
         if: steps.push.outputs.flagd_minimal_otel != ''
@@ -1027,26 +1013,12 @@ jobs:
           subject-name: ghcr.io/open-feature-forking/flagd-minimal-otel
           subject-digest: ${{ steps.push.outputs.flagd_minimal_otel }}
           push-to-registry: true
-      - name: Attest flagd-minimal-otel-fips
-        if: steps.push.outputs.flagd_minimal_otel_fips != ''
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
-        with:
-          subject-name: ghcr.io/open-feature-forking/flagd-minimal-otel
-          subject-digest: ${{ steps.push.outputs.flagd_minimal_otel_fips }}
-          push-to-registry: true
       - name: Attest flagd-cloud
         if: steps.push.outputs.flagd_cloud != ''
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-name: ghcr.io/open-feature-forking/flagd-cloud
           subject-digest: ${{ steps.push.outputs.flagd_cloud }}
-          push-to-registry: true
-      - name: Attest flagd-cloud-fips
-        if: steps.push.outputs.flagd_cloud_fips != ''
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
-        with:
-          subject-name: ghcr.io/open-feature-forking/flagd-cloud
-          subject-digest: ${{ steps.push.outputs.flagd_cloud_fips }}
           push-to-registry: true
       - name: Attest flagd-kubernetes
         if: steps.push.outputs.flagd_kubernetes != ''
@@ -1055,26 +1027,12 @@ jobs:
           subject-name: ghcr.io/open-feature-forking/flagd-kubernetes
           subject-digest: ${{ steps.push.outputs.flagd_kubernetes }}
           push-to-registry: true
-      - name: Attest flagd-kubernetes-fips
-        if: steps.push.outputs.flagd_kubernetes_fips != ''
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
-        with:
-          subject-name: ghcr.io/open-feature-forking/flagd-kubernetes
-          subject-digest: ${{ steps.push.outputs.flagd_kubernetes_fips }}
-          push-to-registry: true
       - name: Attest flagd-sync
         if: steps.push.outputs.flagd_sync != ''
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-name: ghcr.io/open-feature-forking/flagd-sync
           subject-digest: ${{ steps.push.outputs.flagd_sync }}
-          push-to-registry: true
-      - name: Attest flagd-sync-fips
-        if: steps.push.outputs.flagd_sync_fips != ''
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
-        with:
-          subject-name: ghcr.io/open-feature-forking/flagd-sync
-          subject-digest: ${{ steps.push.outputs.flagd_sync_fips }}
           push-to-registry: true
       - name: Attest flagd-testbed
         if: steps.push.outputs.flagd_testbed != ''
