@@ -196,6 +196,7 @@ func (recSyncFactory) ParseURI(uri string) (coresync.SourceConfig, bool) {
 
 func (f recSyncFactory) CreateStreaming(s coresync.Settings) (coresync.StreamingSyncProvider, error) {
 	f.log.add("sync " + s.Source.URI + " create")
+	s.Logger.Info("sync " + s.Source.URI)
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -342,6 +343,9 @@ func TestFromConfigErrorTexts(t *testing.T) {
 		},
 		"evaluator of a missing format": {
 			func(b *recBuild) {
+				// other before flagd: the list in the text is sorted
+				b.components.ConfigurationFormats[0], b.components.ConfigurationFormats[1] =
+					b.components.ConfigurationFormats[1], b.components.ConfigurationFormats[0]
 				b.components.Evaluators = []evaluator.Factory{recEvaluatorFactory{name: "ev", format: "nope", log: b.log}}
 			},
 			`the evaluator "ev" resolves the configuration format "nope", which the distribution lacks; it has: flagd, other`,
@@ -448,6 +452,8 @@ func TestFromConfigCallOrder(t *testing.T) {
 		rt, err := b.run(t)
 		require.NoError(t, err)
 		require.Equal(t, built, b.log.all())
+		require.Len(t, rt.Formats, 1, "flagd's own format is the default, not an entry")
+		require.Contains(t, rt.Formats, "rec://b", "the formats are keyed by source URI")
 		var hooks []string
 		for _, h := range rt.hooks {
 			hooks = append(hooks, h.name)
@@ -467,18 +473,19 @@ func TestFromConfigCallOrder(t *testing.T) {
 		change func(b *recBuild)
 		want   []string
 	}{
-		"middleware fails: the evaluator stays unclosed": {
+		"middleware fails: the evaluator closes": {
 			func(b *recBuild) {
 				b.components.Middleware = []middleware.Configured{{Factory: recMiddlewareFactory{name: "mw", log: b.log, err: errBoom}}}
 			},
 			[]string{
 				"telemetry create", "format other create", "format flagd create", "evaluator ev create",
-				"middleware mw create", "telemetry shutdown",
+				"middleware mw create", "evaluator ev close", "telemetry shutdown",
 			},
 		},
-		"staleAfter fails: the sync providers stay unclosed": {
+		"staleAfter fails: the sync providers close, then the endpoints": {
 			func(b *recBuild) { b.config.SyncProviders[1].StaleAfter = 5 },
-			append(append([]string(nil), built[:9]...), "endpoint e1 close", "endpoint e2 close", "telemetry shutdown"),
+			append(append([]string(nil), built[:9]...),
+				"sync rec://a close", "sync rec://b close", "endpoint e1 close", "endpoint e2 close", "telemetry shutdown"),
 		},
 		"an event sink fails: the earlier one closes": {
 			func(b *recBuild) {
@@ -584,6 +591,7 @@ func TestFromConfigLogLines(t *testing.T) {
 	require.Empty(t, fields(message("format other")), "the format of a source gets the runtime's logger as it is")
 	require.Empty(t, fields(message("evaluator ev")))
 	require.Equal(t, map[string]any{"component": "middleware", "middleware": "mw"}, fields(message("middleware mw")))
+	require.Equal(t, map[string]any{"component": "sync"}, fields(message("sync rec://a")))
 
 	rt.Logger.Info("runtime line")
 	require.Equal(t, map[string]any{"component": "runtime"}, fields(message("runtime line")))

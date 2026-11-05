@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"slices"
 	"sort"
 
@@ -236,4 +237,15 @@ func hasResult(results []evaluator.Result, key string) bool {
 		}
 	}
 	return false
+}
+
+// Close closes the evaluators of the routes that are an io.Closer, and returns their errors joined.
+func (r *Router) Close() error {
+	var errs []error
+	for _, route := range r.routes {
+		if closer, ok := route.Evaluator.(io.Closer); ok {
+			errs = append(errs, closer.Close())
+		}
+	}
+	return errors.Join(errs...)
 }

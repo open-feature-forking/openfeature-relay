@@ -387,3 +387,24 @@ func BenchmarkRouterEvaluate(b *testing.B) {
 		})
 	}
 }
+
+type closingFake struct {
+	fake
+	closed *int
+	err    error
+}
+
+func (c *closingFake) Close() error { *c.closed++; return c.err }
+
+func TestRouterCloseClosesTheEvaluatorsThatCanClose(t *testing.T) {
+	closed := 0
+	errClose := errors.New("close")
+	r, err := New(nil, Route{Format: "a", Evaluator: &closingFake{closed: &closed, err: errClose}})
+	require.NoError(t, err)
+	require.ErrorIs(t, r.Close(), errClose)
+	require.Equal(t, 1, closed)
+
+	plain, err := New(nil, Route{Format: "a", Evaluator: &fake{name: "plain"}})
+	require.NoError(t, err)
+	require.NoError(t, plain.Close())
+}
