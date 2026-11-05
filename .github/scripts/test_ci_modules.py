@@ -81,7 +81,7 @@ class TestTableCoversModules(unittest.TestCase):
     FLAGD = ["flagd", "runtime", "service/transport", "service/flag-evaluation", "service/ofrep", "service/flag-sync",
              "service/event-collector"]
     CONTRIB = ["contrib/flagsmith/engine", "contrib/flagsmith/middleware", "contrib/flagsmith/sync", "testbed/control",
-               "testbed/source"]
+               "testbed/source", "testbed/cmd"]
 
     def test_every_module_has_an_entry(self):
         self.assertEqual(sorted(go_module_dirs()), sorted(TABLE["modules"]))

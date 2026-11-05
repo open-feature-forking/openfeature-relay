@@ -182,6 +182,9 @@
       "test": null,
       "reason": "a Kubernetes test (make run-flagd-proxy-zd-test); make test does not run it"
     },
+    "testbed/cmd": {
+      "test": "make test-module MODULE=testbed/cmd"
+    },
     "testbed/control": {
       "test": "make test-module MODULE=testbed/control"
     },
