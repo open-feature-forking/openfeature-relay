@@ -60,7 +60,7 @@
 | Context Enrichment | Values flagd adds to an evaluation context before resolution: static values, header mappings, and per-selector values. |  |
 | Request Attribute | A value middleware attaches to a request, such as the kind of credential used, that evaluators may read; not part of the evaluation context. |  |
 | Evaluation Router | The part of the runtime that picks, for a selector and flag key, the configuration format holding the flag and its evaluator. |  |
-| Staleness | The age of a source's last accepted delivery; beyond a configured limit, readiness fails. |  |
+| Staleness | The time since a source's last contact, which is a successful fetch (whether or not it changed anything) or the last moment a stream was open; beyond a configured limit, readiness fails. |  |
 | Event Bus | The publish/subscribe channel through which the runtime and service endpoints announce configuration change, evaluation and tracking events to service endpoints and event sinks. |  |
 | Runtime | The part of a distribution that starts sync providers, hands their flag configurations to configuration formats, publishes events on the event bus and starts service endpoints. |  |
 | Image Build Environment | The container build tooling (for example Docker Buildx) that turns a compiled distribution and a Dockerfile into an image. | |
