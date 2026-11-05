@@ -138,7 +138,7 @@ class TestTableCoversModules(unittest.TestCase):
                   "test/eventsink-example/distribution", "test/middleware-example",
                   "test/middleware-example/distribution", "test/telemetry-example",
                   "test/telemetry-example/distribution", "test/inprocess-example/file",
-                  "test/inprocess-example/filegrpc", "test/inprocess-example/engine", "test/porttest"):
+                  "test/inprocess-example/filegrpc", "test/inprocess-example/engine", "test/porttest", "tools/ci"):
             want[m] = plain(m)
         for m, cmd in want.items():
             with self.subTest(module=m):
@@ -153,6 +153,7 @@ class TestTableCoversModules(unittest.TestCase):
             "test-image-pins": ["test/image"],
             "test-release": ["test/release"],
             "test-porttest": ["test/porttest"],
+            "test-tools-ci": ["tools/ci"],
             "test-service-example": ["test/service-example"],
             "test-sync-example": ["test/sync-example"],
             "test-evaluator-testkit": ["test/evaluator-testkit"],
@@ -174,7 +175,7 @@ class TestTableCoversModules(unittest.TestCase):
              "test-upgrade-accepted", "test-image-pins", "test-configformat-example", "test-service-example",
              "test-evaluator-testkit", "test-inprocess-example", "test-sync-example", "test-telemetry-example",
              "test-eventsink-example", "test-contract-external", "test-middleware-example", "test-release",
-             "test-concurrency", "test-porttest"],
+             "test-concurrency", "test-porttest", "test-tools-ci"],
             re.findall(r"^TEST_TARGETS \+= (\S+)", MAKEFILE, re.M))
 
 
