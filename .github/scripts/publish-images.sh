@@ -4,6 +4,6 @@
 # the destinations and refuses any other.
 #
 # usage: publish-images.sh push <layouts directory> --short <7 hex> [--outputs <file>]
-#        publish-images.sh move-main --short <7 hex> --sha <commit>
+#        publish-images.sh move-main --short <7 hex> --sha <commit> [--force]
 set -euo pipefail
 exec python3 "$(dirname "$0")/publish-images.py" "$@"

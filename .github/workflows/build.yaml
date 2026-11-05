@@ -18,6 +18,11 @@ on:
       - ".claude/**"
   # Full run including the gated jobs below.
   workflow_dispatch:
+    inputs:
+      move-main-anyway:
+        description: "Move the :main images to this commit even if the commit :main holds is not its ancestor (after a force-push of main)"
+        type: boolean
+        default: false
   # Nightly, on the default branch, with every flag of the changes job true: the release dry run, the image tests, the
   # image scan, the load test and the outage and gRPC source suites run here, with FULL_CI and manually.
   schedule:
@@ -739,7 +744,11 @@ jobs:
         env:
           REGISTRY_USER: ${{ github.actor }}
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: .github/scripts/publish-images.sh move-main --short "${GITHUB_SHA::7}" --sha "$GITHUB_SHA" | tee -a "$GITHUB_STEP_SUMMARY"
+          ANYWAY: ${{ inputs.move-main-anyway }}
+        run: |
+          force=()
+          if [ "$ANYWAY" = true ]; then force=(--force); fi
+          .github/scripts/publish-images.sh move-main --short "${GITHUB_SHA::7}" --sha "$GITHUB_SHA" "${force[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
 
   testbed-rpc-outages:
     name: Testbed RPC outages

@@ -13,6 +13,7 @@ import tarfile
 import tempfile
 import threading
 import unittest
+import unittest.mock
 
 HERE = pathlib.Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location("publish_images", HERE / "publish-images.py")
@@ -262,6 +263,51 @@ class PublishImages(unittest.TestCase):
         self.assertEqual(FakeRegistry.tags[("open-feature-forking/flagd-sync", f"sha-{new[:7]}")],
                          FakeRegistry.tags[("open-feature-forking/flagd-sync", "main")])
         self.assertTrue(any(m.startswith("- kept open-feature-forking/flagd-sync:main") for m in self.messages), self.messages)
+
+    def history(self, revision_of_old):
+        """Two commits in a repository, the layouts of both published, and :main moved to the old one."""
+        repo = pathlib.Path(self.dir.name) / "repo"
+        repo.mkdir()
+        git = lambda *a: subprocess.run(["git", "-C", str(repo), "-c", "user.email=a@b", "-c", "user.name=x", *a],
+                                        capture_output=True, text=True, check=True).stdout.strip()
+        git("init", "-q")
+        git("commit", "-q", "--allow-empty", "-m", "old")
+        old = git("rev-parse", "HEAD")
+        git("commit", "-q", "--allow-empty", "-m", "new")
+        new = git("rev-parse", "HEAD")
+        for sha, revision in ((old, revision_of_old or old), (new, new)):
+            directory = pathlib.Path(self.dir.name) / f"layouts-{sha[:7]}"
+            directory.mkdir()
+            write_layout(directory / "flagd-sync.tar", refs_for("flagd-sync", sha[:7]), revision)
+            publish.push(argparse.Namespace(layouts=str(directory), short=sha[:7], names="flagd-sync", outputs=None), lambda m: None)
+        cwd = os.getcwd()
+        os.chdir(repo)
+        self.addCleanup(os.chdir, cwd)
+        publish.move_main(argparse.Namespace(short=old[:7], sha=old, names="flagd-sync"), lambda m: None)
+        return new
+
+    def test_a_main_that_holds_a_commit_this_checkout_lacks_stays_until_forced(self):
+        """After a force-push of main the commit :main was built from is gone: not an ancestor of anything, so only
+        --force moves it."""
+        new = self.history("f" * 40)
+        main = ("open-feature-forking/flagd-sync", "main")
+        before = FakeRegistry.tags[main]
+        move = lambda **kw: publish.move_main(argparse.Namespace(short=new[:7], sha=new, names="flagd-sync", **kw), self.messages.append)
+        move()
+        self.assertEqual(before, FakeRegistry.tags[main])
+        self.assertTrue(any("force-pushed" in m for m in self.messages), self.messages)
+        move(force=True)
+        self.assertEqual(FakeRegistry.tags[("open-feature-forking/flagd-sync", f"sha-{new[:7]}")], FakeRegistry.tags[main])
+
+    def test_a_main_tag_that_does_not_hold_the_pushed_digest_is_an_error(self):
+        new = self.history(None)
+        registry = publish.registry_from_env()
+        real = registry.push_manifest
+        registry.push_manifest = lambda *a: "sha256:" + "0" * 64
+        with unittest.mock.patch.object(publish, "registry_from_env", return_value=registry):
+            with self.assertRaises(RuntimeError):
+                publish.move_main(argparse.Namespace(short=new[:7], sha=new, names="flagd-sync"), self.messages.append)
+        registry.push_manifest = real
 
     def test_no_fips_tag_is_a_destination(self):
         self.layouts("abc1234", FULL_OLD)

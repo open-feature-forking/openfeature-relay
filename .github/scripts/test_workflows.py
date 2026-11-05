@@ -93,7 +93,7 @@ class BuildWorkflow(unittest.TestCase):
     # never enabled here) is allowlisted by the hash that ReleaseConfiguration pins.
     PUSH_SURFACE = ("docker/login-action", "--push", "push: true", "push:true", "push=true", "type=registry", "docker push",
                     "docker login", "crane", "skopeo", "oras", "push-to-registry", "packages: write", "publish-images.sh",
-                    "publish-images.py", "REGISTRY_TOKEN", "attest-build-provenance")
+                    "publish-images.py", "REGISTRY_TOKEN", "attest-build-provenance", "imagetools create")
 
     def test_only_publish_images_pushes_or_logs_in(self):
         """Step 17: the push surface is two jobs of build.yaml, on the main branch of this repository, from the nightly run or a manual run."""

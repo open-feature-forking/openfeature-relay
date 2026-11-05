@@ -3,8 +3,10 @@
 
   publish-images.py push <layouts directory> --short <7 hex> [--names n1,n2] [--outputs <file>]
       Pushes every layout by digest and under its sha-<short> tags. It never pushes a main tag: move-main does.
-  publish-images.py move-main --short <7 hex> --sha <full commit> [--names n1,n2]
-      Moves the main tags to the sha-<short> images, only if the commit :main points at is an ancestor of --sha.
+  publish-images.py move-main --short <7 hex> --sha <full commit> [--names n1,n2] [--force]
+      Moves the main tags to the sha-<short> images, only if the commit :main points at is an ancestor of --sha. A commit
+      this checkout does not have (main was force-pushed) is no ancestor, so :main would stay where it is for good: --force
+      moves it anyway.
 
 There is one image per name: no FIPS variant is published.
 
@@ -17,6 +19,7 @@ Needs only the Python standard library.
 """
 import argparse
 import base64
+import hashlib
 import importlib.util
 import json
 import os
@@ -221,6 +224,10 @@ def is_ancestor(old, new):
     return subprocess.run(["git", "merge-base", "--is-ancestor", old, new], capture_output=True).returncode == 0
 
 
+def has_commit(sha):
+    return subprocess.run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], capture_output=True).returncode == 0
+
+
 def move_main(args, log=print):
     names = args.names.split(",") if args.names else NAMES
     registry = registry_from_env()
@@ -238,11 +245,17 @@ def move_main(args, log=print):
             if revision == args.sha:
                 log(f"- {repository}:main already holds {args.sha[:7]}")
                 continue
-            if not revision or not is_ancestor(revision, args.sha):
-                log(f"- kept {repository}:main: it holds {revision[:7] or 'an unknown commit'}, which is not an ancestor of {args.sha[:7]}")
+            if not getattr(args, "force", False) and (not revision or not is_ancestor(revision, args.sha)):
+                hint = ""
+                if revision and not has_commit(revision):
+                    hint = " (this checkout lacks it: was main force-pushed? run the build manually with move-main-anyway)"
+                log(f"- kept {repository}:main: it holds {revision[:7] or 'an unknown commit'}, which is not an ancestor of {args.sha[:7]}{hint}")
                 continue
-        registry.push_manifest(repository, "main", new[0], new[1])
-        log(f"- moved {repository}:main to {args.sha[:7]}")
+        got = registry.push_manifest(repository, "main", new[0], new[1])
+        want = "sha256:" + hashlib.sha256(new[1]).hexdigest()
+        if got != want:
+            raise RuntimeError(f"{repository}: the tag main holds {got}, not {want}")
+        log(f"- moved {repository}:main to {args.sha[:7]} = {want}")
     return 0
 
 
@@ -258,6 +271,7 @@ def main():
     m.add_argument("--short", required=True)
     m.add_argument("--sha", required=True)
     m.add_argument("--names")
+    m.add_argument("--force", action="store_true")
     args = parser.parse_args()
     if not re.fullmatch(r"[0-9a-f]{7}", args.short):
         sys.exit("--short is seven hex digits")
