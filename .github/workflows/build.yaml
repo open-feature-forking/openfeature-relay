@@ -28,6 +28,10 @@ concurrency:
   group: build-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# The default token reads. A job that needs more asks for it at job level (coverage, docker-local).
+permissions:
+  contents: read
+
 env:
   # The toolchain determines which FIPS snapshots exist, so pin it.
   GOTOOLCHAIN: local

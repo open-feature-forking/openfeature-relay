@@ -25,7 +25,7 @@ class ReleaseConfiguration(unittest.TestCase):
     """K2: flagd and flagd-proxy release exactly as today."""
 
     PINNED = {
-        ".github/workflows/release-please.yaml": "e0de2bfa567c335e74db5bb1a8cee66fd5911fd80350c20ba1ae61f3bd257c45",
+        ".github/workflows/release-please.yaml": "cd54450c1a91ea13a0a224f837eca5240d1b812492bd3c19b3dcfd1192ed1f3c",
         "release-please-config.json": "f7f5af2d67434c7a7565fa88cd1cd09b5ad29e7f6bf93dbb3fd57e54afc24c97",
         ".release-please-manifest.json": "4617b2ca55b05124c5c270d1e66184912125b461d6c24ee0d90ec5da142ec6ee",
     }
@@ -364,6 +364,56 @@ class BuildWorkflow(unittest.TestCase):
     def test_grpc_sync_job_runs_the_testbed_test(self):
         """UC-023 Q14: the gated job runs flagd-full with a grpc source against the relay testbed."""
         self.assertIn("make testbed-grpc-sync", self.job("testbed-grpc-sync"))
+
+class WorkflowPermissions(unittest.TestCase):
+    """The repository's default token may write, so every workflow narrows it: a top-level block that reads, and job-level
+    grants only where a job calls an API that needs them. Nothing grants packages: write."""
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            import yaml
+        except ImportError:
+            if os.environ.get("GITHUB_ACTIONS") == "true":
+                raise
+            raise unittest.SkipTest("PyYAML is not installed")
+        cls.files = sorted((ROOT / ".github" / "workflows").glob("*.y*ml"))
+        cls.docs = {f.name: yaml.safe_load(f.read_text(encoding="utf-8")) for f in cls.files}
+
+    def test_every_workflow_parses_and_has_a_top_level_permissions_block(self):
+        self.assertIn("build.yaml", self.docs)
+        for name, doc in self.docs.items():
+            with self.subTest(workflow=name):
+                self.assertIsInstance(doc.get("permissions"), dict, "a top-level permissions block narrows the default token")
+                self.assertIn("jobs", doc)
+
+    def test_the_top_level_block_only_reads_unless_a_deploy_workflow_says_why(self):
+        # the Pages deploy workflows are upstream flagd's, gated to open-feature/flagd
+        deploy = {"dev-benches-page.yml": {"contents": "read", "pages": "write", "id-token": "write"},
+                  "docs.yaml": {"contents": "read"}}
+        for name, doc in self.docs.items():
+            with self.subTest(workflow=name):
+                want = {"lint-pr.yaml": {"pull-requests": "write"}}.get(name) or deploy.get(name) or {"contents": "read"}
+                self.assertEqual(want, doc["permissions"])
+
+    def test_nothing_grants_packages_write(self):
+        for f in self.files:
+            with self.subTest(workflow=f.name):
+                self.assertNotRegex(f.read_text(encoding="utf-8"), r"packages:\s*write")
+
+    def test_the_only_registry_login_is_the_pinned_release_workflow(self):
+        """docker/login-action appears in release-please.yaml only (gated to open-feature/flagd, never enabled here); the
+        hash in ReleaseConfiguration pins that file, so a second login or a change to this one fails a test."""
+        with_login = [f.name for f in self.files if "docker/login-action" in f.read_text(encoding="utf-8")]
+        self.assertEqual(["release-please.yaml"], with_login)
+        self.assertIn(".github/workflows/release-please.yaml", ReleaseConfiguration.PINNED)
+
+    def test_lint_pr_runs_on_pull_request_target_without_the_pull_requests_code(self):
+        text = (ROOT / ".github" / "workflows" / "lint-pr.yaml").read_text(encoding="utf-8")
+        self.assertIn("pull_request_target:", text)
+        for gone in ("actions/checkout", "github.event.pull_request.head", "run:"):
+            self.assertNotIn(gone, text)
+
 
 class SpecLintWorkflow(unittest.TestCase):
     """The spec lint gates spec changes on errors only, and its sibling scripts sit where load_sibling looks."""
