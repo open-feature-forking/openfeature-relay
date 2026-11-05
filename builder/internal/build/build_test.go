@@ -416,3 +416,19 @@ func TestReleaseOptionsReachTheBinary(t *testing.T) {
 	require.Equal(t, "custom v9.9.9 0123456789abcdef Mon Jan  2 03:04:05 UTC 2026 4\n", string(out), "each is stamped as given")
 	require.NoDirExists(t, filepath.Join(f.dir, "out"), "the manifest's output_path is not used")
 }
+
+func TestComponentsOfAddsTheCmdModule(t *testing.T) {
+	cmd := "example.com/relay/cmd"
+	m := &manifest.Manifest{Cmd: &manifest.Entry{Module: cmd, Version: "v1.2.3"}}
+	require.Equal(t, []gotool.Component{
+		{Group: "cmd", Module: cmd, Version: "v1.2.3", Import: cmd, Alias: "runtimecmd"},
+	}, componentsOf(m), "the import defaults to the module root")
+
+	m.Cmd.Import = cmd + "/sub"
+	m.Replaces = []manifest.Replace{{Module: cmd, Path: "../cmd"}}
+	require.Equal(t, []gotool.Component{
+		{Group: "cmd", Module: cmd, Version: "v1.2.3", Import: cmd + "/sub", Alias: "runtimecmd", Replaced: true},
+	}, componentsOf(m))
+
+	require.Empty(t, componentsOf(&manifest.Manifest{}))
+}
