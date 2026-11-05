@@ -90,7 +90,7 @@ class BuildWorkflow(unittest.TestCase):
                     "publish-images.py", "REGISTRY_TOKEN", "attest-build-provenance")
 
     def test_only_publish_images_pushes_or_logs_in(self):
-        """Step 17: the push surface is two jobs of build.yaml, on the main branch of this repository."""
+        """Step 17: the push surface is two jobs of build.yaml, on the main branch of this repository, from the nightly run or a manual run."""
         publishing = (self.job("publish-images"), self.job("move-main"))
         everything = {f.name: f.read_text(encoding="utf-8") for f in (ROOT / ".github" / "workflows").glob("*.y*ml")}
         for name, text in everything.items():
@@ -109,7 +109,7 @@ class BuildWorkflow(unittest.TestCase):
         gate = self.job("publish-images").split("steps:", 1)[0]
         for condition in ("needs.publish-gate.outputs.publish == 'true'", "github.ref == 'refs/heads/main'",
                           "github.repository == 'open-feature-forking/openfeature-relay'",
-                          "github.event_name == 'push' || github.event_name == 'workflow_dispatch'"):
+                          "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'"):
             self.assertIn(condition, gate)
 
     def test_publish_jobs(self):
@@ -118,7 +118,7 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIn("needs: [publish-gate, release-dry-run, image-build, testbed]", job)
         for build in ("docker build", "buildx build", "go build", "make "):
             self.assertNotIn(build, job)
-        self.assertEqual(13, job.count("uses: actions/attest-build-provenance@"))
+        self.assertEqual(7, job.count("uses: actions/attest-build-provenance@"))
         self.assertEqual(1, job.count("uses: docker/login-action@"))
         self.assertRegex(job, r"permissions:\n      contents: read\n      packages: write\n      id-token: write\n      attestations: write\n")
         move = self.job("move-main")
@@ -387,15 +387,15 @@ class BuildWorkflow(unittest.TestCase):
 
     def test_image_build_parts_cover_the_other_five_distributions(self):
         """Step 17: flagd-minimal is built by the distributions part and the testbed by its job; the rest by image-build,
-        each in the two variants, as layouts checked as layouts and run from the layout."""
+        as layouts checked as layouts and run from the layout. FIPS is not published."""
         job = self.job("image-build")
         listed = " ".join(re.findall(r'distributions: "([^"]+)"', job)).split()
         self.assertEqual(["flagd-cloud", "flagd-full", "flagd-kubernetes", "flagd-minimal-otel", "flagd-sync"], sorted(listed))
         self.assertIn(".github/scripts/image-build.sh", job)
         self.assertIn('"0.0.0-main.${GITHUB_SHA::7}"', job)
         script = (ROOT / ".github" / "scripts" / "image-build.sh").read_text(encoding="utf-8")
-        for variant in ("standard", "fips"):
-            self.assertIn(variant, script)
+        # no FIPS image is published: the build has one variant and no FIPS build argument
+        self.assertNotIn("fips", script.lower().replace("no fips images", ""))
         self.assertIn("check_layout", script)
         self.assertIn("check_runtime", script)
         self.assertIn('source_dir=flagd\n', script)
