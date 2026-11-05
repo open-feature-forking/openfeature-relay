@@ -128,7 +128,7 @@ test-module:
 ifneq ($(filter $(TEST_MODULE),$(COVERED_MODULES)),)
 	go test -race -covermode=atomic -cover -short ./$(TEST_MODULE)/... -coverprofile=$(subst /,-,$(TEST_MODULE))-coverage.out
 else ifeq ($(TEST_MODULE),flagd-proxy)
-	go test -race -covermode=atomic -cover -short ./flagd-proxy/pkg/... -coverprofile=flagd-proxy-coverage.out
+	go test -race -covermode=atomic -cover -short ./flagd-proxy/... -coverprofile=flagd-proxy-coverage.out
 else ifneq ($(filter $(TEST_MODULE),$(UNCOVERED_MODULES)),)
 	go test -race -covermode=atomic -cover -short ./$(TEST_MODULE)/...
 else ifneq ($(filter $(TEST_MODULE),$(PLAIN_TEST_MODULES)),)
@@ -181,7 +181,7 @@ test-builder:
 test-distributions:
 	cd test/distributions && go test -count=1 -timeout 30m ./...
 test-flagd-proxy:
-	go test -race -covermode=atomic -cover -short ./flagd-proxy/pkg/... -coverprofile=flagd-proxy-coverage.out
+	go test -race -covermode=atomic -cover -short ./flagd-proxy/... -coverprofile=flagd-proxy-coverage.out
 # fips140=only makes non-approved algorithms error or panic, so this fails if a
 # tested path reaches MD5, SHA-1, RC4, 3DES or ChaCha20-Poly1305. Test mode only;
 # released binaries run with fips140=on.

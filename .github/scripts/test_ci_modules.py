@@ -128,7 +128,7 @@ class TestTableCoversModules(unittest.TestCase):
 
     def test_the_other_modules_keep_their_flags(self):
         want = {
-            "flagd-proxy": "go test -race -covermode=atomic -cover -short ./flagd-proxy/pkg/... -coverprofile=flagd-proxy-coverage.out",
+            "flagd-proxy": "go test -race -covermode=atomic -cover -short ./flagd-proxy/... -coverprofile=flagd-proxy-coverage.out",
             "test/distributions": "cd test/distributions && go test -count=1 -timeout 30m ./...",
             "test/upgrade": "cd test/upgrade && go test -count=1 -run 'TestAcceptedMatchesIssue|TestSurfaces|TestGuideCoversAcceptedItems' ./...",
             "test/image": "cd test/image && go test -count=1 -run TestReferenceDockerfilePins ./...",
@@ -174,6 +174,64 @@ class TestTableCoversModules(unittest.TestCase):
              "test-evaluator-testkit", "test-inprocess-example", "test-sync-example", "test-telemetry-example",
              "test-eventsink-example", "test-contract-external", "test-middleware-example", "test-release"],
             re.findall(r"^TEST_TARGETS \+= (\S+)", MAKEFILE, re.M))
+
+
+class TestEveryTestDirectoryIsReached(unittest.TestCase):
+    """Coverage gap 3: a directory with a _test.go file that no recipe reaches runs nowhere (flagd-proxy/cmd did)."""
+
+    # Directories that `make test` does not reach, each with the CI job or the reason that does.
+    ELSEWHERE = {
+        "test/integration": "the integration-test job",
+        "test/testbed": "the testbed jobs (make testbed-contract, testbed-suites, testbed-rpc-outages, testbed-grpc-sync)",
+    }
+
+    @staticmethod
+    def tracked_test_dirs():
+        done = subprocess.run(["git", "ls-files", "-z", "--", "*_test.go"], cwd=ROOT, capture_output=True)
+        if done.returncode:
+            raise unittest.SkipTest("git cannot list the files")
+        return {pathlib.PurePosixPath(p.decode()).parent.as_posix() for p in done.stdout.split(b"\0") if p}
+
+    @staticmethod
+    def owner(path, modules):
+        """The module directory that holds path: the longest module directory that is a prefix of it."""
+        best = None
+        for m in modules:
+            if (path == m or path.startswith(m + "/")) and (best is None or len(m) > len(best)):
+                best = m
+        return best
+
+    def reached(self, pattern, modules):
+        """Does the go test package pattern (./dir/..., relative to the root) reach the directory?"""
+        base = pattern[2:-4].rstrip("/")
+        return lambda d: (d == base or d.startswith(base + "/")) and self.owner(d, modules) == self.owner(base, modules)
+
+    def test_every_directory_with_a_test_is_reached_by_make_test(self):
+        modules = go_module_dirs()
+        _, lines = make_dry_run("test")
+        reach = []
+        for line in lines:
+            if not line.startswith(("go test", "cd ")):
+                continue
+            prefix = ""
+            m = re.match(r"cd (\S+) && ", line)
+            if m:
+                prefix, line = m.group(1), line[m.end():]
+            for tok in line.split():
+                if tok.startswith("./") and tok.endswith("/..."):
+                    pattern = f"./{prefix}/{tok[2:]}" if prefix and tok != "./..." else (f"./{prefix}/..." if prefix else tok)
+                    reach.append(self.reached(pattern, modules))
+        missed = sorted(d for d in self.tracked_test_dirs()
+                        if d not in self.ELSEWHERE and not any(r(d) for r in reach))
+        self.assertEqual([], missed, "no recipe of `make test` runs the tests in these directories")
+
+    def test_the_directories_run_elsewhere_have_tests(self):
+        self.assertTrue(set(self.ELSEWHERE) <= self.tracked_test_dirs() | {d for d in self.ELSEWHERE if (ROOT / d).is_dir()})
+
+    def test_flagd_proxy_cmd_is_reached(self):
+        _, lines = make_dry_run("test-flagd-proxy")
+        self.assertEqual(1, len(tests(lines)))
+        self.assertIn("./flagd-proxy/...", tests(lines)[0])
 
 
 class TestLintCoversEveryModule(unittest.TestCase):
