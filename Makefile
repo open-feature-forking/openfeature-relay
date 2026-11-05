@@ -486,14 +486,20 @@ testbed-contract:
 	@test -n "$(IMAGE)" || { echo "usage: make testbed-contract IMAGE=<image> [KIND=launchpad|relay]"; exit 1; }
 	cd test/testbed && TESTBED_IMAGE=$(IMAGE) TESTBED_KIND=$(or $(KIND),launchpad) go test -count=1 -timeout 30m -v ./...
 
-# The relay testbed image: the testbed distribution, which the Builder generates from its manifest (UC-022).
+# The relay testbed image: the testbed distribution, which the Builder generates from its manifest (UC-022). With
+# TESTBED_RELAY_IMAGE set, the image is already there (CI loads it from the layout it publishes) and is not built.
+TESTBED_RELAY_IMAGE ?= flagd-testbed:local
 .PHONY: testbed-relay-image testbed-contract-both testbed-suites testbed-rpc-outages
 testbed-relay-image:
-	docker build -f distributions/flagd-testbed/Dockerfile -t flagd-testbed:local .
+ifeq ($(origin TESTBED_RELAY_IMAGE),file)
+	docker build -f distributions/flagd-testbed/Dockerfile -t $(TESTBED_RELAY_IMAGE) .
+else
+	@echo "using $(TESTBED_RELAY_IMAGE), not building the relay testbed image"
+endif
 # The contract against both images: the launchpad as it is, the relay testbed with its quirks fixed.
 testbed-contract-both: testbed-launchpad-image testbed-relay-image
 	$(MAKE) testbed-contract IMAGE=testbed-launchpad:local KIND=launchpad
-	$(MAKE) testbed-contract IMAGE=flagd-testbed:local KIND=relay
+	$(MAKE) testbed-contract IMAGE=$(TESTBED_RELAY_IMAGE) KIND=relay
 # TestRPC and TestInProcess against both images, which must pass the same scenarios (UC-022 Q14). The outage scenarios
 # (@reconnect, @events, @grace) are included by testbed-rpc-outages (Q16).
 testbed-suites: testbed-launchpad-image testbed-relay-image

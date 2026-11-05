@@ -20,7 +20,6 @@ commit="${2:?commit}"
 date="${3:?date}"
 out="${4:?staging directory}"
 summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
-registry=ghcr.io/open-feature
 
 full_path=flagd-minimal
 others="flagd-minimal-otel flagd-cloud flagd-kubernetes flagd-sync"
@@ -47,6 +46,9 @@ sizes_file="${out}/sizes.md"
 add_size() { # <name> <binary>
   printf '| %s | %.1f |\n' "$1" "$(awk -v b="$(stat -c %s "$2")" "BEGIN { print b / 1048576 }")" >>"${sizes_file}"
 }
+
+# shellcheck source=image-lib.sh
+source "$(dirname "$0")/image-lib.sh"
 
 note ""
 note "#### Standard distributions"
@@ -119,51 +121,17 @@ else
   note "- ok: ${name}: the FIPS binary refuses GODEBUG=fips140=off"
 fi
 
-# the images: standard and FIPS, both platforms, as OCI layouts with provenance and an SBOM (Q6, Q11). The default driver
-# cannot export OCI, so a throwaway container builder does.
-builder="dry-run-distributions-$$"
-docker buildx create --driver docker-container --name "${builder}" >/dev/null
-trap 'docker buildx rm "${builder}" >/dev/null 2>&1 || true' EXIT
-image_build() { # <variant arg> <extra buildx arguments...>
-  local fips="$1"
-  shift
-  docker buildx build --builder "${builder}" -q -f builder/reference/Dockerfile --build-arg "DIST_PATH=distributions/${d}/build" \
-    --build-arg "VERSION=v${version}" --build-arg "COMMIT=${commit}" --build-arg "DATE=${date}" --build-arg "FIPS=${fips}" "$@" . >/dev/null
-}
+# the images: standard and FIPS, both platforms, as OCI layouts with provenance, an SBOM and the proof-of-concept marking
+# (Q6, Q11, step 17). The layouts are what publish-images.sh pushes; the amd64 image is run from the layout. The default
+# driver cannot export OCI, so a throwaway container builder does.
+new_builder
 for variant in standard fips; do
   if [ "${variant}" = fips ]; then fips=on; suffix="-fips"; else fips=off; suffix=""; fi
-  oci="${dir}/${name}${suffix}-oci.tar"
-  image_build "${fips}" --platform linux/amd64,linux/arm64 --provenance=mode=max --sbom=true \
-    -t "${registry}/${name}:v${version}${suffix}" -t "${registry}/${name}:latest${suffix}" --output "type=oci,dest=${oci}"
-  found="$(python3 - "${oci}" <<'PY'
-import json, sys, tarfile
-tar = tarfile.open(sys.argv[1])
-def blob(digest):
-    return json.load(tar.extractfile("blobs/sha256/" + digest.split(":", 1)[1]))
-top = json.load(tar.extractfile("index.json"))["manifests"]
-names = sorted(m.get("annotations", {}).get("io.containerd.image.name", "") for m in top)
-manifests = blob(top[0]["digest"])["manifests"]
-platforms = sorted(m["platform"]["os"] + "/" + m["platform"]["architecture"] for m in manifests if m.get("platform", {}).get("os", "unknown") != "unknown")
-attestations = [m for m in manifests if m.get("annotations", {}).get("vnd.docker.reference.type") == "attestation-manifest"]
-kinds = set()
-for m in attestations:
-    for layer in blob(m["digest"]).get("layers", []):
-        kinds.add(layer.get("annotations", {}).get("in-toto.io/predicate-type", ""))
-print(",".join(names), " ".join(platforms), len(attestations), "provenance" if any("slsa.dev/provenance" in k for k in kinds) else "-", "sbom" if any("spdx" in k for k in kinds) else "-")
-PY
-)"
-  expect_equal "${name}${suffix}: tags, platforms, attestation manifests, provenance and SBOM of the OCI image" \
-    "${registry}/${name}:latest${suffix},${registry}/${name}:v${version}${suffix} linux/amd64 linux/arm64 2 provenance sbom" "${found}"
+  build_layout "${name}" "${suffix}" -f builder/reference/Dockerfile --build-arg "DIST_PATH=distributions/${d}/build" \
+    --build-arg "VERSION=v${version}" --build-arg "COMMIT=${commit}" --build-arg "DATE=${date}" --build-arg "FIPS=${fips}"
+  check_layout "${name}" "${suffix}"
+  check_runtime "${name}" "${suffix}" "${name}"
 done
-# the local platform runs: the identity, the user and the entrypoint of the image (BR-003)
-local_tag="${registry}/${name}:v${version}"
-image_build off --load -t "${local_tag}"
-expect_equal "${local_tag}: entrypoint and user" "[/flagd-build] 65532:65532" \
-  "$(docker image inspect "${local_tag}" --format '{{.Config.Entrypoint}} {{.Config.User}}')"
-printed="$(docker run --rm "${local_tag}" version --verbose)"
-expect_equal "${local_tag}: version" "flagd: v${version} (${commit}), built at: ${date}" "$(grep '^flagd:' <<<"${printed}")"
-expect_equal "${local_tag}: distribution" "distribution: ${name} v${version}" "$(grep '^distribution:' <<<"${printed}")"
-docker rmi --force "${local_tag}" >/dev/null 2>&1 || true
 fi
 
 # the other four: only what differs from flagd-minimal

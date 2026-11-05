@@ -6,7 +6,8 @@
 #
 # With "outages", only TestRPC runs, with the @reconnect, @events and @grace scenarios included.
 #
-# The images are built by make testbed-launchpad-image and make testbed-relay-image. Needs Docker and the Go toolchain,
+# The images are built by make testbed-launchpad-image and make testbed-relay-image; TESTBED_RELAY_IMAGE names the relay
+# testbed image (default flagd-testbed:local). Needs Docker and the Go toolchain,
 # and runs from the root of the repository. The go test output of each image is kept in $TESTBED_OUT (default: a
 # temporary directory).
 set -euo pipefail
@@ -30,7 +31,7 @@ fi
 for side in launchpad relay; do
   case "${side}" in
     launchpad) image=testbed-launchpad:local ;;
-    relay) image=flagd-testbed:local ;;
+    relay) image="${TESTBED_RELAY_IMAGE:-flagd-testbed:local}" ;;
   esac
   # a failing scenario is compared, not fatal here: the suites may fail the same scenarios on both images
   (cd test/integration && env GOWORK=off FLAGD_TESTBED_IMAGE="${image}" TESTBED_ENABLE_TAGS="${enabled}" ${env_extra[@]+"${env_extra[@]}"} go test -count=1 -json -timeout 60m -run "^(${run})\$" .) \
