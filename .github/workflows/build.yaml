@@ -18,7 +18,8 @@ on:
       - ".claude/**"
   # Full run including the gated jobs below.
   workflow_dispatch:
-  # Nightly, on the default branch: the outage and gRPC source suites run only here, with FULL_CI and manually.
+  # Nightly, on the default branch, with every flag of the changes job true: the release dry run, the image tests, the
+  # image scan, the load test and the outage and gRPC source suites run here, with FULL_CI and manually.
   schedule:
     - cron: "17 3 * * *"
 
@@ -33,7 +34,7 @@ permissions:
   contents: read
 
 env:
-  # The toolchain determines which FIPS snapshots exist, so pin it.
+  # Pin the toolchain.
   GOTOOLCHAIN: local
 
 jobs:
@@ -50,8 +51,8 @@ jobs:
       deps: ${{ steps.affected.outputs.deps }}
       dockerfile: ${{ steps.affected.outputs.dockerfile }}
       benchmark: ${{ steps.affected.outputs.benchmark }}
-      fips: ${{ steps.affected.outputs.fips }}
       image: ${{ steps.affected.outputs.image }}
+      reference: ${{ steps.affected.outputs.reference }}
       upgrade: ${{ steps.affected.outputs.upgrade }}
       testbed: ${{ steps.affected.outputs.testbed }}
     steps:
@@ -131,7 +132,7 @@ jobs:
           found=$(grep -rn 'golang.org/x/exp' --include=go.mod . | grep -v indirect || true)
           if [ -n "$found" ]; then echo "::error::golang.org/x/exp is a direct requirement in:"; echo "$found"; exit 1; fi
       - name: Save the Go caches
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.go-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
           path: |
@@ -216,102 +217,7 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
       - name: Save the Go caches
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
-        with:
-          path: |
-            ${{ env.GOPATH }}/pkg/mod
-            ~/.cache/go-build
-          key: ${{ steps.go-cache.outputs.cache-primary-key }}
-
-
-  fips:
-    name: FIPS 140-3
-    # Runs on a push to main, with FULL_CI=true, manually, and on a pull request that changes Go code, the Makefile or this
-    # workflow (the `fips` flag of the changes job).
-    needs: changes
-    if: needs.changes.outputs.fips == 'true'
-    runs-on: ubuntu-latest
-    env:
-      GOPATH: /home/runner/work/open-feature/flagd
-      GOBIN: /home/runner/work/open-feature/flagd/bin
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
-      - name: Setup go
-        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
-        with:
-          go-version-file: 'flagd/go.mod'
-          cache: false
-      - name: Restore the Go caches
-        id: go-cache
-        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
-        with:
-          path: |
-            ${{ env.GOPATH }}/pkg/mod
-            ~/.cache/go-build
-          key: go-fips-${{ hashFiles('**/go.sum') }}
-          restore-keys: go-fips-
-      # TestLoadConfig* in runtime/cmd read the evaluator suite from the test-harness submodule
-      - name: Fetch the testbed's evaluator suite
-        run: git submodule update --init test-harness
-      - run: make workspace-init
-
-      # Fails if any tested code path reaches a non-approved algorithm.
-      - name: Test the FIPS variant with strict enforcement
-        run: make test-fips
-
-      - name: Build both variants
-        run: |
-          set -euo pipefail
-          make build-flagd
-          make build-flagd-fips
-
-      - name: The standard build must not claim FIPS
-        run: |
-          set -euo pipefail
-          version_output=$(./bin/flagd version)
-          grep -q 'build variant: standard' <<<"$version_output"
-          grep -q 'FIPS 140-3 mode: disabled' <<<"$version_output"
-          # The standard build must still run with FIPS mode forced off.
-          GODEBUG=fips140=off ./bin/flagd version >/dev/null
-
-      - name: The FIPS build must carry and require the certified module
-        run: |
-          set -euo pipefail
-          build_info=$(go version -m ./bin/flagd-fips)
-          grep -q 'GOFIPS140=v1\.0\.0' <<<"$build_info"
-          grep -q 'DefaultGODEBUG=fips140=on' <<<"$build_info"
-          grep -q -- '-tags=fips140' <<<"$build_info"
-          version_output=$(./bin/flagd-fips version)
-          grep -q 'build variant: fips' <<<"$version_output"
-          grep -q 'FIPS 140-3 mode: enabled' <<<"$version_output"
-          # Enforcement is unconditional: no flag can turn it off.
-          if GODEBUG=fips140=off ./bin/flagd-fips start -f file:./config/samples/example_flags.flagd.json; then
-            echo "::error::the FIPS build started with FIPS mode disabled"; exit 1
-          fi
-
-      - name: A fips140-tagged build without GOFIPS140 must refuse to start
-        run: |
-          set -euo pipefail
-          go build -tags fips140 -o /tmp/flagd-mismatch ./flagd
-          if /tmp/flagd-mismatch start -f file:./config/samples/example_flags.flagd.json; then
-            echo "::error::a mislabelled FIPS build started"; exit 1
-          fi
-
-      - name: Build the FIPS variant of every standard distribution
-        run: make build-standard-fips
-
-      - name: The FIPS crypto closure of every standard distribution is within the recorded one
-        run: make fips-closure-standard
-
-      - name: Check the cryptographic dependency closure has not drifted
-        run: |
-          make fips-closure
-          git diff --exit-code docs/reference/fips-crypto-closure.txt \
-            || { echo "::error::cryptographic dependency closure changed; review docs/reference/fips-140-3.md and commit the regenerated closure"; exit 1; }
-      - name: Save the Go caches
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.go-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
           path: |
@@ -321,8 +227,8 @@ jobs:
 
 
   docker-local:
-    # Runs on a push to main, with FULL_CI=true, manually, and on a pull request that changes go.mod, go.sum or a Dockerfile
-    # (the `image` flag of the changes job). Trivy reports to the Security tab, so the job may write security events.
+    # Runs nightly, with FULL_CI=true, manually, and on a pull request that changes go.mod, go.sum or a Dockerfile (the
+    # `image` flag of the changes job). Trivy reports to the Security tab, so the job may write security events.
     needs: changes
     if: needs.changes.outputs.image == 'true'
     runs-on: ubuntu-latest
@@ -339,11 +245,6 @@ jobs:
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
         with:
           go-version-file: 'flagd/go.mod'
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
-        with:
-          platforms: all
 
       - name: Set up Docker Buildx
         id: buildx
@@ -408,7 +309,7 @@ jobs:
       - name: Run test suite
         run: make workspace-clean && cd test/integration && go clean -testcache && go test -cover
       - name: Save the Go caches
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.go-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
           path: |
@@ -449,10 +350,46 @@ jobs:
           restore-keys: go-upgrade-test-
       - name: Today's flagd and the flagd-full the Builder made, side by side (UC-009)
         run: make upgrade-test
+      - name: Save the Go caches
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.go-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ steps.go-cache.outputs.cache-primary-key }}
+
+
+  # The reference Dockerfile's images, as OCI layouts and loaded locally (UC-002): when the Builder's reference Dockerfile,
+  # the image tests or a Dockerfile change (the `reference` flag of the changes job), and nightly.
+  image-test:
+    name: Image tests
+    needs: changes
+    if: needs.changes.outputs.reference == 'true'
+    runs-on: ubuntu-latest
+    # go test has a 60 minute timeout; this keeps a hung Docker build from holding a runner for GitHub's six hours
+    timeout-minutes: 75
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - name: Setup go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
+        with:
+          go-version-file: 'flagd/go.mod'
+          cache: false
+      - name: Restore the Go caches
+        id: go-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-image-test-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-image-test-
       - name: The reference Dockerfile's images, as OCI layouts and loaded locally (UC-002)
         run: make image-test
       - name: Save the Go caches
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.go-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
           path: |
@@ -463,47 +400,27 @@ jobs:
 
   release-dry-run:
     name: Release dry run (${{ matrix.part }})
-    # Runs the full set on a push to `main`, with FULL_CI=true and when the workflow is run manually. Otherwise only the gate
-    # step runs. A pull request opts into the reduced set with the release-check label (release-check.yaml). One job per
-    # part, in parallel.
+    # Runs the full set nightly, with FULL_CI=true and when the workflow is run manually. A pull request opts into the
+    # reduced set with the release-check label (release-check.yaml). One job per part, in parallel.
+    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
-        part: [flagd-standard, flagd-fips, flagd-proxy-standard, flagd-proxy-fips, images, distributions]
+        part: [flagd-standard, flagd-proxy-standard, images, distributions]
     steps:
       - name: Checkout repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
         with:
           fetch-depth: 0
-      - name: Does the release dry run apply to this change?
-        id: gate
-        env:
-          FULL_CI: ${{ vars.FULL_CI }}
-          EVENT: ${{ github.event_name }}
-          REF: ${{ github.ref }}
-        run: |
-          run=false
-          if [ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]; then
-            run=true
-            echo "::notice::The release dry run runs: FULL_CI or a manual run."
-          elif [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]; then
-            run=true
-            echo "::notice::The release dry run runs: a push to main."
-          else
-            echo "::notice::The release dry run is skipped. It runs on a push to main, with FULL_CI, manually, or on a pull request labeled release-check (release-check.yaml)."
-          fi
-          echo "run=$run" >> "$GITHUB_OUTPUT"
       - name: Setup go
-        if: steps.gate.outputs.run == 'true'
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
         with:
           go-version-file: 'flagd/go.mod'
           cache: false
       - name: Restore the Go caches
         id: go-cache
-        if: steps.gate.outputs.run == 'true'
         uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
           path: |
@@ -512,7 +429,6 @@ jobs:
           key: go-release-dry-run-${{ matrix.part }}-${{ hashFiles('**/go.sum') }}
           restore-keys: go-release-dry-run-${{ matrix.part }}-
       - name: Install cyclonedx-gomod
-        if: steps.gate.outputs.run == 'true'
         # The release's action resolves its version through the GitHub API, which rate-limits a runner without a token.
         # v1.12.0 is what that action's `version: v1` resolves to; the module proxy needs no GitHub API.
         run: |
@@ -520,12 +436,11 @@ jobs:
           gobin="$(go env GOBIN)"
           echo "${gobin:-$(go env GOPATH)/bin}" >> "$GITHUB_PATH"
       - name: The release's build steps, without publishing or signing anything (UC-009, UC-012)
-        if: steps.gate.outputs.run == 'true'
         env:
           DRY_RUN_PART: ${{ matrix.part }}
         run: .github/scripts/release-dry-run.sh
       - name: Save the Go caches
-        if: steps.gate.outputs.run == 'true' && github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.go-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
           path: |
@@ -622,7 +537,7 @@ jobs:
           RELAY_LOAD_LOGS: ${{ runner.temp }}/load-logs
         run: make test-load-smoke
       - name: Save the Go caches
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.go-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
           path: |
@@ -637,11 +552,10 @@ jobs:
           path: ${{ runner.temp }}/load-logs
           if-no-files-found: ignore
 
-  # The full 10 minute run: gated, like fips and docker-local.
+  # The full 10 minute run: nightly, with FULL_CI=true and from a manual run.
   load-test:
     name: Load test (race, 10 min)
-    # Gated during the proof of concept: set the repository variable FULL_CI=true, or run the workflow manually.
-    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'
+    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -667,7 +581,7 @@ jobs:
           RELAY_LOAD_LOGS: ${{ runner.temp }}/load-logs
         run: make test-load
       - name: Save the Go caches
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.go-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
           path: |
