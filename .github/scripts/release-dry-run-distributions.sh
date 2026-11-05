@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # The release dry run of the standard distributions (UC-012, Q8). Nothing is pushed, signed or tagged.
 #
-# flagd-minimal takes the full path: the 11 archives of a release, standard and FIPS images for linux/amd64 and
-# linux/arm64 as OCI layouts with attestations, the FIPS refusal and `version --verbose`. flagd-minimal-otel, flagd-cloud, flagd-kubernetes
+# flagd-minimal takes the full path: the archives of a release, an image for linux/amd64 and linux/arm64 as an OCI
+# layout with attestations, and `version --verbose`. flagd-minimal-otel, flagd-cloud, flagd-kubernetes
 # and flagd-sync are checked on what differs: the archive names of BR-012, one linux/amd64 archive with its
 # contents, and `version --verbose`. flagd-full is released under flagd's names by the flagd checks of release-dry-run.sh.
 #
 # DRY_RUN_DISTS names the distributions to check (default: all five); DRY_RUN_SCOPE=reduced builds the full path's archives for
-# linux/amd64 only (one standard, one FIPS) and keeps its images and every check.
+# linux/amd64 only and keeps its image and every check.
 #
 # usage: [DRY_RUN_DISTS="flagd-sync ..."] [DRY_RUN_SCOPE=full] release-dry-run-distributions.sh <version without v> <commit> <date> <staging directory>
 #
@@ -59,15 +59,11 @@ for d in ${selected}; do
   GOWORK=off "${out}/relay-builder" --manifest "distributions/${d}/manifest.yaml" --skip-compile >/dev/null
 done
 
-archive_names() { # <name> <variants: standard fips> [platform labels]
+archive_names() { # <name> <variants: standard> [platform labels]
   local name="$1"
   if [[ " $2 " == *" standard "* ]]; then
     for label in ${3:-Darwin_arm64 Darwin_x86_64 Linux_arm64 Linux_x86_64}; do echo "${name}_${version}_${label}.tar.gz"; done
     [ -n "${3:-}" ] || for label in Windows_x86_64 Windows_i386; do echo "${name}_${version}_${label}.zip"; done
-  fi
-  if [[ " $2 " == *" fips "* ]]; then
-    for label in Darwin_arm64 Darwin_x86_64 Linux_arm64 Linux_x86_64; do echo "${name}-fips_${version}_${label}.tar.gz"; done
-    echo "${name}-fips_${version}_Windows_x86_64.zip"
   fi
 }
 
@@ -100,9 +96,9 @@ name="$(published_name "${d}")"
 dir="${out}/${d}"
 RELEASE_PLATFORMS="${platforms}" .github/scripts/release-build.sh "${name}" "${version}" "${commit}" "${date}" "${dir}" "distributions/${d}/build"
 if [ -n "${platforms}" ]; then
-  expected="$(echo "${name}_${version}_Linux_x86_64.tar.gz"; echo "${name}-fips_${version}_Linux_x86_64.tar.gz")"
+  expected="${name}_${version}_Linux_x86_64.tar.gz"
 else
-  expected="$(archive_names "${name}" "standard fips")"
+  expected="$(archive_names "${name}" standard)"
 fi
 check_archives "${name}" "${dir}" "${expected}"
 tar -xzf "${dir}/${name}_${version}_Linux_x86_64.tar.gz" -C "${dir}" "./${name}_linux_x86_64"
@@ -110,17 +106,6 @@ add_size "${name}" "${dir}/${name}_linux_x86_64"
 expect_equal "${name}: build info path" "github.com/open-feature-forking/openfeature-relay/distributions/${d}" \
   "$(go version -m "${dir}/${name}_linux_x86_64" | awk '$1 == "path" {print $2}')"
 check_version "${name}" "${dir}/${name}_linux_x86_64"
-tar -xzf "${dir}/${name}-fips_${version}_Linux_x86_64.tar.gz" -C "${dir}" "./${name}-fips_linux_amd64"
-go version -m "${dir}/${name}-fips_linux_amd64" | grep -q -- '-tags=fips140,fips140v1.0' \
-  && note "- ok: ${name}: the FIPS build carries the tags fips140 and fips140v1.0" \
-  || fail "${name}: the FIPS archive is not a FIPS 140-3 build"
-# BR-007: FIPS mode cannot be switched off in the FIPS binary
-if GODEBUG=fips140=off timeout 20 "${dir}/${name}-fips_linux_amd64" start -f file:./config/samples/example_flags.flagd.json >/dev/null 2>&1; then
-  fail "${name}: the FIPS binary runs with GODEBUG=fips140=off"
-else
-  note "- ok: ${name}: the FIPS binary refuses GODEBUG=fips140=off"
-fi
-
 # the image: both platforms, as an OCI layout with provenance, an SBOM and the proof-of-concept marking
 # (Q6, Q11, step 17). The layouts are what publish-images.sh pushes; the amd64 image is run from the layout. The default
 # driver cannot export OCI, so a throwaway container builder does.
@@ -136,7 +121,7 @@ for d in ${others}; do
   chosen "${d}" || continue
   name="$(published_name "${d}")"
   dir="${out}/${d}"
-  RELEASE_PLATFORMS=linux/amd64 RELEASE_VARIANTS=standard \
+  RELEASE_PLATFORMS=linux/amd64 \
     .github/scripts/release-build.sh "${name}" "${version}" "${commit}" "${date}" "${dir}" "distributions/${d}/build"
   check_archives "${name}" "${dir}" "${name}_${version}_Linux_x86_64.tar.gz"
   tar -xzf "${dir}/${name}_${version}_Linux_x86_64.tar.gz" -C "${dir}" "./${name}_linux_x86_64"

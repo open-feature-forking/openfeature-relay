@@ -16,6 +16,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 )
 
 // Component is a component module of the manifest, as the generated source imports it.
@@ -47,7 +48,32 @@ type Tool struct {
 	Log io.Writer
 }
 
+// retryDelays are the waits before the second and the third attempt of a call that failed on the network.
+var retryDelays = []time.Duration{2 * time.Second, 5 * time.Second}
+
+// transient matches the output of a call that failed because the module proxy or the network dropped a request; a
+// call that failed for another reason, such as a compile error or a module the proxy answers 404 for, is not repeated.
+var transient = regexp.MustCompile(`stream error|INTERNAL_ERROR|i/o timeout|TLS handshake|connection reset|error reading from server: EOF|no such host|proxy\.golang\.org\S*: 5\d\d `)
+
+// run runs the go binary, again after a wait when it failed on the network (see transient).
 func (t Tool) run(ctx context.Context, dir string, env []string, args ...string) ([]byte, []byte, error) {
+	for attempt := 0; ; attempt++ {
+		stdout, stderr, err := t.runOnce(ctx, dir, env, args...)
+		if err == nil || attempt == len(retryDelays) || !transient.Match(stderr) {
+			return stdout, stderr, err
+		}
+		if t.Log != nil {
+			fmt.Fprintf(t.Log, "go %s failed on the network, attempt %d of %d\n", strings.Join(args, " "), attempt+1, len(retryDelays)+1)
+		}
+		select {
+		case <-time.After(retryDelays[attempt]):
+		case <-ctx.Done():
+			return stdout, stderr, err
+		}
+	}
+}
+
+func (t Tool) runOnce(ctx context.Context, dir string, env []string, args ...string) ([]byte, []byte, error) {
 	bin := t.Go
 	if bin == "" {
 		bin = "go"

@@ -29,6 +29,7 @@ import (
 	flageval "github.com/open-feature-forking/openfeature-relay/service/flag-evaluation"
 	flagsync "github.com/open-feature-forking/openfeature-relay/service/flag-sync"
 	"github.com/open-feature-forking/openfeature-relay/service/ofrep"
+	"github.com/open-feature-forking/openfeature-relay/runtime/internal/porttest"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/http2"
 )
@@ -61,6 +62,9 @@ func officialSettings(t *testing.T, factory service.Factory) (service.Settings, 
 
 func serveFactory(t *testing.T, factory service.Factory, settings service.Settings) {
 	t.Helper()
+	if settings.Listen == nil {
+		settings.Listen = porttest.Listen
+	}
 	endpoint, err := factory.Create(settings)
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -358,10 +362,10 @@ func TestRuntimeStartsAnyEndpointSet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			p := newPorts(t)
 			cfg := characterizedConfig(t, p)
-			rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, Components{
+			rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, listening(Components{
 				Sync:                 officialset.Components().Sync,
 				ConfigurationFormats: officialset.Components().ConfigurationFormats, Evaluators: officialset.Components().Evaluators, Endpoints: tt.endpoints,
-			})
+			}))
 			require.NoError(t, err)
 			require.Equal(t, tt.evaluator, rt.Evaluator != nil, "an evaluator is built only for an endpoint that needs one")
 			require.Len(t, rt.Endpoints, len(tt.endpoints))

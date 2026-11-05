@@ -14,3 +14,7 @@ require (
 	github.com/ohler55/ojg v1.28.1 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 )
+
+require github.com/open-feature-forking/openfeature-relay/test/porttest v0.0.0
+
+replace github.com/open-feature-forking/openfeature-relay/test/porttest => ../porttest

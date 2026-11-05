@@ -3,48 +3,53 @@ resolver
   2. creates from what it declared
   3. serves and returns within the budget with its connections ended
   4. a serve error is returned
-  5. resolves through the injected resolver with the effective selector
-  6. publishes one evaluation event per resolved flag
-  7. serves the documents of the requested format, unchanged, with versions (not applicable: Without: Documents)
-  8. the validator follows the document version (not applicable: Without: Validator)
-  9. reacts to a configuration change event for its selector only (not applicable: Without: Listen)
-  10. relays events marked in-process (not applicable: Without: SendEvents)
-  11. honours the bound selector and the client's selector
+  5. opens its listeners through Settings.Listen
+  6. resolves through the injected resolver with the effective selector
+  7. publishes one evaluation event per resolved flag
+  8. serves the documents of the requested format, unchanged, with versions (not applicable: Without: Documents)
+  9. the validator follows the document version (not applicable: Without: Validator)
+  10. reacts to a configuration change event for its selector only (not applicable: Without: Listen)
+  11. relays events marked in-process (not applicable: Without: SendEvents)
+  12. honours the bound selector and the client's selector
 vendor evaluator
   1. declarations
   2. creates from what it declared
   3. serves and returns within the budget with its connections ended
   4. a serve error is returned
-  5. resolves through the injected resolver with the effective selector
-  6. publishes one evaluation event per resolved flag
-  7. serves the documents of the requested format, unchanged, with versions (not applicable: Without: Documents)
-  8. the validator follows the document version (not applicable: Without: Validator)
-  9. reacts to a configuration change event for its selector only (not applicable: Without: Listen)
-  10. relays events marked in-process (not applicable: Without: SendEvents)
+  5. opens its listeners through Settings.Listen
+  6. resolves through the injected resolver with the effective selector
+  7. publishes one evaluation event per resolved flag
+  8. serves the documents of the requested format, unchanged, with versions (not applicable: Without: Documents)
+  9. the validator follows the document version (not applicable: Without: Validator)
+  10. reacts to a configuration change event for its selector only (not applicable: Without: Listen)
+  11. relays events marked in-process (not applicable: Without: SendEvents)
 config server
   1. declarations
   2. creates from what it declared
   3. serves and returns within the budget with its connections ended
   4. a serve error is returned
-  5. serves the documents of the requested format, unchanged, with versions
-  6. the validator follows the document version
-  7. reacts to a configuration change event for its selector only
-  8. relays events marked in-process (not applicable: Without: SendEvents)
+  5. opens its listeners through Settings.Listen
+  6. serves the documents of the requested format, unchanged, with versions
+  7. the validator follows the document version
+  8. reacts to a configuration change event for its selector only
+  9. relays events marked in-process (not applicable: Without: SendEvents)
 collector
   1. declarations
   2. creates from what it declared
   3. serves and returns within the budget with its connections ended
   4. a serve error is returned
-  5. serves the documents of the requested format, unchanged, with versions (not applicable: Without: Documents)
-  6. the validator follows the document version (not applicable: Without: Validator)
-  7. reacts to a configuration change event for its selector only (not applicable: Without: Listen)
-  8. relays events marked in-process
+  5. opens its listeners through Settings.Listen
+  6. serves the documents of the requested format, unchanged, with versions (not applicable: Without: Documents)
+  7. the validator follows the document version (not applicable: Without: Validator)
+  8. reacts to a configuration change event for its selector only (not applicable: Without: Listen)
+  9. relays events marked in-process
 silent
   1. declarations
   2. creates from what it declared
   3. serves and returns within the budget with its connections ended
   4. a serve error is returned
-  5. serves the documents of the requested format, unchanged, with versions (not applicable: Without: Documents)
-  6. the validator follows the document version (not applicable: Without: Validator)
-  7. reacts to a configuration change event for its selector only (not applicable: Without: Listen)
-  8. relays events marked in-process (not applicable: Without: SendEvents)
+  5. opens its listeners through Settings.Listen
+  6. serves the documents of the requested format, unchanged, with versions (not applicable: Without: Documents)
+  7. the validator follows the document version (not applicable: Without: Validator)
+  8. reacts to a configuration change event for its selector only (not applicable: Without: Listen)
+  9. relays events marked in-process (not applicable: Without: SendEvents)

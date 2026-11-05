@@ -169,7 +169,7 @@ func buildReported(t *testing.T, cfg Config, components Components) (*Runtime, f
 	t.Helper()
 	core, logs := observer.New(zap.DebugLevel)
 	report := &runReport{logs: logs}
-	rt, err := FromConfig(logger.NewLogger(zap.New(core), false), "test", cfg, components)
+	rt, err := FromConfig(logger.NewLogger(zap.New(core), false), "test", cfg, listening(components))
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)

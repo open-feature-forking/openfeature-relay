@@ -71,7 +71,9 @@ type Settings struct {
 	Sources []string
 	// Config holds the endpoint's own settings.
 	Config map[string]any
-	// Listen opens the endpoint's listeners; see ListenFunc. Nil means net.Listen.
+	// Listen opens the endpoint's listeners; see ListenFunc. Nil means net.Listen. An endpoint opens every listener it serves on
+	// through it and never calls net.Listen itself (UC-004 BR-012): the testbed's listener gate and embedders that hand over a
+	// listener they opened earlier decide how it listens.
 	Listen ListenFunc
 }
 

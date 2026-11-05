@@ -26,7 +26,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"sort"
 	"strconv"
@@ -111,7 +110,8 @@ type endpoint struct {
 
 // Serve implements service.Endpoint: it serves until ctx ends, then ends the open long polls and returns.
 func (e *endpoint) Serve(ctx context.Context) error {
-	listener, err := net.Listen("tcp", ":"+strconv.Itoa(e.port))
+	// the distribution decides how the endpoint listens (Settings.Listen); nil means net.Listen
+	listener, err := e.settings.Listen.Or()("tcp", ":"+strconv.Itoa(e.port))
 	if err != nil {
 		return fmt.Errorf("the %s endpoint cannot listen: %w", Type, err)
 	}

@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -41,7 +40,7 @@ type extensionEndpoint struct {
 }
 
 func (e extensionEndpoint) Serve(ctx context.Context) error {
-	listener, err := net.Listen("tcp", ":"+strconv.Itoa(e.port))
+	listener, err := e.settings.Listen.Or()("tcp", ":"+strconv.Itoa(e.port))
 	if err != nil {
 		return err
 	}
@@ -86,7 +85,7 @@ func TestRuntimeStartsExtensionEndpoint(t *testing.T) {
 	extensionPort := int(freePort(t))
 	cfg.EndpointSettings = map[string]map[string]any{extensionFactory{}.Type(): {"port": extensionPort}}
 
-	rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, withFlagd(Components{Endpoints: []service.Factory{extensionFactory{}}}))
+	rt, err := FromConfig(logger.NewLogger(nil, false), "test", cfg, listening(withFlagd(Components{Endpoints: []service.Factory{extensionFactory{}}})))
 	require.NoError(t, err)
 	require.Len(t, rt.Endpoints, 1)
 	require.Equal(t, "extension-api", rt.Endpoints[0].Type)

@@ -36,7 +36,7 @@
 **Trigger:** The current deployment runs the FIPS build of flagd (step 1)  
 **Flow:**
 
-1. Operator selects the FIPS build of flagd-full under the names of BR-007: the binary archive `flagd-fips_<version>_<OS>_<arch>` or the image `ghcr.io/open-feature/flagd` with the `-fips` tag suffix.
+1. Operator builds a FIPS build of flagd-full with the builder, as [Build a FIPS distribution](../relay/fips.md) shows: the relay's releases publish no FIPS archive and no `-fips` image, unlike today's flagd (C-009). CI does not verify the FIPS build.
 2. Use case continues at step 2.
 
 ### A2: Source With Unrecognized Scheme
@@ -115,7 +115,7 @@ The flag evaluation and OFREP service endpoints record one evaluation span per e
 
 ### BR-007: Release Names
 
-Binary archives follow today's release pattern with the distribution name in the product position, and FIPS builds add `-fips` to it: flagd-full keeps `flagd_<version>_<OS>_<arch>` and `flagd-fips_<version>_<OS>_<arch>`; every other standard distribution is `flagd-<distribution>_<version>_<OS>_<arch>` and `flagd-<distribution>-fips_<version>_<OS>_<arch>`, e.g. `flagd-sync-fips_<version>_Linux_x86_64`. flagd-full's image stays `ghcr.io/open-feature/flagd`, the others are `ghcr.io/open-feature/flagd-<distribution>`, and FIPS images add `-fips` to their tags (UC-012).
+Binary archives follow today's release pattern with the distribution name in the product position: flagd-full keeps `flagd_<version>_<OS>_<arch>`; every other standard distribution is `flagd-<distribution>_<version>_<OS>_<arch>`. flagd-full's image stays `ghcr.io/open-feature/flagd`, the others are `ghcr.io/open-feature/flagd-<distribution>` (UC-012). No FIPS archive or `-fips` image is released (C-009).
 
 ### BR-008: No Staleness Limit by Default
 
