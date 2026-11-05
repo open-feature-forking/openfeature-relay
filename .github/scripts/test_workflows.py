@@ -109,7 +109,7 @@ class BuildWorkflow(unittest.TestCase):
 
     def test_gated_jobs(self):
         gate = "if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'"
-        for name in ("fips", "docker-local", "testbed-rpc-outages", "testbed-grpc-sync"):
+        for name in ("docker-local", "testbed-rpc-outages", "testbed-grpc-sync"):
             with self.subTest(job=name):
                 self.assertIn(gate, self.job(name))
         self.assertIn("if: github.event_name == 'pull_request'", self.job("benchmark"))
@@ -139,7 +139,7 @@ class BuildWorkflow(unittest.TestCase):
         return {m.group(1): part for part in parts if (m := re.match(r"  ([a-z0-9-]+):", part))}
 
     CACHED_JOBS = ("lint", "docs-check", "test", "builder-e2e", "fips", "integration-test", "upgrade-test", "release-dry-run")
-    GATED_CACHED_JOBS = ("upgrade-test", "release-dry-run")
+    GATED_CACHED_JOBS = ("fips", "upgrade-test", "release-dry-run")
     ON_MAIN = "github.ref == 'refs/heads/main' && github.event_name == 'push'"
 
     def test_go_caches_are_saved_only_on_main(self):
@@ -176,7 +176,7 @@ class BuildWorkflow(unittest.TestCase):
         """P0: a pull request's change set is its merge commit against the first parent. base.sha is where the pull
         request was opened and holds what the base gained since."""
         jobs = self.all_jobs()
-        for name in ("upgrade-test", "testbed"):
+        for name in ("upgrade-test", "testbed", "fips"):
             with self.subTest(job=name):
                 job = jobs[name]
                 self.assertIn("BASE: ${{ github.event.before }}\n", job)
@@ -209,6 +209,23 @@ class BuildWorkflow(unittest.TestCase):
         for path in ("README.md", "docs/vision.md", "Makefile"):
             with self.subTest(path=path):
                 self.assertFalse(re.search(pattern, path), path)
+
+    def test_fips_runs_on_go_changes_with_the_submodule(self):
+        """Coverage gap 2: runtime/cmd's tests need the test-harness submodule; the job runs on a push to main, FULL_CI,
+        a manual run and a pull request that changes Go code, and every step after the checkout waits for the gate."""
+        job = self.all_jobs()["fips"]
+        self.assertNotRegex(job, r"\n    if:")
+        self.assertIn("git submodule update --init test-harness", job)
+        self.assertLess(job.index("git submodule update --init test-harness"), job.index("make test-fips"))
+        pattern = re.search(r"pattern='([^']*)'", job).group(1)
+        self.assertTrue(re.search(pattern, "core/pkg/x.go"))
+        self.assertTrue(re.search(pattern, "sync/http/go.sum"))
+        self.assertFalse(re.search(pattern, "README.md"))
+        self.assertIn('[ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]', job)
+        steps = re.split(r"(?m)^      - ", job.split("\n    steps:\n", 1)[1])[1:]
+        ungated = [s.splitlines()[0] for s in steps if "steps.gate.outputs.run == 'true'" not in s]
+        self.assertEqual(["name: Checkout repository", "name: Fetch the commit before the push",
+                          "name: Does the FIPS job apply to this change?"], ungated)
 
     def test_outage_job_compares_both_images(self):
         """UC-022 Q16: the gated job runs the RPC suite with the outage scenarios against both images."""

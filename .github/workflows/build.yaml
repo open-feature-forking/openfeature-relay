@@ -297,8 +297,8 @@ jobs:
 
   fips:
     name: FIPS 140-3
-    # Gated during the proof of concept: set the repository variable FULL_CI=true, or run the workflow manually.
-    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'
+    # Runs on a push to main, with FULL_CI=true, manually, and on a pull request that changes Go code, the Makefile or this
+    # workflow (the pattern in the gate step). Otherwise only the gate step runs.
     runs-on: ubuntu-latest
     env:
       GOPATH: /home/runner/work/open-feature/flagd
@@ -306,12 +306,52 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+        with:
+          fetch-depth: 2
+      - name: Fetch the commit before the push
+        if: github.event_name == 'push'
+        run: git fetch --no-tags --depth=1 origin "${{ github.event.before }}" || true
+      - name: Does the FIPS job apply to this change?
+        id: gate
+        env:
+          FULL_CI: ${{ vars.FULL_CI }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          # for a push, the commits it brought
+          BASE: ${{ github.event.before }}
+          HEAD: ${{ github.sha }}
+        run: |
+          # A pull request's own changes are its merge commit against the first parent: the base as it is now.
+          if [ "$EVENT" = pull_request ]; then BASE=$(git rev-parse "$HEAD^1"); fi
+          pattern='\.go$|(^|/)go\.(mod|sum)$|^Makefile$|^\.github/workflows/build\.yaml$'
+          run=false
+          if [ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]; then
+            run=true
+            echo "::notice::The FIPS job runs: FULL_CI or a manual run."
+          elif [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]; then
+            run=true
+            echo "::notice::The FIPS job runs: a push to main."
+          elif [ -z "$BASE" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "::notice::No base to compare with: the FIPS job is skipped. Run the workflow manually or set FULL_CI."
+          else
+            hits=$(git diff --name-only "$BASE" "$HEAD" | grep -E "$pattern" || true)
+            if [ -n "$hits" ]; then
+              run=true
+              echo "::notice::The FIPS job runs: this change touches Go code or the build."
+              printf '%s\n' "$hits" | head -10
+            else
+              echo "::notice::The FIPS job is skipped: no Go code or build file changed. Set FULL_CI or run the workflow manually to run it."
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
       - name: Setup go
+        if: steps.gate.outputs.run == 'true'
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
         with:
           go-version-file: 'flagd/go.mod'
           cache: false
       - name: Restore the Go caches
+        if: steps.gate.outputs.run == 'true'
         id: go-cache
         uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
@@ -320,19 +360,27 @@ jobs:
             ~/.cache/go-build
           key: go-fips-${{ hashFiles('**/go.sum') }}
           restore-keys: go-fips-
+      # TestLoadConfig* in runtime/cmd read the evaluator suite from the test-harness submodule
+      - name: Fetch the testbed's evaluator suite
+        if: steps.gate.outputs.run == 'true'
+        run: git submodule update --init test-harness
       - run: make workspace-init
+        if: steps.gate.outputs.run == 'true'
 
       # Fails if any tested code path reaches a non-approved algorithm.
       - name: Test the FIPS variant with strict enforcement
+        if: steps.gate.outputs.run == 'true'
         run: make test-fips
 
       - name: Build both variants
+        if: steps.gate.outputs.run == 'true'
         run: |
           set -euo pipefail
           make build-flagd
           make build-flagd-fips
 
       - name: The standard build must not claim FIPS
+        if: steps.gate.outputs.run == 'true'
         run: |
           set -euo pipefail
           version_output=$(./bin/flagd version)
@@ -342,6 +390,7 @@ jobs:
           GODEBUG=fips140=off ./bin/flagd version >/dev/null
 
       - name: The FIPS build must carry and require the certified module
+        if: steps.gate.outputs.run == 'true'
         run: |
           set -euo pipefail
           build_info=$(go version -m ./bin/flagd-fips)
@@ -357,6 +406,7 @@ jobs:
           fi
 
       - name: A fips140-tagged build without GOFIPS140 must refuse to start
+        if: steps.gate.outputs.run == 'true'
         run: |
           set -euo pipefail
           go build -tags fips140 -o /tmp/flagd-mismatch ./flagd
@@ -365,18 +415,21 @@ jobs:
           fi
 
       - name: Build the FIPS variant of every standard distribution
+        if: steps.gate.outputs.run == 'true'
         run: make build-standard-fips
 
       - name: The FIPS crypto closure of every standard distribution is within the recorded one
+        if: steps.gate.outputs.run == 'true'
         run: make fips-closure-standard
 
       - name: Check the cryptographic dependency closure has not drifted
+        if: steps.gate.outputs.run == 'true'
         run: |
           make fips-closure
           git diff --exit-code docs/reference/fips-crypto-closure.txt \
             || { echo "::error::cryptographic dependency closure changed; review docs/reference/fips-140-3.md and commit the regenerated closure"; exit 1; }
       - name: Save the Go caches
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        if: steps.gate.outputs.run == 'true' && github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
           path: |
