@@ -6,11 +6,11 @@
 **Use Case Name:** Verify Change Against Distributions  
 **Primary Actor:** Maintainer  
 **Secondary Actors:** GitHub Actions, flagd Test Harness  
-**Goal:** Know before a change is merged whether it keeps every standard distribution building, keeps flagd-full compatible with today's flagd, keeps flagd-sync rejecting what flagd-full rejects, and keeps evaluation performance and dependency boundaries within their limits.  
+**Goal:** Know before a change is merged whether it keeps every standard distribution building, keeps flagd-full compatible with today's flagd, keeps flagd-sync rejecting what flagd-full rejects, and keeps flagd-minimal correct under concurrent clients, and keeps evaluation performance and dependencies within their limits.  
 **Trigger:** A pull request against main is opened or updated  
 **Status:** Tested  
 
-**Requirements:** [FR-026, FR-032, NFR-001, NFR-004, NFR-005, NFR-007, NFR-011, C-009, C-010](../requirements.md)
+**Requirements:** [FR-026, FR-032, NFR-001, NFR-004, NFR-005, NFR-007, NFR-011, NFR-012, NFR-017, C-009, C-010](../requirements.md)
 
 ## Preconditions
 
@@ -22,14 +22,15 @@
 ## Main Success Scenario
 
 1. Maintainer opens or updates a pull request with a change to main.
-2. GitHub Actions runs the linters, including the dependency rules, and the unit tests of every module.
+2. GitHub Actions runs the linters, including the dependency rules and the check that no Go file imports and no go.mod directly requires `golang.org/x/exp` (NFR-012), and the unit tests of every module.
 3. GitHub Actions builds every standard distribution from its manifest, with the modules of the change in place of their released versions, as a standard build and a FIPS build.
 4. GitHub Actions checks that the binary of flagd-minimal links no module listed in NFR-004 and its packages import none, that the binary of flagd-sync links no evaluator module and no JsonLogic module and its packages import none, and that neither the evaluator module nor the flagd configuration format module depends on a package listed in NFR-005.
 5. GitHub Actions builds the flagd-full image of the change and runs the flagd Test Harness RPC and in-process suites against it with the tag selection of today's flagd.
 6. GitHub Actions gives flagd-sync and flagd-full each flag configuration of the set and checks that flagd-sync rejects every flag configuration flagd-full rejects and accepts every one flagd-full accepts.
-7. GitHub Actions runs the evaluator benchmarks on the change and on the pull request's base commit and compares allocations and time per operation of each benchmark.
-8. GitHub Actions reports the result of each check on the pull request.
-9. Maintainer sees that all checks passed and knows the change keeps every standard distribution building, flagd-full compatible and flagd-sync consistent with flagd-full.
+7. GitHub Actions builds flagd-minimal from the change with the race detector, runs concurrent OFREP, flag evaluation and flag sync clients against it for 60 seconds while its flags change, and checks every answer and every stream against the flag generations written (NFR-017).
+8. GitHub Actions runs the evaluator benchmarks on the change and on the pull request's base commit and compares allocations and time per operation of each benchmark.
+9. GitHub Actions reports the result of each check on the pull request.
+10. Maintainer sees that all checks passed and knows the change keeps every standard distribution building, flagd-full compatible, flagd-sync consistent with flagd-full and flagd-minimal correct under concurrent clients.
 
 ## Alternative Flows
 
@@ -43,7 +44,7 @@
 
 ### A2: Lint or Unit Test Fails
 
-**Trigger:** A linter, a dependency rule or a unit test fails (step 2)  
+**Trigger:** A linter, a dependency rule, the `golang.org/x/exp` check or a unit test fails (step 2)  
 **Flow:**
 
 1. GitHub Actions reports the failing module, rule or test on the pull request.
@@ -106,7 +107,7 @@
 
 ### A9: Allocation Regression
 
-**Trigger:** A benchmark allocates more per operation than on the pull request's base commit (step 7)  
+**Trigger:** A benchmark allocates more per operation than on the pull request's base commit (step 8)  
 **Flow:**
 
 1. GitHub Actions reports each benchmark that regressed, with both measurements.
@@ -115,12 +116,21 @@
 
 ### A10: Time Deviation Beyond 5%
 
-**Trigger:** A benchmark's time per operation differs from the pull request's base commit by more than 5% while its allocations do not increase (step 7)  
+**Trigger:** A benchmark's time per operation differs from the pull request's base commit by more than 5% while its allocations do not increase (step 8)  
 **Flow:**
 
 1. GitHub Actions reports the benchmark with both measurements as a finding that does not fail the check.
 2. Maintainer decides in the review whether the change needs work.
-3. Use case continues at step 8.
+3. Use case continues at step 9.
+
+### A11: Incorrect Under Concurrent Load
+
+**Trigger:** flagd-minimal answers from a flag generation outside the change window, a stream misses or lags a flag generation, a request fails, flagd-minimal loses readiness or does not exit cleanly, or the race detector reports a data race (step 7)  
+**Flow:**
+
+1. GitHub Actions reports the failed check with the client, the request times and the flag generations, and keeps flagd-minimal's output and the load summary with the run.
+2. Maintainer updates the change.
+3. Use case continues at step 2.
 
 ## Postconditions
 
@@ -131,7 +141,8 @@
 - flagd-full built from the change passes the RPC and in-process suites with today's tag selection, or with a selection the Maintainer accepted in review.
 - flagd-sync rejects and accepts exactly the flag configurations of the set that flagd-full rejects and accepts.
 - No evaluator benchmark allocates more per operation than on the pull request's base commit, and every time deviation beyond 5% is reported on the pull request.
-- flagd-minimal, flagd-sync, the evaluator module and the flagd configuration format module stay inside their dependency boundaries.
+- flagd-minimal, flagd-sync, the evaluator module and the flagd configuration format module stay inside their dependency boundaries, and no module depends directly on `golang.org/x/exp`.
+- flagd-minimal built from the change answers every client from a flag generation inside the change window, every stream sees every flag generation, and the race detector reports nothing.
 
 ### Failure Postconditions
 
@@ -172,6 +183,10 @@ Binaries and images built for verification stay inside the verification run.
 ### BR-008: Same Verdict as flagd-full
 
 flagd-sync and flagd-full are checked against the same set of flag configurations, and flagd-sync gives the same verdict, accept or reject, as flagd-full for each one. A flag configuration added to the set is valid or invalid by flagd-full's verdict, never by flagd-sync's.
+
+### BR-009: Short Load on Every Change
+
+Every pull request that changes more than documentation runs the 60-second concurrency load against flagd-minimal. The 10-minute run with more clients is not part of this verification; it runs on demand or in a full build.
 
 ## Delivered by Later Use Cases
 
