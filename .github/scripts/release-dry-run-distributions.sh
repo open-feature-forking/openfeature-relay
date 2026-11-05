@@ -6,7 +6,10 @@
 # and flagd-sync are checked on what differs: the archive names of BR-012, one linux/amd64 archive with its
 # contents, and `version --verbose`. flagd-full is released under flagd's names by the flagd checks of release-dry-run.sh.
 #
-# usage: release-dry-run-distributions.sh <version without v> <commit> <date> <staging directory>
+# DRY_RUN_DISTS names the distributions to check (default: all five); DRY_RUN_SCOPE=reduced builds the full path's archives for
+# linux/amd64 only (one standard, one FIPS) and keeps its images and every check.
+#
+# usage: [DRY_RUN_DISTS="flagd-sync ..."] [DRY_RUN_SCOPE=full] release-dry-run-distributions.sh <version without v> <commit> <date> <staging directory>
 #
 # Needs Docker with buildx, cyclonedx-gomod and the Go toolchain on PATH, and runs from the root of the repository, on
 # linux/amd64 (it runs the binaries it builds).
@@ -21,6 +24,10 @@ registry=ghcr.io/open-feature
 
 full_path=flagd-minimal
 others="flagd-minimal-otel flagd-cloud flagd-kubernetes flagd-sync"
+selected="${DRY_RUN_DISTS-${full_path} ${others}}"
+platforms=""
+[ "${DRY_RUN_SCOPE:-full}" != reduced ] || platforms="linux/amd64"
+chosen() { [[ " ${selected} " == *" $1 "* ]]; } # <distribution>
 
 failures=0
 note() { echo "$*" | tee -a "${summary}"; }
@@ -46,7 +53,7 @@ note "#### Standard distributions"
 
 mkdir -p "${out}"
 (cd builder && GOWORK=off go build -o "${out}/relay-builder" ./cmd/relay-builder)
-for d in ${full_path} ${others}; do
+for d in ${selected}; do
   GOWORK=off "${out}/relay-builder" --manifest "distributions/${d}/manifest.yaml" --skip-compile >/dev/null
 done
 
@@ -85,11 +92,17 @@ check_version() { # <name> <binary>: BR-003, the stamped version and the distrib
 }
 
 # flagd-minimal: the full path
+if chosen "${full_path}"; then
 d="${full_path}"
 name="$(published_name "${d}")"
 dir="${out}/${d}"
-.github/scripts/release-build.sh "${name}" "${version}" "${commit}" "${date}" "${dir}" "distributions/${d}/build"
-check_archives "${name}" "${dir}" "$(archive_names "${name}" "standard fips")"
+RELEASE_PLATFORMS="${platforms}" .github/scripts/release-build.sh "${name}" "${version}" "${commit}" "${date}" "${dir}" "distributions/${d}/build"
+if [ -n "${platforms}" ]; then
+  expected="$(echo "${name}_${version}_Linux_x86_64.tar.gz"; echo "${name}-fips_${version}_Linux_x86_64.tar.gz")"
+else
+  expected="$(archive_names "${name}" "standard fips")"
+fi
+check_archives "${name}" "${dir}" "${expected}"
 tar -xzf "${dir}/${name}_${version}_Linux_x86_64.tar.gz" -C "${dir}" "./${name}_linux_x86_64"
 add_size "${name}" "${dir}/${name}_linux_x86_64"
 expect_equal "${name}: build info path" "github.com/open-feature-forking/openfeature-relay/distributions/${d}" \
@@ -151,9 +164,11 @@ printed="$(docker run --rm "${local_tag}" version --verbose)"
 expect_equal "${local_tag}: version" "flagd: v${version} (${commit}), built at: ${date}" "$(grep '^flagd:' <<<"${printed}")"
 expect_equal "${local_tag}: distribution" "distribution: ${name} v${version}" "$(grep '^distribution:' <<<"${printed}")"
 docker rmi --force "${local_tag}" >/dev/null 2>&1 || true
+fi
 
 # the other four: only what differs from flagd-minimal
 for d in ${others}; do
+  chosen "${d}" || continue
   name="$(published_name "${d}")"
   dir="${out}/${d}"
   RELEASE_PLATFORMS=linux/amd64 RELEASE_VARIANTS=standard \
@@ -166,7 +181,7 @@ done
 
 # the published manifests (Q10): the placeholder version and no replaces, every module a component module of this repository
 mkdir -p "${out}/manifests"
-for d in ${full_path} ${others}; do
+for d in ${selected}; do
   rendered="${out}/manifests/${d}.yaml"
   if .github/scripts/render-published-manifest.sh "distributions/${d}/manifest.yaml" "${rendered}"; then
     if ! grep -q '^replaces:' "${rendered}" && ! grep -q 'version: v0\.0\.0}' "${rendered}"; then

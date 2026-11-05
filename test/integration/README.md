@@ -61,3 +61,9 @@ or, run without the path, defaulting to the host's root certificate authorities 
 ```shell
 make ARGS="-tls true" integration-test
 ```
+
+## Against a testbed image
+
+By default the suites build flagd from this checkout into the upstream testbed image. `FLAGD_TESTBED_IMAGE=<name:tag>` runs `TestRPC` and `TestInProcess` against an image that already exists, with the same tags.
+`make testbed-suites` runs both suites against the upstream launchpad image and the relay testbed (`distributions/flagd-testbed`) and fails when they pass different scenarios.
+`make testbed-rpc-outages` does the same for `TestRPC` with the `@reconnect`, `@events` and `@grace` scenarios included (`TESTBED_RPC_OUTAGES=true`).

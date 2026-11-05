@@ -95,7 +95,7 @@ func (r *Router) Evaluate(ctx context.Context, req evaluator.Request, dst []eval
 
 	keysOf := make([][]string, len(r.routes))
 	for p, e := range winners {
-		if !contains(keysOf[e.route], p.key) {
+		if !slices.Contains(keysOf[e.route], p.key) {
 			keysOf[e.route] = append(keysOf[e.route], p.key)
 		}
 	}
@@ -241,15 +241,6 @@ func notFound(key string, meta model.Metadata) evaluator.Result {
 		FlagKey: key, Reason: model.ErrorReason, ErrorCode: model.FlagNotFoundErrorCode,
 		ErrorMessage: model.GetErrorMessage(model.FlagNotFoundErrorCode), Metadata: meta,
 	}
-}
-
-func contains(keys []string, key string) bool {
-	for _, k := range keys {
-		if k == key {
-			return true
-		}
-	}
-	return false
 }
 
 func hasResult(results []evaluator.Result, key string) bool {

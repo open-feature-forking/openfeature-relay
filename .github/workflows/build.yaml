@@ -39,9 +39,13 @@ jobs:
       - run: make check-package-coverage
       - run: make check-flagd-full-modules
       - name: Test the workflow characterization
-        run: python3 .github/scripts/test_workflows.py
+        run: |
+          python3 -m pip install pyyaml
+          python3 .github/scripts/test_workflows.py
       - name: Test the benchmark comparison
         run: python3 .github/scripts/test_compare_allocs.py
+      - name: Test the comparison of the pass sets of the testbed suites
+        run: python3 .github/scripts/test_compare_pass_sets.py
       # The module boundary tables include the evaluator boundary (NFR-005), which check-evaluator-boundary names.
       - run: make check-module-boundary check-evaluator-boundary
       # NFR-012: golang.org/x/exp is gone from the sources and from the direct requirements.
@@ -333,11 +337,16 @@ jobs:
         run: make image-test
 
   release-dry-run:
-    name: Release dry run
+    name: Release dry run (${{ matrix.part }})
     # Runs when the release's inputs change (the pattern in the gate step), or with FULL_CI=true, or when the workflow is
-    # run manually. Otherwise only the gate step runs.
+    # run manually. Otherwise only the gate step runs. One job per part, in parallel: a pull request builds the reduced set
+    # (the scope output), `main`, FULL_CI and a manual run the full one.
     runs-on: ubuntu-latest
     timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [flagd-standard, flagd-fips, flagd-proxy-standard, flagd-proxy-fips, images, distributions]
     steps:
       - name: Checkout repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
@@ -350,11 +359,17 @@ jobs:
           EVENT: ${{ github.event_name }}
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD: ${{ github.sha }}
+          REF: ${{ github.ref }}
         run: |
           # the release scripts and the goldens they compare, the release workflow the dry run reads, the Builder and its reference
           # Dockerfile, the distributions and every Dockerfile
           pattern='^\.github/scripts/release-|^\.github/scripts/render-|^\.github/scripts/testdata/|^\.github/workflows/release-please\.yaml$|^builder/|^distributions/|Dockerfile$'
           run=false
+          # full: what a release builds. reduced: linux/amd64 archives and the distributions the change touches.
+          scope=reduced
+          if [ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ] || [ "$REF" = refs/heads/main ]; then scope=full; fi
+          all_dists="flagd-minimal flagd-minimal-otel flagd-cloud flagd-kubernetes flagd-sync"
+          dists="$all_dists"
           if [ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]; then
             run=true
             echo "::notice::The release dry run runs: FULL_CI or a manual run."
@@ -367,11 +382,22 @@ jobs:
               run=true
               echo "::notice::The release dry run runs: this change touches the release or what it builds."
               printf '%s\n' "$hits" | head -10
+              # a reduced run checks only the distributions the change names; a change to anything shared checks them all.
+              # flagd-full is released under flagd's names, so the flagd parts cover it.
+              if [ "$scope" = reduced ] && ! printf '%s\n' "$hits" | grep -qvE '^distributions/(flagd-full|'"${all_dists// /|}"')/'; then
+                dists=""
+                for d in $all_dists; do
+                  ! printf '%s\n' "$hits" | grep -q "^distributions/$d/" || dists="$dists $d"
+                done
+                dists="${dists# }"
+              fi
             else
               echo "::notice::The release dry run is skipped: no release input changed. Set FULL_CI or run the workflow manually to run it."
             fi
           fi
           echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "scope=$scope" >> "$GITHUB_OUTPUT"
+          echo "dists=$dists" >> "$GITHUB_OUTPUT"
       - name: Setup go
         if: steps.gate.outputs.run == 'true'
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
@@ -386,8 +412,85 @@ jobs:
           gobin="$(go env GOBIN)"
           echo "${gobin:-$(go env GOPATH)/bin}" >> "$GITHUB_PATH"
       - name: The release's build steps, without publishing or signing anything (UC-009, UC-012)
-        if: steps.gate.outputs.run == 'true'
+        # the distributions part has nothing to check when a reduced run touches no distribution
+        if: steps.gate.outputs.run == 'true' && (matrix.part != 'distributions' || steps.gate.outputs.dists != '')
+        env:
+          DRY_RUN_PART: ${{ matrix.part }}
+          DRY_RUN_SCOPE: ${{ steps.gate.outputs.scope }}
+          DRY_RUN_DISTS: ${{ steps.gate.outputs.dists }}
         run: .github/scripts/release-dry-run.sh
+
+  testbed:
+    name: Relay testbed
+    # The relay testbed (UC-022) takes the place of the launchpad in the provider test suites, so it is built and compared
+    # with the upstream launchpad image whenever Go code changes outside docs/ and .claude/ (docs/ is ignored above), or
+    # the upgrade differential's inputs, or the testbed itself change. It also runs with FULL_CI=true or a manual run.
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - name: Does the relay testbed apply to this change?
+        id: gate
+        env:
+          FULL_CI: ${{ vars.FULL_CI }}
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.sha }}
+        run: |
+          # any Go source or module file; what the upgrade differential watches; the testbed, its distribution, the suites
+          # and this workflow
+          pattern='\.go$|(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^flagd/|^testbed/|^test/(testbed|integration|upgrade)/|^\.github/scripts/(testbed|compare-pass)|^\.github/workflows/build\.yaml$'
+          run=false
+          if [ "$FULL_CI" = true ] || [ "$EVENT" = workflow_dispatch ]; then
+            run=true
+            echo "::notice::The relay testbed runs: FULL_CI or a manual run."
+          elif [ -z "$BASE" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ]; then
+            echo "::notice::No base to compare with (a new branch): the relay testbed is skipped. Run the workflow manually or set FULL_CI."
+          else
+            changed=$(git diff --name-only "$BASE" "$HEAD" | grep -Ev '^(docs|\.claude)/' || true)
+            hits=$(printf '%s\n' "$changed" | grep -E "$pattern" || true)
+            if [ -n "$hits" ]; then
+              run=true
+              echo "::notice::The relay testbed runs: this change touches Go code or the testbed."
+              printf '%s\n' "$hits" | head -10
+            else
+              echo "::notice::The relay testbed is skipped: no Go code or testbed file changed. Set FULL_CI or run the workflow manually to run it."
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+      - name: Setup go
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
+        with:
+          go-version-file: 'flagd/go.mod'
+      - name: The launchpad contract against both images (the launchpad quirks on the launchpad only)
+        if: steps.gate.outputs.run == 'true'
+        run: make testbed-contract-both
+      - name: TestRPC and TestInProcess against both images, with the same scenarios passed
+        if: steps.gate.outputs.run == 'true'
+        run: make testbed-suites
+
+  testbed-rpc-outages:
+    name: Testbed RPC outages
+    # Gated during the proof of concept: set the repository variable FULL_CI=true, or run the workflow manually.
+    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+        with:
+          submodules: recursive
+      - name: Setup go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
+        with:
+          go-version-file: 'flagd/go.mod'
+      - name: TestRPC with the @reconnect, @events and @grace scenarios, against both images
+        run: make testbed-rpc-outages
 
   testbed-grpc-sync:
     name: Testbed gRPC source
