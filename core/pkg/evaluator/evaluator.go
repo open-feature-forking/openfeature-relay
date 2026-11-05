@@ -39,6 +39,21 @@ type Request struct {
 	Attributes map[string]any
 }
 
+// WantedKeys is the set of keys the request asks for; nil means every key the selector names.
+func (r Request) WantedKeys() map[string]struct{} {
+	if r.Bulk && r.FlagKeys == nil {
+		return nil
+	}
+	if r.FlagKeys == nil {
+		return map[string]struct{}{r.FlagKey: {}}
+	}
+	wanted := make(map[string]struct{}, len(r.FlagKeys))
+	for _, key := range r.FlagKeys {
+		wanted[key] = struct{}{}
+	}
+	return wanted
+}
+
 // Result is the resolution of one flag.
 type Result struct {
 	FlagKey string
