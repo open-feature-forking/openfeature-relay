@@ -30,6 +30,7 @@ import (
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/events"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/eventsink"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/headers"
 )
 
 // Type is the type name of the event sink.
@@ -141,24 +142,13 @@ func parseHeaders(raw any) (http.Header, error) {
 	if raw == nil {
 		return nil, nil
 	}
-	values := map[string]string{}
-	switch m := raw.(type) {
-	case map[string]string:
-		values = m
-	case map[string]any:
-		for name, v := range m {
-			str, ok := v.(string)
-			if !ok {
-				return nil, fmt.Errorf("setting %q: the value of header %q is not a string", SettingHeaders, name)
-			}
-			values[name] = str
-		}
-	default:
-		return nil, fmt.Errorf("setting %q: expected a mapping of header names to strings, observed %T", SettingHeaders, raw)
+	values, err := headers.FromSetting(raw)
+	if err != nil {
+		return nil, fmt.Errorf("setting %q: %w", SettingHeaders, err)
 	}
 	h := make(http.Header, len(values))
 	for name, value := range values {
-		if !validHeaderName(name) {
+		if !headers.ValidName(name) {
 			return nil, fmt.Errorf("setting %q: %q is not a valid header name", SettingHeaders, name)
 		}
 		switch http.CanonicalHeaderKey(name) {
@@ -171,21 +161,6 @@ func parseHeaders(raw any) (http.Header, error) {
 		h.Set(name, value)
 	}
 	return h, nil
-}
-
-// validHeaderName reports whether name is an RFC 9110 token.
-func validHeaderName(name string) bool {
-	if name == "" {
-		return false
-	}
-	for _, c := range name {
-		switch {
-		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', strings.ContainsRune("!#$%&'*+-.^_`|~", c):
-		default:
-			return false
-		}
-	}
-	return true
 }
 
 // Webhook posts batches of events to a URL.
