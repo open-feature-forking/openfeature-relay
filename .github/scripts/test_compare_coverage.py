@@ -20,8 +20,9 @@ def profile(blocks):
     return out
 
 
-def run(base, head, summary=None):
-    """Writes each side's profiles ({file name: text}) to a directory and compares them."""
+def run(base, head, summary=None, trees=None):
+    """Writes each side's profiles ({file name: text}) to a directory and compares them. trees is
+    {"base": [paths], "head": [paths]}, the files of the two checkouts, whose roots are then passed."""
     with tempfile.TemporaryDirectory() as tmp:
         dirs = []
         for side, files in (("base", base), ("head", head)):
@@ -30,11 +31,19 @@ def run(base, head, summary=None):
             for name, text in files.items():
                 (d / name).write_text(text, encoding="utf-8")
             dirs.append(str(d))
+        roots = []
+        for side, paths in (trees or {}).items():
+            for path in paths:
+                f = pathlib.Path(tmp) / f"{side}-root" / path
+                f.parent.mkdir(parents=True, exist_ok=True)
+                f.write_text("package x"+chr(10), encoding="utf-8")
+            (pathlib.Path(tmp) / f"{side}-root").mkdir(exist_ok=True)
+            roots += [f"--{side}-root", str(pathlib.Path(tmp) / f"{side}-root")]
         env = dict(os.environ)
         env.pop("GITHUB_STEP_SUMMARY", None)
         if summary:
             env["GITHUB_STEP_SUMMARY"] = str(pathlib.Path(tmp) / "summary.md")
-        done = subprocess.run([sys.executable, str(SCRIPT), *dirs], capture_output=True, text=True, env=env)
+        done = subprocess.run([sys.executable, str(SCRIPT), *roots, *dirs], capture_output=True, text=True, env=env)
         written = pathlib.Path(env["GITHUB_STEP_SUMMARY"]).read_text(encoding="utf-8") if summary else ""
         return done.returncode, done.stdout + done.stderr, written
 
@@ -66,13 +75,30 @@ class CompareCoverage(unittest.TestCase):
         self.assertEqual(0, code, text)
         self.assertIn("| core/pkg/a | 80.0% | 90.0% | +10.0 |", text)
 
-    def test_new_and_removed_packages_never_fail(self):
-        code, text, _ = run({"core.out": profile({"a/a.go": hundred(80), "gone/g.go": hundred(90)})},
-                            {"core.out": profile({"a/a.go": hundred(80), "new/n.go": hundred(0)})})
+    BASE = {"core.out": profile({"a/a.go": hundred(80), "gone/g.go": hundred(90)})}
+    HEAD = {"core.out": profile({"a/a.go": hundred(80), "new/n.go": hundred(0)})}
+
+    def test_a_new_package_never_fails_and_a_deleted_one_is_listed(self):
+        code, text, _ = run(self.BASE, self.HEAD, trees={"base": ["core/pkg/gone/g.go"], "head": ["core/pkg/a/a.go"]})
         self.assertEqual(0, code, text)
-        self.assertIn("1 new, 1 removed", text)
+        self.assertIn("1 new, 1 removed, 0 without a profile", text)
         self.assertIn("New: core/pkg/new 0.0%", text)
         self.assertIn("Removed: core/pkg/gone", text)
+
+    def test_a_package_without_a_profile_in_the_head_fails(self):
+        # the module stopped writing its profile: the directory still has Go files
+        code, text, _ = run(self.BASE, self.HEAD, trees={"base": ["core/pkg/gone/g.go"], "head": ["core/pkg/gone/g.go"]})
+        self.assertEqual(1, code, text)
+        self.assertIn("::error::core/pkg/gone has a coverage profile in the base and none in the head", text)
+        self.assertIn("No profile in the head: core/pkg/gone", text)
+
+    def test_a_package_whose_directory_is_not_in_the_base_checkout_fails(self):
+        code, text, _ = run(self.BASE, self.HEAD, trees={"base": ["unrelated/x.go"], "head": []})
+        self.assertEqual(1, code, text)
+
+    def test_without_the_checkouts_every_missing_package_fails(self):
+        code, text, _ = run(self.BASE, self.HEAD)
+        self.assertEqual(1, code, text)
 
     def test_packages_are_totalled_over_files_and_profiles(self):
         # a.go and b.go are one package; the second profile covers a block the first did not
