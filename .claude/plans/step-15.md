@@ -1,6 +1,12 @@
 # Step 15 plan: a test job per affected module, one lint job, a lighter build for markdown (issue #176)
 
 **Status: revision 3, final. The project lead has decided QA–QD, and added the spec lint as a CI gate (slice L).**
+
+**Slice R (the release dry run), decided:**
+- **QE (c):** the parts in parallel, and a reduced set on PRs. The full set runs on `main`, with `FULL_CI`, and on `workflow_dispatch`. That is ~8–9 min on a PR and ~11 min on `main`, against 43–71 min today.
+- **QF (a):** `go build -a` stays.
+
+R is ready to implement, from `main`, in parallel with the others. Open: none.
 - Revision 2 resolved `step-15-opposer.md` (1 blocker, 4 major, 6 minor; section 8).
 - Revision 3 records the decisions and the markdown rule that QD added.
 - Open: none.
@@ -200,6 +206,60 @@ While today's serial `test` still runs in full, `changes` also:
 - `test_docs_check_workflow` pins `docs-check.yaml`'s paths and its two jobs;
 - `test_jobs` is unchanged by this part.
 
+### Release dry run (slice R, the project lead's later request)
+
+**The real PR bottleneck.**
+- In the last 100 `build` runs, the release dry run's gate fired on 23. Each of those took **43–71 min** (2559–4255 s), against `test`'s 16.5 min.
+- B1 (#163) is waiting on run 41982722997, which was still in progress when this was written.
+
+**Where the time goes,** from run 41977622128 (job 127080054036; main step 55 min):
+
+| Phase | min | What it builds |
+|---|---|---|
+| flagd archives | 18.0 | 11 cross-compiled `go build -a` (6 standard, 5 FIPS), serial, ~98 s each; SBOM; checks |
+| flagd-proxy archives | 17.6 | the same 11, ~96 s each; flagd-proxy pulls in every sync provider through `sync/builder` |
+| flagd images | 4.1 | `docker build` standard and FIPS, linux/amd64, then the image configuration checks |
+| flagd multi-arch OCI | 3.8 | `buildx` linux/amd64 + linux/arm64 with a fresh `docker-container` builder (cold cache) |
+| flagd-minimal, full path | 6.3 | 11 archives (~25 s each, a small closure) and 2 × 2-platform OCI images with provenance and SBOM |
+| the 4 other distributions | 4.5 | one linux/amd64 archive each, and the published-manifest checks |
+
+**What the measurement rules out:**
+- **arm64 is not emulated.** Both Dockerfiles build in `FROM --platform=$BUILDPLATFORM` with `GOOS=${TARGETOS} GOARCH=${TARGETARCH}`. The arm64 stage is a distroless `COPY`, with no `RUN`, and the job sets up no QEMU. Cross-compiling arm64 in the Dockerfile is already done and would gain nothing.
+- **The 11 targets of one item share no build cache with each other** (GOOS, GOARCH and GOFIPS140 differ), so `-a` costs little within an item. Its cost is across items: flagd-proxy recompiles the dependencies that flagd has just built for the same target. That gain is not measured.
+
+**Constraints:**
+- `release-please.yaml` (K2 hash), `release-build.sh` (which the release calls), and the two Dockerfiles (K3 hashes, and the image drop-in rule) stay unchanged under every option but QF (b);
+- what a release would build and publish stays the same;
+- only the dry run's own scripts and job change.
+
+**Design (QE (c), recommended):**
+- **The job:** `release-dry-run` keeps its id and its gate step, so K2's `test_release_dry_run_runs_when_its_inputs_change` still holds. It becomes a matrix over `part`:
+  - `flagd-standard`, `flagd-fips`, `flagd-proxy-standard`, `flagd-proxy-fips` (`DRY_RUN_ITEMS`, `RELEASE_VARIANTS`);
+  - `images` (the flagd images, the image configuration, the OCI build);
+  - `distributions` (`release-dry-run-distributions.sh`).
+- **The scripts:** `release-dry-run.sh` gains `DRY_RUN_PART`. Each part runs its own checks, and derives its expected archive list from the same lists it builds.
+- **The gate step** adds a `scope` output:
+  - `full` on a push to `main`, on `FULL_CI=true` and on `workflow_dispatch`;
+  - `reduced` on a pull request.
+- **A reduced scope builds:**
+  - `RELEASE_PLATFORMS="linux/amd64"` for each archive part, so one standard and one FIPS archive per item;
+  - the flagd images, and the multi-arch OCI build unchanged, because the platform check is the point;
+  - only the distributions whose `distributions/<d>/` the change touches, every distribution when `builder/`, a Dockerfile or the release scripts change, and flagd-minimal's full path in two archives.
+
+  The step summary says "reduced; the full set runs on `main`".
+- **The first-parent change set** (P0) applies to this gate.
+
+**Estimates:**
+
+| | PR | push to `main`, `FULL_CI` |
+|---|---|---|
+| today | 43–71 min | 43–71 min |
+| QE (a) parallel parts, full set | ~11 min (the longest part: distributions ~11, flagd-standard ~10) | ~11 min |
+| QE (b) reduced set, serial | ~21 min | 43–71 min |
+| QE (c) parallel parts, reduced on PRs | **~8–9 min** (images ~8, with the cold `buildx` builder) | ~11 min |
+
+The parts are 6 jobs against the 20-job limit. Each needs ~30 s of setup and the `cyclonedx-gomod` install.
+
 ## 3. Tests
 
 **Characterization first (PR C):**
@@ -262,13 +322,14 @@ While today's serial `test` still runs in full, `changes` also:
 | C | implementer | `main` | C1–C3; `ci-modules.json`; `test-module` and `lint-modules`, with `test-modules`, `test-flagd` and `test-contrib` looping over `test-module`. `make test` and `make lint` run what they run today | now |
 | P4 | implementer | `main` | QD: the `concurrency` group, the new `paths-ignore`, `docs-check.yaml` with `docs-check` and `upgrade-guide`, and the K2 pins | now |
 | L | implementer | `main` | The spec lint: the three vendored aiup-core 2.28.0 scripts in their layout, `spec-lint.yaml`, `test_spec_lint_workflow` | now |
+| R | implementer | `main` (if P0 merges first, its first-parent `BASE` line is merged in mechanically) | QE (c): `release-dry-run` as a matrix over `part`, with `DRY_RUN_PART` in `release-dry-run.sh`, the `scope` output, and the reduced set on PRs. `release-please.yaml`, `release-build.sh` and the Dockerfiles stay unchanged. Dry runs: a PR touching `builder/` (reduced, every distribution), one touching `distributions/flagd-sync/` (reduced, that one), and a `workflow_dispatch` (full, every check of today green). `test_release_dry_run_parts` pins the parts and that `full` covers today's archive and image lists | now |
 | P1 | implementer | C | `ci-modules.py` (ownership, change set, edges, `extraEdges`, the `go.mod` rule) and the `TestAffected*` tests; the `changes` job in **report-only mode** with the miss report, beside today's `test` and `lint` | after C |
 | P2 | implementer | P1, and P0 merged | the `test-module` matrix and the aggregate `test`; per-module coverage and `codecov.yml`; the restore-only cache for the matrix; K2's job list | after P1 has reported ten PR runs with no miss |
 | P3 | implementer | P2 | `lint` over `lint-modules` and `repo-checks` (QB (a)); K2's job list | after P2 |
 | S | mechanic | `main` (straight to `main`) | `CLAUDE.md` "Local runs and CI": the affected-module matrix, `repo-checks`, everything on `main`, the markdown-only run, and the spec lint now in CI (the Spec gate row and the implementer's "the one gate CI does not run" line) | after P3 |
 
 **The critical path is C → P1 → (the ten reports) → P2 → P3.**
-- P0, C, P4 and L start now, in parallel. L touches no existing workflow.
+- P0, C, P4, L and R start now, in parallel. L touches no existing workflow; R touches only the `release-dry-run` job and its scripts.
 - They touch different parts of `build.yaml`, so their merges into the stack are mechanical; `test_workflows.py` takes one new test per PR.
 - P2 needs P0's cache on `main` before its matrix is measured.
 
@@ -306,6 +367,7 @@ No Go code changes, so no Go gate runs locally.
 - **R5, the aggregate goes green on a skipped job.** It is green only for an empty set with `all` false. Pinned by `test_aggregate_test`.
 - **R6, coverage noise.** Splitting `flagd-coverage.out` and carrying flags forward changes how Codecov groups coverage, once. The upload doesn't fail CI, as today.
 - **R7, markdown that Go reads.** Only two readers exist today: the generated CLI reference and the upgrade guide, and `docs-check.yaml` covers both. A new `go:embed` of a `.md` file, or a new test reading one, would be a third. `TestNoEmbeddedMarkdown` in P4 fails on a `go:embed` pattern that matches `.md`; a test that reads markdown has to be added to `docs-check.yaml`, which R7 says.
+- **R11, a reduced dry run on PRs misses a broken non-Linux or arm64 archive** until the full set runs on `main`. A darwin or Windows build failure surfaces after the merge. Releases are disabled here, so nothing ships from it; `FULL_CI` or a manual run gives a PR the full set.
 - **R10, the vendored spec lint drifts from the plugin.** The header records the version and the sha256. A local run with a newer plugin can disagree with CI until L's files are re-vendored; the CI copy is the gate. The sibling scripts are pinned to exist, so the lint can't silently lose the use-case validator.
 - **R8, K2's job regex.** It already misses two jobs (C3); C fixes it.
 - **R9, drop-in (C-003).** Nothing observable by operators or clients changes; only CI does.
@@ -328,6 +390,8 @@ No Go code changes, so no Go gate runs locally.
 | QA | (b), not the recommendation | The affected-module matrix, with every fix of the opposer: the `go.mod`/`go.sum` rule, `extraEdges`, the derived submodule flag, path-keyed edges, report-only mode with the miss report, and green on an empty set only with `all` false. Section 2 rewritten; P1–P3 restored; per-module coverage with carryforward, as #176 asks |
 | QB | (a), as recommended | One `lint` job over all modules, and `repo-checks` beside it |
 | QC | (c), as recommended | No gate. The compile gate (b) was considered with QA (b) in view and declined (section 7) |
+| QE (release dry run) | (c), as recommended | Slice R: `release-dry-run` as a matrix over six parts; a reduced scope on PRs; full on `main`, with `FULL_CI` and on `workflow_dispatch` |
+| QF (release dry run) | (a), as recommended | `go build -a` stays; `release-build.sh`, `release-please.yaml` and both Dockerfiles stay unchanged |
 | Spec lint in CI (later decision) | vendored, gating on errors | Slice L: aiup-core 2.28.0's `spec_lint.py` and its two sibling scripts, vendored in the plugin's layout; `spec-lint.yaml` on the spec files; fails on ERROR, not on WARN; K2 pin |
 | QD | (a), plus markdown | The `concurrency` group and everything on `main`. `paths-ignore` grows to `**/*.md`, `docs/**` and `.claude/**`. A new `docs-check.yaml` runs `docs-check` and the upgrade-guide test on markdown and `docs/` changes, with `.claude/` excluded. K2 pins the new block and the workflow. All in P4 |
 
