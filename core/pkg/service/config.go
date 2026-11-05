@@ -173,6 +173,38 @@ func StringMap(value any) (map[string]string, error) {
 	return nil, fmt.Errorf("want a mapping of strings, got %v (%T)", value, value)
 }
 
+// EndpointKeys point at where an endpoint keeps the settings every service endpoint reads: port, service-name,
+// cors, context-values, max-request-header-bytes and max-request-body-bytes. A nil field leaves its key out.
+type EndpointKeys struct {
+	Port                  *uint16
+	ServiceName           *string
+	CORS                  *[]string
+	ContextValues         *map[string]any
+	MaxRequestHeaderBytes *int64
+	MaxRequestBodyBytes   *int64
+}
+
+// Decoder returns a decoder of these keys and of the endpoint's own keys in own.
+func (k EndpointKeys) Decoder(own ConfigDecoder) ConfigDecoder {
+	d := make(ConfigDecoder, len(own)+6)
+	addKey(d, "port", k.Port, Uint16)
+	addKey(d, "service-name", k.ServiceName, String)
+	addKey(d, "cors", k.CORS, Strings)
+	addKey(d, "context-values", k.ContextValues, Map)
+	addKey(d, "max-request-header-bytes", k.MaxRequestHeaderBytes, Int64)
+	addKey(d, "max-request-body-bytes", k.MaxRequestBodyBytes, Int64)
+	for key, decode := range own {
+		d[key] = decode
+	}
+	return d
+}
+
+func addKey[T any](d ConfigDecoder, key string, dst *T, read func(any) (T, error)) {
+	if dst != nil {
+		d[key] = Set(dst, read)
+	}
+}
+
 // Set returns a decoder for a key that stores the value read by read into dst.
 func Set[T any](dst *T, read func(any) (T, error)) func(any) error {
 	return func(value any) error {

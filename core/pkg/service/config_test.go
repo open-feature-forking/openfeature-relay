@@ -34,6 +34,34 @@ func TestConfigDecoder(t *testing.T) {
 	require.NoError(t, d.Decode(map[string]any{"config": 1}, "config"), "an accepted key is left to the caller")
 }
 
+func TestEndpointKeys(t *testing.T) {
+	var (
+		port         uint16
+		name         string
+		cors         []string
+		header, body int64
+		deadline     time.Duration
+	)
+	d := EndpointKeys{
+		Port: &port, ServiceName: &name, CORS: &cors, MaxRequestHeaderBytes: &header, MaxRequestBodyBytes: &body,
+	}.Decoder(ConfigDecoder{"stream-deadline": Set(&deadline, Duration)})
+
+	require.NoError(t, d.Decode(map[string]any{
+		"port": 8013, "service-name": "svc", "cors": []any{"*"}, "max-request-header-bytes": 2,
+		"max-request-body-bytes": 3, "stream-deadline": "1s",
+	}))
+	require.Equal(t, uint16(8013), port)
+	require.Equal(t, "svc", name)
+	require.Equal(t, []string{"*"}, cors)
+	require.Equal(t, int64(2), header)
+	require.Equal(t, int64(3), body)
+	require.Equal(t, time.Second, deadline)
+
+	require.EqualError(t, d.Decode(map[string]any{"context-values": map[string]any{}}),
+		`unknown setting "context-values"; the settings are: cors, max-request-body-bytes, max-request-header-bytes, `+
+			`port, service-name, stream-deadline`, "a nil field leaves its key out")
+}
+
 func TestConfigConversions(t *testing.T) {
 	_, err := Int64(1.5)
 	require.Error(t, err)

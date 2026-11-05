@@ -39,15 +39,15 @@ func decodeConfig(config map[string]any) (EndpointConfig, error) {
 	cfg, _ := config[ConfigKey].(EndpointConfig)
 	svc := &cfg.Service
 	sseDelay := int64(svc.SSEInactivityDelaySec)
-	err := service.ConfigDecoder{
-		"port": service.Set(&svc.Port, service.Uint16), "service-name": service.Set(&svc.ServiceName, service.String),
-		"sse-public-url": service.Set(&svc.SSEPublicURL, service.String), "sse-enabled": service.Set(&svc.SSEEnabled, service.Bool),
-		"sse-inactivity-delay": service.Set(&sseDelay, service.Int64), "cors": service.Set(&cfg.CORS, service.Strings),
-		"context-values":                 service.Set(&cfg.ContextValues, service.Map),
+	err := service.EndpointKeys{
+		Port: &svc.Port, ServiceName: &svc.ServiceName, CORS: &cfg.CORS, ContextValues: &cfg.ContextValues,
+		MaxRequestHeaderBytes: &svc.MaxRequestHeaderBytes, MaxRequestBodyBytes: &svc.MaxRequestBodyBytes,
+	}.Decoder(service.ConfigDecoder{
+		"sse-public-url":                 service.Set(&svc.SSEPublicURL, service.String),
+		"sse-enabled":                    service.Set(&svc.SSEEnabled, service.Bool),
+		"sse-inactivity-delay":           service.Set(&sseDelay, service.Int64),
 		"header-to-context-key-mappings": service.Set(&cfg.HeaderToContextKeyMappings, service.StringMap),
-		"max-request-header-bytes":       service.Set(&svc.MaxRequestHeaderBytes, service.Int64),
-		"max-request-body-bytes":         service.Set(&svc.MaxRequestBodyBytes, service.Int64),
-	}.Decode(config, ConfigKey)
+	}).Decode(config, ConfigKey)
 	svc.SSEInactivityDelaySec = int(sseDelay)
 	return cfg, err
 }
