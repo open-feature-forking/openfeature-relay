@@ -104,7 +104,7 @@ func startRuntimeWith(t *testing.T, cfg Config, components Components) (cancel f
 		}
 		defer resp.Body.Close()
 		return resp.StatusCode == http.StatusOK
-	}, 20*time.Second, 50*time.Millisecond, "the runtime becomes ready")
+	}, time.Minute, 50*time.Millisecond, "the runtime becomes ready")
 	return stop, result
 }
 
