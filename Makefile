@@ -16,9 +16,9 @@ FLAGD_MODULE_DIRS := ./flagd ./runtime ./service/transport ./service/flag-evalua
 # test-fips.
 CONTRIB_MODULE_DIRS := ./contrib/flagsmith/engine ./contrib/flagsmith/middleware ./contrib/flagsmith/sync
 
-# The testbed's modules (UC-022): runtime pieces of the test harness. Tested and pinned like the contrib modules, and in
-# no standard distribution.
-TESTBED_MODULE_DIRS := ./testbed/source
+# The testbed's modules (UC-022): the control API, a library for the test suites of providers, and the runtime pieces of
+# the test harness. Tested and pinned like the contrib modules, and in no standard distribution.
+TESTBED_MODULE_DIRS := ./testbed/control ./testbed/source
 
 # The FIPS variant builds against the CMVP-certified Go Cryptographic Module
 # v1.0.0 (certificate #5247). The literal version is required; the
