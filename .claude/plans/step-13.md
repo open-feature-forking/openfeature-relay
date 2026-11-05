@@ -387,16 +387,19 @@ Every question is decided. Each keeps its number; the decided option is stated f
 | Flow | Test |
 |---|---|
 | main 1–7, BR-001, NFR-014 | I: `TestRPC` and `TestInProcess` against both images; `TestTestbedContract` (C) against ours |
+| main 2, A10 | K's `TestServeOpensThePortWhenTheDefaultConfigurationIsReady`, `TestServeStopsWhenTheDefaultConfigurationDoesNotStart` (A10 was added in X) |
 | main 3, BR-003 | L's `TestResetEmptiesAndReloads` (every source re-accepted, unchanged content delivered through `ReSync`, readiness false until then); B1's `TestStartReloadsCleanedStore` |
 | main 5, BR-004 | B1's `TestChangeThroughTrigger` (the store holds the new variant; no file under `/rawflags` or `/configs` changes, by mtime and content), `TestChangeSurvivesRestart`, `TestChangeRestartChange` (revision 2's blocker sequence) |
 | main 6, BR-002 | G1's gate tests; B1's `TestRestartClosesEveryRuntimePort`, `TestControlPortOutsideGate` |
 | A1 | B1's `TestConfigSwitch` (Q22) |
-| A3, A4, A7, A8, A9 | K's tests against a fake target: `TestStopUntilStart`, `TestChangeTimesOut`, `TestStartNotReadyIn10s`, `TestUnknownConfiguration`, `TestFailedStartKeepsLastGoodConfiguration`; C and I |
+| A3, A4, A7, A8, A9 | K's tests against a fake target: `TestAPITexts` (A3), `TestStopUntilStart`, `TestChangeTimesOut`, `TestStartNotReadyIn10s`, `TestUnknownConfiguration`, `TestUnknownConfigurationKeepsPendingRestart`, `TestFailedStartKeepsLastGoodConfiguration`; C and I |
 | Q21, Q25, BR-009 | K's `TestRenderLifecycle` (rendered at start, after `/change` and after every start; removed during `/restart`; never before `Target.Load` returns), `TestRenderMatchesLaunchpad` (C3's golden), `TestRenderIsAtomic`; B1's `TestRuntimeNeverReadsRenderedFile` (the rendered path is in no source of the loaded configuration) |
 | BR-005 | `TestTestbedManifestIsMinimal` |
 | BR-006 | `TestStandardManifestsHaveNoTestbedModule` |
 | BR-007 | `TestImageDataMatchesSubmodule`; L's `TestLoadConfigRewriteTouchesOneSource` |
-| BR-008 | K's tests use a fake target only; a boundary row keeps flagd and relay modules out of `testbed/control` |
+| BR-008 | K's tests use a fake target only; rows in `testdata/module-boundaries.txt` and `testdata/module-graph-boundaries.txt` keep flagd and relay modules out of `testbed/control` |
+
+Checked in X against `main` @ d23076d6: every test named above exists under the path its PR gives (`test/integration`, `test/testbed`, `runtime`, `runtime/cmd`, `testbed/control`, `testbed/cmd`, `service/transport/gate`, `test/distributions`), and the `testbed` and `testbed-rpc-outages` jobs of `build.yaml` run I's suites.
 
 **Leaves out (follow-ups):**
 - fault injection and `/faults` (Q11);
