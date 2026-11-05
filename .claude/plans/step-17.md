@@ -1,9 +1,17 @@
 # Step 17 plan: publish the standard distributions and flagd-testbed to ghcr from `main` (issue #216)
 
-**Status: revision 2.**
-- It resolves `step-17-opposer.md`: 1 blocker, 5 major and 8 minor, all adopted or answered (section 8).
-- Four questions are open for the project lead: Q2, Q3, Q5 and Q6.
-- Q1 and Q4 are settled as planner defaults the lead can overrule.
+**Status: revision 2, final. The project lead has decided Q2, Q3, Q5 and Q6, each as recommended.**
+- Revision 2 resolved `step-17-opposer.md`: 1 blocker, 5 major and 8 minor (section 8).
+- Q1 and Q4 are planner defaults.
+- Open: none.
+
+**Final decisions:**
+- Q2 (a): attestations, Dependabot for the base images, and a Trivy report;
+- Q3 (a): every `sha-` tag kept during the PoC;
+- Q5 (a): accepted and documented;
+- Q6 (b): throttled publishing.
+
+W is #231 (`ci/workflow-permissions`).
 
 **Decided by the project lead (#216):**
 - **Images:** flagd-full, flagd-minimal, flagd-minimal-otel, flagd-cloud, flagd-kubernetes and flagd-sync, each in standard and FIPS, plus flagd-testbed. All are linux/amd64 + linux/arm64, under `ghcr.io/open-feature-forking/`.
@@ -45,7 +53,7 @@
   - **The push.** `publish-images` pushes by digest. It holds the only `packages: write` and runs no build: only `publish-images.sh`, a pinned login, and the attestation (Q2).
   - **Rejected:** a rebuild with a cache (a second build), and pushing from inside the dry run (the token would sit beside the build).
 
-- **Q2, signing, base-image updates and scanning. (open)**
+- **Q2, signing, base-image updates and scanning. (decided: (a))**
   - (a) **GitHub artifact attestations, Dependabot for the base images, and a Trivy report.**
     - `actions/attest-build-provenance` signs each pushed digest, beside buildx's provenance and SBOM; users run `gh attestation verify oci://… -R open-feature-forking/openfeature-relay`.
     - A `.github/dependabot.yml` covers the `docker` ecosystem, weekly, for `builder/reference/Dockerfile` and the testbed Dockerfile, so the digest pins move.
@@ -57,7 +65,7 @@
     - Attestations and cosign keyless both write a public Sigstore transparency-log entry naming this repository; the images are public anyway.
     - Dependabot is a new bot in this repository. Its PRs follow the loop like any other.
 
-- **Q3, `sha-` retention. (open)**
+- **Q3, `sha-` retention. (decided: (a))**
 
   **The numbers,** with Q6 (b):
   - ~8 publishes a day × 13 tags is ~100 `sha-` tags a day.
@@ -71,7 +79,7 @@
     - `registry:2` does not model ghcr's versions, so no rehearsal covers it.
   - **Recommended:** (a). Deletion is the one step here that can break a published image, and at Q6 (b)'s rate the list stays readable for weeks.
 
-- **Q5, who can push. (open; W fixes the default token)**
+- **Q5, who can push. (decided: (a); W, #231, fixes the default token)**
 
   **What holds after W:**
   - Only `publish-images` requests `packages: write`.
@@ -94,7 +102,7 @@
     - (b) adds a long-lived credential bound to an account outside the repository, plus a manual setting on 7 packages, to guard against the people who can already push to `main`.
     - (b) is the right shape once `main` is protected, or before anything is released.
 
-- **Q6, how often to publish. (open; #216 says `:main` moves with every push, and the load says otherwise)**
+- **Q6, how often to publish. (decided: (b))**
   - (a) **Every `main` push that touches image inputs.** That is ~40–50 publishes a day. Each runs 18 + 2 image-build parts + 2 publish jobs = 22 jobs, above the 20-job org limit, so PRs queue behind `main`. It uploads ~20–50 GB of layouts a day (one-day retention).
   - (b) **Throttled.**
     - A `main` push publishes when the image inputs changed **and** `:main` is more than 3 hours old. A small `publish-gate` job reads `:main`'s `org.opencontainers.image.created` anonymously.
@@ -188,7 +196,7 @@
 
 | PR | Model | Base | Content | Starts |
 |---|---|---|---|---|
-| W | (the lead's separate PR) | `main` | top-level `permissions` in every workflow, its K2 check, the default token set to read | now, outside step 17 |
+| W | #231 (`ci/workflow-permissions`), the lead's separate PR | `main` | top-level `permissions` in every workflow, its K2 check, the default token set to read | now, outside step 17 |
 | B | implementer | `main` | The builds, with no push. `publish-gate`; `image-build` (parts below); flagd-full under its own name; the four missing images; Q4; the layout-based runtime checks; the testbed Dockerfile, its layout and `TESTBED_RELAY_IMAGE`; the base pins; Trivy (Q2); the artifacts. It measures every part on a `workflow_dispatch` | after the decisions |
 | P | implementer | B, and W merged | `publish-images.sh` and its rehearsal, `publish-images`, `move-main`, the attestation (Q2), Dependabot (Q2), K2's push test | after B exists (stacked); merges after W |
 | D | mechanic | P merged and its first publish checked | README, `try-it.md`, UC-002, UC-012, CLAUDE.md (below), `/spec-review`, #216 | last |
@@ -246,6 +254,15 @@ The critical path is B → P (with W merged) → the first publish → the org o
 - **A separate `publish.yaml` on `workflow_run`.** It needs artifacts across workflows; `needs:` inside `build.yaml` is simpler.
 
 ## 8. Changelog
+
+### Final decisions (project lead)
+
+| Question | Decision | Change |
+|---|---|---|
+| Q2 | (a), as recommended | B: Trivy in `image-build`, report only. P: `actions/attest-build-provenance` in `publish-images`, and `.github/dependabot.yml` for the `docker` ecosystem, weekly |
+| Q3 | (a), as recommended | No cleanup job; "delete untagged" never used; the question returns at the end of the PoC or at 30 days |
+| Q5 | (a), as recommended | No environment and no extra credential. R1 and D's CLAUDE.md rule state that a branch here could push; W (#231) narrows the default token |
+| Q6 | (b), as recommended | B: `publish-gate` (image inputs changed and `:main` older than 3 h, or a `workflow_dispatch` on `main`) |
 
 ### Revision 2 (`step-17-opposer.md`)
 
