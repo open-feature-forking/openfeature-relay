@@ -111,7 +111,7 @@ With no event sink selected, publishing evaluation events adds no allocation to 
 
 ### BR-003: One Event per Resolved Flag
 
-The flag evaluation and OFREP service endpoints resolve through the injected evaluation router, which publishes one evaluation event for every flag it resolves, including each flag of a bulk evaluation; a service endpoint that uses a configuration format's evaluator directly publishes them itself; the evaluator publishes nothing (FR-037).
+The flag evaluation and OFREP service endpoints resolve through the injected evaluation router and publish one evaluation event for every flag they resolve, including each flag of a bulk evaluation, through the observer of their typed adapter (`events.EvaluationObserver`); the router and the evaluator never see the event bus (FR-037).
 
 ### BR-004: Change Events Only for Accepted Changes
 

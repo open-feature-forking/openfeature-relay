@@ -119,7 +119,7 @@ Binary archives follow today's release pattern with the distribution name in the
 
 ### BR-008: No Staleness Limit by Default
 
-flagd-full applies no staleness limit unless the Operator configures one, so readiness behaves as before the upgrade (C-003). With a configured limit, readiness fails while a source has not delivered within it (FR-052).
+flagd-full applies no staleness limit unless the Operator configures one, so readiness behaves as before the upgrade (C-003). With a configured limit, readiness fails while the last contact with a source is older than it (FR-052).
 
 ## Delivered by Later Use Cases
 

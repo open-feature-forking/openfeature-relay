@@ -20,7 +20,7 @@
 
 1. Extension Author adds the core module as a dependency of their component module.
 2. Extension Author names the service endpoint's type and declares that it resolves flags through the evaluation router.
-3. Extension Author implements the service endpoint: it starts serving clients when the distribution starts, resolves the flags of each request for the request's selector through the injected evaluation router, which publishes an evaluation event for each resolved flag on the event bus, answers in its protocol, and stops serving when the distribution shuts down.
+3. Extension Author implements the service endpoint: it starts serving clients when the distribution starts, resolves the flags of each request for the request's selector through the injected evaluation router, publishes an evaluation event for each resolved flag on the event bus, answers in its protocol, and stops serving when the distribution shuts down.
 4. Extension Author subscribes the service endpoint, through the event bus, to the configuration change events it reacts to, such as a change of the flags its clients have asked for.
 5. Extension Author implements the factory that creates the service endpoint from the dependencies a distribution injects: store with document versions, event bus, configuration, logger, telemetry provider and, because it declared that it resolves flags, the evaluation router.
 6. Extension Author runs the service endpoint contract tests (include UC-008 Run Contract Tests).
