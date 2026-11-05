@@ -108,6 +108,14 @@ nav:
       - 'UC-019 Serve Vendor Flags': 'use_cases/UC-019-serve-vendor-flags.md'
       - 'UC-020 Develop Event Sink Extension': 'use_cases/UC-020-develop-event-sink-extension.md'
       - 'UC-021 Export Evaluation Data': 'use_cases/UC-021-export-evaluation-data.md'
+    - 'Test cases':
+      - 'TC-001 Custom Distribution as Image': 'test_cases/TC-001-custom-distribution-as-image.md'
+      - 'TC-002 Extension Components in a Distribution': 'test_cases/TC-002-extension-components-in-a-distribution.md'
+      - 'TC-003 Vendor Flags Through flagd': 'test_cases/TC-003-vendor-flags-through-flagd.md'
+      - 'TC-004 Evaluation Data Export': 'test_cases/TC-004-evaluation-data-export.md'
+      - 'TC-005 Upgrade, Then Slim Down': 'test_cases/TC-005-upgrade-then-slim-down.md'
+      - 'TC-006 In-Process Providers Behind a Configuration Proxy': 'test_cases/TC-006-in-process-providers-behind-a-configuration-proxy.md'
+      - 'TC-007 Change to Release': 'test_cases/TC-007-change-to-release.md'
     - 'Research: cross-vendor evaluation': 'research/cross-vendor-evaluation.md'
     - 'How it''s built': 'relay/how-its-built.md'
   - 'flagd (reference distribution)':

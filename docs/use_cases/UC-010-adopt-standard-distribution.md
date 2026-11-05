@@ -7,7 +7,7 @@
 **Primary Actor:** Operator  
 **Goal:** Run the smallest standard distribution that contains every component the deployment uses, without running the builder, so that the deployment carries fewer dependencies and less code.  
 **Trigger:** Operator decides to replace flagd-full with a smaller standard distribution for a deployment  
-**Status:** Implemented  
+**Status:** Tested  
 
 **Requirements:** [FR-021, FR-022, FR-023, FR-024, FR-034, FR-052, NFR-003, NFR-004, NFR-011, C-009](../requirements.md)
 
