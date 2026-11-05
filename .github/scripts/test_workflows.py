@@ -90,11 +90,11 @@ class BuildWorkflow(unittest.TestCase):
         names = re.findall(r"^  ([a-z][a-z0-9-]*):[ \t]*(?:#.*)?\n", self.text.split("\njobs:\n", 1)[1], re.M)
         self.assertEqual(
             ["changes", "lint", "benchmark", "docs-check", "test", "miss-report", "coverage", "builder-e2e", "fips", "docker-local", "integration-test",
-             "upgrade-test", "release-dry-run", "testbed", "testbed-rpc-outages", "testbed-grpc-sync"], names)
+             "upgrade-test", "release-dry-run", "testbed", "testbed-rpc-outages", "testbed-grpc-sync", "load-smoke", "load-test"], names)
 
     def test_changes_is_report_only(self):
         """P1: the affected-module report runs beside today's jobs; nothing but the miss report waits on it."""
-        self.assertEqual([], [n for n in ("lint", "test", "builder-e2e", "integration-test", "upgrade-test", "release-dry-run")
+        self.assertEqual([], [n for n in ("lint", "test", "builder-e2e", "integration-test", "upgrade-test", "release-dry-run", "load-smoke", "load-test")
                               if re.search(r"needs:.*\bchanges\b", self.job(n))])
         self.assertIn("fetch-depth: 2", self.job("changes"))
         self.assertIn("python3 .github/scripts/ci-modules.py changes", self.job("changes"))
@@ -120,6 +120,29 @@ class BuildWorkflow(unittest.TestCase):
                 self.assertIn(gate, self.job(name))
         self.assertIn("if: github.event_name == 'pull_request'", self.job("benchmark"))
 
+    def test_load_smoke_runs_on_every_build_and_load_test_is_gated(self):
+        """W: the 60 s race-build smoke is on every build, the 10 min run is gated, and both keep their logs on failure."""
+        self.assertNotIn("if:", self.job("load-smoke").split("steps:", 1)[0])
+        self.assertIn("run: make test-load-smoke", self.job("load-smoke"))
+        self.assertIn("if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'", self.job("load-test"))
+        self.assertNotIn("schedule", self.job("load-test").split("steps:", 1)[0])
+        self.assertRegex(self.job("load-test"), r"run: make test-load\s")
+        for name in ("load-smoke", "load-test"):
+            with self.subTest(job=name):
+                self.assertIn("RELAY_LOAD_LOGS:", self.job(name))
+                self.assertIn("if: failure()", self.job(name))
+
+    def test_load_image_pinned(self):
+        """W: the k6 image is pulled by digest; no workflow or script names a grafana/k6 tag without one."""
+        makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+        self.assertRegex(makefile, r"(?m)^K6_IMAGE \?= grafana/k6:\d+\.\d+\.\d+@sha256:[0-9a-f]{64}$")
+        for path in [*(ROOT / ".github").rglob("*.y*ml"), *(ROOT / ".github").rglob("*.py"), ROOT / "Makefile"]:
+            for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+                if path.name != "test_workflows.py":
+                    for ref in re.findall(r"grafana/k6:[^\s'\"]+", line):
+                        with self.subTest(path=path.name, ref=ref):
+                            self.assertIn("@sha256:", ref)
+
     def test_build_never_sees_a_label_event(self):
         """The release-check label starts release-check.yaml, not build.yaml: a label event in build.yaml would cancel the
         pull request's running jobs through the concurrency group and report skipped jobs under the real check names."""
@@ -144,7 +167,7 @@ class BuildWorkflow(unittest.TestCase):
         parts = re.split(r"(?m)^(?=  [a-z][a-z0-9-]*:[^\n]*\n)", jobs)
         return {m.group(1): part for part in parts if (m := re.match(r"  ([a-z0-9-]+):", part))}
 
-    CACHED_JOBS = ("lint", "docs-check", "test", "builder-e2e", "fips", "integration-test", "upgrade-test", "release-dry-run")
+    CACHED_JOBS = ("lint", "docs-check", "test", "builder-e2e", "fips", "integration-test", "upgrade-test", "release-dry-run", "load-smoke", "load-test")
     GATED_CACHED_JOBS = ("fips", "upgrade-test", "release-dry-run")
     ON_MAIN = "github.ref == 'refs/heads/main' && github.event_name == 'push'"
 

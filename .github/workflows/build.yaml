@@ -904,3 +904,92 @@ jobs:
           go-version-file: 'flagd/go.mod'
       - name: A grpc source against the relay testbed - reconnects, a fatal status code and a stream deadline (UC-023)
         run: make testbed-grpc-sync
+
+  # The concurrency load against the race build of flagd-minimal (NFR-017, #183): OFREP, flag evaluation and flag sync
+  # clients at once while the flags change. The smoke is about 60 seconds of load and runs on every build.
+  load-smoke:
+    name: Load smoke (race)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - name: Setup go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
+        with:
+          go-version-file: 'flagd/go.mod'
+          cache: false
+      - name: Restore the Go caches
+        id: go-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-load-smoke-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-load-smoke-
+      - run: make workspace-init
+      - name: Self-test the checks, then run the smoke against the race build
+        env:
+          RELAY_LOAD_LOGS: ${{ runner.temp }}/load-logs
+        run: make test-load-smoke
+      - name: Save the Go caches
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ steps.go-cache.outputs.cache-primary-key }}
+      - name: Keep flagd's stderr and k6's output
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: load-smoke-logs
+          path: ${{ runner.temp }}/load-logs
+          if-no-files-found: ignore
+
+  # The full 10 minute run: gated, like fips and docker-local.
+  load-test:
+    name: Load test (race, 10 min)
+    # Gated during the proof of concept: set the repository variable FULL_CI=true, or run the workflow manually.
+    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - name: Setup go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
+        with:
+          go-version-file: 'flagd/go.mod'
+          cache: false
+      - name: Restore the Go caches
+        id: go-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-load-test-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-load-test-
+      - run: make workspace-init
+      - name: Run the full load against the race build
+        env:
+          RELAY_LOAD_LOGS: ${{ runner.temp }}/load-logs
+        run: make test-load
+      - name: Save the Go caches
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ steps.go-cache.outputs.cache-primary-key }}
+      - name: Keep flagd's stderr and k6's output
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: load-test-logs
+          path: ${{ runner.temp }}/load-logs
+          if-no-files-found: ignore
