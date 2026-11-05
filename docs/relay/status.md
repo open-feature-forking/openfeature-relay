@@ -75,7 +75,7 @@ The table shows the order; the sections above say which rows are done.
 | 12 | [UC-002](../use_cases/UC-002-package-distribution-as-image.md), [UC-012](../use_cases/UC-012-release-distributions-and-component-modules.md), [UC-013](../use_cases/UC-013-verify-change-against-distributions.md) | image, release, CI verification |
 | 13 | [UC-022](../use_cases/UC-022-run-provider-test-suites-against-the-testbed.md) | the flagd testbed as a `relay-builder` distribution |
 | 14 | [UC-023](../use_cases/UC-023-sync-from-an-upstream-flag-sync-endpoint.md) | the Go flagd provider's gRPC sync features in `sync/flagd-grpc`, opt-in |
-| 15 | [#176](https://github.com/open-feature-forking/openfeature-relay/issues/176) (in progress) | a CI test and lint job per component, only for the modules a PR reaches |
+| 15 | [#176](https://github.com/open-feature-forking/openfeature-relay/issues/176) | faster CI: the release dry run in parallel parts on `main` and on demand, a per-job cache, the spec lint in CI, cancelled superseded runs and a markdown-only light run; the per-module test matrix was dropped as slower on full runs |
 | 16 | [#183](https://github.com/open-feature-forking/openfeature-relay/issues/183) (planned) | a load test that flagd-minimal stays correct under concurrent OFREP, RPC and sync clients |
 
 [UC-016 Recover from Snapshot](../use_cases/UC-016-recover-from-snapshot.md) is deferred to a later release.
