@@ -367,7 +367,8 @@ func startOnFileOnce(t *testing.T, name string, portFlags []string, content, ext
 	path := filepath.Join(dir, "flags"+ext)
 	writeFile(t, path, content)
 
-	args := []string{"start", "--log-format", "json", "--uri", "file:" + path}
+	// debug lines are not warnings or errors, so the comparison of what the two log is unaffected
+	args := []string{"start", "--debug", "--log-format", "json", "--uri", "file:" + path}
 	ports := map[string]int{}
 	for _, flagName := range portFlags {
 		ports[flagName] = freePort(t)
@@ -383,6 +384,14 @@ func startOnFileOnce(t *testing.T, name string, portFlags []string, content, ext
 		ready = isReady(ports["management-port"])
 	}
 	exited := !p.running()
+	if expectReady && !ready && !exited {
+		// SIGQUIT makes the Go runtime print the stack of every goroutine and exit, which shows where the start stalled
+		_ = p.cmd.Process.Signal(syscall.SIGQUIT)
+		select {
+		case <-p.done:
+		case <-time.After(5 * time.Second):
+		}
+	}
 	p.stop(20 * time.Second)
 	raw = fmt.Sprintf("the process had exited: %t\n%s", exited, p.out.String())
 
