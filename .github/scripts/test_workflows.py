@@ -135,6 +135,36 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIn('platforms="linux/amd64"', dists)
 
 
+class SpecLintWorkflow(unittest.TestCase):
+    """The spec lint gates spec changes on errors only, and its sibling scripts sit where load_sibling looks."""
+
+    PATHS = (
+        "docs/vision.md", "docs/requirements.md", "docs/glossary.md", "docs/use_cases.puml", "docs/use_cases/**",
+        "docs/test_cases/**", "docs/.spec-lint-baseline.json", ".github/scripts/aiup/**", ".github/workflows/spec-lint.yaml")
+
+    @classmethod
+    def setUpClass(cls):
+        cls.text = (ROOT / ".github" / "workflows" / "spec-lint.yaml").read_text(encoding="utf-8")
+
+    def test_spec_lint_workflow(self):
+        paths = "".join(f'      - "{p}"\n' for p in self.PATHS)
+        for event in ("push", "pull_request"):
+            with self.subTest(event=event):
+                self.assertIn(f"  {event}:\n    branches:\n      - main\n    paths:\n{paths}", self.text)
+        script = ".github/scripts/aiup/spec-review/scripts/spec_lint.py"
+        self.assertIn(f"run: python3 -I {script} --self-test\n", self.text)
+        self.assertIn(f"run: python3 -I {script} --docs docs\n", self.text)
+        self.assertNotIn("--strict", self.text)
+        jobs = self.text.split("\njobs:\n", 1)[1]
+        self.assertEqual(["spec-lint"], re.findall(r"^  ([a-z][a-z-]*):\n", jobs, re.M))
+
+    def test_sibling_scripts_are_vendored_where_the_lint_looks(self):
+        skills = ROOT / ".github" / "scripts" / "aiup"
+        for pattern in ("*use-case-spec/scripts/validate_use_case.py", "*test-case/scripts/bpmn_paths.py"):
+            with self.subTest(pattern=pattern):
+                self.assertEqual(1, len(list(skills.glob(pattern))))
+
+
 class BuildDockerfiles(unittest.TestCase):
     """K3: the Dockerfiles of flagd and flagd-proxy. A new hash for flagd-proxy means re-recording its image configuration."""
 
