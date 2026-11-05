@@ -38,7 +38,9 @@ A use case counts as done when its **Status** line reads `Implemented`, or `Test
 ## How a change is verified
 
 [UC-013](../use_cases/UC-013-verify-change-against-distributions.md) maps to these checks of the `build` workflow.
-The workflow does not run for a change that touches only `README.md` or `docs/**`; the `docs` and `Markdown checks` workflows run for those.
+The workflow does not run for a change that touches only markdown, `docs/**` or `.claude/**`; the light `docs-check` workflow and `Markdown checks` run for those.
+A newer push to a pull request cancels its running build.
+`FULL_CI=true` or a manual run of `build` runs every gated job.
 
 | Check | Job | Covers |
 |-------|-----|--------|
@@ -48,12 +50,12 @@ The workflow does not run for a change that touches only `README.md` or `docs/**
 | flagd-full built from its manifest by the builder, its components checked, the CLI pins and the flagsmith distribution built | `builder-e2e` | FR-005, FR-006, FR-027, NFR-008 |
 | RPC and in-process Test Harness suites against flagd, with the tag selection pinned to today's flagd | `integration-test` | NFR-007, C-010 |
 | allocs/op against the pull request's base commit; time deviations beyond 5% are reported, never failing | `benchmark` (pull requests) | NFR-001 |
-| today's flagd and flagd-full side by side, and the reference Dockerfile's images | `upgrade-test`, when a Dockerfile or the build changes | FR-009, NFR-007 |
-| the release's build steps without publishing | `release-dry-run`, when a release input changes | FR-030, FR-031 |
-| FIPS compile and crypto closure of every standard distribution | `fips`, gated by `FULL_CI` or a manual run | C-009 |
-| the local Docker build and its vulnerability scan | `docker-local`, gated by `FULL_CI` or a manual run | NFR-009 |
-| 60 s of concurrent OFREP, RPC and flag sync clients against a race build of flagd-minimal while its flags change | `load-smoke` | NFR-017 |
-| the same for 10 min with more clients | `load-test`, gated by `FULL_CI` or a manual run | NFR-017 |
+| today's flagd and flagd-full side by side, and the reference Dockerfile's images | `upgrade-test`, on a pull request that changes Go code, a Dockerfile or the build | FR-009, NFR-007 |
+| the release's build steps without publishing | `release-dry-run` on a push to `main`, with `FULL_CI` or a manual run; a reduced set on a pull request labelled `release-check` (`release-check.yaml`) | FR-030, FR-031 |
+| FIPS compile and crypto closure of every standard distribution | `fips` on a push to `main` and on a pull request that changes Go code or the Makefile | C-009 |
+| the local Docker build and its Trivy vulnerability scan | `docker-local` on a push to `main` and on a pull request that changes `go.mod`, `go.sum` or a Dockerfile | NFR-009 |
+| 60 s of concurrent OFREP, RPC and flag sync clients against a race build of flagd-minimal while its flags change | `load-smoke`, every build | NFR-017 |
+| the same for 10 min with more clients | `load-test`, with `FULL_CI` or a manual run | NFR-017 |
 
 Branch protection is not set: the project lead decides which of these checks are required for merging.
 NFR-001 against the upstream commit the work branched from is not compared yet (`compare-allocs.py` would need a mapping of the old package paths to the new ones), so NFR-001 stays `In Progress`.
