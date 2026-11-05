@@ -208,16 +208,22 @@ func (r *Router) collect(view store.View, selector store.Selector, wanted map[st
 				if flagSetNamed && doc.FlagSet != flagSet {
 					continue
 				}
-				for _, key := range doc.FlagKeys {
-					if wanted != nil {
-						if _, ok := wanted[key]; !ok {
-							continue
-						}
-					}
-					entries = append(entries, entry{flagSet: doc.FlagSet, key: key, priority: priority, route: i})
-				}
+				entries = appendEntries(entries, doc, priority, i, wanted)
 			}
 		}
+	}
+	return entries
+}
+
+// appendEntries adds the flags of doc that the wanted keys allow; nil wanted allows every key.
+func appendEntries(entries []entry, doc store.Document, priority, route int, wanted map[string]struct{}) []entry {
+	for _, key := range doc.FlagKeys {
+		if wanted != nil {
+			if _, ok := wanted[key]; !ok {
+				continue
+			}
+		}
+		entries = append(entries, entry{flagSet: doc.FlagSet, key: key, priority: priority, route: route})
 	}
 	return entries
 }
