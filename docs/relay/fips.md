@@ -67,8 +67,12 @@ GODEBUG=fips140=only ./flagd-fips start --uri file:flags.json
 Exercise the endpoints and sources your deployment uses: a TLS peer that offers only algorithms outside the approved set fails here.
 Started with `GODEBUG=fips140=off`, a FIPS build with the runtime's command line refuses to run.
 
-## What CI proves
+## Test the modules
 
-CI builds flagd-full as a FIPS build every night, and checks that its crypto dependency closure stays inside the one recorded in `docs/reference/fips-crypto-closure.txt`.
-A change that breaks the FIPS build of flagd-full fails that nightly run after it is merged, not its pull request.
-The FIPS build of any other distribution is yours to build and verify as above.
+In a checkout of this repository, `make test-fips` runs the tests of the component modules, flagd and flagd-proxy as a FIPS build under `GODEBUG=fips140=only`.
+`make fips-closure` regenerates the crypto dependency closure of flagd and flagd-proxy recorded in `docs/reference/fips-crypto-closure.txt`, for review against the [FIPS 140-3 reference](../reference/fips-140-3.md).
+
+## Not tested in CI
+
+CI does not build or test a FIPS build (C-009).
+A FIPS build of any distribution, flagd-full included, is yours to build and verify as above.

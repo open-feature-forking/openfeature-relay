@@ -8,9 +8,9 @@
 **Secondary Actors:** GitHub Actions, flagd Test Harness  
 **Goal:** Know before a change is merged whether it keeps every standard distribution building, keeps flagd-full compatible with today's flagd, keeps flagd-sync rejecting what flagd-full rejects, keeps flagd-minimal correct under concurrent clients, and keeps evaluation performance and dependencies within their limits.  
 **Trigger:** A pull request against main is opened or updated  
-**Status:** Implemented  
+**Status:** Tested  
 
-**Requirements:** [FR-026, FR-032, NFR-001, NFR-004, NFR-005, NFR-007, NFR-011, NFR-012, NFR-017, C-009, C-010](../requirements.md)
+**Requirements:** [FR-026, FR-032, NFR-001, NFR-004, NFR-005, NFR-007, NFR-011, NFR-012, NFR-017, C-010](../requirements.md)
 
 ## Preconditions
 
@@ -23,7 +23,7 @@
 
 1. Maintainer opens or updates a pull request with a change to main.
 2. GitHub Actions runs the linters, including the dependency rules and the check that no Go file imports and no go.mod directly requires `golang.org/x/exp` (NFR-012), and the unit tests of every module.
-3. GitHub Actions builds every standard distribution from its manifest, with the modules of the change in place of their released versions, as a standard build and a FIPS build.
+3. GitHub Actions builds every standard distribution from its manifest, with the modules of the change in place of their released versions.
 4. GitHub Actions checks that the binary of flagd-minimal links no module listed in NFR-004 and its packages import none, that the binary of flagd-sync links no evaluator module and no JsonLogic module and its packages import none, and that neither the evaluator module nor the flagd configuration format module depends on a package listed in NFR-005.
 5. GitHub Actions builds the flagd-full image of the change and runs the flagd Test Harness RPC and in-process suites against it with the tag selection of today's flagd.
 6. GitHub Actions gives flagd-sync and flagd-full each flag configuration of the set and checks that flagd-sync rejects every flag configuration flagd-full rejects and accepts every one flagd-full accepts.
@@ -53,11 +53,11 @@
 
 ### A3: Standard Distribution Does Not Build
 
-**Trigger:** A standard distribution does not build, its FIPS build does not carry the certified Go Cryptographic Module, or its cryptographic dependency closure differs from the reviewed one (step 3)  
+**Trigger:** A standard distribution does not build (step 3)  
 **Flow:**
 
-1. GitHub Actions reports the standard distribution, the variant and the failing component on the pull request.
-2. Maintainer updates the change; a deliberate change of the cryptographic dependency closure is reviewed against the FIPS reference and committed with the change.
+1. GitHub Actions reports the standard distribution and the failing component on the pull request.
+2. Maintainer updates the change.
 3. Use case continues at step 2.
 
 ### A4: Dependency Boundary Violated
@@ -137,7 +137,7 @@
 ### Success Postconditions
 
 - The pull request carries a passed result for every check.
-- Every standard distribution builds from the change, as standard and FIPS build.
+- Every standard distribution builds from the change.
 - flagd-full built from the change passes the RPC and in-process suites with today's tag selection, or with a selection the Maintainer accepted in review.
 - flagd-sync rejects and accepts exactly the flag configurations of the set that flagd-full rejects and accepts.
 - No evaluator benchmark allocates more per operation than on the pull request's base commit, and every time deviation beyond 5% is reported on the pull request.
@@ -154,7 +154,7 @@
 
 ### BR-001: Every Standard Distribution on Every Code Change
 
-Every pull request that changes more than documentation builds all six standard distributions, each as standard and FIPS build, regardless of which modules it touches.
+Every pull request that changes more than documentation builds all six standard distributions, regardless of which modules it touches. A FIPS build is not part of this verification: it is documented for the builder, not verified in CI (C-009).
 
 ### BR-002: Verify the Change, Not the Last Release
 
@@ -190,11 +190,10 @@ Every pull request that changes more than documentation runs the 60-second concu
 
 ## Delivered by Later Use Cases
 
-This use case is `Implemented`: the build of every standard distribution from its manifest on every pull request; the dependency boundaries of NFR-004 and NFR-005; the Test Harness suites against the flagd-full image with a pinned tag selection; the verdict of flagd-sync against flagd-full for the set of flag configurations; and the allocs/op comparison with the pull request's base commit, with time deviations beyond 5% reported. The checks are listed in [Status and roadmap](../relay/status.md). These parts are accepted gaps of this use case:
+This use case is `Implemented`: the build of every standard distribution from its manifest; the dependency boundaries of NFR-004 and NFR-005; the Test Harness suites against the flagd-full image with a pinned tag selection; the verdict of flagd-sync against flagd-full for the set of flag configurations; and the allocs/op comparison with the pull request's base commit, with time deviations beyond 5% reported. The checks are listed in [Status and roadmap](../relay/status.md). These parts are accepted gaps of this use case:
 
 | Gap | Delivered by |
 |-----|--------------|
 | Precondition, "required for merging": branch protection is a repository setting the project lead makes; no workflow enforces it | the project lead, after the proof of concept |
 | BR-005, NFR-001: the allocs/op of the evaluator benchmarks against the upstream commit the work branched from. Every benchmark's package path moved, so `compare-allocs.py` finds no common benchmark without a mapping of old paths to new ones | after the incubator |
-| Step 3, A3, BR-001: the FIPS build on every pull request. A FIPS build is the builder's do-it-yourself build (C-009); CI builds only flagd-full as a FIPS build, nightly, with the check that its crypto closure stays inside the recorded one, so a change that breaks it fails the nightly run after the merge, not the pull request, and the FIPS build of the other standard distributions is not checked | the project lead, after the proof of concept |
 | A6: a setup failure of the Test Harness or the flagd-full image fails the integration test with `failed to build flagd image` before any scenario; no test pins it | the project lead, after the proof of concept |

@@ -25,7 +25,7 @@
 | 1 | Open change | The Maintainer opens a pull request against main that changes a component module | a change under `core/` | [UC-013](../use_cases/UC-013-verify-change-against-distributions.md) | `build.yaml` triggers on `pull_request` to `main`; a change that only touches `docs/**` or `README.md` skips the workflow (A1) |
 | 2 | Lint and unit test | GitHub Actions runs the linters with the dependency rules and the unit tests of every module | `make lint`, `make test` | [UC-013](../use_cases/UC-013-verify-change-against-distributions.md) | `lint` job (`make lint`, `check-package-coverage`, `check-module-boundary`, `check-evaluator-boundary`) and `test` job (`make test`), every PR |
 | 3 | Check stable dependencies | GitHub Actions checks that no Go file imports and no go.mod directly requires `golang.org/x/exp` | the Go files and go.mod files of every module | [UC-013](../use_cases/UC-013-verify-change-against-distributions.md) | the `golang.org/x/exp` greps in the `lint` job, every PR (NFR-012) |
-| 4 | Build standard distributions | GitHub Actions builds every standard distribution with the change's modules in place of released versions, as a standard and a FIPS build | the six manifests | [UC-013](../use_cases/UC-013-verify-change-against-distributions.md) | `TestStandardModuleGraphs` and `TestRepositoryManifestsReplaceEveryRelayModule` (`test/distributions`, `test` job); `builder-e2e` job; FIPS: the nightly `fips` job builds flagd-full only, with its crypto closure check; partial, see Gaps |
+| 4 | Build standard distributions | GitHub Actions builds every standard distribution with the change's modules in place of released versions | the six manifests | [UC-013](../use_cases/UC-013-verify-change-against-distributions.md) | `TestStandardModuleGraphs` and `TestRepositoryManifestsReplaceEveryRelayModule` (`test/distributions`, `test` job); `builder-e2e` job |
 | 5 | Verify dependency boundaries | flagd-minimal links no NFR-004 module, flagd-sync links no evaluator or JsonLogic module, and the evaluator and the flagd configuration format depend on no NFR-005 package | flagd-minimal, flagd-sync | [UC-013](../use_cases/UC-013-verify-change-against-distributions.md) | `TestStandardModuleGraphs`, `TestMinimalShapeLinksNoPlatformSDK` (`test/distributions`); `check-module-boundary` in the `lint` job |
 | 6 | Run Test Harness | GitHub Actions builds the flagd-full image of the change and runs the RPC and in-process suites with today's tag selection | `flagd/build.Dockerfile`, `tag-selection.golden` | [UC-013](../use_cases/UC-013-verify-change-against-distributions.md) | `TestRPC`, `TestInProcess`, `TestTagSelectionMatchesBranchPoint` (`test/integration`, `integration-test` job, every PR) |
 | 7 | Compare flagd-sync with flagd-full | GitHub Actions gives both each flag configuration of the set and checks they accept and reject the same ones | `flag-configurations/valid/`, `flag-configurations/invalid/` | [UC-013](../use_cases/UC-013-verify-change-against-distributions.md) | `TestProxyRejectsWhatFlagdFullRejects`, `TestInvalidFlagConfigurationRejectedAlike` (`test/distributions`) |
@@ -42,7 +42,7 @@ Steps 1–10 are covered on every pull request that changes more than documentat
 
 ## Validation
 
-1. **Change verified**: Every check of steps 2–9 shows its result on the pull request; the FIPS build of flagd-full runs in the nightly `fips` job.
+1. **Change verified**: Every check of steps 2–9 shows its result on the pull request.
 2. **Distributions consistent**: flagd-sync and flagd-full give the same verdict for every flag configuration of the set.
 3. **Correct under load**: flagd-minimal answers every client from a flag generation inside the change window, and every stream sees every flag generation.
 4. **Release complete**: The flagd release lists the six standard distributions with manifest, binary archives, SBOM and images, and each released module resolves at its new tag.
@@ -57,7 +57,6 @@ Steps 1–10 are covered on every pull request that changes more than documentat
 
 | Step | Gap |
 |------|-----|
-| 4 | No FIPS build runs on the pull request: the nightly `fips` job builds flagd-full only, after the merge, and no other standard distribution as a FIPS build (C-009). |
 | 11 | Component modules are not registered with release-please and its workflow runs only in `open-feature/flagd`; no release pull request exists in this repository. |
 | 12 | Nothing is tagged; `TestPublishedComponentModulesBuildADistribution` (`test/release`) resolves the modules from a simulated release with a `file://` proxy, so a real tag resolving remains the gap. |
 | 13 | The dry run builds every archive of flagd, flagd-proxy and flagd-minimal, but only one `linux/amd64` archive of the other four distributions and none of their FIPS archives, from the tree rather than released versions; nothing is attached to a release. |

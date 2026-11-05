@@ -132,5 +132,5 @@ This use case is `Implemented`: the manifests of flagd-minimal, flagd-minimal-ot
 
 | Gap | Delivered by |
 |-----|--------------|
-| A1: the FIPS image of a standard distribution with the `-fips` tag. A FIPS build of any manifest is the builder's do-it-yourself build ([Build a FIPS distribution](../relay/fips.md), C-009); CI builds only flagd-full's, nightly | UC-002 |
+| A1: the FIPS image of a standard distribution with the `-fips` tag. A FIPS build of any manifest is the builder's do-it-yourself build ([Build a FIPS distribution](../relay/fips.md), C-009), not verified in CI | UC-002 |
 | BR-005: the image names, the binary archives and the release names of the standard distributions, and their platform matrix (NFR-009) | UC-012 |
