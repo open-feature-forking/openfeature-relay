@@ -41,7 +41,7 @@
 | FIPS Build            | A distribution compiled in FIPS 140-3 mode, with the crypto boundary described in docs/reference/fips-140-3.md. | |
 | Document | The parsed, validated flags of one flag set from one source, owned by the configuration format that accepted them and kept in the store; a source whose flag configuration holds several flag sets yields several documents. |  |
 | Contract Case         | One check within a contract test, such as rejecting an invalid flag configuration without changing the store. | |
-| Release Tag           | The git tag `<module path>/v<version>` that releases one component module, or the flagd release a standard distribution follows. | |
+| Release Tag           | The git tag `<module directory>/v<version>` that releases one component module, or the flagd release a standard distribution follows. | |
 | flagd Test Harness    | The Gherkin acceptance suites and test bed (open-feature/flagd-testbed) that flagd and its providers run to prove evaluation and sync behaviour. | |
 | Event Sink | A component type that subscribes to events on the event bus (configuration changes, evaluations, tracking) and delivers them to an external system, buffered and in batches where needed. |  |
 | Notifier | An event sink that tells people or systems about configuration changes (a chat message, a webhook call), as GO Feature Flag's notifiers do; outbound, the counterpart of an inbound fetch trigger. | |
@@ -71,9 +71,11 @@
 | Operator              | A person who runs a flagd binary or image.                                                                                                 | admin                         |
 | Distribution Builder  | A person who composes a custom distribution from a manifest.                                                                               |                               |
 | Extension Author      | A person who writes an extension in their own Go module.                                                                                   | contributor                   |
-| Provider Author       | A person who maintains an in-process provider that embeds the evaluator.                                                                   |                               |
+| Provider Author       | A person who maintains an OpenFeature provider for flagd, remote or in-process; an in-process provider embeds the evaluator.              |                               |
 | Maintainer            | A person who maintains flagd, its component modules and the standard distributions.                                                       |                               |
-| Testbed | A distribution of the flagd-testbed role: flagd built from `distributions/flagd-testbed` with a control endpoint and a listener gate, against which provider test suites run. | |
+| Testbed | A distribution of the flagd-testbed role: flagd built from `distributions/flagd-testbed` with the control module and a listener gate, against which provider test suites run. | |
+| Control Module | The reusable module (`testbed/control`) that serves the Launchpad API on its own port, outside the listener gate, keeps the combined flags in memory, renders them to `allFlags.json`, and drives a runtime through a control target. | |
+| Testbed Source | The testbed's sync provider (scheme `testbed:`): it serves the combined flags the control module holds in memory, so the runtime reads no file the testbed changes. | |
 | Launchpad API | The control API of flagd-testbed v3.11.0 on port 8080: `/start`, `/stop`, `/restart` and `/change`, with their texts and codes. | |
 | Listener Gate | The layer through which the runtime opens its listeners; closing it closes every listener and connection with a plain close, opening it binds them again. | |
 | Control Target | The interface through which the control module drives a runtime: start, stop, load a document and report readiness. | |
