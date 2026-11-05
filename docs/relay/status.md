@@ -10,7 +10,7 @@ What runs by default is flagd-full, which is flagd built from this repository by
 
 ## Done
 
-Steps 1 to 13 of the proof of concept are done; step 12's release runs as a dry run.
+Steps 1 to 14 of the proof of concept are done; step 12's release runs as a dry run.
 A use case counts as done when its **Status** line reads `Implemented`, or `Tested` once a test case under `docs/test_cases/` covers it.
 
 - **Evaluator without telemetry, with a boundary**: the evaluator no longer imports OpenTelemetry, and `depguard` rules and a CI check keep OpenTelemetry, gRPC, ConnectRPC, Kubernetes and cloud SDKs out of its dependencies (FR-040, NFR-005).
@@ -31,10 +31,7 @@ A use case counts as done when its **Status** line reads `Implemented`, or `Test
 - **The reference image and the CI checks**: a reference Dockerfile builds any distribution into an image ([UC-002](../use_cases/UC-002-package-distribution-as-image.md)), and CI verifies a change against the distributions ([UC-013](../use_cases/UC-013-verify-change-against-distributions.md)).
 - **A release dry run**: the release's build steps run in CI without publishing or signing anything ([UC-012](../use_cases/UC-012-release-distributions-and-component-modules.md), part of it).
 - **The flagd testbed as a distribution**: the testbed the provider suites run against is built by the relay builder, with a control module, a listener gate and a runtime reset, and CI runs the RPC and in-process suites against it and against the flagd-testbed image ([UC-022](../use_cases/UC-022-run-provider-test-suites-against-the-testbed.md), [the testbed](testbed.md)).
-
-## In progress
-
-- **Step 14, syncing from an upstream flag sync endpoint**: [UC-023](../use_cases/UC-023-sync-from-an-upstream-flag-sync-endpoint.md) brings the Go flagd provider's gRPC sync features to `sync/flagd-grpc`, opt-in per source ([#158](https://github.com/open-feature-forking/openfeature-relay/issues/158)).
+- **Syncing from an upstream flag sync endpoint**: a `grpc` source opts into the Go flagd provider's gRPC sync features with a `grpc` object: its retry policy, fatal status codes, a stream deadline, keepalive, the selector header and readiness on the first payload; without the object it behaves as before ([UC-023](../use_cases/UC-023-sync-from-an-upstream-flag-sync-endpoint.md), [the settings](grpc-source.md)).
 
 ## How a change is verified
 
@@ -77,7 +74,7 @@ The table shows the order; the sections above say which rows are done.
 | 11 | [UC-019](../use_cases/UC-019-serve-vendor-flags.md) | a Flagsmith engine module as the cross-vendor proof |
 | 12 | [UC-002](../use_cases/UC-002-package-distribution-as-image.md), [UC-012](../use_cases/UC-012-release-distributions-and-component-modules.md), [UC-013](../use_cases/UC-013-verify-change-against-distributions.md) | image, release, CI verification |
 | 13 | [UC-022](../use_cases/UC-022-run-provider-test-suites-against-the-testbed.md) | the flagd testbed as a `relay-builder` distribution |
-| 14 | [UC-023](../use_cases/UC-023-sync-from-an-upstream-flag-sync-endpoint.md) (in progress, [#158](https://github.com/open-feature-forking/openfeature-relay/issues/158)) | the Go flagd provider's gRPC sync features in `sync/flagd-grpc`, opt-in |
+| 14 | [UC-023](../use_cases/UC-023-sync-from-an-upstream-flag-sync-endpoint.md) | the Go flagd provider's gRPC sync features in `sync/flagd-grpc`, opt-in |
 
 [UC-016 Recover from Snapshot](../use_cases/UC-016-recover-from-snapshot.md) is deferred to a later release.
 Provider migration (formerly UC-015) is a follow-up after the proof of concept, [#156](https://github.com/open-feature-forking/openfeature-relay/issues/156).

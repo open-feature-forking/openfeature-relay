@@ -49,7 +49,7 @@ Without either key the source retries on the schedule it always had.
     Set `keepAliveTime` only for an upstream that allows it.
 - The provider sends the selector header whenever a selector is set.
     Here it is opt-in with `selectorHeader`, because it changes what the upstream sees.
-    A `flagd-selector` entry in the source's `headers` is refused with it.
+    A `flagd-selector` entry in the source's `headers` or `headersFrom` is refused with it.
 - A fatal status code ends flagd, naming the source and the code, as for a fetching source that is refused before its first fetch.
     The other sources of the same flagd stop with it.
     After the first payload a listed code is retried like any error.
@@ -61,6 +61,6 @@ Without either key the source retries on the schedule it always had.
 
 ## Upgrading
 
-Keys spelled as the provider documents them, set directly on a source, are ignored today and stay ignored.
-Today flagd also ignores a key named `grpc` on a source.
-Once the step 14 changes land, a configuration that already carries such a key has it read, and flagd stops at startup when its content is malformed.
+Keys spelled as the provider documents them, set directly on a source, were ignored and stay ignored.
+Upstream flagd also ignores a key named `grpc` on a source.
+flagd built from this repository reads it, and stops at startup when its content is malformed or the source's provider is not `grpc` ([upgrade guide](../guides/upgrade-to-flagd-full.md#a-grpc-object-on-a-source-is-read-and-validated)).
