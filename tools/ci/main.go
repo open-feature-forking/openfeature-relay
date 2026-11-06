@@ -7,11 +7,13 @@ import (
 	"os"
 
 	"github.com/open-feature-forking/openfeature-relay/tools/ci/internal/oci"
+	"github.com/open-feature-forking/openfeature-relay/tools/ci/internal/publish"
 )
 
 const usage = `usage: relay-ci <subcommand> [arguments]
 
   oci       read the OCI layouts the image builds write (check, marking, load, platforms)
+  publish   push the layouts to ghcr.io and move the main tags (push, move-main)
 `
 
 func main() {
@@ -30,6 +32,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 0
 	case "oci":
 		return oci.Run(args[1:], stdout, stderr)
+	case "publish":
+		return publish.Run(args[1:], stdout, stderr)
 	default:
 		_, _ = fmt.Fprintf(stderr, "relay-ci: unknown subcommand %q\n\n%s", args[0], usage)
 		return 2
