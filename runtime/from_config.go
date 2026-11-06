@@ -218,10 +218,11 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 			}
 		}
 	}()
-	for _, factory := range components.Endpoints {
-		if err := service.ValidateDeclarations(factory); err != nil {
-			return nil, fmt.Errorf("the service endpoint %q declares: %w", factory.Type(), err)
-		}
+	plan, err := planHosted(components.Endpoints)
+	if err != nil {
+		return nil, err
+	}
+	createEndpoint := func(factory service.Factory, extensions []service.Endpoint) (service.Endpoint, error) {
 		settings := inputs.settings(factory)
 		settings.Initialized = rt.Initialized()
 		settings.Telemetry = tp
@@ -230,12 +231,43 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		settings.Sources = sources
 		settings.HTTPMiddleware = wrapHTTP
 		settings.Listen = components.Listen
+		settings.Extensions = extensions
 		endpoint, err := factory.Create(settings)
 		if err != nil {
 			return nil, fmt.Errorf("error creating the service endpoint %q: %w", factory.Type(), err)
 		}
 		created = append(created, endpoint)
+		return endpoint, nil
+	}
+	// a hosted endpoint is created first, so that its host gets it, and is never served: its host serves it
+	var hosted []service.Endpoint
+	extensions := map[string][]service.Endpoint{}
+	for i, factory := range components.Endpoints {
+		if !plan.isHosted[i] {
+			continue
+		}
+		endpoint, err := createEndpoint(factory, nil)
+		if err != nil {
+			return nil, err
+		}
+		hosted = append(hosted, endpoint)
+		extensions[plan.hosts[i]] = append(extensions[plan.hosts[i]], endpoint)
+	}
+	for i, factory := range components.Endpoints {
+		if plan.isHosted[i] {
+			continue
+		}
+		if err := service.ValidateDeclarations(factory); err != nil {
+			return nil, fmt.Errorf("the service endpoint %q declares: %w", factory.Type(), err)
+		}
+		endpoint, err := createEndpoint(factory, extensions[factory.Type()])
+		if err != nil {
+			return nil, err
+		}
 		rt.Endpoints = append(rt.Endpoints, NamedEndpoint{Type: factory.Type(), Endpoint: endpoint})
+	}
+	if len(hosted) > 0 {
+		rt.onShutdown("hosted endpoints", closeHosted(hosted))
 	}
 
 	// build sync providers with a shared source-agnostic sync-metrics recorder so every
