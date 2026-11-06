@@ -1,6 +1,6 @@
 //lint:file-ignore SA4003 old proto is deprecated but we want to serve it for a while
 
-package service
+package flagevallegacy
 
 import (
 	"context"
@@ -127,7 +127,7 @@ func TestConnectService_ResolveAll(t *testing.T) {
 			s := NewOldFlagEvaluationService(
 				logger.NewLogger(nil, false),
 				eval,
-				&eventingConfiguration{},
+				noEvents{},
 				metrics,
 				nil,
 			)
@@ -235,7 +235,7 @@ func TestFlag_Evaluation_ResolveBoolean(t *testing.T) {
 			s := NewOldFlagEvaluationService(
 				logger.NewLogger(nil, false),
 				eval,
-				&eventingConfiguration{},
+				noEvents{},
 				metrics,
 				nil,
 			)
@@ -291,7 +291,7 @@ func BenchmarkFlag_Evaluation_ResolveBoolean(b *testing.B) {
 		s := NewOldFlagEvaluationService(
 			logger.NewLogger(nil, false),
 			eval,
-			&eventingConfiguration{},
+			noEvents{},
 			metrics,
 			nil,
 		)
@@ -390,7 +390,7 @@ func TestFlag_Evaluation_ResolveString(t *testing.T) {
 			s := NewOldFlagEvaluationService(
 				logger.NewLogger(nil, false),
 				eval,
-				&eventingConfiguration{},
+				noEvents{},
 				metrics,
 				nil,
 			)
@@ -446,7 +446,7 @@ func BenchmarkFlag_Evaluation_ResolveString(b *testing.B) {
 		s := NewOldFlagEvaluationService(
 			logger.NewLogger(nil, false),
 			eval,
-			&eventingConfiguration{},
+			noEvents{},
 			metrics,
 			nil,
 		)
@@ -544,7 +544,7 @@ func TestFlag_Evaluation_ResolveFloat(t *testing.T) {
 			s := NewOldFlagEvaluationService(
 				logger.NewLogger(nil, false),
 				eval,
-				&eventingConfiguration{},
+				noEvents{},
 				metrics,
 				nil,
 			)
@@ -600,7 +600,7 @@ func BenchmarkFlag_Evaluation_ResolveFloat(b *testing.B) {
 		s := NewOldFlagEvaluationService(
 			logger.NewLogger(nil, false),
 			eval,
-			&eventingConfiguration{},
+			noEvents{},
 			metrics,
 			nil,
 		)
@@ -698,7 +698,7 @@ func TestFlag_Evaluation_ResolveInt(t *testing.T) {
 			s := NewOldFlagEvaluationService(
 				logger.NewLogger(nil, false),
 				eval,
-				&eventingConfiguration{},
+				noEvents{},
 				metrics,
 				nil,
 			)
@@ -754,7 +754,7 @@ func BenchmarkFlag_Evaluation_ResolveInt(b *testing.B) {
 		s := NewOldFlagEvaluationService(
 			logger.NewLogger(nil, false),
 			eval,
-			&eventingConfiguration{},
+			noEvents{},
 			metrics,
 			nil,
 		)
@@ -855,7 +855,7 @@ func TestFlag_Evaluation_ResolveObject(t *testing.T) {
 			s := NewOldFlagEvaluationService(
 				logger.NewLogger(nil, false),
 				eval,
-				&eventingConfiguration{},
+				noEvents{},
 				metrics,
 				nil,
 			)
@@ -919,7 +919,7 @@ func BenchmarkFlag_Evaluation_ResolveObject(b *testing.B) {
 		s := NewOldFlagEvaluationService(
 			logger.NewLogger(nil, false),
 			eval,
-			&eventingConfiguration{},
+			noEvents{},
 			metrics,
 			nil,
 		)
@@ -1063,7 +1063,7 @@ func TestInvalidSelector_OldFlagEvaluationService(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	eval := mock.NewMockIEvaluator(ctrl)
 	metrics, _ := getMetricReader()
-	s := NewOldFlagEvaluationService(logger.NewLogger(nil, false), eval, &eventingConfiguration{}, metrics, nil)
+	s := NewOldFlagEvaluationService(logger.NewLogger(nil, false), eval, noEvents{}, metrics, nil)
 
 	assertInvalidSelectorConnect(t, []invalidSelectorCase{
 		{"ResolveAll", func() error {

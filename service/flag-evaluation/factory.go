@@ -56,14 +56,21 @@ type connectInstrumentation interface {
 	ConnectHandlerOptions() []connect.HandlerOption
 }
 
-// Factory creates the flag evaluation service endpoint: the legacy, v1 and v2 flag evaluation services over
-// connect, gRPC and HTTP. It resolves through the evaluation router and publishes nothing by hand.
+// Factory creates the flag evaluation service endpoint: the v2 flag evaluation service over
+// connect, gRPC and HTTP, and the services of the hosted endpoints it mounts (Settings.Extensions). It resolves through
+// the evaluation router and publishes nothing by hand.
 type Factory struct{}
 
-var _ service.Factory = Factory{}
+var (
+	_ service.Factory = Factory{}
+	_ service.Hosting = Factory{}
+)
 
 // Type implements service.Factory.
 func (Factory) Type() string { return Type }
+
+// Hosts implements service.Hosting: the endpoint mounts the hosted endpoints of Settings.Extensions on its server.
+func (Factory) Hosts() bool { return true }
 
 // Needs implements service.Factory.
 func (Factory) Needs() service.Needs { return service.Needs{Router: true} }
@@ -84,6 +91,9 @@ func (Factory) Create(s service.Settings) (service.Endpoint, error) {
 	svc := NewConnectService(s.Logger.WithFields(zap.String("component", "service")), s.Resolver, s.Store, s.Telemetry, options...)
 	svc.httpMiddleware = s.HTTPMiddleware
 	svc.listen = s.Listen
+	if err := svc.Mount(cfg.Configuration, s.Extensions...); err != nil {
+		return nil, fmt.Errorf("the %s endpoint: %w", Type, err)
+	}
 	return &endpoint{svc: svc, cfg: cfg.Configuration}, nil
 }
 

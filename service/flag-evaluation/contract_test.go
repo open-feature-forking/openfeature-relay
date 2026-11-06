@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"testing"
 
-	evaluationV1 "buf.build/gen/go/open-feature/flagd/connectrpc/go/flagd/evaluation/v1/evaluationv1connect"
-	evalV1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/evaluation/v1"
+	evaluationV2 "buf.build/gen/go/open-feature/flagd/connectrpc/go/flagd/evaluation/v2/evaluationv2connect"
+	evalV2 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/evaluation/v2"
 	"connectrpc.com/connect"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/service/servicetest"
@@ -19,8 +19,8 @@ import (
 // announces its changes from the flags table and not from the bus (UC-004 Q7). It honours a selector bound by
 // middleware.
 func TestConnectContract(t *testing.T) {
-	client := func(addr string) evaluationV1.ServiceClient {
-		return evaluationV1.NewServiceClient(http.DefaultClient, "http://"+addr)
+	client := func(addr string) evaluationV2.ServiceClient {
+		return evaluationV2.NewServiceClient(http.DefaultClient, "http://"+addr)
 	}
 
 	servicetest.Run(t, Factory{}, servicetest.Inputs{
@@ -32,7 +32,7 @@ func TestConnectContract(t *testing.T) {
 		},
 		Connect: func(ctx context.Context, addr string) (<-chan struct{}, error) {
 			// the event stream stays open until the endpoint ends it; its first message says that it serves
-			stream, err := client(addr).EventStream(context.Background(), connect.NewRequest(&evalV1.EventStreamRequest{}))
+			stream, err := client(addr).EventStream(context.Background(), connect.NewRequest(&evalV2.EventStreamRequest{}))
 			if err != nil {
 				return nil, err
 			}
@@ -49,7 +49,7 @@ func TestConnectContract(t *testing.T) {
 			return ended, nil
 		},
 		Resolve: func(ctx context.Context, addr, key, selector string) (servicetest.Answer, error) {
-			req := connect.NewRequest(&evalV1.ResolveBooleanRequest{FlagKey: key})
+			req := connect.NewRequest(&evalV2.ResolveBooleanRequest{FlagKey: key})
 			if selector != "" {
 				req.Header().Set(flagdService.FLAGD_SELECTOR_HEADER, selector)
 			}

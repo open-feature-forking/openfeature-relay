@@ -1,0 +1,27 @@
+# legacy_Boolean_bool-flag
+connectrpc.com/otelconnect/schema.v1.Service/ResolveBoolean[server]{rpc.method=ResolveBoolean,rpc.service=schema.v1.Service,rpc.system=connect_rpc} event=message event=message
+  flagEvaluationService/resolveBoolean[server]{feature_flag.key=bool-flag,feature_flag.provider.name=flagd,feature_flag.result.variant=on}
+    jsonEvaluator/resolveBoolean[internal]{}
+# legacy_All
+connectrpc.com/otelconnect/schema.v1.Service/ResolveAll[server]{rpc.method=ResolveAll,rpc.service=schema.v1.Service,rpc.system=connect_rpc} event=message event=message
+  flagEvaluationService/resolveAll[server]{feature_flag.count=5}
+    jsonEvaluator/resolveAll[internal]{}
+# v1_Boolean_bool-flag
+connectrpc.com/otelconnect/flagd.evaluation.v1.Service/ResolveBoolean[server]{rpc.method=ResolveBoolean,rpc.service=flagd.evaluation.v1.Service,rpc.system=connect_rpc} event=message event=message
+  flagd.evaluation.v1/resolveBoolean[server]{feature_flag.key=bool-flag,feature_flag.provider.name=flagd,feature_flag.result.variant=on}
+    jsonEvaluator/resolveBoolean[internal]{}
+# v1_Boolean_missing
+connectrpc.com/otelconnect/flagd.evaluation.v1.Service/ResolveBoolean[server]{rpc.connect_rpc.error_code=not_found,rpc.method=ResolveBoolean,rpc.service=flagd.evaluation.v1.Service,rpc.system=connect_rpc} event=message event=message
+  flagd.evaluation.v1/resolveBoolean[server]{feature_flag.key=missing,feature_flag.provider.name=flagd,feature_flag.result.variant=} status=Error("error evaluating flag with key missing") event=exception
+    jsonEvaluator/resolveBoolean[internal]{}
+# v1_Object_object-flag
+connectrpc.com/otelconnect/flagd.evaluation.v1.Service/ResolveObject[server]{rpc.method=ResolveObject,rpc.service=flagd.evaluation.v1.Service,rpc.system=connect_rpc} event=message event=message
+  flagd.evaluation.v1/resolveObject[server]{feature_flag.key=object-flag,feature_flag.provider.name=flagd,feature_flag.result.variant=a}
+    jsonEvaluator/resolveObject[internal]{}
+# v1_All
+connectrpc.com/otelconnect/flagd.evaluation.v1.Service/ResolveAll[server]{rpc.method=ResolveAll,rpc.service=flagd.evaluation.v1.Service,rpc.system=connect_rpc} event=message event=message
+  flagd.evaluation.v1/resolveAll[server]{feature_flag.count=5}
+    jsonEvaluator/resolveAll[internal]{}
+# v1_All_invalid=selector
+connectrpc.com/otelconnect/flagd.evaluation.v1.Service/ResolveAll[server]{rpc.connect_rpc.error_code=invalid_argument,rpc.method=ResolveAll,rpc.service=flagd.evaluation.v1.Service,rpc.system=connect_rpc} event=message event=message
+  flagd.evaluation.v1/resolveAll[server]{} status=Error("invalid_argument: invalid selector key \"invalid\", valid keys: \"flagSetId\", \"source\"") event=exception
