@@ -26,6 +26,7 @@ replace (
 	github.com/open-feature-forking/openfeature-relay/evaluator/flagd => ../../evaluator/flagd
 	github.com/open-feature-forking/openfeature-relay/runtime => ../../runtime
 	github.com/open-feature-forking/openfeature-relay/service/flag-evaluation => ../flag-evaluation
+	github.com/open-feature-forking/openfeature-relay/service/flag-evaluation-legacy => ../flag-evaluation-legacy
 	github.com/open-feature-forking/openfeature-relay/service/flag-sync => ../flag-sync
 	github.com/open-feature-forking/openfeature-relay/service/transport => ../transport
 	github.com/open-feature-forking/openfeature-relay/sync/azblob => ../../sync/azblob

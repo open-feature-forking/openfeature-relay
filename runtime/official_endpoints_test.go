@@ -27,6 +27,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
 	flagdeval "github.com/open-feature-forking/openfeature-relay/evaluator/flagd"
 	flageval "github.com/open-feature-forking/openfeature-relay/service/flag-evaluation"
+	flagevallegacy "github.com/open-feature-forking/openfeature-relay/service/flag-evaluation-legacy"
 	flagsync "github.com/open-feature-forking/openfeature-relay/service/flag-sync"
 	"github.com/open-feature-forking/openfeature-relay/service/ofrep"
 	"github.com/open-feature-forking/openfeature-relay/runtime/internal/porttest"
@@ -148,6 +149,9 @@ func TestOfficialEndpointsPublishOncePerFlag(t *testing.T) {
 			defer sub.Close()
 			port := freePort(t)
 			settings.Config = tt.config(port)
+			if _, ok := tt.factory.(flageval.Factory); ok {
+				settings = withLegacy(t, settings)
+			}
 			serveFactory(t, tt.factory, settings)
 			waitForPort(t, port)
 			base := fmt.Sprintf("http://127.0.0.1:%d", port)
@@ -208,7 +212,7 @@ func TestHTTPMiddlewareSeesH2CRequests(t *testing.T) {
 		config     func(port uint16, cert, key string) map[string]any
 	}{
 		{
-			name: "flag evaluation", path: "/flagd.evaluation.v1.Service/ResolveBoolean", factory: flageval.Factory{},
+			name: "flag evaluation", path: "/flagd.evaluation.v2.Service/ResolveBoolean", factory: flageval.Factory{},
 			config: func(port uint16, cert, key string) map[string]any {
 				return map[string]any{flageval.ConfigKey: flageval.EndpointConfig{Configuration: service.Configuration{
 					Port: port, CertPath: cert, KeyPath: key, CORS: []string{"*"},
@@ -368,7 +372,13 @@ func TestRuntimeStartsAnyEndpointSet(t *testing.T) {
 			}))
 			require.NoError(t, err)
 			require.Equal(t, tt.evaluator, rt.Evaluator != nil, "an evaluator is built only for an endpoint that needs one")
-			require.Len(t, rt.Endpoints, len(tt.endpoints))
+			served := 0 // a hosted endpoint is served by its host
+			for _, f := range tt.endpoints {
+				if _, hosted := f.(service.Hosted); !hosted {
+					served++
+				}
+			}
+			require.Len(t, rt.Endpoints, served)
 
 			ctx, cancel := context.WithCancel(context.Background())
 			done := make(chan error, 1)
@@ -393,4 +403,14 @@ func TestRuntimeStartsAnyEndpointSet(t *testing.T) {
 			}
 		})
 	}
+}
+
+// withLegacy mounts the deprecated flag evaluation endpoint on the flag evaluation endpoint these settings create, as
+// the runtime does for a distribution that lists it.
+func withLegacy(t *testing.T, settings service.Settings) service.Settings {
+	t.Helper()
+	hosted, err := flagevallegacy.Factory{}.Create(service.Settings{Config: map[string]any{}})
+	require.NoError(t, err)
+	settings.Extensions = append(settings.Extensions, hosted)
+	return settings
 }

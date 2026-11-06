@@ -24,6 +24,7 @@ evaluators:
   - {module: github.com/open-feature-forking/openfeature-relay/evaluator/flagd, version: v0.0.0}
 service_endpoints:
   - {module: github.com/open-feature-forking/openfeature-relay/service/flag-evaluation, version: v0.0.0}
+  - {module: github.com/open-feature-forking/openfeature-relay/service/flag-evaluation-legacy, version: v0.0.0}
   - {module: github.com/open-feature-forking/openfeature-relay/service/ofrep, version: v0.0.0}
   - {module: github.com/open-feature-forking/openfeature-relay/service/flag-sync, version: v0.0.0}
   - {module: github.com/open-feature-forking/openfeature-relay/service/event-collector, version: v0.0.0}
@@ -39,6 +40,7 @@ replaces:
   - {module: github.com/open-feature-forking/openfeature-relay/runtime, path: ../../runtime}
   - {module: github.com/open-feature-forking/openfeature-relay/service/event-collector, path: ../../service/event-collector}
   - {module: github.com/open-feature-forking/openfeature-relay/service/flag-evaluation, path: ../../service/flag-evaluation}
+  - {module: github.com/open-feature-forking/openfeature-relay/service/flag-evaluation-legacy, path: ../../service/flag-evaluation-legacy}
   - {module: github.com/open-feature-forking/openfeature-relay/service/flag-sync, path: ../../service/flag-sync}
   - {module: github.com/open-feature-forking/openfeature-relay/service/ofrep, path: ../../service/ofrep}
   - {module: github.com/open-feature-forking/openfeature-relay/service/transport, path: ../../service/transport}

@@ -31,6 +31,8 @@ evaluator
 service endpoints
   flag-evaluation
     needs: router=true format=""
+  flag-evaluation-legacy
+    needs: router=false format=""
   ofrep
     needs: router=true format=""
   flag-sync

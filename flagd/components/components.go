@@ -8,10 +8,11 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/distribution"
 	evaluator0 "github.com/open-feature-forking/openfeature-relay/evaluator/flagd"
 	eventsink0 "github.com/open-feature-forking/openfeature-relay/eventsink/webhook"
-	endpoint3 "github.com/open-feature-forking/openfeature-relay/service/event-collector"
+	endpoint4 "github.com/open-feature-forking/openfeature-relay/service/event-collector"
 	endpoint0 "github.com/open-feature-forking/openfeature-relay/service/flag-evaluation"
-	endpoint2 "github.com/open-feature-forking/openfeature-relay/service/flag-sync"
-	endpoint1 "github.com/open-feature-forking/openfeature-relay/service/ofrep"
+	endpoint1 "github.com/open-feature-forking/openfeature-relay/service/flag-evaluation-legacy"
+	endpoint3 "github.com/open-feature-forking/openfeature-relay/service/flag-sync"
+	endpoint2 "github.com/open-feature-forking/openfeature-relay/service/ofrep"
 	sync5 "github.com/open-feature-forking/openfeature-relay/sync/azblob"
 	sync0 "github.com/open-feature-forking/openfeature-relay/sync/file"
 	sync3 "github.com/open-feature-forking/openfeature-relay/sync/flagd-grpc"
@@ -38,6 +39,7 @@ func Components() distribution.Components {
 	c.Endpoints = append(c.Endpoints, endpoint1.NewFactory())
 	c.Endpoints = append(c.Endpoints, endpoint2.NewFactory())
 	c.Endpoints = append(c.Endpoints, endpoint3.NewFactory())
+	c.Endpoints = append(c.Endpoints, endpoint4.NewFactory())
 	c.Telemetry = telemetry0.NewFactory()
 	c.EventSinkFactories = append(c.EventSinkFactories, eventsink0.NewFactory())
 	return c
@@ -73,9 +75,10 @@ func Inventory() distribution.Inventory {
 	add(distribution.GroupConfigurationFormat, format0.NewFactory().Type(), "github.com/open-feature-forking/openfeature-relay/configformat/flagd")
 	add(distribution.GroupEvaluator, evaluator0.NewFactory().Type(), "github.com/open-feature-forking/openfeature-relay/evaluator/flagd")
 	add(distribution.GroupServiceEndpoint, endpoint0.NewFactory().Type(), "github.com/open-feature-forking/openfeature-relay/service/flag-evaluation")
-	add(distribution.GroupServiceEndpoint, endpoint1.NewFactory().Type(), "github.com/open-feature-forking/openfeature-relay/service/ofrep")
-	add(distribution.GroupServiceEndpoint, endpoint2.NewFactory().Type(), "github.com/open-feature-forking/openfeature-relay/service/flag-sync")
-	add(distribution.GroupServiceEndpoint, endpoint3.NewFactory().Type(), "github.com/open-feature-forking/openfeature-relay/service/event-collector")
+	add(distribution.GroupServiceEndpoint, endpoint1.NewFactory().Type(), "github.com/open-feature-forking/openfeature-relay/service/flag-evaluation-legacy")
+	add(distribution.GroupServiceEndpoint, endpoint2.NewFactory().Type(), "github.com/open-feature-forking/openfeature-relay/service/ofrep")
+	add(distribution.GroupServiceEndpoint, endpoint3.NewFactory().Type(), "github.com/open-feature-forking/openfeature-relay/service/flag-sync")
+	add(distribution.GroupServiceEndpoint, endpoint4.NewFactory().Type(), "github.com/open-feature-forking/openfeature-relay/service/event-collector")
 	add(distribution.GroupTelemetry, telemetry0.NewFactory().Type(), "github.com/open-feature-forking/openfeature-relay/telemetry/otel")
 	add(distribution.GroupEventSink, eventsink0.NewFactory().Type(), "github.com/open-feature-forking/openfeature-relay/eventsink/webhook")
 	return inv

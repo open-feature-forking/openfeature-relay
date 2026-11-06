@@ -78,7 +78,8 @@ class TestTableCoversModules(unittest.TestCase):
     LIB = ["core", "sync/file", "sync/flagd-grpc", "sync/http", "sync/openfeature-operator", "sync/gcs", "sync/azblob",
            "sync/s3", "sync/sse", "sync/builder", "telemetry/otel", "eventsink/webhook", "evaluator/flagd",
            "configformat/flagd"]
-    FLAGD = ["flagd", "runtime", "service/transport", "service/flag-evaluation", "service/ofrep", "service/flag-sync",
+    FLAGD = ["flagd", "runtime", "service/transport", "service/flag-evaluation", "service/flag-evaluation-legacy", "service/ofrep",
+             "service/flag-sync",
              "service/event-collector"]
     CONTRIB = ["contrib/flagsmith/engine", "contrib/flagsmith/middleware", "contrib/flagsmith/sync", "testbed/control",
                "testbed/source", "testbed/cmd"]

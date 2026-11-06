@@ -52,6 +52,7 @@ github.com/open-feature-forking/openfeature-relay/runtime/telemetrystartup_test
 github.com/open-feature-forking/openfeature-relay/runtime/tracingoff_test
 github.com/open-feature-forking/openfeature-relay/service/event-collector
 github.com/open-feature-forking/openfeature-relay/service/flag-evaluation
+github.com/open-feature-forking/openfeature-relay/service/flag-evaluation-legacy
 github.com/open-feature-forking/openfeature-relay/service/flag-evaluation/mock
 github.com/open-feature-forking/openfeature-relay/service/flag-sync
 github.com/open-feature-forking/openfeature-relay/service/ofrep

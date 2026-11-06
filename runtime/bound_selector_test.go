@@ -104,7 +104,7 @@ func TestBoundSelectorNarrowing(t *testing.T) {
 		settings.Config = map[string]any{flageval.ConfigKey: flageval.EndpointConfig{
 			Configuration: service.Configuration{Port: port, ServiceName: "flagd"},
 		}}
-		serveFactory(t, flageval.Factory{}, settings)
+		serveFactory(t, flageval.Factory{}, withLegacy(t, settings))
 		waitForPort(t, port)
 		base := fmt.Sprintf("http://127.0.0.1:%d/flagd.evaluation.v1.Service/", port)
 

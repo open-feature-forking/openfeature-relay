@@ -87,6 +87,7 @@ linters:
             - "!$test"
             - "**/service/transport/**"
             - "**/service/flag-evaluation/**"
+            - "**/service/flag-evaluation-legacy/**"
             - "**/service/ofrep/**"
             - "**/service/flag-sync/**"
             - "**/service/event-collector/**"

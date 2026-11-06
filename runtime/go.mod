@@ -13,6 +13,7 @@ require (
 	github.com/open-feature-forking/openfeature-relay/core v0.20.0
 	github.com/open-feature-forking/openfeature-relay/evaluator/flagd v0.1.0
 	github.com/open-feature-forking/openfeature-relay/service/flag-evaluation v0.1.0
+	github.com/open-feature-forking/openfeature-relay/service/flag-evaluation-legacy v0.1.0
 	github.com/open-feature-forking/openfeature-relay/service/flag-sync v0.1.0
 	github.com/open-feature-forking/openfeature-relay/service/ofrep v0.1.0
 	github.com/open-feature-forking/openfeature-relay/service/transport v0.1.0
@@ -213,6 +214,7 @@ replace (
 	github.com/open-feature-forking/openfeature-relay/eventsink/webhook => ../eventsink/webhook
 	github.com/open-feature-forking/openfeature-relay/service/event-collector => ../service/event-collector
 	github.com/open-feature-forking/openfeature-relay/service/flag-evaluation => ../service/flag-evaluation
+	github.com/open-feature-forking/openfeature-relay/service/flag-evaluation-legacy => ../service/flag-evaluation-legacy
 	github.com/open-feature-forking/openfeature-relay/service/flag-sync => ../service/flag-sync
 	github.com/open-feature-forking/openfeature-relay/service/ofrep => ../service/ofrep
 	github.com/open-feature-forking/openfeature-relay/service/transport => ../service/transport

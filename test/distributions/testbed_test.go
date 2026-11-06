@@ -18,7 +18,8 @@ var testbedModules = []string{
 	relay + "configformat/flagd",      // every source's flag configuration
 	relay + "evaluator/flagd",         // TestRPC: every evaluation through port 8013
 	relay + "runtime",                 // the runtime
-	relay + "service/flag-evaluation", // TestRPC and the rpc.service route of envoy
+	relay + "service/flag-evaluation", // TestRPC and the rpc.service route of envoy; and the deprecated services it calls
+	relay + "service/flag-evaluation-legacy", // TestRPC: the deprecated services of port 8013
 	relay + "service/flag-sync",       // TestInProcess and the sync.service route of envoy
 	relay + "sync/file",               // selector-flags.json and the metadata configuration's source
 	relay + "testbed/cmd",             // the control API and the flagd target

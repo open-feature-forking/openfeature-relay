@@ -76,7 +76,7 @@ func TestMiddlewareChainCharacterization(t *testing.T) {
 	}
 	targets := []target{
 		{
-			name: "flag evaluation", path: "/flagd.evaluation.v1.Service/ResolveBoolean", factory: flageval.Factory{}, tls: true, h2c: true,
+			name: "flag evaluation", path: "/flagd.evaluation.v2.Service/ResolveBoolean", factory: flageval.Factory{}, tls: true, h2c: true,
 			oversizedStatus: http.StatusTooManyRequests, oversizedRecorded: "429",
 			config: func(port uint16, cert, key string) map[string]any {
 				return map[string]any{flageval.ConfigKey: flageval.EndpointConfig{Configuration: service.Configuration{
