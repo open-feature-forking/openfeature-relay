@@ -79,6 +79,9 @@ type Result struct {
 // Evaluator resolves flags. One method serves a single flag and a bulk request alike: the results are
 // appended to dst, so that a caller can reuse its buffer, and the flag-set metadata of the selector is returned
 // beside them. An error is for a failure of the whole request; a failure of one flag is its Result's ErrorCode.
+//
+// An evaluator that holds resources may implement io.Closer. The runtime closes it once: when a start fails after it was
+// built, and at shutdown. A router closes the evaluators of its routes, so give each route its own.
 type Evaluator interface {
 	Evaluate(ctx context.Context, req Request, dst []Result) ([]Result, model.Metadata, error)
 }

@@ -186,6 +186,25 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		store:           store,
 	}
 
+	inputs, err := newEndpointInputs(logger, store, bus, components.Endpoints, formatTypes, config.Evaluators,
+		func(evaluatorType string) map[string]any { return maps.Clone(config.EvaluatorSettings[evaluatorType]) },
+		config.StrictNumericRange)
+	if err != nil {
+		return nil, err
+	}
+	// a runtime that is not built closes the evaluators after the endpoints that use them; a built one closes them at
+	// shutdown
+	defer func() {
+		if rt == nil {
+			_ = inputs.close()
+		}
+	}()
+	rt.Evaluator = inputs.evaluator()
+	wrapHTTP, err := httpMiddleware(logger, tp, components.Middleware)
+	if err != nil {
+		return nil, err
+	}
+
 	// an endpoint may hold a resource from its Create on, such as the listener of flag sync: a build that fails after it
 	// releases it, since the endpoint is never served
 	var created []service.Endpoint
@@ -199,19 +218,6 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 			}
 		}
 	}()
-
-	inputs, err := newEndpointInputs(logger, store, bus, components.Endpoints, formatTypes, config.Evaluators,
-		func(evaluatorType string) map[string]any { return maps.Clone(config.EvaluatorSettings[evaluatorType]) },
-		config.StrictNumericRange)
-	if err != nil {
-		return nil, err
-	}
-	rt.Evaluator = inputs.evaluator()
-	wrapHTTP, err := httpMiddleware(logger, tp, components.Middleware)
-	if err != nil {
-		_ = inputs.close()
-		return nil, err
-	}
 	for _, factory := range components.Endpoints {
 		if err := service.ValidateDeclarations(factory); err != nil {
 			return nil, fmt.Errorf("the service endpoint %q declares: %w", factory.Type(), err)
@@ -241,13 +247,19 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		return nil, err
 	}
 	rt.Syncs = iSyncs
-	staleLimits, err := staleLimitsOf(syncProviders, iSyncs)
-	if err != nil {
+	// the sync providers close before the endpoints
+	defer func() {
+		if rt != nil {
+			return
+		}
 		for _, s := range iSyncs {
 			if closer, ok := s.(io.Closer); ok {
 				_ = closer.Close()
 			}
 		}
+	}()
+	staleLimits, err := staleLimitsOf(syncProviders, iSyncs)
+	if err != nil {
 		return nil, err
 	}
 	rt.staleLimits = staleLimits
@@ -257,6 +269,9 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 	}
 	if len(sinks) > 0 {
 		rt.onShutdown("event sinks", flushEventSinks(sinks))
+	}
+	if inputs.router != nil {
+		rt.onShutdown("evaluator", func(context.Context) error { return inputs.close() })
 	}
 	if shutdownTelemetry != nil {
 		rt.onShutdown("telemetry", shutdownTelemetry)

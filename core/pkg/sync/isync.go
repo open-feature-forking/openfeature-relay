@@ -11,6 +11,9 @@ import (
 StreamingSyncProvider implementations watch for changes in the flag sources (a gRPC stream, K8s CRDs ...), fetch the
 latest value and communicate to the Runtime with DataSync channel. A source that is only read on request is a Fetcher
 that the core's fetching sync provider drives.
+
+A sync provider that holds resources may implement io.Closer. The runtime closes it once when a start fails after it was
+built; a running runtime stops it through the context of Sync.
 */
 type StreamingSyncProvider interface {
 	// Init is used by the sync provider to initialize its data structures and external dependencies.
