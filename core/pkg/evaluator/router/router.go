@@ -85,7 +85,26 @@ func (r *Router) Evaluate(ctx context.Context, req evaluator.Request, dst []eval
 		return r.single(ctx, req, entries, dst, meta)
 	}
 
-	type pair struct{ flagSet, key string }
+	return r.bulk(ctx, req, entries, dst, meta)
+}
+
+// pair identifies a flag within a flag set.
+type pair struct{ flagSet, key string }
+
+// bulk answers a bulk request or an explicit key list, one result for each winning (flag set, key).
+func (r *Router) bulk(
+	ctx context.Context, req evaluator.Request, entries []entry, dst []evaluator.Result, meta model.Metadata,
+) ([]evaluator.Result, model.Metadata, error) {
+	winners := winnersOf(entries)
+	keysOf := r.keysPerRoute(winners)
+	results, merged := r.evaluateRoutes(ctx, req, winners, keysOf, meta)
+	results = fillNotFound(req, results, meta)
+	sortResults(req, results)
+	return append(dst, results...), merged, nil
+}
+
+// winnersOf picks, for each (flag set, key), the entry of the highest-priority source.
+func winnersOf(entries []entry) map[pair]entry {
 	winners := map[pair]entry{}
 	for _, e := range entries {
 		p := pair{e.flagSet, e.key}
@@ -93,14 +112,25 @@ func (r *Router) Evaluate(ctx context.Context, req evaluator.Request, dst []eval
 			winners[p] = e
 		}
 	}
+	return winners
+}
 
+// keysPerRoute lists the keys each route wins, indexed like the routes.
+func (r *Router) keysPerRoute(winners map[pair]entry) [][]string {
 	keysOf := make([][]string, len(r.routes))
 	for p, e := range winners {
 		if !slices.Contains(keysOf[e.route], p.key) {
 			keysOf[e.route] = append(keysOf[e.route], p.key)
 		}
 	}
+	return keysOf
+}
 
+// evaluateRoutes sends each route the keys it won and merges what the evaluators return. The metadata is
+// meta extended by the routes'; a route that fails answers GENERAL for each of its keys.
+func (r *Router) evaluateRoutes(
+	ctx context.Context, req evaluator.Request, winners map[pair]entry, keysOf [][]string, meta model.Metadata,
+) ([]evaluator.Result, model.Metadata) {
 	var results []evaluator.Result
 	merged := model.Metadata{}
 	for k, v := range meta {
@@ -115,12 +145,7 @@ func (r *Router) Evaluate(ctx context.Context, req evaluator.Request, dst []eval
 		sub.FlagKeys, sub.FlagKey = keysOf[i], ""
 		out, routeMeta, err := route.Evaluator.Evaluate(ctx, sub, nil)
 		if err != nil {
-			for _, key := range keysOf[i] {
-				results = append(results, evaluator.Result{
-					FlagKey: key, Reason: model.ErrorReason, ErrorCode: model.GeneralErrorCode, Format: route.Format,
-					ErrorMessage: model.GetErrorMessage(model.GeneralErrorCode), Metadata: meta,
-				})
-			}
+			results = routeFailed(results, route, keysOf[i], meta)
 			continue
 		}
 		for k, v := range routeMeta {
@@ -137,7 +162,22 @@ func (r *Router) Evaluate(ctx context.Context, req evaluator.Request, dst []eval
 			results = append(results, res)
 		}
 	}
+	return results, merged
+}
 
+// routeFailed appends a GENERAL error result for each key of a route whose evaluator failed.
+func routeFailed(results []evaluator.Result, route Route, keys []string, meta model.Metadata) []evaluator.Result {
+	for _, key := range keys {
+		results = append(results, evaluator.Result{
+			FlagKey: key, Reason: model.ErrorReason, ErrorCode: model.GeneralErrorCode, Format: route.Format,
+			ErrorMessage: model.GetErrorMessage(model.GeneralErrorCode), Metadata: meta,
+		})
+	}
+	return results
+}
+
+// fillNotFound adds FLAG_NOT_FOUND for each key of an explicit list that has no result.
+func fillNotFound(req evaluator.Request, results []evaluator.Result, meta model.Metadata) []evaluator.Result {
 	if req.FlagKeys != nil && !req.Bulk {
 		// an explicit list answers for every key it names
 		for _, key := range req.FlagKeys {
@@ -146,7 +186,11 @@ func (r *Router) Evaluate(ctx context.Context, req evaluator.Request, dst []eval
 			}
 		}
 	}
+	return results
+}
 
+// sortResults orders a bulk request by (flag set, key) and an explicit list by the request's order.
+func sortResults(req evaluator.Request, results []evaluator.Result) {
 	sort.SliceStable(results, func(a, b int) bool {
 		if !req.Bulk {
 			return slices.Index(req.FlagKeys, results[a].FlagKey) < slices.Index(req.FlagKeys, results[b].FlagKey)
@@ -156,7 +200,6 @@ func (r *Router) Evaluate(ctx context.Context, req evaluator.Request, dst []eval
 		}
 		return results[a].FlagKey < results[b].FlagKey
 	})
-	return append(dst, results...), merged, nil
 }
 
 func (r *Router) single(
@@ -209,16 +252,22 @@ func (r *Router) collect(view store.View, selector store.Selector, wanted map[st
 				if flagSetNamed && doc.FlagSet != flagSet {
 					continue
 				}
-				for _, key := range doc.FlagKeys {
-					if wanted != nil {
-						if _, ok := wanted[key]; !ok {
-							continue
-						}
-					}
-					entries = append(entries, entry{flagSet: doc.FlagSet, key: key, priority: priority, route: i})
-				}
+				entries = appendEntries(entries, doc, priority, i, wanted)
 			}
 		}
+	}
+	return entries
+}
+
+// appendEntries adds the flags of doc that the wanted keys allow; nil wanted allows every key.
+func appendEntries(entries []entry, doc store.Document, priority, route int, wanted map[string]struct{}) []entry {
+	for _, key := range doc.FlagKeys {
+		if wanted != nil {
+			if _, ok := wanted[key]; !ok {
+				continue
+			}
+		}
+		entries = append(entries, entry{flagSet: doc.FlagSet, key: key, priority: priority, route: route})
 	}
 	return entries
 }
