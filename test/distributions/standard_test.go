@@ -67,18 +67,19 @@ func importedModules(t *testing.T, name string) map[string]bool {
 	return modules
 }
 
-// forbiddenModules are the modules a standard distribution must not link, and its packages must not import (Q3).
+// forbiddenModules are the modules a standard distribution must not link, and its packages must not import (Q3). None of
+// them links the deprecated flag evaluation endpoint, which only flagd-full and flagd-testbed list.
 var forbiddenModules = map[string][]string{
 	// NFR-004
-	"flagd-minimal": {"k8s.io/", "cloud.google.com/", "github.com/aws/", "github.com/Azure/", "go.opentelemetry.io/otel/sdk"},
+	"flagd-minimal": {relay + "service/flag-evaluation-legacy", "k8s.io/", "cloud.google.com/", "github.com/aws/", "github.com/Azure/", "go.opentelemetry.io/otel/sdk"},
 	// flagd-minimal plus OpenTelemetry: the SDK is the one module of NFR-004 it adds
-	"flagd-minimal-otel": {"k8s.io/", "cloud.google.com/", "github.com/aws/", "github.com/Azure/"},
+	"flagd-minimal-otel": {relay + "service/flag-evaluation-legacy", "k8s.io/", "cloud.google.com/", "github.com/aws/", "github.com/Azure/"},
 	// no operator source, so no Kubernetes client
-	"flagd-cloud": {"k8s.io/", "sigs.k8s.io/"},
+	"flagd-cloud": {relay + "service/flag-evaluation-legacy", "k8s.io/", "sigs.k8s.io/"},
 	// no cloud storage source
-	"flagd-kubernetes": {"cloud.google.com/go/storage", "github.com/aws/", "github.com/Azure/"},
+	"flagd-kubernetes": {relay + "service/flag-evaluation-legacy", "cloud.google.com/go/storage", "github.com/aws/", "github.com/Azure/"},
 	// NFR-011
-	"flagd-sync": {relay + "evaluator/", "github.com/diegoholiveira/jsonlogic"},
+	"flagd-sync": {relay + "service/flag-evaluation-legacy", relay + "evaluator/", "github.com/diegoholiveira/jsonlogic"},
 }
 
 // TestStandardModuleGraphs pins what each standard distribution links, as go version -m lists it (what a scanner of a
