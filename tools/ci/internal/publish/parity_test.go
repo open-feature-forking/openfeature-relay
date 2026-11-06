@@ -178,7 +178,7 @@ func TestParityPush(t *testing.T) {
 		parity(t, func(t *testing.T, w *world) {
 			layoutsOf(shortRefs)(t, w)
 			w.reg.Set(func(r *ocitest.Registry) {
-				r.ManifestDigest = func(string) string { return "sha256:" + strings.Repeat("0", 64) }
+				r.ManifestDigest = func(string, string) string { return "sha256:" + strings.Repeat("0", 64) }
 			})
 		}, push)
 	})
@@ -208,7 +208,10 @@ func newHistory(t *testing.T, revisionOfOld string) history {
 
 func (h history) sha() (old, next, oldRevision string) { return h.old, h.next, h.oldRevision }
 
-func (h history) setup(published ...string) func(*testing.T, *world) {
+// setup publishes the images of the commits named in published. With mainOnOld, :main is then put on the old image
+// directly: move-main itself refuses an image whose revision is not the commit it is given (stricter than the Python), so
+// a :main built from another revision (a force-pushed main, a sibling commit) cannot be set up by moving it there.
+func (h history) setup(mainOnOld bool, published ...string) func(*testing.T, *world) {
 	old, next, oldRevision := h.sha()
 	return func(t *testing.T, w *world) {
 		for _, c := range []struct{ sha, revision string }{{old, oldRevision}, {next, next}} {
@@ -224,6 +227,10 @@ func (h history) setup(published ...string) func(*testing.T, *world) {
 			if err := Push(PushOptions{Layouts: dir, Short: c.sha[:7], Names: []string{"flagd-sync"}}, func(string) {}); err != nil {
 				t.Fatal(err)
 			}
+		}
+		if mainOnOld {
+			t.Setenv("REGISTRY_HOST", w.reg.Host())
+			putMain(t, old)
 		}
 	}
 }
@@ -248,47 +255,47 @@ func TestParityMoveMain(t *testing.T) {
 	t.Run("main moves forward and an older commit published later leaves it alone", func(t *testing.T) {
 		h := newHistory(t, "")
 		old, next, _ := h.sha()
-		parity(t, h.setup(old, next), move(h, old, false), move(h, next, false), move(h, next, false), move(h, old, false))
+		parity(t, h.setup(false, old, next), move(h, old, false), move(h, next, false), move(h, next, false), move(h, old, false))
 	})
 	t.Run("a main that holds a commit this checkout lacks stays until forced", func(t *testing.T) {
 		h := newHistory(t, fullSha("f"))
 		old, next, _ := h.sha()
-		parity(t, h.setup(old, next), move(h, old, false), move(h, next, false), move(h, next, true))
+		parity(t, h.setup(true, old, next), move(h, next, false), move(h, next, true))
 	})
 	t.Run("force does not move main back to a commit the checkout has", func(t *testing.T) {
 		h := newHistory(t, "side")
 		old, next, _ := h.sha()
-		parity(t, h.setup(old, next), move(h, old, false), move(h, next, false), move(h, next, true))
+		parity(t, h.setup(true, old, next), move(h, next, false), move(h, next, true))
 	})
 	t.Run("an image that was not published keeps main", func(t *testing.T) {
 		h := newHistory(t, "")
 		old, next, _ := h.sha()
-		parity(t, h.setup(old), move(h, old, false), move(h, next, false))
+		parity(t, h.setup(false, old), move(h, old, false), move(h, next, false))
 	})
 	t.Run("every name, the ones without an image kept", func(t *testing.T) {
 		h := newHistory(t, "")
 		old, _, _ := h.sha()
-		parity(t, h.setup(old), step{args: []string{"move-main", "--short", old[:7], "--sha", old}, dir: h.repo.dir})
+		parity(t, h.setup(false, old), step{args: []string{"move-main", "--short", old[:7], "--sha", old}, dir: h.repo.dir})
 	})
 	t.Run("a name outside the seven is refused", func(t *testing.T) {
 		h := newHistory(t, "")
 		old, _, _ := h.sha()
-		parity(t, h.setup(old), step{args: []string{"move-main", "--short", old[:7], "--sha", old, "--names", "flagd"}, dir: h.repo.dir})
+		parity(t, h.setup(false, old), step{args: []string{"move-main", "--short", old[:7], "--sha", old, "--names", "flagd"}, dir: h.repo.dir})
 	})
 	t.Run("a host that is neither ghcr.io nor local is refused", func(t *testing.T) {
 		h := newHistory(t, "")
 		old, _, _ := h.sha()
-		parity(t, h.setup(old), step{args: []string{"move-main", "--short", old[:7], "--sha", old}, dir: h.repo.dir,
+		parity(t, h.setup(false, old), step{args: []string{"move-main", "--short", old[:7], "--sha", old}, dir: h.repo.dir,
 			env: map[string]string{"REGISTRY_HOST": "registry.example.com"}})
 	})
 	t.Run("a registry that reports another digest for main is an error", func(t *testing.T) {
 		h := newHistory(t, "")
 		old, _, _ := h.sha()
-		setup := h.setup(old)
+		setup := h.setup(false, old)
 		parity(t, func(t *testing.T, w *world) {
 			setup(t, w)
 			w.reg.Set(func(r *ocitest.Registry) {
-				r.ManifestDigest = func(string) string { return "sha256:" + strings.Repeat("0", 64) }
+				r.ManifestDigest = func(string, string) string { return "sha256:" + strings.Repeat("0", 64) }
 			})
 		}, move(h, old, false))
 	})

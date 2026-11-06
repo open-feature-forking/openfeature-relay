@@ -42,6 +42,8 @@ type LayoutSpec struct {
 	Platforms []string
 	// AttestationPerPlatform adds one attestation manifest per image instead of one in all, as buildx writes.
 	AttestationPerPlatform bool
+	// MutateIndex edits the image index before it is written, to build a layout a hostile builder could write.
+	MutateIndex func(index map[string]any)
 	// NoAttestation leaves the attestation manifest out.
 	NoAttestation bool
 	// Predicates are the predicate types of the attestation manifest's layers; nil means provenance and SPDX.
@@ -149,6 +151,9 @@ func WriteLayout(t testing.TB, path string, spec LayoutSpec) string {
 	if len(annotations) > 0 {
 		index["annotations"] = annotations
 	}
+	if spec.MutateIndex != nil {
+		spec.MutateIndex(index)
+	}
 	indexRaw := marshal(t, index)
 	top := blob(indexRaw)
 
@@ -211,8 +216,12 @@ type Registry struct {
 	Token, User, Password string
 	// TokenScopes records the scope of every token request.
 	tokenScopes []string
-	// ManifestDigest, when set, replaces the Docker-Content-Digest header of a manifest PUT.
-	ManifestDigest func(reference string) string
+	// Location, when set, turns the path of an upload into the Location header the registry answers with.
+	Location func(path string) string
+	// Realm, when set, is the realm of the Bearer challenge instead of this server's /token.
+	Realm string
+	// ManifestDigest, when set, replaces the Docker-Content-Digest header of a manifest PUT; actual is the digest of what was stored.
+	ManifestDigest func(reference, actual string) string
 }
 
 type stored struct {
@@ -307,15 +316,23 @@ func (r *Registry) serve(w http.ResponseWriter, req *http.Request) {
 	r.requests = append(r.requests, Request{req.Method, req.URL.RequestURI(), req.Header.Get("Content-Type"),
 		req.Header.Get("Authorization"), req.Header.Get("Accept")})
 	if r.Token != "" && req.Header.Get("Authorization") != "Bearer "+r.Token {
+		realm := r.Server.URL + "/token"
+		if r.Realm != "" {
+			realm = r.Realm
+		}
 		send(http.StatusUnauthorized, map[string]string{"WWW-Authenticate": fmt.Sprintf(
-			`Bearer realm="%s/token",service="fake"`, r.Server.URL)}, nil)
+			`Bearer realm="%s",service="fake"`, realm)}, nil)
 		return
 	}
 	path := req.URL.Path
 	repo := repoOf(path)
 	switch req.Method {
 	case http.MethodPost:
-		send(http.StatusAccepted, map[string]string{"Location": path + "1"}, nil)
+		location := path + "1"
+		if r.Location != nil {
+			location = r.Location(location)
+		}
+		send(http.StatusAccepted, map[string]string{"Location": location}, nil)
 	case http.MethodPut:
 		if strings.Contains(path, "/blobs/uploads/") {
 			want := req.URL.Query().Get("digest")
@@ -340,7 +357,7 @@ func (r *Registry) serve(w http.ResponseWriter, req *http.Request) {
 		r.pushed = append(r.pushed, [2]string{repo, reference})
 		header := got
 		if r.ManifestDigest != nil {
-			header = r.ManifestDigest(reference)
+			header = r.ManifestDigest(reference, got)
 		}
 		send(http.StatusCreated, map[string]string{"Docker-Content-Digest": header}, nil)
 	default: // HEAD and GET

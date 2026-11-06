@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/open-feature-forking/openfeature-relay/tools/ci/internal/oci"
 )
 
 var indexTypes = []string{
@@ -59,7 +61,8 @@ func localHost(host string) bool {
 // NewClient returns a client for host: ghcr.io over https, a local registry over plain http. Basic credentials go to a
 // local registry directly and to the token realm of any other.
 func NewClient(host, user, token string) *Client {
-	r := &Client{host: host, local: localHost(host), tokens: map[string]string{}, client: &http.Client{}}
+	r := &Client{host: host, local: localHost(host), tokens: map[string]string{}}
+	r.client = &http.Client{CheckRedirect: r.sameOriginRedirect}
 	r.base = "https://" + host
 	if r.local {
 		r.base = "http://" + host
@@ -68,6 +71,58 @@ func NewClient(host, user, token string) *Client {
 		r.basic = base64.StdEncoding.EncodeToString([]byte(user + ":" + token))
 	}
 	return r
+}
+
+// sameOriginRedirect refuses a redirect that leaves the registry's origin: credentials never leave the allowed host.
+// The Python followed any redirect (stricter here).
+func (r *Client) sameOriginRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return errors.New("stopped after 10 redirects")
+	}
+	if origin(req.URL) != origin(via[0].URL) {
+		return fmt.Errorf("refusing a redirect from %s to %s", origin(via[0].URL), origin(req.URL))
+	}
+	return nil
+}
+
+func origin(u *url.URL) string { return u.Scheme + "://" + u.Host }
+
+// resolveLocation reports whether a Location the registry sent stays on the registry's origin. A path is joined to the base;
+// an absolute URL must carry the base's scheme and host, and no user information.
+func (r *Client) resolveLocation(location string) (string, error) {
+	u, err := url.Parse(location)
+	if err != nil {
+		return "", fmt.Errorf("the upload Location %q: %w", location, err)
+	}
+	if u.Scheme != "" || u.Host != "" {
+		if u.User != nil || origin(u) != r.base {
+			return "", fmt.Errorf("refusing the upload Location %q: it is not on %s", location, r.base)
+		}
+		return location, nil
+	}
+	if !strings.HasPrefix(location, "/") {
+		return "", fmt.Errorf("refusing the upload Location %q: it is neither a path nor a URL on %s", location, r.base)
+	}
+	return r.base + location, nil
+}
+
+// checkRealm requires the token realm of a challenge to be where credentials may go: on ghcr, exactly https://ghcr.io/...;
+// for a local registry, a loopback host. The Python sent the Basic login to any realm (stricter here).
+func (r *Client) checkRealm(realm string) error {
+	u, err := url.Parse(realm)
+	if err != nil {
+		return fmt.Errorf("the token realm %q: %w", realm, err)
+	}
+	ok := u.User == nil && u.Host != ""
+	if r.local {
+		ok = ok && (u.Scheme == "http" || u.Scheme == "https") && (u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1")
+	} else {
+		ok = ok && u.Scheme == "https" && u.Host == "ghcr.io" && r.host == "ghcr.io"
+	}
+	if !ok {
+		return fmt.Errorf("refusing the token realm %q: credentials only go to %s", realm, r.host)
+	}
+	return nil
 }
 
 func (r *Client) open(method, target string, headers map[string]string, b func() io.Reader, scope string, length int64) (*http.Response, error) {
@@ -125,6 +180,9 @@ func (r *Client) authenticate(challenge, scope string) error {
 	if !ok {
 		return fmt.Errorf("the challenge %q names no realm", challenge)
 	}
+	if err := r.checkRealm(realm); err != nil {
+		return err
+	}
 	target := realm + "?service=" + url.QueryEscape(params["service"]) + "&scope=" + url.QueryEscape(scope)
 	req, err := http.NewRequest(http.MethodGet, target, nil)
 	if err != nil {
@@ -172,6 +230,9 @@ func (r *Client) blobExists(repository, digest string) (bool, error) {
 
 // PushBlob uploads a blob unless the registry has it. The bytes are the layout's own, with the size the manifest declares.
 func (r *Client) PushBlob(repository, digest string, stream func() io.Reader, size int64) error {
+	if !oci.ValidDigest(digest) {
+		return fmt.Errorf("%s: %q is not a sha256 digest", repository, digest)
+	}
 	exists, err := r.blobExists(repository, digest)
 	if err != nil || exists {
 		return err
@@ -186,8 +247,8 @@ func (r *Client) PushBlob(repository, digest string, stream func() io.Reader, si
 	if location == "" {
 		return fmt.Errorf("%s: the upload answered without a Location", repository)
 	}
-	if strings.HasPrefix(location, "/") {
-		location = r.base + location
+	if location, err = r.resolveLocation(location); err != nil {
+		return err
 	}
 	sep := "?"
 	if strings.Contains(location, "?") {

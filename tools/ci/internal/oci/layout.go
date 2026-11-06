@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 )
 
@@ -145,12 +146,17 @@ func (l *Layout) Raw(name string) ([]byte, error) {
 
 // BlobName is the member name of the blob with the given digest.
 func BlobName(digest string) (string, error) {
-	_, hex, ok := strings.Cut(digest, ":")
-	if !ok {
+	if !ValidDigest(digest) {
 		return "", fmt.Errorf("malformed digest %q", digest)
 	}
-	return "blobs/sha256/" + hex, nil
+	return "blobs/sha256/" + strings.TrimPrefix(digest, "sha256:"), nil
 }
+
+var digestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+
+// ValidDigest reports whether s is a sha256 digest. Digests come from a layout and go into registry URLs, so nothing else
+// is accepted (the Python took anything with a colon).
+func ValidDigest(s string) bool { return digestPattern.MatchString(s) }
 
 // RawBlob returns the bytes of the blob with the given digest.
 func (l *Layout) RawBlob(digest string) ([]byte, error) {

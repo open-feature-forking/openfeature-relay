@@ -221,6 +221,10 @@ func TestOnlyGhcrOrALocalRegistryIsAHost(t *testing.T) {
 		{"port: localhost:0", true},
 		{"port: localhost:99999", true},
 		{"port: localhost:5000/path", true},
+		{"port: localhost:05000 (leading zero)", true},
+		{"port: localhost:+5000", true},
+		{"port: localhost:", true},
+		{"port: localhost: 5000", true},
 		{"localhost:5000", false},
 		{"127.0.0.1:5000", false},
 		{"localhost", false},
@@ -287,6 +291,23 @@ func (e *env) publishCommit(sha, revision string) {
 	}
 }
 
+// putMain points :main of flagd-sync at the image published under sha-<short of sha>, without move-main: move-main refuses
+// an image whose revision is not the commit it is given, and these tests need a :main built from another revision.
+func putMain(t *testing.T, sha string) {
+	t.Helper()
+	reg, err := RegistryFromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := reg.GetManifest(syncRepo, "sha-"+sha[:7])
+	if err != nil || m == nil {
+		t.Fatalf("no image under sha-%s: %v", sha[:7], err)
+	}
+	if _, err := reg.PushManifest(syncRepo, "main", m.MediaType, m.Body); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func (e *env) move(r *repo, sha string, force bool) error {
 	return MoveMain(MoveOptions{Short: sha[:7], Sha: sha, Names: []string{"flagd-sync"}, Force: force, GitDir: r.dir},
 		func(s string) { e.log = append(e.log, s) })
@@ -350,9 +371,7 @@ func (e *env) history(revisionOfOld string) (*repo, string) {
 	}
 	e.publishCommit(old, revisionOfOld)
 	e.publishCommit(next, next)
-	if err := e.move(r, old, false); err != nil {
-		e.t.Fatal(err)
-	}
+	putMain(e.t, old)
 	e.log = nil
 	return r, next
 }
@@ -404,7 +423,7 @@ func TestAMainTagThatDoesNotHoldThePushedDigestIsAnError(t *testing.T) {
 	e := newEnv(t)
 	r, next := e.history("")
 	e.reg.Set(func(r *ocitest.Registry) {
-		r.ManifestDigest = func(string) string { return "sha256:" + strings.Repeat("0", 64) }
+		r.ManifestDigest = func(string, string) string { return "sha256:" + strings.Repeat("0", 64) }
 	})
 	client, err := RegistryFromEnv()
 	if err != nil {
@@ -451,9 +470,7 @@ func TestMoveMainEdges(t *testing.T) {
 		next := r.commit("new")
 		e.publishCommit(old, "")
 		e.publishCommit(next, next)
-		if err := e.move(r, old, false); err != nil {
-			t.Fatal(err)
-		}
+		putMain(t, old)
 		before := e.reg.Tag(syncRepo, "main")
 		for _, force := range []bool{false, true} {
 			e.log = nil
@@ -554,7 +571,7 @@ func TestRegistryClient(t *testing.T) {
 	t.Run("port: a digest the registry reports wrong stops the push", func(t *testing.T) {
 		e := newEnv(t)
 		e.layouts(short, fullSha("a"), "flagd-sync")
-		e.reg.Set(func(r *ocitest.Registry) { r.ManifestDigest = func(string) string { return "" } })
+		e.reg.Set(func(r *ocitest.Registry) { r.ManifestDigest = func(string, string) string { return "" } })
 		err := e.push(func(o *PushOptions) { o.Names = []string{"flagd-sync"} })
 		if err == nil || !strings.Contains(err.Error(), "the registry stored") {
 			t.Fatalf("error = %v", err)

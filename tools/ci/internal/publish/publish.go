@@ -133,6 +133,44 @@ type PushOptions struct {
 	Registry Registry // default: from the environment
 }
 
+// checkDigests requires every digest a layout will put into a registry URL to be a sha256 digest, before the first byte is
+// pushed. The Python took anything with a colon (stricter here).
+func checkDigests(key string, layout *oci.Layout, short string) error {
+	refs, err := layout.Refs()
+	if err != nil {
+		return err
+	}
+	descriptor := refs["ghcr.io/"+Namespace+"/"+key+":sha-"+short]
+	bad := func(what, digest string) error {
+		return refuse("%s: the %s digest %q is not a sha256 digest", key, what, digest)
+	}
+	if !oci.ValidDigest(descriptor.Digest) {
+		return bad("index", descriptor.Digest)
+	}
+	var index oci.Index
+	if err := layout.Blob(descriptor.Digest, &index); err != nil {
+		return err
+	}
+	for _, child := range index.Manifests {
+		if !oci.ValidDigest(child.Digest) {
+			return bad("manifest", child.Digest)
+		}
+		var manifest oci.Manifest
+		if err := layout.Blob(child.Digest, &manifest); err != nil {
+			return err
+		}
+		if !oci.ValidDigest(manifest.Config.Digest) {
+			return bad("config", manifest.Config.Digest)
+		}
+		for _, l := range manifest.Layers {
+			if !oci.ValidDigest(l.Digest) {
+				return bad("layer", l.Digest)
+			}
+		}
+	}
+	return nil
+}
+
 func pushLayout(reg Registry, key string, layout *oci.Layout, short string, log func(string)) (string, error) {
 	repository := Namespace + "/" + key
 	ref := "ghcr.io/" + repository + ":sha-" + short
@@ -245,6 +283,9 @@ func Push(o PushOptions, log func(string)) (err error) {
 			if err := checkDestinations(name, l, o.Short); err != nil {
 				return err
 			}
+			if err := checkDigests(name, l, o.Short); err != nil {
+				return err
+			}
 		}
 	}
 	reg := o.Registry
@@ -295,9 +336,14 @@ type MoveOptions struct {
 	Force    bool
 	GitDir   string // the checkout git runs in; default: the working directory
 	Registry Registry
+
+	gitRun func(args ...string) bool // replaces git, for the tests
 }
 
 func (o MoveOptions) git(args ...string) bool {
+	if o.gitRun != nil {
+		return o.gitRun(args...)
+	}
 	if o.GitDir != "" {
 		args = append([]string{"-C", o.GitDir}, args...)
 	}
@@ -313,6 +359,18 @@ func (o MoveOptions) isAncestor(old string) bool {
 
 func (o MoveOptions) hasCommit(sha string) bool {
 	return !strings.HasPrefix(sha, "-") && o.git("cat-file", "-e", sha+"^{commit}")
+}
+
+// revisionOf reads the revision annotation of an image index; an index without one has "".
+func revisionOf(index []byte) (string, error) {
+	var doc struct {
+		Annotations map[string]any `json:"annotations"`
+	}
+	if err := json.Unmarshal(index, &doc); err != nil {
+		return "", err
+	}
+	revision, _ := doc.Annotations[oci.Revision].(string)
+	return revision, nil
 }
 
 func short7(s string) string {
@@ -350,18 +408,23 @@ func MoveMain(o MoveOptions, log func(string)) error {
 			log(fmt.Sprintf("- kept %s:main: sha-%s was not published", repository, o.Short))
 			continue
 		}
+		built, err := revisionOf(next.Body)
+		if err != nil {
+			return fmt.Errorf("%s:sha-%s: %w", repository, o.Short, err)
+		}
+		if built != o.Sha {
+			// The Python did not look: the image under sha-<short> must have been built from the commit --sha names.
+			return fmt.Errorf("%s:sha-%s was built from %q, not from %s", repository, o.Short, built, o.Sha)
+		}
 		current, err := reg.GetManifest(repository, "main")
 		if err != nil {
 			return err
 		}
 		if current != nil {
-			var doc struct {
-				Annotations map[string]any `json:"annotations"`
-			}
-			if err := json.Unmarshal(current.Body, &doc); err != nil {
+			revision, err := revisionOf(current.Body)
+			if err != nil {
 				return fmt.Errorf("%s:main: %w", repository, err)
 			}
-			revision, _ := doc.Annotations[oci.Revision].(string)
 			if revision == o.Sha {
 				log(fmt.Sprintf("- %s:main already holds %s", repository, short7(o.Sha)))
 				continue
