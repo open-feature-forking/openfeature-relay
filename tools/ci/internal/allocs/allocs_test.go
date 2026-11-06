@@ -3,6 +3,7 @@ package allocs
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -288,3 +289,26 @@ func TestTranslationHazards(t *testing.T) {
 		}
 	})
 }
+
+// The head's lowest equals the base's highest, which is above the base's lowest: the comparison is strict (>), so this
+// is within the base's range and noise, not a rise.
+func TestAHeadLowestEqualToTheBaseHighestPasses(t *testing.T) {
+	dir := t.TempDir()
+	b := write(t, dir, "b", bench(map[string][]int{"BenchmarkX": {30, 36, 31}}, 11000))
+	h := write(t, dir, "h", bench(map[string][]int{"BenchmarkX": {36, 37, 38}}, 11000))
+	code, text, _ := compare(t, b, h, false)
+	if code != 0 || !strings.Contains(text, "Within noise: flagd: BenchmarkX") {
+		t.Errorf("exit code = %d, want 0 with the benchmark within noise\n%s", code, text)
+	}
+}
+
+// A count with more digits than an int holds is kept as the largest int; Python keeps every digit.
+func TestAnAllocsCountThatOverflowsIsSaturated(t *testing.T) {
+	res, _ := parse("BenchmarkX-8 \t 10\t 500 ns/op\t 1 B/op\t 99999999999999999999999 allocs/op\n")
+	if got := res[" BenchmarkX"]; len(got) != 1 || got[0] != math.MaxInt {
+		t.Errorf("allocs/op = %v, want [%d]", got, math.MaxInt)
+	}
+}
+
+// Python reads a benchmark file with strict UTF-8 and stops with a traceback on invalid bytes (exit 1). The Go port
+// replaces them with U+FFFD and compares on; the "invalid utf-8 is replaced" row of TestTranslationHazards pins it.

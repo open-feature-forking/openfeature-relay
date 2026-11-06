@@ -263,3 +263,16 @@ func TestParity(t *testing.T) {
 		}
 	})
 }
+
+// A skipped test is not a pass: the other side passing it is a difference.
+func TestASkipIsNotAPass(t *testing.T) {
+	skip := `{"Action":"skip","Package":"p","Test":"TestRPC/a"}` + "\n"
+	ok, failed := Passed(skip)
+	if len(ok) != 0 || len(failed) != 0 {
+		t.Errorf("passed %v, failed %v, want neither", ok, failed)
+	}
+	code, out := compare(t, events([]string{"TestRPC/a"}, nil), skip+events([]string{"TestRPC/b"}, nil))
+	if code != 1 || !strings.Contains(out, "passes on the launchpad and not on the relay testbed: TestRPC/a") {
+		t.Errorf("exit code = %d\n%s", code, out)
+	}
+}
