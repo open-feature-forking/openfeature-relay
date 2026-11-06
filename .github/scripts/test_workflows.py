@@ -528,6 +528,24 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIn("make testbed-suites TESTBED_RELAY_IMAGE=flagd-testbed:layout", job)
         self.assertIn("name: layouts-flagd-testbed", job)
 
+    def test_the_testbed_jobs_keep_their_failure_details(self):
+        """#190: the suites' go test output is written to testbed-out/, a failed run prints its failed tests, and the
+        directory is uploaded with a short retention; the triggers are not part of this."""
+        script = (ROOT / ".github" / "scripts" / "testbed-suites.sh").read_text(encoding="utf-8")
+        self.assertIn('out="${TESTBED_OUT:-testbed-out}"', script)
+        self.assertIn("testbed-failures.py", script)
+        self.assertIn("test-failures.py --log", script)
+        self.assertIn("testbed-out/", (ROOT / ".gitignore").read_text(encoding="utf-8"))
+        for name in ("testbed", "testbed-rpc-outages", "testbed-grpc-sync"):
+            with self.subTest(job=name):
+                job = self.job(name)
+                self.assertRegex(job, r"(?s)if: always\(\)\n\s+uses: actions/upload-artifact@\S+ # v4[^\n]*\n\s+with:\n"
+                                      r"\s+name: testbed-[a-z-]+\n\s+path: testbed-out/\n\s+retention-days: 7\n")
+        grpc = self.job("testbed-grpc-sync")
+        self.assertIn("make testbed-grpc-sync 2>&1 | tee testbed-out/grpc-sync.log", grpc)
+        self.assertIn("test-failures.py --log testbed-out/grpc-sync.log", grpc)
+        self.assertIn("if: failure()", grpc)
+
     def test_images_are_marked_as_a_proof_of_concept(self):
         """Q4: labels and annotations come from the build scripts, never from flagd's or flagd-proxy's Dockerfile (K3)."""
         layout = (ROOT / ".github" / "scripts" / "oci-layout.py").read_text(encoding="utf-8")
