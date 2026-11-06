@@ -35,9 +35,6 @@ type Endpoint interface {
 	Serve(ctx context.Context) error
 }
 
-// A hosted endpoint (see Hosted) implements Endpoint too, but the runtime never calls its Serve; Serve returns an error naming
-// its host.
-
 // Needs declares what a service endpoint resolves flags with, which decides what the runtime injects.
 type Needs struct {
 	// Router asks for Settings.Resolver, the typed calls over the evaluation router.

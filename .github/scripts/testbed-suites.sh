@@ -8,12 +8,12 @@
 #
 # The images are built by make testbed-launchpad-image and make testbed-relay-image; TESTBED_RELAY_IMAGE names the relay
 # testbed image (default flagd-testbed:local). Needs Docker and the Go toolchain,
-# and runs from the root of the repository. The go test output of each image is kept in $TESTBED_OUT (default: a
-# temporary directory).
+# and runs from the root of the repository. The go test -json output of each image is kept in $TESTBED_OUT (default:
+# testbed-out, which CI uploads on a failure); a run that failed prints its failed tests' output and lists them (#190).
 set -euo pipefail
 
 mode="${1:-standard}"
-out="${TESTBED_OUT:-$(mktemp -d)}"
+out="${TESTBED_OUT:-testbed-out}"
 mkdir -p "${out}"
 
 # Scenarios switched on for both images, on top of the tags test/integration excludes (see TESTBED_ENABLE_TAGS there).
@@ -35,7 +35,13 @@ for side in launchpad relay; do
   esac
   # a failing scenario is compared, not fatal here: the suites may fail the same scenarios on both images
   (cd test/integration && env GOWORK=off FLAGD_TESTBED_IMAGE="${image}" TESTBED_ENABLE_TAGS="${enabled}" ${env_extra[@]+"${env_extra[@]}"} go test -count=1 -json -timeout 60m -run "^(${run})\$" .) \
-    >"${out}/${side}.json" || echo "::notice::the ${side} run reported failures; the pass sets decide"
+    >"${out}/${side}.json" || {
+      echo "::notice::the ${side} run reported failures; the pass sets decide"
+      echo "::group::Failed tests of the ${side} run"
+      python3 .github/scripts/testbed-failures.py "${out}/${side}.json" "${out}/${side}.log" || true
+      echo "::endgroup::"
+      python3 .github/scripts/test-failures.py --log "${out}/${side}.log" --job "testbed ${mode} ${side}" ${GITHUB_STEP_SUMMARY:+--summary "${GITHUB_STEP_SUMMARY}"} || true
+    }
 done
 
 python3 .github/scripts/compare-pass-sets.py "${out}/launchpad.json" "${out}/relay.json"
