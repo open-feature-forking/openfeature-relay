@@ -6,7 +6,7 @@ go 1.27
 require (
 	github.com/go-git/go-git/v5 v5.19.2
 	github.com/open-feature/go-sdk-contrib/providers/flagd v0.8.0
-	github.com/open-feature/go-sdk-contrib/tests/flagd/v2 v2.3.0
+	github.com/open-feature/go-sdk-contrib/tests/flagd/v2 v2.3.1-0.20261013091024-232bb9fde8a7
 	github.com/testcontainers/testcontainers-go v0.44.0
 )
 

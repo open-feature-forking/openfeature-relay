@@ -184,11 +184,11 @@ func (rt *Runtime) createEndpoints(
 	if err != nil {
 		return err
 	}
-
-	for _, factory := range components.Endpoints {
-		if err := service.ValidateDeclarations(factory); err != nil {
-			return fmt.Errorf("the service endpoint %q declares: %w", factory.Type(), err)
-		}
+	plan, err := planHosted(components.Endpoints)
+	if err != nil {
+		return err
+	}
+	createEndpoint := func(factory service.Factory, extensions []service.Endpoint) (service.Endpoint, error) {
 		settings := inputs.settings(factory)
 		settings.Initialized = rt.Initialized()
 		settings.Telemetry = tp
@@ -197,14 +197,58 @@ func (rt *Runtime) createEndpoints(
 		settings.Sources = sources
 		settings.HTTPMiddleware = wrapHTTP
 		settings.Listen = components.Listen
+		settings.Extensions = extensions
 		endpoint, err := factory.Create(settings)
 		if err != nil {
-			return fmt.Errorf("error creating the service endpoint %q: %w", factory.Type(), err)
+			return nil, fmt.Errorf("error creating the service endpoint %q: %w", factory.Type(), err)
 		}
 		*created = append(*created, endpoint)
+		return endpoint, nil
+	}
+	// a hosted endpoint is created first, so that its host gets it, and is never served: its host serves it
+	hosted, extensions, err := createHosted(components.Endpoints, plan, createEndpoint)
+	if err != nil {
+		return err
+	}
+	for i, factory := range components.Endpoints {
+		if plan.isHosted[i] {
+			continue
+		}
+		if err := service.ValidateDeclarations(factory); err != nil {
+			return fmt.Errorf("the service endpoint %q declares: %w", factory.Type(), err)
+		}
+		endpoint, err := createEndpoint(factory, extensions[factory.Type()])
+		if err != nil {
+			return err
+		}
 		rt.Endpoints = append(rt.Endpoints, NamedEndpoint{Type: factory.Type(), Endpoint: endpoint})
 	}
+	if len(hosted) > 0 {
+		rt.onShutdown("hosted endpoints", closeHosted(hosted))
+	}
 	return nil
+}
+
+// createHosted creates the hosted endpoints, in list order, and returns them with the ones each host gets, keyed by
+// the host's type.
+func createHosted(
+	factories []service.Factory, plan hostedPlan,
+	create func(service.Factory, []service.Endpoint) (service.Endpoint, error),
+) ([]service.Endpoint, map[string][]service.Endpoint, error) {
+	var hosted []service.Endpoint
+	extensions := map[string][]service.Endpoint{}
+	for i, factory := range factories {
+		if !plan.isHosted[i] {
+			continue
+		}
+		endpoint, err := create(factory, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+		hosted = append(hosted, endpoint)
+		extensions[plan.hosts[i]] = append(extensions[plan.hosts[i]], endpoint)
+	}
+	return hosted, extensions, nil
 }
 
 // closeEndpoints closes the endpoints that hold a resource, in list order.

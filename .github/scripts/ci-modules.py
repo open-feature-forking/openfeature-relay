@@ -48,6 +48,15 @@ FLAG_PATTERNS = {
                r"^test/(testbed|integration|upgrade)/|^\.github/scripts/(testbed|compare-pass)|^\.github/workflows/build\.yaml$",
 }
 
+# tools/ci is the repository's own CI tooling: its sources and module files do not call for a gated job. A path the
+# include matches does not count when it matches the flag's exclusion; the terms below it are the packages of tools/ci
+# that a flag does depend on. (RE2, which the Go port uses, has no lookahead, so this is include-and-not-exclude.)
+FLAG_EXCLUDES = {n: r"^tools/ci/" for n in FLAG_PATTERNS}
+FLAG_EXTRA_TERMS = {
+    "benchmark": r"^tools/ci/internal/allocs/",
+    "testbed": r"^tools/ci/internal/passsets/",
+}
+
 
 class TableError(Exception):
     """A module directory without an entry in ci-modules.json."""
@@ -307,7 +316,12 @@ def flag_change_set(root, event, sha, before, full_ci=""):
 
 def flags(changed):
     """flag -> bool for the changed paths (None: all true)."""
-    return {n: changed is None or any(re.search(p, f) for f in changed) for n, p in FLAG_PATTERNS.items()}
+    def counts(name, pattern, path):
+        if re.search(pattern, path) and not re.search(FLAG_EXCLUDES[name], path):
+            return True
+        return bool(re.search(FLAG_EXTRA_TERMS.get(name, r"(?!)"), path))
+
+    return {n: changed is None or any(counts(n, p, f) for f in changed) for n, p in FLAG_PATTERNS.items()}
 
 
 def flag_lines(values):

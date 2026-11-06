@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/distribution"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/spf13/cobra"
 )
@@ -46,6 +47,7 @@ type listedComponent struct {
 	Module  string   `json:"module"`
 	Version string   `json:"version"`
 	Schemes []string `json:"schemes,omitempty"`
+	Host    string   `json:"host,omitempty"`
 }
 
 // listing is the content of `flagd components`, in the layout of its JSON form.
@@ -93,13 +95,22 @@ func buildListing(id identity, runtimeVer string, components distribution.Compon
 			schemes[f.Type()] = sf.Schemes()
 		}
 	}
+	hosts := map[string]string{}
+	for _, f := range components.Endpoints {
+		if h, ok := f.(service.Hosted); ok {
+			hosts[f.Type()] = h.Host()
+		}
+	}
 	l := &listing{Distribution: id}
 	l.Runtime.Version = runtimeVer
 	for _, g := range groupOrder {
 		*l.section(g.group) = []listedComponent{}
 	}
 	for _, c := range inventory.Components {
-		entry := listedComponent{Type: c.Type, Module: c.Module, Version: c.Version}
+		entry := listedComponent{Type: c.Type, Module: c.Module, Version: c.Version, Host: c.Host}
+		if c.Group == distribution.GroupServiceEndpoint && entry.Host == "" {
+			entry.Host = hosts[c.Type]
+		}
 		if c.Group == distribution.GroupSync {
 			entry.Schemes = schemes[c.Type]
 		}
@@ -122,6 +133,9 @@ func (l *listing) text(w io.Writer) {
 			line := "  " + e.Type + "  " + e.Module
 			if e.Version != "" {
 				line += " " + e.Version
+			}
+			if e.Host != "" {
+				line += "  host: " + e.Host
 			}
 			if len(e.Schemes) > 0 {
 				line += "  schemes: " + strings.Join(e.Schemes, ", ")

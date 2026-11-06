@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/distribution"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/sync"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
@@ -181,4 +183,35 @@ func TestComponentsOpensNoPortAndReadsNoConfig(t *testing.T) {
 		viper.Set(sourcesFlagName, nil)
 	})
 	require.Equal(t, want, runComponents(t))
+}
+
+type hostedStub struct{}
+
+func (hostedStub) Type() string                                      { return "legacy" }
+func (hostedStub) Needs() service.Needs                              { return service.Needs{} }
+func (hostedStub) Host() string                                      { return "ofrep" }
+func (hostedStub) Create(service.Settings) (service.Endpoint, error) { return nil, nil }
+
+// TestComponentsShowsTheHostOfAHostedEndpoint: the host is on the line of a hosted endpoint, and in JSON a hosted
+// endpoint has a host field and the others have none (T8).
+func TestComponentsShowsTheHostOfAHostedEndpoint(t *testing.T) {
+	withDistribution(t)
+	Components.Endpoints = []service.Factory{hostedStub{}}
+	Inventory.Components = append(slices.Clone(Inventory.Components),
+		distribution.ComponentInfo{Group: distribution.GroupServiceEndpoint, Type: "legacy", Module: "example.com/legacy", Version: "v1.0.0"})
+
+	text := runComponents(t)
+	require.Contains(t, text, "  legacy  example.com/legacy v1.0.0  host: ofrep\n")
+	require.Contains(t, text, "  ofrep  example.com/ofrep v2.0.0\n", "an endpoint that is not hosted shows no host")
+
+	var l listing
+	require.NoError(t, json.Unmarshal([]byte(runComponents(t, "--output", "json")), &l))
+	require.Equal(t, "", l.Components.ServiceEndpoints[0].Host)
+	require.Equal(t, "ofrep", l.Components.ServiceEndpoints[1].Host)
+	raw := runComponents(t, "--output", "json")
+	require.Equal(t, 1, strings.Count(raw, `"host"`), "host is omitted when empty")
+
+	var again bytes.Buffer
+	l.text(&again)
+	require.Equal(t, text, again.String())
 }
