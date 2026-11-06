@@ -118,10 +118,8 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		}
 	}()
 
-	if config.EventSinksNeedMetrics && len(components.EventSinks) > 0 && metricsHandler(tp, components) == nil {
-		return nil, fmt.Errorf("the setting event-sinks needs a telemetry provider that serves /metrics, because the events "+
-			"an event sink does not get are reported on the management port; the telemetry provider of this distribution "+
-			"(%s) serves none", telemetryTypeName(components))
+	if err := checkSinkMetrics(config, tp, components); err != nil {
+		return nil, err
 	}
 
 	syncProviders := sourcesWithKnownFormat(logger, config.SyncProviders, config.ConfigurationFormats)
@@ -277,6 +275,17 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		rt.onShutdown("telemetry", shutdownTelemetry)
 	}
 	return rt, nil
+}
+
+// checkSinkMetrics refuses event sinks when the setting event-sinks needs /metrics and the telemetry provider serves
+// none.
+func checkSinkMetrics(config Config, tp telemetry.Provider, components Components) error {
+	if config.EventSinksNeedMetrics && len(components.EventSinks) > 0 && metricsHandler(tp, components) == nil {
+		return fmt.Errorf("the setting event-sinks needs a telemetry provider that serves /metrics, because the events "+
+			"an event sink does not get are reported on the management port; the telemetry provider of this distribution "+
+			"(%s) serves none", telemetryTypeName(components))
+	}
+	return nil
 }
 
 // telemetryProvider returns the telemetry provider of the runtime, and how to shut it down. It is the provider of the
