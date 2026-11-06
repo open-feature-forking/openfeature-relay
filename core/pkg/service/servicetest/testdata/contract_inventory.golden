@@ -53,3 +53,18 @@ silent
   7. the validator follows the document version (not applicable: Without: Validator)
   8. reacts to a configuration change event for its selector only (not applicable: Without: Listen)
   9. relays events marked in-process (not applicable: Without: SendEvents)
+hosted
+  1. declarations
+  2. creates from what it declared
+  3. is served by a host that hosts it
+  4. is never served on its own
+  5. serves and returns within the budget with its connections ended
+  6. a serve error is returned
+  7. opens its listeners through Settings.Listen
+  8. resolves through the injected resolver with the effective selector
+  9. publishes one evaluation event per resolved flag
+  10. serves the documents of the requested format, unchanged, with versions (not applicable: Without: Documents)
+  11. the validator follows the document version (not applicable: Without: Validator)
+  12. reacts to a configuration change event for its selector only (not applicable: Without: Listen)
+  13. relays events marked in-process (not applicable: Without: SendEvents)
+  14. honours the bound selector and the client's selector

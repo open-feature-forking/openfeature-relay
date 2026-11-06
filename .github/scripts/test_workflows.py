@@ -88,22 +88,82 @@ class BuildWorkflow(unittest.TestCase):
             "concurrency:\n  group: build-${{ github.event_name == 'pull_request' && github.ref || github.sha }}\n"
             "  cancel-in-progress: ${{ github.event_name == 'pull_request' }}\n", head)
 
-    def test_nothing_is_pushed_or_logged_in(self):
-        self.assertNotRegex(self.text, r"push:\s*true")
-        self.assertNotIn("docker/login-action", self.text)
+    # Every way a workflow can push an image, log in to a registry or ask for the right to. They may appear in the
+    # publish-images and move-main jobs of build.yaml and nowhere else; release-please.yaml (gated to open-feature/flagd,
+    # never enabled here) is allowlisted by the hash that ReleaseConfiguration pins.
+    PUSH_SURFACE = ("docker/login-action", "--push", "push: true", "push:true", "push=true", "type=registry", "docker push",
+                    "docker login", "crane", "skopeo", "oras", "push-to-registry", "packages: write", "publish-images.sh",
+                    "publish-images.py", "REGISTRY_TOKEN", "attest-build-provenance", "imagetools create")
+
+    def test_only_publish_images_pushes_or_logs_in(self):
+        """Step 17: the push surface is two jobs of build.yaml, on the main branch of this repository, from the nightly run or a manual run."""
+        publishing = (self.job("publish-images"), self.job("move-main"))
+        everything = {f.name: f.read_text(encoding="utf-8") for f in (ROOT / ".github" / "workflows").glob("*.y*ml")}
+        for name, text in everything.items():
+            if name == "release-please.yaml":
+                continue
+            outside = text
+            if name == "build.yaml":
+                for job in publishing:
+                    outside = outside.replace(job, "")
+            for needle in self.PUSH_SURFACE:
+                with self.subTest(workflow=name, needle=needle):
+                    self.assertNotIn(needle, outside)
+        for needle in ("docker/login-action", "push-to-registry", "attest-build-provenance"):
+            self.assertIn(needle, self.job("publish-images"))
+        # a pull request, a fork, FULL_CI and a branch never publish
+        gate = self.job("publish-images").split("steps:", 1)[0]
+        for condition in ("needs.publish-gate.outputs.publish == 'true'", "github.ref == 'refs/heads/main'",
+                          "github.repository == 'open-feature-forking/openfeature-relay'",
+                          "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'"):
+            self.assertIn(condition, gate)
+
+    def test_publish_jobs(self):
+        """Step 17: publish-images needs the builds and builds nothing; move-main moves :main by compare-and-set."""
+        job = self.job("publish-images")
+        self.assertIn("needs: [publish-gate, release-dry-run, image-build, testbed]", job)
+        for build in ("docker build", "buildx build", "go build", "make "):
+            self.assertNotIn(build, job)
+        self.assertEqual(7, job.count("uses: actions/attest-build-provenance@"))
+        self.assertEqual(1, job.count("uses: docker/login-action@"))
+        self.assertRegex(job, r"permissions:\n      contents: read\n      packages: write\n      id-token: write\n      attestations: write\n")
+        move = self.job("move-main")
+        self.assertIn("needs: publish-images", move)
+        self.assertIn("concurrency:\n      group: move-main\n      cancel-in-progress: false\n", move)
+        self.assertIn("fetch-depth: 0", move)
+        self.assertRegex(move, r"permissions:\n      contents: read\n      packages: write\n")
+        # packages: write is granted at job level in these two jobs and nowhere else
+        self.assertEqual(2, self.text.count("packages: write"))
+        self.assertNotRegex(self.text.split("\njobs:\n", 1)[0], r"packages:")
+
+    def test_move_main_anyway_input(self):
+        """Step 17: the dispatch input that lets move-main pass --force is a boolean off by default, read only in the
+        move-main job through the environment, and --force is passed only when it is true."""
+        head = self.text.split("\njobs:\n", 1)[0]
+        self.assertRegex(head, r"workflow_dispatch:\n    inputs:\n      move-main-anyway:\n(?:        description: .*\n)?"
+                               r"        type: boolean\n        default: false\n")
+        self.assertEqual(1, head.count("move-main-anyway"))
+        jobs = self.text.split("\njobs:\n", 1)[1]
+        self.assertEqual(1, jobs.count("move-main-anyway"))
+        move = self.job("move-main")
+        self.assertRegex(move, r"env:\n(?:          .*\n)*?          ANYWAY: \$\{\{ inputs\.move-main-anyway \}\}\n")
+        run = move.split("run: |\n", 1)[1]
+        self.assertNotIn("inputs.", run)
+        self.assertEqual(1, self.text.count("--force"))
+        self.assertIn('if [ "$ANYWAY" = true ]; then force=(--force); fi', run)
+        self.assertIn('"${force[@]}"', run)
 
     def test_jobs(self):
         names = re.findall(r"^  ([a-z][a-z0-9-]*):[ \t]*(?:#.*)?\n", self.text.split("\njobs:\n", 1)[1], re.M)
         self.assertEqual(
             ["changes", "lint", "benchmark", "test", "docker-local", "integration-test", "upgrade-test", "image-test",
-             "release-dry-run", "testbed", "testbed-rpc-outages", "testbed-grpc-sync", "load-smoke", "load-test"], names)
+             "publish-gate", "release-dry-run", "image-build", "testbed", "publish-images", "move-main",
+             "testbed-rpc-outages", "testbed-grpc-sync", "load-smoke", "load-test"], names)
 
     GATED = {
-        "benchmark": "github.event_name == 'pull_request' && needs.changes.outputs.benchmark == 'true'",
         "docker-local": "needs.changes.outputs.image == 'true'",
         "upgrade-test": "needs.changes.outputs.upgrade == 'true'",
         "image-test": "needs.changes.outputs.reference == 'true'",
-        "testbed": "needs.changes.outputs.testbed == 'true'",
     }
 
     def test_changes_is_the_single_gate(self):
@@ -154,10 +214,13 @@ class BuildWorkflow(unittest.TestCase):
         def on(flag, path):
             return bool(cm.flags([path])[flag])
 
-        for path in ("core/pkg/evaluator/x.go", "service/ofrep/x.go", "sync/http/go.mod", "runtime/go.sum", "go.sum",
-                     "flagd/build.Dockerfile", "distributions/flagd-full/manifest.yaml", "builder/main.go"):
+        # the differential runs on a pull request that touches what it is built from, and Go code elsewhere reaches it
+        # through the nightly run
+        for path in ("flagd/build.Dockerfile", "distributions/flagd-full/manifest.yaml", "builder/main.go",
+                     "flagd/cmd/main.go", "test/upgrade/x_test.go", ".github/workflows/build.yaml", "x/Dockerfile"):
             self.assertTrue(on("upgrade", path), path)
-        for path in ("README.md", "docs/vision.md", "Makefile"):
+        for path in ("README.md", "docs/vision.md", "Makefile", "core/pkg/evaluator/x.go", "service/ofrep/x.go",
+                     "sync/http/go.mod", "runtime/go.sum", "go.sum", "testbed/cmd/main.go"):
             self.assertFalse(on("upgrade", path), path)
         for path in ("builder/reference/Dockerfile", "test/image/x_test.go", "flagd/build.Dockerfile"):
             self.assertTrue(on("reference", path), path)
@@ -167,24 +230,18 @@ class BuildWorkflow(unittest.TestCase):
             self.assertTrue(on("image", path), path)
         for path in ("core/pkg/x.go", "README.md"):
             self.assertFalse(on("image", path), path)
-        for path in ("testbed/cmd/main.go", "test/testbed/x.go", ".github/scripts/compare-pass-sets.py"):
-            self.assertTrue(on("testbed", path), path)
-        self.assertFalse(on("testbed", "docs/vision.md"))
-        self.assertTrue(on("benchmark", "core/pkg/evaluator/x.go"))
-        self.assertFalse(on("benchmark", "docs/guides/x.md"))
+        # the testbed and the benchmarks are not on pull requests, so no flag of the diff gates them
+        self.assertNotIn("testbed", FLAGS)
+        self.assertNotIn("benchmark", FLAGS)
 
-    def test_tools_ci_sets_only_the_flags_that_name_its_package(self):
-        """tools/ci is the repository's CI tooling: its Go files and module files call for no gated job, except the
-        flag of the package that a job runs (S0 of step 18)."""
-        own = {"allocs": "benchmark", "passsets": "testbed"}
+    def test_tools_ci_sets_no_flag(self):
+        """tools/ci is the repository's CI tooling: its Go files and module files call for no gated job."""
         for path in ("tools/ci/main.go", "tools/ci/go.mod", "tools/ci/go.sum", "tools/ci/internal/textio/x.go",
                      "tools/ci/internal/modules/deeper/x.go", "tools/ci/internal/oci/x.go",
-                     "tools/ci/internal/publish/x.go", "tools/ci/Dockerfile"):
+                     "tools/ci/internal/publish/x.go", "tools/ci/internal/allocs/x.go",
+                     "tools/ci/internal/passsets/x.go", "tools/ci/Dockerfile"):
             with self.subTest(path=path):
                 self.assertEqual([], [n for n, v in cm.flags([path]).items() if v])
-        for package, flag in own.items():
-            with self.subTest(package=package):
-                self.assertEqual([flag], [n for n, v in cm.flags([f"tools/ci/internal/{package}/x.go"]).items() if v])
         for flag in FLAGS:
             with self.subTest(flag=flag):
                 self.assertIn(flag, cm.FLAG_EXCLUDES)
@@ -227,12 +284,18 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIn("run: python3 .github/scripts/test_ci_modules.py\n", self.job("lint"))
         self.assertIn("run: python3 .github/scripts/test_ci_modules_affected.py\n", self.job("lint"))
 
+    NIGHTLY_ONLY = "if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'"
+
     def test_gated_jobs(self):
         gate = "if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'"
         for name in ("testbed-rpc-outages", "testbed-grpc-sync"):
             with self.subTest(job=name):
                 self.assertIn(gate, self.job(name))
-        self.assertIn("if: github.event_name == 'pull_request'", self.job("benchmark"))
+        self.assertIn(self.NIGHTLY_ONLY, self.job("benchmark"))
+        self.assertIn(self.NIGHTLY, self.job("testbed"))
+        for name in ("benchmark", "testbed"):
+            with self.subTest(job=name):
+                self.assertNotIn("pull_request", self.job(name).split("steps:", 1)[0].replace("not on pull requests", ""))
 
     def test_load_smoke_runs_on_every_build_and_load_test_runs_nightly(self):
         """W: the 60 s race-build smoke is on every build, the 10 min run is nightly, and both keep their logs on failure."""
@@ -278,12 +341,21 @@ class BuildWorkflow(unittest.TestCase):
         for gone in ("steps.gate", "git diff", "BASE", "DRY_RUN_SCOPE", "DRY_RUN_DISTS"):
             self.assertNotIn(gone, job)
 
+    def test_the_benchmark_compares_with_the_commit_a_day_older_and_skips_without_one(self):
+        job = self.job("benchmark")
+        self.assertIn("fetch-depth: 0", job)
+        self.assertIn("git rev-list -1 --first-parent --before='24 hours ago' \"$GITHUB_SHA\"", job)
+        self.assertIn('[ "$base" = "$GITHUB_SHA" ]', job)
+        self.assertIn("compare-allocs.py", job)
+        self.assertEqual(4, job.count("if: steps.base.outputs.run == 'true'"))
+
     def test_every_job_that_moved_to_the_nightly_run_accepts_the_schedule_event(self):
         """A job whose condition lacks `schedule` silently skips there. The jobs behind a flag run because every flag is
         true without a diff, and the cache of the nightly run is saved."""
-        for name in ("release-dry-run", "load-test", "testbed-rpc-outages", "testbed-grpc-sync"):
+        for name in ("release-dry-run", "load-test", "testbed-rpc-outages", "testbed-grpc-sync", "testbed"):
             with self.subTest(job=name):
                 self.assertIn(self.NIGHTLY, self.job(name))
+        self.assertIn(self.NIGHTLY_ONLY, self.job("benchmark"))
         for name in self.GATED:
             with self.subTest(job=name):
                 self.assertNotIn("schedule", self.all_jobs()[name].split("steps:", 1)[0].replace("on the schedule", ""))
@@ -347,8 +419,7 @@ class BuildWorkflow(unittest.TestCase):
             with self.subTest(job=name):
                 job = self.all_jobs()[name]
                 self.assertNotIn("git diff --name-only", job)
-                if name != "benchmark":  # the benchmark checks the base out to measure it
-                    self.assertNotIn("base.sha", job)
+                self.assertNotIn("base.sha", job)
         check = RELEASE_CHECK.read_text(encoding="utf-8")
         self.assertIn('BASE=$(git rev-parse "$HEAD^1")', check)
         self.assertNotIn("base.sha", check)
@@ -368,8 +439,8 @@ class BuildWorkflow(unittest.TestCase):
         for name in ("testbed-rpc-outages", "testbed-grpc-sync"):
             with self.subTest(job=name):
                 self.assertIn("github.event_name == 'schedule'", self.job(name))
-        # nothing else is gated on the schedule: the pull-request-only and push-only jobs skip it
-        self.assertIn("if: github.event_name == 'pull_request'", self.job("benchmark"))
+        # the benchmark comparison runs nightly as well, against the newest commit that is a day older
+        self.assertIn(self.NIGHTLY_ONLY, self.job("benchmark"))
 
     def test_coverage_profiles_are_kept(self):
         """#208: the profiles are an artifact for a coverage tracker; the comparison with the base was dropped by the
@@ -412,6 +483,61 @@ class BuildWorkflow(unittest.TestCase):
         self.assertNotIn("cache/save", text)
         self.assertNotRegex(text, r"push:\s*true")
         self.assertNotIn("docker/login-action", text)
+
+    def test_publish_gate_job(self):
+        """Step 17: one small job decides whether a run builds and publishes the images; the image jobs wait for it."""
+        gate = self.job("publish-gate")
+        self.assertNotIn("permissions:", gate)
+        self.assertIn(".github/scripts/publish-gate.sh", gate)
+        # tools/ci is CI tooling: its files do not count as image inputs, except the packages that publish (step 18, plan 4)
+        self.assertIn("grep -Ev '^tools/ci/'", gate)
+        self.assertLess(gate.index("grep -Ev '^tools/ci/'"), gate.index('grep -Eq "$pattern"'))
+        self.assertIn("|^tools/ci/internal/(oci|publish)/'", gate)
+        # the group must exit 0 when nothing matches, or a diff of core/x.go alone reads as "not changed" under pipefail
+        self.assertIn("grep -E '^tools/ci/internal/(oci|publish)/' || true; } | grep -Eq", gate)
+        self.assertIn("build: ${{ steps.gate.outputs.build }}", gate)
+        self.assertIn("publish: ${{ steps.gate.outputs.publish }}", gate)
+        for name in ("release-dry-run", "image-build"):
+            with self.subTest(job=name):
+                self.assertIn("needs: publish-gate\n", self.job(name))
+        # the testbed runs nightly, with FULL_CI and manually, and tests the layout of a run that builds the images
+        testbed = self.job("testbed")
+        self.assertIn("    needs: publish-gate\n", testbed)
+        self.assertIn(self.NIGHTLY, testbed)
+        self.assertIn("if: needs.publish-gate.outputs.build == 'true'", self.job("image-build"))
+
+    def test_image_build_parts_cover_the_other_five_distributions(self):
+        """Step 17: flagd-minimal is built by the distributions part and the testbed by its job; the rest by image-build,
+        as layouts checked as layouts and run from the layout. FIPS is not published."""
+        job = self.job("image-build")
+        listed = " ".join(re.findall(r'distributions: "([^"]+)"', job)).split()
+        self.assertEqual(["flagd-cloud", "flagd-full", "flagd-kubernetes", "flagd-minimal-otel", "flagd-sync"], sorted(listed))
+        self.assertIn(".github/scripts/image-build.sh", job)
+        self.assertIn('"0.0.0-main.${GITHUB_SHA::7}"', job)
+        script = (ROOT / ".github" / "scripts" / "image-build.sh").read_text(encoding="utf-8")
+        # no FIPS image is published: the build has one variant and no FIPS build argument
+        self.assertNotIn("fips", script.lower().replace("no fips images", ""))
+        self.assertIn("check_layout", script)
+        self.assertIn("check_runtime", script)
+        self.assertIn('source_dir=flagd\n', script)
+
+    def test_the_testbed_runs_on_the_layout_that_is_published(self):
+        job = self.job("testbed")
+        self.assertIn(".github/scripts/image-testbed.sh", job)
+        self.assertIn("make testbed-contract-both TESTBED_RELAY_IMAGE=flagd-testbed:layout", job)
+        self.assertIn("make testbed-suites TESTBED_RELAY_IMAGE=flagd-testbed:layout", job)
+        self.assertIn("name: layouts-flagd-testbed", job)
+
+    def test_images_are_marked_as_a_proof_of_concept(self):
+        """Q4: labels and annotations come from the build scripts, never from flagd's or flagd-proxy's Dockerfile (K3)."""
+        layout = (ROOT / ".github" / "scripts" / "oci-layout.py").read_text(encoding="utf-8")
+        self.assertIn("Proof of concept from the OpenFeature Relay incubator, built from main. ", layout)
+        self.assertIn("Not an official OpenFeature image; not for production.", layout)
+        self.assertNotIn("vendor", layout)
+        lib = (ROOT / ".github" / "scripts" / "image-lib.sh").read_text(encoding="utf-8")
+        self.assertIn('--label "${kv}" --annotation "index:${kv}" --annotation "manifest:${kv}"', lib)
+        for dockerfile in ("flagd/build.Dockerfile", "flagd-proxy/build.Dockerfile"):
+            self.assertNotIn("org.opencontainers.image", (ROOT / dockerfile).read_text(encoding="utf-8"))
 
     def test_release_dry_run_full_covers_todays_set(self):
         """Slice R: the parts together build the standard archives of flagd and flagd-proxy, the image and the five distributions."""
@@ -465,16 +591,18 @@ class WorkflowPermissions(unittest.TestCase):
                 want = {"lint-pr.yaml": {"pull-requests": "write"}}.get(name) or deploy.get(name) or {"contents": "read"}
                 self.assertEqual(want, doc["permissions"])
 
-    def test_nothing_grants_packages_write(self):
+    def test_packages_write_is_granted_in_two_jobs_of_build_yaml_only(self):
         for f in self.files:
             with self.subTest(workflow=f.name):
-                self.assertNotRegex(f.read_text(encoding="utf-8"), r"packages:\s*write")
+                want = 2 if f.name == "build.yaml" else 0
+                self.assertEqual(want, len(re.findall(r"packages:\s*write", f.read_text(encoding="utf-8"))))
 
-    def test_the_only_registry_login_is_the_pinned_release_workflow(self):
-        """docker/login-action appears in release-please.yaml only (gated to open-feature/flagd, never enabled here); the
-        hash in ReleaseConfiguration pins that file, so a second login or a change to this one fails a test."""
+    def test_the_registry_logins_are_publish_images_and_the_pinned_release_workflow(self):
+        """docker/login-action appears in build.yaml's publish-images and in release-please.yaml (gated to
+        open-feature/flagd, never enabled here); the hash in ReleaseConfiguration pins that file, so a second login or a
+        change to this one fails a test."""
         with_login = [f.name for f in self.files if "docker/login-action" in f.read_text(encoding="utf-8")]
-        self.assertEqual(["release-please.yaml"], with_login)
+        self.assertEqual(["build.yaml", "release-please.yaml"], with_login)
         self.assertIn(".github/workflows/release-please.yaml", ReleaseConfiguration.PINNED)
 
     def test_lint_pr_runs_on_pull_request_target_without_the_pull_requests_code(self):

@@ -56,6 +56,7 @@ func newEndpointInputs(
 	for _, f := range factories {
 		if format := f.Needs().Format; format != "" {
 			if _, ok := rt.Evaluator(format); !ok {
+				_ = in.close()
 				return nil, fmt.Errorf("the service endpoint %q needs the evaluator of the configuration format %q, which the distribution lacks",
 					f.Type(), format)
 			}

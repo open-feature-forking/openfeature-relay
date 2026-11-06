@@ -2,6 +2,7 @@ package builder
 
 import (
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -71,6 +72,11 @@ func (sb *SyncBuilder) SyncsFromConfig(sourceConfigs []sync.SourceConfig, logger
 	for i, syncProvider := range sourceConfigs {
 		syncImpl, err := sb.syncFromConfig(syncProvider, logger)
 		if err != nil {
+			for _, built := range syncImpls[:i] {
+				if closer, ok := built.(io.Closer); ok {
+					_ = closer.Close()
+				}
+			}
 			return nil, fmt.Errorf("could not create sync provider: %w", err)
 		}
 		syncImpls[i] = syncImpl

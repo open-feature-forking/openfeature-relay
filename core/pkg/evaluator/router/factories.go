@@ -28,6 +28,7 @@ func FromFactories(
 	for _, factory := range factories {
 		format := factory.ConfigurationFormat()
 		if !slices.Contains(available, format) {
+			_ = closeEvaluators(routes)
 			return nil, fmt.Errorf("the evaluator %q resolves the configuration format %q, which the distribution lacks; it has: %s",
 				factory.Type(), format, strings.Join(available, ", "))
 		}
@@ -37,6 +38,7 @@ func FromFactories(
 		}
 		ev, err := factory.Create(evaluator.Settings{Store: st, Logger: log, Config: config})
 		if err != nil {
+			_ = closeEvaluators(routes)
 			return nil, fmt.Errorf("error creating the evaluator %q: %w", factory.Type(), err)
 		}
 		routes = append(routes, Route{Format: format, Evaluator: ev})
@@ -51,5 +53,10 @@ func FromFactories(
 		return nil, fmt.Errorf("the distribution has no evaluator, but a service endpoint needs the evaluation router; its configuration formats are: %s",
 			strings.Join(available, ", "))
 	}
-	return New(st, routes...)
+	r, err := New(st, routes...)
+	if err != nil {
+		_ = closeEvaluators(routes)
+		return nil, err
+	}
+	return r, nil
 }

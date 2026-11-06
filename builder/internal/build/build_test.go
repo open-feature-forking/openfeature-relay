@@ -91,6 +91,10 @@ type Factory interface {
 	Type() string
 	Needs() Needs
 }
+
+type Hosted interface{ Host() string }
+
+type Hosting interface{ Hosts() bool }
 `,
 	},
 	"runtime": {
@@ -118,6 +122,10 @@ func Execute(info distribution.Info, c distribution.Components, inv distribution
 		"type factory struct{}\n\nfunc (factory) Type() string { return \"ofrep\" }\nfunc (factory) Needs() service.Needs { return service.Needs{Router: true} }\n"),
 	"flagsync": component("flagsync", "service", "NewFactory() service.Factory", "factory{}",
 		"type factory struct{}\n\nfunc (factory) Type() string { return \"flag-sync\" }\nfunc (factory) Needs() service.Needs { return service.Needs{} }\n"),
+	"flaghost": component("flaghost", "service", "NewFactory() service.Factory", "factory{}",
+		"type factory struct{}\n\nfunc (factory) Type() string { return \"flag-sync\" }\nfunc (factory) Needs() service.Needs { return service.Needs{} }\nfunc (factory) Hosts() bool { return true }\n"),
+	"legacy": component("legacy", "service", "NewFactory() service.Factory", "factory{}",
+		"type factory struct{}\n\nfunc (factory) Type() string { return \"legacy\" }\nfunc (factory) Needs() service.Needs { return service.Needs{} }\nfunc (factory) Host() string { return \"flag-sync\" }\n"),
 }
 
 func component(name, corePkg, signature, value, types string) map[string]string {
@@ -146,7 +154,7 @@ func setup(t *testing.T, selected ...string) *fixture {
 	}
 	group := map[string]string{
 		"file": "sync_providers", "flagdformat": "configuration_formats", "flagdeval": "evaluators",
-		"ofrep": "service_endpoints", "flagsync": "service_endpoints",
+		"ofrep": "service_endpoints", "flagsync": "service_endpoints", "flaghost": "service_endpoints", "legacy": "service_endpoints",
 	}
 	var text strings.Builder
 	text.WriteString("dist: {name: custom, version: 1.2.3, output_path: ./out, module: example.test/custom, binary: relay}\n")
@@ -431,4 +439,36 @@ func TestComponentsOfAddsTheCmdModule(t *testing.T) {
 	}, componentsOf(m))
 
 	require.Empty(t, componentsOf(&manifest.Manifest{}))
+}
+
+func TestHostedEndpointNeedsAHostThatHosts(t *testing.T) {
+	tests := []struct {
+		name     string
+		selected []string
+		problem  string
+	}{
+		{"no host of that type", []string{"file", "flagdformat", "legacy"}, `is hosted by the service endpoint "flag-sync", but no selected service endpoint has that type`},
+		{"a host without Hosts", []string{"file", "flagdformat", "flagsync", "legacy"}, `which does not host other endpoints`},
+		{"a host that hosts", []string{"file", "flagdformat", "flaghost", "legacy"}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := setup(t, tt.selected...)
+			opts, log := options(t)
+
+			res, err := Run(ctx, f.load(t), opts)
+
+			if tt.problem == "" {
+				require.NoError(t, err)
+				require.NotEmpty(t, res.Binary)
+				return
+			}
+			var nerr *needs.Error
+			require.True(t, errors.As(err, &nerr), "%v", err)
+			require.Contains(t, nerr.Error(), `service endpoint "legacy"`)
+			require.Contains(t, nerr.Error(), tt.problem)
+			require.Empty(t, res.Binary)
+			require.NotContains(t, log.String(), "go build")
+		})
+	}
 }

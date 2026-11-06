@@ -117,7 +117,7 @@ func TestRandomChoiceBetweenTwoFaultsIsKept(t *testing.T) {
 	withoutAWSConfig(t)
 	seen := map[string]bool{}
 	for range 1000 {
-		_, _, _, _, err := configOptions(map[string][]string{"foo": {"1"}, "bar": {"2"}})
+		_, err := configOptions(map[string][]string{"foo": {"1"}, "bar": {"2"}})
 		require.Error(t, err)
 		seen[err.Error()] = true
 	}
