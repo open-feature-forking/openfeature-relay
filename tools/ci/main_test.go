@@ -22,6 +22,8 @@ func TestRun(t *testing.T) {
 		{name: "unknown subcommand", args: []string{"nope"}, wantCode: 2, wantStderr: `unknown subcommand "nope"`},
 		{name: "help", args: []string{"help"}, wantStdout: "usage: relay-ci"},
 		{name: "dash h", args: []string{"-h"}, wantStdout: "usage: relay-ci"},
+		{name: "compare-allocs without arguments", args: []string{"compare-allocs"}, wantCode: 2, wantStderr: "relay-ci compare-allocs <base> <head>"},
+		{name: "compare-pass-sets without arguments", args: []string{"compare-pass-sets"}, wantCode: 2, wantStdout: "relay-ci compare-pass-sets"},
 		{name: "dash dash help", args: []string{"--help"}, wantStdout: "usage: relay-ci"},
 	}
 	for _, tt := range tests {

@@ -34,28 +34,20 @@ FLAG_PATTERNS = {
     "go": r"\.go$|(^|/)go\.(mod|sum)$",
     "deps": r"(^|/)go\.(mod|sum)$",
     "dockerfile": r"(^|/)[^/]*Dockerfile$",
-    "benchmark": r"\.go$|(^|/)go\.(mod|sum)$|^\.github/scripts/(run-benchmarks|compare-allocs)",
     "image": r"(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^\.github/workflows/build\.yaml$",
     # the reference Dockerfile of the Builder and the tests that build images from it
     "reference": r"^builder/reference/|^test/image/|(^|/)[^/]*Dockerfile$|^\.github/workflows/build\.yaml$",
-    # Dockerfiles; the manifest of flagd-full and the Builder that builds it; flagd, which holds flagd-full's main and its
-    # list of components; the differential's own test; any Go source or module file, because a change under core/,
-    # service/, sync/, runtime/ or evaluator/ changes flagd-full.
-    "upgrade": r"\.go$|(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^flagd/|^test/upgrade/|"
-               r"^\.github/workflows/build\.yaml$",
-    # the same, and the testbed, its distribution and the suites
-    "testbed": r"\.go$|(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^flagd/|^testbed/|"
-               r"^test/(testbed|integration|upgrade)/|^\.github/scripts/(testbed|compare-pass)|^\.github/workflows/build\.yaml$",
+    # What the differential is built from: Dockerfiles; the manifest of flagd-full and the Builder that builds it; flagd,
+    # which holds flagd-full's main and its list of components; the differential's own test; this workflow. Go code
+    # elsewhere is not a term: a pull request that changes it gets the differential from the nightly run.
+    "upgrade": r"(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^flagd/|^test/upgrade/|^\.github/workflows/build\.yaml$",
 }
 
 # tools/ci is the repository's own CI tooling: its sources and module files do not call for a gated job. A path the
 # include matches does not count when it matches the flag's exclusion; the terms below it are the packages of tools/ci
 # that a flag does depend on. (RE2, which the Go port uses, has no lookahead, so this is include-and-not-exclude.)
 FLAG_EXCLUDES = {n: r"^tools/ci/" for n in FLAG_PATTERNS}
-FLAG_EXTRA_TERMS = {
-    "benchmark": r"^tools/ci/internal/allocs/",
-    "testbed": r"^tools/ci/internal/passsets/",
-}
+FLAG_EXTRA_TERMS = {}
 
 
 class TableError(Exception):

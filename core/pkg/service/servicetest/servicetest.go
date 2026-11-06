@@ -15,6 +15,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"reflect"
@@ -99,6 +100,10 @@ type Inputs struct {
 	// HTTP says the endpoint serves HTTP through Settings.WrapHTTP; the harness then supplies middleware that
 	// binds a selector and attributes, and checks the effective selector.
 	HTTP bool
+	// Host is the factory of the endpoint that serves a hosted endpoint, which has no listener of its own: the harness
+	// creates the hosted endpoint, hands it to Host in Settings.Extensions and runs Host. PortKey, Config and the
+	// inputs then address the host. Required for a hosted factory (service.Hosted), unused otherwise.
+	Host service.Factory
 	// Without names the features the endpoint does not have. A feature is either supplied through its input or
 	// named here; one that is neither fails its case, naming the input, so that leaving an input out cannot
 	// pass the contract.
@@ -163,6 +168,16 @@ func hasPort(_ service.Needs, in Inputs) bool { return in.PortKey != "" }
 
 func resolves(n service.Needs, _ Inputs) bool { return n.Router || n.Format != "" }
 
+func isHosted(_ service.Needs, in Inputs) bool { return in.Host != nil }
+
+// servedBy is the factory whose endpoint serves f: its host for a hosted factory, else f itself.
+func servedBy(f service.Factory, in Inputs) service.Factory {
+	if in.Host != nil {
+		return in.Host
+	}
+	return f
+}
+
 // Check runs the cases and returns the report, without failing a test. A case of a feature the author named in Without
 // is reported as not applicable; one whose input is neither supplied nor named fails, naming the input. A feature both
 // supplied and named in Without, or a name that is no feature, aborts the run without a case (UC-008 BR-006).
@@ -170,6 +185,8 @@ func Check(_ testing.TB, f service.Factory, in Inputs) contracttest.Report {
 	cases := []contractCase{
 		{"declarations", always, caseDeclarations, ""},
 		{"creates from what it declared", always, caseCreates, ""},
+		{"is served by a host that hosts it", isHosted, caseHostHosts, ""},
+		{"is never served on its own", isHosted, caseNotServedAlone, ""},
 		{"serves and returns within the budget with its connections ended", always, caseServesAndStops, ""},
 		{"a serve error is returned", always, caseServeError, ""},
 		{"opens its listeners through Settings.Listen", hasPort, caseOpensThroughListen, ""},
@@ -183,7 +200,13 @@ func Check(_ testing.TB, f service.Factory, in Inputs) contracttest.Report {
 			caseEffectiveSelector, FeatureHTTP},
 	}
 
-	needs := f.Needs()
+	if hosted, ok := f.(service.Hosted); ok && in.Host == nil {
+		return contracttest.Report{Aborted: fmt.Sprintf("the endpoint %q is served by %q, not on its own; set Inputs.Host to the factory of that endpoint", f.Type(), hosted.Host())}
+	}
+	if _, ok := f.(service.Hosted); !ok && in.Host != nil {
+		return contracttest.Report{Aborted: fmt.Sprintf("Inputs.Host is set, but the endpoint %q is not hosted", f.Type())}
+	}
+	needs := servedBy(f, in).Needs()
 	var report contracttest.Report
 	supplied := map[Feature]bool{}
 	for _, feature := range allFeatures {
@@ -297,9 +320,10 @@ func (e *env) settings(mutate func(*service.Settings)) service.Settings {
 	s := service.Settings{
 		Store: e.store, Bus: e.bus, Initialized: initialized, Logger: e.log, Config: maps(e.in.Config),
 	}
-	needs := e.f.Needs()
+	served := servedBy(e.f, e.in)
+	needs := served.Needs()
 	if needs.Router {
-		s.Resolver = typed.New(e.rec, typed.WithObserver(events.EvaluationObserver(e.bus, e.f.Type())))
+		s.Resolver = typed.New(e.rec, typed.WithObserver(events.EvaluationObserver(e.bus, served.Type())))
 	}
 	if needs.Format != "" {
 		s.Evaluator = e.rec
@@ -391,11 +415,45 @@ func (e *env) create(port int, mutate func(*service.Settings)) (service.Endpoint
 	if e.in.PortKey != "" {
 		addr = net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
 	}
-	endpoint, err := e.f.Create(s)
+	var endpoint service.Endpoint
+	var err error
+	if e.in.Host != nil {
+		endpoint, err = e.createHosted(s)
+	} else {
+		endpoint, err = e.f.Create(s)
+	}
 	if err == nil && endpoint == nil {
 		err = errors.New("Create returned neither an endpoint nor an error")
 	}
 	return endpoint, addr, err
+}
+
+// createHosted creates the hosted endpoint as the runtime does, with no settings of its own, and the host with it in
+// Settings.Extensions. s are the settings of the host.
+func (e *env) createHosted(s service.Settings) (service.Endpoint, error) {
+	initialized := make(chan struct{})
+	close(initialized)
+	hostedSettings := service.Settings{Store: e.store, Bus: e.bus, Initialized: initialized, Logger: e.log, Config: maps(nil)}
+	needs := e.f.Needs()
+	if needs.Router {
+		hostedSettings.Resolver = typed.New(e.rec, typed.WithObserver(events.EvaluationObserver(e.bus, e.f.Type())))
+	}
+	if needs.Format != "" {
+		hostedSettings.Evaluator = e.rec
+	}
+	hosted, err := e.f.Create(hostedSettings)
+	if err != nil {
+		return nil, fmt.Errorf("expected the hosted endpoint to be created with what it declared\nobserved: %w", err)
+	}
+	s.Extensions = []service.Endpoint{hosted}
+	endpoint, err := e.in.Host.Create(s)
+	if err != nil {
+		if closer, ok := hosted.(io.Closer); ok {
+			_ = closer.Close()
+		}
+		return nil, err
+	}
+	return endpoint, nil
 }
 
 // start creates the endpoint, serves it and waits until a client can connect. The endpoint is handed an open listener
@@ -532,7 +590,7 @@ func caseDeclarations(e *env) error {
 }
 
 func caseCreates(e *env) error {
-	needs := e.f.Needs()
+	needs := servedBy(e.f, e.in).Needs()
 	if _, _, err := e.create(0, nil); err != nil {
 		return fmt.Errorf("expected Create to succeed with exactly what the factory declared (resolver: %t, evaluator for %q)\nobserved: %w",
 			needs.Router, needs.Format, err)
@@ -879,6 +937,40 @@ func caseEffectiveSelector(e *env) error {
 		if seen[0].Attributes["audience"] != "contract" {
 			return fmt.Errorf("selector row %q: expected the request attributes bound by the middleware to reach the resolver\nobserved: %v", row.name, seen[0].Attributes)
 		}
+	}
+	return nil
+}
+
+// caseHostHosts: the host is the endpoint the hosted factory names, and it declares that it hosts.
+func caseHostHosts(e *env) error {
+	want := e.f.(service.Hosted).Host()
+	if got := e.in.Host.Type(); got != want {
+		return fmt.Errorf("expected Inputs.Host to be the endpoint %q that the factory names as its host\nobserved: %q", want, got)
+	}
+	if h, ok := e.in.Host.(service.Hosting); !ok || !h.Hosts() {
+		return fmt.Errorf("expected the host %q to declare that it hosts endpoints (service.Hosting, Hosts() true)\nobserved: it does not, so the runtime refuses the distribution", want)
+	}
+	return nil
+}
+
+// caseNotServedAlone: the runtime never serves a hosted endpoint, and one that is served says by whom.
+func caseNotServedAlone(e *env) error {
+	hosted, err := e.f.Create(service.Settings{Store: e.store, Bus: e.bus, Logger: e.log, Config: maps(nil)})
+	if err != nil {
+		return fmt.Errorf("expected the hosted endpoint to be created\nobserved: %w", err)
+	}
+	if closer, ok := hosted.(io.Closer); ok {
+		defer closer.Close() //nolint:errcheck // the case is about Serve
+	}
+	host := e.f.(service.Hosted).Host()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	err = hosted.Serve(ctx)
+	if err == nil {
+		return fmt.Errorf("expected Serve of a hosted endpoint to return an error naming its host %q\nobserved: nil", host)
+	}
+	if !strings.Contains(err.Error(), fmt.Sprintf("%q", host)) || !strings.Contains(err.Error(), fmt.Sprintf("%q", e.f.Type())) {
+		return fmt.Errorf("expected the error of Serve to name the endpoint %q and its host %q\nobserved: %v", e.f.Type(), host, err)
 	}
 	return nil
 }
