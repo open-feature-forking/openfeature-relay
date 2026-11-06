@@ -89,68 +89,26 @@ func open(ctx context.Context, bucketURL, object string, extra []func(*s3.Option
 	}
 	q := u.Query()
 
-	if sseType := q.Get("ssetype"); sseType != "" {
-		q.Del("ssetype")
-		valid := false
-		for _, v := range types.ServerSideEncryptionAes256.Values() {
-			valid = valid || strings.EqualFold(string(v), sseType)
-		}
-		if !valid {
-			return nil, fmt.Errorf("%q is not a valid value for %q", sseType, "ssetype")
-		}
+	if err := checkSSEType(q); err != nil {
+		return nil, err
 	}
 	q.Del("kmskeyid")
 
-	var clientOptions []func(*s3.Options)
-	if value := q.Get("accelerate"); value != "" {
-		q.Del("accelerate")
-		accelerate, err := parseBool("accelerate", value)
-		if err != nil {
-			return nil, err
-		}
-		clientOptions = append(clientOptions, func(o *s3.Options) { o.UseAccelerate = accelerate })
-	}
-	if value := q.Get("disable_https"); value != "" {
-		q.Del("disable_https")
-		disable, err := parseBool("disable_https", value)
-		if err != nil {
-			return nil, err
-		}
-		clientOptions = append(clientOptions, func(o *s3.Options) { o.EndpointOptions.DisableHTTPS = disable })
-	}
-	pathStyle := false
-	for _, key := range []string{"use_path_style", "s3ForcePathStyle"} {
-		if value := q.Get(key); value != "" {
-			q.Del(key)
-			if pathStyle, err = parseBool(key, value); err != nil {
-				return nil, err
-			}
-		}
+	clientOptions, pathStyle, err := clientOptionsOf(q)
+	if err != nil {
+		return nil, err
 	}
 
-	loadOptions, endpoint, hostnameImmutable, rateLimitCapacity, err := configOptions(q)
+	shared, err := configOptions(q)
 	if err != nil {
 		return nil, fmt.Errorf("open bucket %v: %v", u, err)
 	}
-	cfg, err := config.LoadDefaultConfig(ctx, loadOptions...)
+	cfg, err := config.LoadDefaultConfig(ctx, shared.opts...)
 	if err != nil {
 		return nil, fmt.Errorf("open bucket %v: %v", u, err)
 	}
 
-	var limiter retry.RateLimiter = ratelimit.None
-	if rateLimitCapacity > 0 {
-		limiter = ratelimit.NewTokenRateLimit(uint(rateLimitCapacity))
-	}
-	clientOptions = append(clientOptions, func(o *s3.Options) {
-		o.UsePathStyle = pathStyle || (endpoint != "" && hostnameImmutable)
-		if endpoint != "" {
-			o.BaseEndpoint = aws.String(endpoint)
-		}
-		o.Retryer = retry.NewStandard(func(so *retry.StandardOptions) {
-			so.RateLimiter = limiter
-			so.MaxAttempts = maxAttempts
-		})
-	})
+	clientOptions = append(clientOptions, addressingOption(pathStyle, shared))
 	return &store{
 		client: s3.NewFromConfig(cfg, append(clientOptions, extra...)...),
 		bucket: u.Host,
@@ -158,58 +116,149 @@ func open(ctx context.Context, bucketURL, object string, extra []func(*s3.Option
 	}, nil
 }
 
-// configOptions reads the options that shape the SDK's shared config.
-func configOptions(q url.Values) (opts []func(*config.LoadOptions) error, endpoint string, hostnameImmutable bool, rateLimitCapacity int64, err error) {
-	for param, values := range q {
-		value := values[0]
-		switch param {
-		case "hostname_immutable":
-			if hostnameImmutable, err = strconv.ParseBool(value); err != nil {
-				return nil, "", false, 0, fmt.Errorf("invalid value for hostname_immutable: %w", err)
-			}
-		case "region":
-			opts = append(opts, config.WithRegion(value))
-		case "endpoint":
-			endpoint = value
-		case "profile":
-			opts = append(opts, config.WithSharedConfigProfile(value))
-		case "dualstack":
-			dualStack, err := strconv.ParseBool(value)
-			if err != nil {
-				return nil, "", false, 0, fmt.Errorf("invalid value for dualstack: %w", err)
-			}
-			if dualStack {
-				opts = append(opts, config.WithUseDualStackEndpoint(aws.DualStackEndpointStateEnabled))
-			}
-		case "fips":
-			fips, err := strconv.ParseBool(value)
-			if err != nil {
-				return nil, "", false, 0, fmt.Errorf("invalid value for fips: %w", err)
-			}
-			if fips {
-				opts = append(opts, config.WithUseFIPSEndpoint(aws.FIPSEndpointStateEnabled))
-			}
-		case "rate_limiter_capacity":
-			if rateLimitCapacity, err = strconv.ParseInt(value, 10, 32); err != nil {
-				return nil, "", false, 0, fmt.Errorf("invalid value for capacity: %w", err)
-			}
-		case "anonymous":
-			anon, err := strconv.ParseBool(value)
-			if err != nil {
-				return nil, "", false, 0, fmt.Errorf("invalid value for anonymous: %w", err)
-			}
-			if anon {
-				opts = append(opts, config.WithCredentialsProvider(aws.AnonymousCredentials{}))
-			}
-		case "awssdk":
-			if value == "v1" {
-				return nil, "", false, 0, fmt.Errorf("unsupported value %q for \"awssdk\": only the AWS SDK v2 is supported", value)
-			}
-		default:
-			return nil, "", false, 0, fmt.Errorf("unknown query parameter %q", param)
+// checkSSEType removes the ssetype option from q and rejects a value that is not a server-side encryption type; the
+// type is accepted and unused for reading.
+func checkSSEType(q url.Values) error {
+	sseType := q.Get("ssetype")
+	if sseType == "" {
+		return nil
+	}
+	q.Del("ssetype")
+	for _, v := range types.ServerSideEncryptionAes256.Values() {
+		if strings.EqualFold(string(v), sseType) {
+			return nil
 		}
 	}
-	return opts, endpoint, hostnameImmutable, rateLimitCapacity, nil
+	return fmt.Errorf("%q is not a valid value for %q", sseType, "ssetype")
+}
+
+// takeBool reads and removes a boolean option of q; set is false for an absent or empty one, which stays in q.
+func takeBool(q url.Values, key string) (value, set bool, err error) {
+	raw := q.Get(key)
+	if raw == "" {
+		return false, false, nil
+	}
+	q.Del(key)
+	value, err = parseBool(key, raw)
+	return value, true, err
+}
+
+// clientOptionsOf removes the options that shape the S3 client from q, in the order accelerate, disable_https and
+// use_path_style (or s3ForcePathStyle, which wins as the later of the two), and returns the client options and
+// whether path-style addressing was asked for.
+func clientOptionsOf(q url.Values) (opts []func(*s3.Options), pathStyle bool, err error) {
+	accelerate, set, err := takeBool(q, "accelerate")
+	if err != nil {
+		return nil, false, err
+	}
+	if set {
+		opts = append(opts, func(o *s3.Options) { o.UseAccelerate = accelerate })
+	}
+	disable, set, err := takeBool(q, "disable_https")
+	if err != nil {
+		return nil, false, err
+	}
+	if set {
+		opts = append(opts, func(o *s3.Options) { o.EndpointOptions.DisableHTTPS = disable })
+	}
+	for _, key := range []string{"use_path_style", "s3ForcePathStyle"} {
+		value, set, err := takeBool(q, key)
+		if err != nil {
+			return nil, false, err
+		}
+		if set {
+			pathStyle = value
+		}
+	}
+	return opts, pathStyle, nil
+}
+
+// addressingOption sets the endpoint, the addressing style and the retryer of the client.
+func addressingOption(pathStyle bool, shared sharedOptions) func(*s3.Options) {
+	var limiter retry.RateLimiter = ratelimit.None
+	if shared.rateLimitCapacity > 0 {
+		limiter = ratelimit.NewTokenRateLimit(uint(shared.rateLimitCapacity))
+	}
+	return func(o *s3.Options) {
+		o.UsePathStyle = pathStyle || (shared.endpoint != "" && shared.hostnameImmutable)
+		if shared.endpoint != "" {
+			o.BaseEndpoint = aws.String(shared.endpoint)
+		}
+		o.Retryer = retry.NewStandard(func(so *retry.StandardOptions) {
+			so.RateLimiter = limiter
+			so.MaxAttempts = maxAttempts
+		})
+	}
+}
+
+// sharedOptions are what configOptions reads from the query: the options of the SDK's shared config, and the
+// settings the client is built with.
+type sharedOptions struct {
+	opts              []func(*config.LoadOptions) error
+	endpoint          string
+	hostnameImmutable bool
+	rateLimitCapacity int64
+}
+
+// configOptions reads the options that shape the SDK's shared config. Which of two wrong options is reported is left
+// to the map's iteration.
+func configOptions(q url.Values) (sharedOptions, error) {
+	var shared sharedOptions
+	for param, values := range q {
+		if err := shared.read(param, values[0]); err != nil {
+			return sharedOptions{}, err
+		}
+	}
+	return shared, nil
+}
+
+// read applies one option of the query.
+func (s *sharedOptions) read(param, value string) error {
+	switch param {
+	case "hostname_immutable":
+		immutable, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("invalid value for hostname_immutable: %w", err)
+		}
+		s.hostnameImmutable = immutable
+	case "region":
+		s.opts = append(s.opts, config.WithRegion(value))
+	case "endpoint":
+		s.endpoint = value
+	case "profile":
+		s.opts = append(s.opts, config.WithSharedConfigProfile(value))
+	case "dualstack":
+		return s.addIfTrue(param, value, config.WithUseDualStackEndpoint(aws.DualStackEndpointStateEnabled))
+	case "fips":
+		return s.addIfTrue(param, value, config.WithUseFIPSEndpoint(aws.FIPSEndpointStateEnabled))
+	case "rate_limiter_capacity":
+		capacity, err := strconv.ParseInt(value, 10, 32)
+		if err != nil {
+			return fmt.Errorf("invalid value for capacity: %w", err)
+		}
+		s.rateLimitCapacity = capacity
+	case "anonymous":
+		return s.addIfTrue(param, value, config.WithCredentialsProvider(aws.AnonymousCredentials{}))
+	case "awssdk":
+		if value == "v1" {
+			return fmt.Errorf("unsupported value %q for \"awssdk\": only the AWS SDK v2 is supported", value)
+		}
+	default:
+		return fmt.Errorf("unknown query parameter %q", param)
+	}
+	return nil
+}
+
+// addIfTrue adds opt when the boolean option name is true.
+func (s *sharedOptions) addIfTrue(name, value string, opt func(*config.LoadOptions) error) error {
+	on, err := strconv.ParseBool(value)
+	if err != nil {
+		return fmt.Errorf("invalid value for %s: %w", name, err)
+	}
+	if on {
+		s.opts = append(s.opts, opt)
+	}
+	return nil
 }
 
 // Identity is the ETag of the object.
