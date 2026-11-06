@@ -146,5 +146,4 @@ This use case is `Implemented`: the manifests of flagd-minimal, flagd-minimal-ot
 | Gap | Delivered by |
 |-----|--------------|
 | A1: the FIPS image an Operator builds with the `-fips` tag. The relay's releases publish none; [Build a FIPS distribution](../relay/fips.md) shows how to build one, and CI does not verify it (C-009) | UC-002 |
-| A7, BR-008, FR-063: the component `flag-evaluation-legacy`, its selection in flagd-full and flagd-testbed, and the slim distributions' answers | Step 19 (#266) |
 | BR-005: the image names, the binary archives and the release names of the standard distributions, and their platform matrix (NFR-009) | UC-012 |

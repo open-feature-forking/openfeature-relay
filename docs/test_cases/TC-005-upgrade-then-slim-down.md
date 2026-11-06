@@ -35,13 +35,14 @@
 | 9 | Start standard distribution | The Operator starts it with the unchanged start command; it checks every setting and scheme against its components and starts its sources and endpoints | `flagd-minimal start --uri s3://bucket/flags.json` rejected with `run "flagd components"` | [UC-010](../use_cases/UC-010-adopt-standard-distribution.md) | `TestStartsWithFlagdFullDefaults`, `TestAbsentComponentSettingStopsStartup`, `TestUnknownSchemeListsSchemes`, `TestNoEvaluationEndpoint` (`test/distributions`) |
 | 10 | Verify ready and identified | The standard distribution reports readiness, not while a source is unavailable or stale, and `flagd version --verbose` names it | `distribution: flagd-minimal 0.0.0` | - | `TestUnavailableSourceNotReady`, `TestVersionVerboseNamesEachDistribution` (`test/distributions`); `TestReadinessLostWhenStale`, `TestReadinessWithoutStaleAfterIgnoresContact` (`runtime`) |
 | 11 | Verify same results as flagd-full | Evaluation requests get the same results from the standard distribution as from flagd-full | flags of step 6 | [UC-010](../use_cases/UC-010-adopt-standard-distribution.md) | `TestStandardDistributionParity` (`test/distributions`) |
+| 12 | Meet a deprecated evaluation service | A client of the deprecated flagd-web provider or an old RPC provider calls `schema.v1` or `flagd.evaluation.v1`: the slim distributions answer HTTP 404 (`Unimplemented` to gRPC and ConnectRPC clients) while flagd-full serves it, so the Operator keeps flagd-full for that client or moves it to v2 or OFREP | `schema.v1.Service/ResolveBoolean`, `flagd.evaluation.v1.Service/ResolveAll` | [UC-010](../use_cases/UC-010-adopt-standard-distribution.md) | `TestSlimDistributionsDoNotServeDeprecatedServices`, `TestFlagdFullServesDeprecatedServices`, `TestComponentsListsTheHostOfTheLegacyEndpoint` (`test/distributions`) |
 
 `test/upgrade` runs in the `upgrade-test` job (`make upgrade-test`) when a change touches a Dockerfile, `distributions/`, `builder/`, `flagd/` or the build, and on every `FULL_CI` or manual run; the other tests run in the `test` job on every pull request.
 
 ## Validation
 
 1. **Drop-in upgrade**: Every difference between the baseline flagd and flagd-full is listed in `test/upgrade/accepted.yaml`.
-2. **Smaller distribution, same answers**: The selected standard distribution resolves every flag of the configuration as flagd-full does, and contains only the components its manifest lists.
+2. **Smaller distribution, same answers**: The selected standard distribution resolves every flag of the configuration as flagd-full does, and contains only the components its manifest lists, and answers the deprecated evaluation services as the manifest says (FR-063).
 
 ## Postconditions
 

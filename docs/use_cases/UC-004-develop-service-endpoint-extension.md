@@ -197,5 +197,4 @@ This use case is `Implemented` for the service endpoint side: the factory, setti
 | Middleware factories, the chain, the official endpoints honouring a bound selector, FR-047 | UC-005 |
 | Event sinks and their flush | UC-020 |
 | Vendor flags on the flag evaluation event stream | UC-019 |
-| A10, BR-013, FR-063: the hosted endpoint seam in the runtime, the contract harness, the builder check and the flag evaluation endpoint's mount | Step 19 (#266) |
 | A webhook fetch trigger | UC-019 |

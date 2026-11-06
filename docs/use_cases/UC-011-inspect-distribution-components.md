@@ -94,5 +94,4 @@ This use case is `Implemented`: the hidden `flagd components` command lists the 
 
 | Gap | Delivered by |
 |-----|--------------|
-| Step 5: the host of a hosted endpoint, in the text and as an `omitempty` `host` field of the JSON listing (FR-063) | Step 19 (#266) |
 | A2: the startup errors for an unsupported scheme or a setting of an absent component name `flagd components` (flagd-full keeps today's error text) | UC-010 |
