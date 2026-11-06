@@ -71,6 +71,8 @@ type hostingFactory struct {
 
 func (f hostingFactory) Hosts() bool { return f.hosts }
 
+var _ Hosting = hostingFactory{}
+
 func TestValidateDeclarationsHost(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -87,8 +89,6 @@ func TestValidateDeclarationsHost(t *testing.T) {
 			factory: hostedFactory{fakeFactory{needs: Needs{Format: " x"}}, ""},
 			wantErr: "the type name is empty; the needed configuration format has surrounding whitespace; the host is empty",
 		},
-		{name: "a host that hosts", factory: hostingFactory{fakeFactory{typeName: "flag-evaluation"}, true}},
-		{name: "a host that does not", factory: hostingFactory{fakeFactory{typeName: "flag-evaluation"}, false}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
