@@ -144,14 +144,14 @@
 2. Builder produces no binary.
 3. Use case ends.
 
-### A13: Hosted Endpoint Without a Host That Hosts It
+### A13: Host Present but Does Not Host
 
-**Trigger:** A selected hosted endpoint names a service endpoint type that no selected component of that type hosts (step 8)
+**Trigger:** A selected hosted endpoint names a service endpoint type that is selected but does not host; a type that is not selected is an unmet need (A9) (step 8)
 **Flow:**
 
-1. Builder reports the hosted endpoint, the type it names and whether that type is absent or does not host.
+1. Builder reports the hosted endpoint and the type it names, which does not host.
 2. Builder produces no binary.
-3. Distribution Builder selects the hosting endpoint, or removes the hosted endpoint from the manifest.
+3. Distribution Builder selects a hosting endpoint of that type, or removes the hosted endpoint from the manifest.
 4. Use case continues at step 3.
 
 ## Postconditions
@@ -243,5 +243,5 @@ This use case is `Implemented`: the manifest and its validation, the generated s
 | flagd-full released from the generated source | UC-009 |
 | `flagd components` (the inventory and the identity exist) | UC-011 |
 | Reference Dockerfile (FR-009) | UC-002 |
-| A13, BR-014 for hosted endpoints, FR-063: the builder's check of a hosted endpoint's host | Step 19 (#266) |
+| A13, BR-014 for hosted endpoints, FR-063: the builder's check of a hosted endpoint's host and its host's hosting | Step 19 (#266) |
 | Compiling a distribution with middleware: no repository manifest lists one yet; the Flagsmith distribution will list `contrib/flagsmith/middleware` | UC-019 (#94) |

@@ -87,7 +87,7 @@
 **Trigger:** A client calls `schema.v1` or `flagd.evaluation.v1`, such as the deprecated flagd-web provider or an old release of an RPC provider, and the distribution is not flagd-full (step 9)
 **Flow:**
 
-1. System answers the call with `Unimplemented` over gRPC and ConnectRPC, and with 404 over HTTP; `flagd.evaluation.v2` and OFREP are unchanged.
+1. System answers HTTP 404 for the paths of those services, which gRPC and ConnectRPC clients report as `Unimplemented`; `flagd.evaluation.v2` and OFREP are unchanged.
 2. Operator selects flagd-full or a custom distribution that lists `flag-evaluation-legacy` (UC-001), or moves the client to `flagd.evaluation.v2` or OFREP, the deprecated flagd-web provider to the ofrep-web provider.
 3. Use case continues at step 4.
 
@@ -135,7 +135,7 @@ A standard distribution evaluates with the same configuration format and evaluat
 flagd-sync contains sync providers, a configuration format and the flag sync endpoint but no evaluator, and its binary links no evaluator module and no `github.com/diegoholiveira/jsonlogic` module, and the packages of the distribution import none (NFR-011). It rejects invalid flag configurations the same way flagd-full does (FR-026). Today's flagd-proxy stays a separate program with its own CLI and image and is not affected by adopting a standard distribution.
 
 
-### BR-008: Deprecated Evaluation Services Only in flagd-full
+### BR-008: Deprecated Evaluation Services Only in flagd-full and flagd-testbed
 
 The deprecated evaluation services (`schema.v1`, `flagd.evaluation.v1`) are served by the component `flag-evaluation-legacy`, which flagd-full and flagd-testbed list. flagd-minimal, flagd-minimal-otel, flagd-cloud, flagd-kubernetes and flagd-sync do not (FR-063). The slim distributions serve `flagd.evaluation.v2` and OFREP, and BR-006 holds for the components they contain.
 

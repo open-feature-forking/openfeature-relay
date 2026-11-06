@@ -24,7 +24,7 @@ Each standard distribution's manifest is kept in this repository and accepts fla
 ## Deprecated evaluation services
 
 Only flagd-full (and flagd-testbed) includes [`flag-evaluation-legacy`](flag-evaluation-legacy.md), which serves `schema.v1` and `flagd.evaluation.v1`.
-flagd-minimal, flagd-minimal-otel, flagd-cloud and flagd-kubernetes serve only `flagd.evaluation.v2` and OFREP on their flag evaluation port: a call to `schema.v1` or `flagd.evaluation.v1` answers `Unimplemented` (gRPC, ConnectRPC) or 404 (HTTP).
+flagd-minimal, flagd-minimal-otel, flagd-cloud and flagd-kubernetes serve only `flagd.evaluation.v2` on their flag evaluation port (OFREP has its own, `--ofrep-port`, 8016): the server answers HTTP 404 for the paths of `schema.v1` and `flagd.evaluation.v1`, which gRPC and ConnectRPC clients report as `Unimplemented`.
 flagd-sync has no flag evaluation endpoint.
 A client that still calls the deprecated services, such as the deprecated flagd-web provider, needs flagd-full or a custom distribution that lists the component, or must move to `flagd.evaluation.v2` or OFREP.
 

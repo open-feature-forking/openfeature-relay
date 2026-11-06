@@ -31,10 +31,7 @@ A custom distribution lists it in the `service_endpoints` group of its manifest,
 
 ## Without the component
 
-On a distribution that does not include it, a call to `schema.v1.Service` or `flagd.evaluation.v1.Service` fails:
-
-- `Unimplemented` over gRPC and ConnectRPC;
-- 404 over HTTP.
+On a distribution that does not include it, a call to `schema.v1.Service` or `flagd.evaluation.v1.Service` gets HTTP 404 for those paths, which gRPC and ConnectRPC clients report as `Unimplemented`.
 
 `flagd.evaluation.v2` and OFREP are unchanged.
 The deprecated flagd-web provider calls v1 `ResolveAll` and `EventStream`, so it does not become ready on such a distribution, and neither do old releases of the RPC providers that still call v1.
