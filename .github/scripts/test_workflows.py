@@ -418,6 +418,11 @@ class BuildWorkflow(unittest.TestCase):
         gate = self.job("publish-gate")
         self.assertNotIn("permissions:", gate)
         self.assertIn(".github/scripts/publish-gate.sh", gate)
+        # tools/ci is CI tooling: its files do not count as image inputs, except the packages that publish (step 18, plan 4)
+        self.assertIn("grep -Ev '^tools/ci/'", gate)
+        self.assertLess(gate.index("grep -Ev '^tools/ci/'"), gate.index('grep -Eq "$pattern"'))
+        self.assertIn("|^tools/ci/internal/(oci|publish)/'", gate)
+        self.assertIn("grep -E '^tools/ci/internal/(oci|publish)/'", gate)
         self.assertIn("build: ${{ steps.gate.outputs.build }}", gate)
         self.assertIn("publish: ${{ steps.gate.outputs.publish }}", gate)
         for name in ("release-dry-run", "image-build"):

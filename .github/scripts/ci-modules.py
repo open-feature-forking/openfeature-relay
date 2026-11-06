@@ -53,8 +53,8 @@ FLAG_PATTERNS = {
 # that a flag does depend on. (RE2, which the Go port uses, has no lookahead, so this is include-and-not-exclude.)
 FLAG_EXCLUDES = {n: r"^tools/ci/" for n in FLAG_PATTERNS}
 FLAG_EXTRA_TERMS = {
-    "benchmark": r"^tools/ci/internal/allocs/|^\.github/scripts/run-benchmarks",
-    "testbed": r"^tools/ci/internal/passsets/|^\.github/scripts/testbed",
+    "benchmark": r"^tools/ci/internal/allocs/",
+    "testbed": r"^tools/ci/internal/passsets/",
 }
 
 

@@ -16,6 +16,8 @@ func TestNormalize(t *testing.T) {
 		{"mixed", "a\r\nb\rc\n", "a\nb\nc\n"},
 		{"cr cr lf", "a\r\r\nb", "a\n\nb"},
 		{"invalid utf-8", "a\xffb", "a�b"},
+		// Python errors="replace" gives one U+FFFD per byte of the run; Go gives one for the whole run.
+		{"invalid utf-8 run", "a\xe2\x82\xffb\xff\xffc", "a�b�c"},
 		{"empty", "", ""},
 	}
 	for _, tt := range tests {
