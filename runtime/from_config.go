@@ -124,25 +124,9 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 
 	syncProviders, sources, sourceReadiness := sourcesOf(logger, config)
 
-	// build flag store, collect flag sources & fill sources details
-	store, err := store.NewStore(logger, sources)
-	if err != nil {
-		return nil, fmt.Errorf("error creating flag store: %w", err)
-	}
-
-	formats, err := configurationFormats(logger, store, syncProviders, config.ConfigurationFormats)
+	store, formats, defaultFormat, formatTypes, err := formatsOf(logger, syncProviders, sources, config)
 	if err != nil {
 		return nil, err
-	}
-
-	// derive the default format and the service endpoints
-	defaultFormat, err := defaultFormatOf(logger, store, syncProviders, config.ConfigurationFormats)
-	if err != nil {
-		return nil, err
-	}
-	formatTypes := make([]string, 0, len(config.ConfigurationFormats))
-	for _, f := range config.ConfigurationFormats {
-		formatTypes = append(formatTypes, f.Type())
 	}
 
 	bus := events.NewBus()
@@ -282,6 +266,34 @@ func sourcesOf(logger *logger.Logger, config Config) ([]sync.SourceConfig, []str
 		sourceReadiness[source] = false
 	}
 	return syncProviders, sources, sourceReadiness
+}
+
+// formatsOf builds the flag store of the sources and the configuration formats on top of it: the format of every
+// source that names one, the default format, and the types of the formats of the configuration.
+func formatsOf(
+	logger *logger.Logger, syncProviders []sync.SourceConfig, sources []string, config Config,
+) (*store.Store, map[string]configformat.ConfigurationFormat, configformat.ConfigurationFormat, []string, error) {
+	// build flag store, collect flag sources & fill sources details
+	st, err := store.NewStore(logger, sources)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("error creating flag store: %w", err)
+	}
+
+	formats, err := configurationFormats(logger, st, syncProviders, config.ConfigurationFormats)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	// derive the default format and the service endpoints
+	defaultFormat, err := defaultFormatOf(logger, st, syncProviders, config.ConfigurationFormats)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	formatTypes := make([]string, 0, len(config.ConfigurationFormats))
+	for _, f := range config.ConfigurationFormats {
+		formatTypes = append(formatTypes, f.Type())
+	}
+	return st, formats, defaultFormat, formatTypes, nil
 }
 
 // checkSinkMetrics refuses event sinks when the setting event-sinks needs /metrics and the telemetry provider serves
