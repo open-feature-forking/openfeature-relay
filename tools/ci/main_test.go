@@ -71,8 +71,9 @@ func TestRequiresNoRelayModule(t *testing.T) {
 		t.Fatalf("GOWORK=off go list -deps ./...: %v\n%s", err, stderr.String())
 	}
 	for _, mod := range strings.Fields(string(out)) {
-		if mod != "github.com/open-feature-forking/openfeature-relay/tools/ci" {
-			t.Errorf("tools/ci depends on the module %s", mod)
+		own := "github.com/open-feature-forking/openfeature-relay/tools/ci"
+		if mod != own && (strings.HasPrefix(mod, "github.com/open-feature-forking/openfeature-relay") || strings.HasPrefix(mod, "github.com/open-feature/flagd")) {
+			t.Errorf("tools/ci depends on the module %s of this repository", mod)
 		}
 	}
 }
