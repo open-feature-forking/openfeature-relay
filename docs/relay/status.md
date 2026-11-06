@@ -10,7 +10,7 @@ What runs by default is flagd-full, which is flagd built from this repository by
 
 ## Done
 
-Steps 1 to 16 of the proof of concept are done; step 12's release runs as a dry run.
+Steps 1 to 16 and step 19 of the proof of concept are done; step 12's release runs as a dry run.
 A use case counts as done when its **Status** line reads `Implemented`, or `Tested` once a test case under `docs/test_cases/` covers it.
 
 - **Evaluator without telemetry, with a boundary**: the evaluator no longer imports OpenTelemetry, and `depguard` rules and a CI check keep OpenTelemetry, gRPC, ConnectRPC, Kubernetes and cloud SDKs out of its dependencies (FR-040, NFR-005).
@@ -34,6 +34,10 @@ A use case counts as done when its **Status** line reads `Implemented`, or `Test
 - **Syncing from an upstream flag sync endpoint**: a `grpc` source opts into the Go flagd provider's gRPC sync features with a `grpc` object: its retry policy, fatal status codes, a stream deadline, keepalive, the selector header and readiness on the first payload; without the object it behaves as before ([UC-023](../use_cases/UC-023-sync-from-an-upstream-flag-sync-endpoint.md), [the settings](grpc-source.md)).
 - **Faster CI**: the release dry run in parallel parts, a per-job cache, cancelled superseded runs and a light run for markdown-only changes ([#176](https://github.com/open-feature-forking/openfeature-relay/issues/176)).
 - **A load test**: flagd-minimal, built with `-race`, answers every OFREP, RPC and flag sync client from the current flags while they change, and every stream sees every change (NFR-017, [the load test](load-test.md)).
+- **The deprecated evaluation services as their own component**: `schema.v1` and `flagd.evaluation.v1` are served by the hosted endpoint [`flag-evaluation-legacy`](flag-evaluation-legacy.md), which the flag evaluation endpoint mounts on its port ([#266](https://github.com/open-feature-forking/openfeature-relay/issues/266), [FR-063](../requirements.md)).
+    flagd-full and flagd-testbed list it and stay drop-in replacements.
+    The standard distributions without it, the slim `:main` images included, serve only `flagd.evaluation.v2` and OFREP: the paths of the deprecated services answer HTTP 404, which gRPC and ConnectRPC clients report as `Unimplemented`.
+    A client of the deprecated flagd-web provider needs flagd-full, a custom manifest that lists the component, or OFREP.
 
 ## How a change is verified
 

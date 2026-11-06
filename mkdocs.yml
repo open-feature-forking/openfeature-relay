@@ -80,6 +80,7 @@ nav:
   - 'Architecture': 'relay/architecture.md'
   - 'Distributions': 'relay/distributions.md'
   - 'Syncing from an upstream': 'relay/grpc-source.md'
+  - 'Deprecated evaluation services': 'relay/flag-evaluation-legacy.md'
   - 'The testbed': 'relay/testbed.md'
   - 'The load test': 'relay/load-test.md'
   - 'Build a FIPS distribution': 'relay/fips.md'
