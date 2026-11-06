@@ -35,6 +35,9 @@ type Endpoint interface {
 	Serve(ctx context.Context) error
 }
 
+// A hosted endpoint (see Hosted) implements Endpoint too, but the runtime never calls its Serve; Serve returns an error naming
+// its host.
+
 // Needs declares what a service endpoint resolves flags with, which decides what the runtime injects.
 type Needs struct {
 	// Router asks for Settings.Resolver, the typed calls over the evaluation router.
@@ -71,6 +74,9 @@ type Settings struct {
 	Sources []string
 	// Config holds the endpoint's own settings.
 	Config map[string]any
+	// Extensions are the hosted endpoints of this factory's type, created by the runtime. Only a factory that is
+	// Hosting receives them; see Hosted.
+	Extensions []Endpoint
 	// Listen opens the endpoint's listeners; see ListenFunc. Nil means net.Listen. An endpoint opens every listener it serves on
 	// through it and never calls net.Listen itself (UC-004 BR-012): the testbed's listener gate and embedders that hand over a
 	// listener they opened earlier decide how it listens.

@@ -57,6 +57,51 @@ func TestValidateDeclarations(t *testing.T) {
 	}
 }
 
+type hostedFactory struct {
+	fakeFactory
+	host string
+}
+
+func (f hostedFactory) Host() string { return f.host }
+
+type hostingFactory struct {
+	fakeFactory
+	hosts bool
+}
+
+func (f hostingFactory) Hosts() bool { return f.hosts }
+
+func TestValidateDeclarationsHost(t *testing.T) {
+	tests := []struct {
+		name    string
+		factory Factory
+		wantErr string
+	}{
+		{name: "a hosted endpoint", factory: hostedFactory{fakeFactory{typeName: "legacy"}, "flag-evaluation"}},
+		{name: "no host", factory: hostedFactory{fakeFactory{typeName: "legacy"}, ""}, wantErr: "the host is empty"},
+		{name: "a blank host", factory: hostedFactory{fakeFactory{typeName: "legacy"}, " "}, wantErr: "the host has surrounding whitespace"},
+		{name: "a host with whitespace", factory: hostedFactory{fakeFactory{typeName: "legacy"}, "flag-evaluation "}, wantErr: "the host has surrounding whitespace"},
+		{name: "its own type", factory: hostedFactory{fakeFactory{typeName: "legacy"}, "legacy"}, wantErr: "the host is the endpoint's own type"},
+		{
+			name:    "every broken rule is named",
+			factory: hostedFactory{fakeFactory{needs: Needs{Format: " x"}}, ""},
+			wantErr: "the type name is empty; the needed configuration format has surrounding whitespace; the host is empty",
+		},
+		{name: "a host that hosts", factory: hostingFactory{fakeFactory{typeName: "flag-evaluation"}, true}},
+		{name: "a host that does not", factory: hostingFactory{fakeFactory{typeName: "flag-evaluation"}, false}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateDeclarations(tt.factory)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.EqualError(t, err, tt.wantErr)
+		})
+	}
+}
+
 func TestWrapHTTP(t *testing.T) {
 	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.Header().Set("X-Inner", "yes") })
 
