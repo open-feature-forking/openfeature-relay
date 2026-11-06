@@ -44,3 +44,12 @@ func TestResolvedWithoutBuildInformation(t *testing.T) {
 	require.Len(t, got.Components, 1)
 	require.Empty(t, got.Components[0].Version)
 }
+
+func TestResolvedKeepsTheHost(t *testing.T) {
+	got := Inventory{Components: []ComponentInfo{
+		{Group: GroupServiceEndpoint, Type: "legacy", Module: "example.com/none", Host: "flag-evaluation"},
+		{Group: GroupServiceEndpoint, Type: "flag-evaluation", Module: "example.com/none"},
+	}}.ResolvedFrom(&debug.BuildInfo{}).Components
+	require.Equal(t, "flag-evaluation", got[0].Host)
+	require.Empty(t, got[1].Host)
+}

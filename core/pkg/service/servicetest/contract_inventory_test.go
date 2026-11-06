@@ -17,7 +17,7 @@ import (
 func TestContractInventory(t *testing.T) {
 	kinds := []struct {
 		name    string
-		factory stub
+		factory service.Factory
 		inputs  Inputs
 	}{
 		{"resolver", stub{typeName: "resolver", needs: service.Needs{Router: true}, features: resolverFeatures}, inputsFor(resolverFeatures, true)},
@@ -25,6 +25,7 @@ func TestContractInventory(t *testing.T) {
 		{"config server", stub{typeName: "config-server", features: serverFeatures}, inputsFor(serverFeatures, false)},
 		{"collector", stub{typeName: "collector", features: collectFeatures}, inputsFor(collectFeatures, false)},
 		{"silent", stub{typeName: "silent"}, inputsFor(features{}, false)},
+		{"hosted", hostedStub{typeName: "legacy", host: "host"}, hostedInputs(newHost(true))},
 	}
 	var got strings.Builder
 	for _, k := range kinds {

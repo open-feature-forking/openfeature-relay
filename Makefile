@@ -105,6 +105,7 @@ TEST_TARGETS += test-middleware-example
 TEST_TARGETS += test-release
 TEST_TARGETS += test-concurrency
 TEST_TARGETS += test-porttest
+TEST_TARGETS += test-tools-ci
 test: $(TEST_TARGETS)
 test-core: test-modules
 # The loops below and CI's matrix (.github/scripts/ci-modules.json) run the same recipe, test-module.
@@ -123,7 +124,7 @@ COVERED_MODULES := $(patsubst ./%,%,$(GO_LIB_MODULE_DIRS) $(FLAGD_MODULE_DIRS) $
 PLAIN_TEST_MODULES := builder test/release test/service-example test/sync-example test/evaluator-testkit \
     test/configformat-example test/configformat-example/distribution test/eventsink-example test/eventsink-example/distribution \
     test/middleware-example test/middleware-example/distribution test/telemetry-example test/telemetry-example/distribution \
-    test/inprocess-example/file test/inprocess-example/filegrpc test/inprocess-example/engine test/porttest
+    test/inprocess-example/file test/inprocess-example/filegrpc test/inprocess-example/engine test/porttest tools/ci
 # Every module that leaves a <module>-coverage.out profile, uploaded by CI as the coverage-profiles artifact.
 COVERAGE_MODULES := $(COVERED_MODULES) flagd-proxy $(PLAIN_TEST_MODULES)
 .PHONY: test-module
@@ -198,6 +199,16 @@ test-load:
 # The shared port helpers of the test modules.
 test-porttest:
 	@$(MAKE) --no-print-directory test-module MODULE=test/porttest
+test-tools-ci:
+	@$(MAKE) --no-print-directory test-module MODULE=tools/ci
+# The CI helpers as one binary (tools/ci). ci-tool builds it into .relay-ci/; ci-tool-path builds it if needed and
+# prints the path, for the scripts that run it (RELAY_CI overrides).
+.PHONY: ci-tool ci-tool-path
+ci-tool:
+	@CGO_ENABLED=0 GOWORK=off go build -C tools/ci -trimpath -o $(CURDIR)/.relay-ci/relay-ci .
+ci-tool-path:
+	@$(MAKE) --no-print-directory ci-tool >&2
+	@echo $(CURDIR)/.relay-ci/relay-ci
 test-distributions:
 	cd test/distributions && go test -count=1 -timeout 30m ./...
 test-flagd-proxy:

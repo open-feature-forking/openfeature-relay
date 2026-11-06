@@ -100,11 +100,9 @@ func warnOnNoOpConfig(logger *logger.Logger, config Config) {
 }
 
 // FromConfig builds a runtime from startup configurations
-// nolint: funlen
 func FromConfig(logger *logger.Logger, version string, config Config, components Components) (rt *Runtime, err error) {
 	config = withComponents(config, components)
 	warnOnNoOpConfig(logger, config)
-
 	tp, shutdownTelemetry, err := telemetryProvider(logger, version, components)
 	if err != nil {
 		return nil, err
@@ -117,13 +115,196 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 			_ = shutdownTelemetry(ctx)
 		}
 	}()
-
-	if config.EventSinksNeedMetrics && len(components.EventSinks) > 0 && metricsHandler(tp, components) == nil {
-		return nil, fmt.Errorf("the setting event-sinks needs a telemetry provider that serves /metrics, because the events "+
-			"an event sink does not get are reported on the management port; the telemetry provider of this distribution "+
-			"(%s) serves none", telemetryTypeName(components))
+	if err := checkSinkMetrics(config, tp, components); err != nil {
+		return nil, err
 	}
+	syncProviders, sources, sourceReadiness := sourcesOf(logger, config)
+	store, formats, defaultFormat, formatTypes, err := formatsOf(logger, syncProviders, sources, config)
+	if err != nil {
+		return nil, err
+	}
+	rt = newRuntime(logger, tp, config, components, store, formats, defaultFormat, sourceReadiness)
+	inputs, err := endpointInputsOf(logger, store, rt.Bus, config, components, formatTypes)
+	if err != nil {
+		return nil, err
+	}
+	// a runtime that is not built closes the evaluators after the endpoints that use them; a built one closes them at
+	// shutdown
+	defer func() {
+		if rt == nil {
+			_ = inputs.close()
+		}
+	}()
+	// endpoints hold resources from their Create on (the flag sync listener): a failed build releases them
+	var created []service.Endpoint
+	defer func() {
+		if rt == nil {
+			closeEndpoints(created)
+		}
+	}()
+	if err := rt.createEndpoints(logger, config, components, tp, inputs, formatTypes, sources, &created); err != nil {
+		return nil, err
+	}
+	syncs, err := rt.startSyncs(logger, config, syncProviders, tp)
+	// the sync providers close before the endpoints; those created before a failure of startSyncs are released too
+	defer func() {
+		if rt == nil {
+			closeSyncs(syncs)
+		}
+	}()
+	if err != nil {
+		return nil, err
+	}
+	if err := rt.startSinks(logger, tp, components, inputs, shutdownTelemetry); err != nil {
+		return nil, err
+	}
+	return rt, nil
+}
 
+// createEndpoints creates the service endpoints of the components, in list order, on the runtime. It sets the
+// evaluator of the runtime and creates the middleware first. Every endpoint created is appended to created at once, so
+// a failure leaves the endpoints before it there for the caller to close.
+func (rt *Runtime) createEndpoints(
+	logger *logger.Logger, config Config, components Components, tp telemetry.Provider, inputs *endpointInputs,
+	formatTypes, sources []string, created *[]service.Endpoint,
+) error {
+	rt.Evaluator = inputs.evaluator()
+	wrapHTTP, err := httpMiddleware(logger, tp, components.Middleware)
+	if err != nil {
+		return err
+	}
+	plan, err := planHosted(components.Endpoints)
+	if err != nil {
+		return err
+	}
+	createEndpoint := func(factory service.Factory, extensions []service.Endpoint) (service.Endpoint, error) {
+		settings := inputs.settings(factory)
+		settings.Initialized = rt.Initialized()
+		settings.Telemetry = tp
+		settings.Config = endpointSettings(config, factory.Type())
+		settings.Formats = append([]string{configformat.DefaultType}, formatTypes...)
+		settings.Sources = sources
+		settings.HTTPMiddleware = wrapHTTP
+		settings.Listen = components.Listen
+		settings.Extensions = extensions
+		endpoint, err := factory.Create(settings)
+		if err != nil {
+			return nil, fmt.Errorf("error creating the service endpoint %q: %w", factory.Type(), err)
+		}
+		*created = append(*created, endpoint)
+		return endpoint, nil
+	}
+	// a hosted endpoint is created first, so that its host gets it, and is never served: its host serves it
+	hosted, extensions, err := createHosted(components.Endpoints, plan, createEndpoint)
+	if err != nil {
+		return err
+	}
+	for i, factory := range components.Endpoints {
+		if plan.isHosted[i] {
+			continue
+		}
+		if err := service.ValidateDeclarations(factory); err != nil {
+			return fmt.Errorf("the service endpoint %q declares: %w", factory.Type(), err)
+		}
+		endpoint, err := createEndpoint(factory, extensions[factory.Type()])
+		if err != nil {
+			return err
+		}
+		rt.Endpoints = append(rt.Endpoints, NamedEndpoint{Type: factory.Type(), Endpoint: endpoint})
+	}
+	if len(hosted) > 0 {
+		rt.onShutdown("hosted endpoints", closeHosted(hosted))
+	}
+	return nil
+}
+
+// createHosted creates the hosted endpoints, in list order, and returns them with the ones each host gets, keyed by
+// the host's type.
+func createHosted(
+	factories []service.Factory, plan hostedPlan,
+	create func(service.Factory, []service.Endpoint) (service.Endpoint, error),
+) ([]service.Endpoint, map[string][]service.Endpoint, error) {
+	var hosted []service.Endpoint
+	extensions := map[string][]service.Endpoint{}
+	for i, factory := range factories {
+		if !plan.isHosted[i] {
+			continue
+		}
+		endpoint, err := create(factory, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+		hosted = append(hosted, endpoint)
+		extensions[plan.hosts[i]] = append(extensions[plan.hosts[i]], endpoint)
+	}
+	return hosted, extensions, nil
+}
+
+// closeEndpoints closes the endpoints that hold a resource, in list order.
+func closeEndpoints(endpoints []service.Endpoint) {
+	for _, e := range endpoints {
+		if closer, ok := e.(io.Closer); ok {
+			_ = closer.Close()
+		}
+	}
+}
+
+// startSyncs builds the sync providers of the sources on the runtime, with the stale limits of the sources that set
+// staleAfter. It returns the sync providers created even when it fails on a stale limit, for the caller to close.
+func (rt *Runtime) startSyncs(
+	logger *logger.Logger, config Config, syncProviders []sync.SourceConfig, tp telemetry.Provider,
+) ([]sync.ISync, error) {
+	// build sync providers with a shared source-agnostic sync-metrics recorder so every
+	// provider (grpc, http, file, kubernetes, blob) emits the universal client-side sync
+	// metrics into the same reader as the rest of flagd's telemetry.
+	syncLogger := logger.WithFields(zap.String("component", "sync"))
+	iSyncs, err := syncProvidersFromConfig(syncLogger, syncProviders, tp, config.SyncFactories)
+	if err != nil {
+		return nil, err
+	}
+	rt.Syncs = iSyncs
+	staleLimits, err := staleLimitsOf(syncProviders, iSyncs)
+	if err != nil {
+		return iSyncs, err
+	}
+	rt.staleLimits = staleLimits
+	return iSyncs, nil
+}
+
+// closeSyncs closes the sync providers that hold a resource, in list order.
+func closeSyncs(syncs []sync.ISync) {
+	for _, s := range syncs {
+		if closer, ok := s.(io.Closer); ok {
+			_ = closer.Close()
+		}
+	}
+}
+
+// startSinks starts the event sinks of the components and registers what the runtime shuts down: the event sinks, then
+// the evaluators, then the telemetry provider.
+func (rt *Runtime) startSinks(
+	logger *logger.Logger, tp telemetry.Provider, components Components, inputs *endpointInputs,
+	shutdownTelemetry func(context.Context) error,
+) error {
+	sinks, err := startEventSinks(logger, rt.Bus, tp, components.EventSinks)
+	if err != nil {
+		return err
+	}
+	if len(sinks) > 0 {
+		rt.onShutdown("event sinks", flushEventSinks(sinks))
+	}
+	if inputs.router != nil {
+		rt.onShutdown("evaluator", func(context.Context) error { return inputs.close() })
+	}
+	if shutdownTelemetry != nil {
+		rt.onShutdown("telemetry", shutdownTelemetry)
+	}
+	return nil
+}
+
+// sourcesOf returns the sources of the configuration whose format the distribution has, their URIs, and a readiness
+// entry per URI, all false.
+func sourcesOf(logger *logger.Logger, config Config) ([]sync.SourceConfig, []string, map[string]bool) {
 	syncProviders := sourcesWithKnownFormat(logger, config.SyncProviders, config.ConfigurationFormats)
 	sources := []string{}
 
@@ -137,32 +318,56 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 	for _, source := range sources {
 		sourceReadiness[source] = false
 	}
+	return syncProviders, sources, sourceReadiness
+}
 
+// formatsOf builds the flag store of the sources and the configuration formats on top of it: the format of every
+// source that names one, the default format, and the types of the formats of the configuration.
+func formatsOf(
+	logger *logger.Logger, syncProviders []sync.SourceConfig, sources []string, config Config,
+) (*store.Store, map[string]configformat.ConfigurationFormat, configformat.ConfigurationFormat, []string, error) {
 	// build flag store, collect flag sources & fill sources details
-	store, err := store.NewStore(logger, sources)
+	st, err := store.NewStore(logger, sources)
 	if err != nil {
-		return nil, fmt.Errorf("error creating flag store: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("error creating flag store: %w", err)
 	}
 
-	formats, err := configurationFormats(logger, store, syncProviders, config.ConfigurationFormats)
+	formats, err := configurationFormats(logger, st, syncProviders, config.ConfigurationFormats)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	// derive the default format and the service endpoints
-	defaultFormat, err := defaultFormatOf(logger, store, syncProviders, config.ConfigurationFormats)
+	defaultFormat, err := defaultFormatOf(logger, st, syncProviders, config.ConfigurationFormats)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, nil, err
 	}
 	formatTypes := make([]string, 0, len(config.ConfigurationFormats))
 	for _, f := range config.ConfigurationFormats {
 		formatTypes = append(formatTypes, f.Type())
 	}
+	return st, formats, defaultFormat, formatTypes, nil
+}
 
-	bus := events.NewBus()
-	rt = &Runtime{
+// endpointInputsOf builds what the service endpoints are created from, with each evaluator getting a copy of its own
+// settings.
+func endpointInputsOf(
+	logger *logger.Logger, st *store.Store, bus *events.Bus, config Config, components Components, formatTypes []string,
+) (*endpointInputs, error) {
+	return newEndpointInputs(logger, st, bus, components.Endpoints, formatTypes, config.Evaluators,
+		func(evaluatorType string) map[string]any { return maps.Clone(config.EvaluatorSettings[evaluatorType]) },
+		config.StrictNumericRange)
+}
+
+// newRuntime returns the runtime without endpoints, evaluator and sync providers, which the build adds.
+func newRuntime(
+	logger *logger.Logger, tp telemetry.Provider, config Config, components Components, st *store.Store,
+	formats map[string]configformat.ConfigurationFormat, defaultFormat configformat.ConfigurationFormat,
+	sourceReadiness map[string]bool,
+) *Runtime {
+	return &Runtime{
 		Logger:         logger.WithFields(zap.String("component", "runtime")),
-		Bus:            bus,
+		Bus:            events.NewBus(),
 		Telemetry:      tp,
 		MetricsHandler: metricsHandler(tp, components),
 		Listen:         components.Listen,
@@ -183,100 +388,19 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		Formats:         formats,
 		DefaultFormat:   defaultFormat,
 		sourceReadiness: sourceReadiness,
-		store:           store,
+		store:           st,
 	}
+}
 
-	inputs, err := newEndpointInputs(logger, store, bus, components.Endpoints, formatTypes, config.Evaluators,
-		func(evaluatorType string) map[string]any { return maps.Clone(config.EvaluatorSettings[evaluatorType]) },
-		config.StrictNumericRange)
-	if err != nil {
-		return nil, err
+// checkSinkMetrics refuses event sinks when the setting event-sinks needs /metrics and the telemetry provider serves
+// none.
+func checkSinkMetrics(config Config, tp telemetry.Provider, components Components) error {
+	if config.EventSinksNeedMetrics && len(components.EventSinks) > 0 && metricsHandler(tp, components) == nil {
+		return fmt.Errorf("the setting event-sinks needs a telemetry provider that serves /metrics, because the events "+
+			"an event sink does not get are reported on the management port; the telemetry provider of this distribution "+
+			"(%s) serves none", telemetryTypeName(components))
 	}
-	// a runtime that is not built closes the evaluators after the endpoints that use them; a built one closes them at
-	// shutdown
-	defer func() {
-		if rt == nil {
-			_ = inputs.close()
-		}
-	}()
-	rt.Evaluator = inputs.evaluator()
-	wrapHTTP, err := httpMiddleware(logger, tp, components.Middleware)
-	if err != nil {
-		return nil, err
-	}
-
-	// an endpoint may hold a resource from its Create on, such as the listener of flag sync: a build that fails after it
-	// releases it, since the endpoint is never served
-	var created []service.Endpoint
-	defer func() {
-		if rt != nil {
-			return
-		}
-		for _, e := range created {
-			if closer, ok := e.(io.Closer); ok {
-				_ = closer.Close()
-			}
-		}
-	}()
-	for _, factory := range components.Endpoints {
-		if err := service.ValidateDeclarations(factory); err != nil {
-			return nil, fmt.Errorf("the service endpoint %q declares: %w", factory.Type(), err)
-		}
-		settings := inputs.settings(factory)
-		settings.Initialized = rt.Initialized()
-		settings.Telemetry = tp
-		settings.Config = endpointSettings(config, factory.Type())
-		settings.Formats = append([]string{configformat.DefaultType}, formatTypes...)
-		settings.Sources = sources
-		settings.HTTPMiddleware = wrapHTTP
-		settings.Listen = components.Listen
-		endpoint, err := factory.Create(settings)
-		if err != nil {
-			return nil, fmt.Errorf("error creating the service endpoint %q: %w", factory.Type(), err)
-		}
-		created = append(created, endpoint)
-		rt.Endpoints = append(rt.Endpoints, NamedEndpoint{Type: factory.Type(), Endpoint: endpoint})
-	}
-
-	// build sync providers with a shared source-agnostic sync-metrics recorder so every
-	// provider (grpc, http, file, kubernetes, blob) emits the universal client-side sync
-	// metrics into the same reader as the rest of flagd's telemetry.
-	syncLogger := logger.WithFields(zap.String("component", "sync"))
-	iSyncs, err := syncProvidersFromConfig(syncLogger, syncProviders, tp, config.SyncFactories)
-	if err != nil {
-		return nil, err
-	}
-	rt.Syncs = iSyncs
-	// the sync providers close before the endpoints
-	defer func() {
-		if rt != nil {
-			return
-		}
-		for _, s := range iSyncs {
-			if closer, ok := s.(io.Closer); ok {
-				_ = closer.Close()
-			}
-		}
-	}()
-	staleLimits, err := staleLimitsOf(syncProviders, iSyncs)
-	if err != nil {
-		return nil, err
-	}
-	rt.staleLimits = staleLimits
-	sinks, err := startEventSinks(logger, bus, tp, components.EventSinks)
-	if err != nil {
-		return nil, err
-	}
-	if len(sinks) > 0 {
-		rt.onShutdown("event sinks", flushEventSinks(sinks))
-	}
-	if inputs.router != nil {
-		rt.onShutdown("evaluator", func(context.Context) error { return inputs.close() })
-	}
-	if shutdownTelemetry != nil {
-		rt.onShutdown("telemetry", shutdownTelemetry)
-	}
-	return rt, nil
+	return nil
 }
 
 // telemetryProvider returns the telemetry provider of the runtime, and how to shut it down. It is the provider of the
