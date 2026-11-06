@@ -276,64 +276,90 @@ func parseEvent(raw json.RawMessage, now time.Time) (events.Event, string) {
 
 	switch kind, _ := item["kind"].(string); events.Kind(kind) {
 	case events.KindEvaluation:
-		ev := events.Evaluation{Time: when, Endpoint: Type, Origin: events.OriginInProcess, Value: topLevelNumber(item["value"])}
-		fields := map[string]*string{
-			"flagKey": &ev.FlagKey, "flagSet": &ev.FlagSet, "format": &ev.Format, "variant": &ev.Variant,
-			"reason": &ev.Reason, "errorCode": &ev.ErrorCode, "targetingKey": &ev.TargetingKey,
-		}
-		for name, dst := range fields {
-			s, reason := optString(item, name)
-			if reason != "" {
-				return nil, reason
-			}
-			*dst = s
-		}
-		if ev.FlagKey == "" {
-			return nil, `an evaluation event needs a "flagKey"`
-		}
-		ev.HasValue = item["value"] != nil
-		if v, ok := item["hasValue"]; ok {
-			b, isBool := v.(bool)
-			if !isBool {
-				return nil, `"hasValue" must be a boolean`
-			}
-			ev.HasValue = b
-		}
-		return ev, ""
-
+		return parseEvaluation(item, when)
 	case events.KindTracking:
-		ev := events.Tracking{Time: when, Origin: events.OriginInProcess}
-		var reason string
-		if ev.EventName, reason = optString(item, "name"); reason != "" {
-			return nil, reason
-		}
-		if ev.EventName == "" {
-			return nil, `a tracking event needs a "name"`
-		}
-		if ev.TargetingKey, reason = optString(item, "targetingKey"); reason != "" {
-			return nil, reason
-		}
-		if v, ok := item["value"]; ok && v != nil {
-			number, isNumber := v.(json.Number)
-			if !isNumber {
-				return nil, `"value" of a tracking event must be a number`
-			}
-			n, err := number.Float64()
-			if err != nil {
-				return nil, `"value" of a tracking event must be a number`
-			}
-			ev.Value = n
-		}
-		if v, ok := item["details"]; ok && v != nil {
-			details, isObject := v.(map[string]any)
-			if !isObject {
-				return nil, `"details" must be an object`
-			}
-			ev.Details = floats(details).(map[string]any)
-		}
-		return ev, ""
+		return parseTracking(item, when)
 	}
 	return nil, fmt.Sprintf(`the "kind" must be %q or %q`, events.KindEvaluation, events.KindTracking)
+}
+
+// parseEvaluation reads an evaluation event of a batch item. Which of two wrong fields is reported is left to the
+// map's iteration.
+func parseEvaluation(item map[string]any, when time.Time) (events.Event, string) {
+	ev := events.Evaluation{Time: when, Endpoint: Type, Origin: events.OriginInProcess, Value: topLevelNumber(item["value"])}
+	fields := map[string]*string{
+		"flagKey": &ev.FlagKey, "flagSet": &ev.FlagSet, "format": &ev.Format, "variant": &ev.Variant,
+		"reason": &ev.Reason, "errorCode": &ev.ErrorCode, "targetingKey": &ev.TargetingKey,
+	}
+	for name, dst := range fields {
+		s, reason := optString(item, name)
+		if reason != "" {
+			return nil, reason
+		}
+		*dst = s
+	}
+	if ev.FlagKey == "" {
+		return nil, `an evaluation event needs a "flagKey"`
+	}
+	ev.HasValue = item["value"] != nil
+	if v, ok := item["hasValue"]; ok {
+		b, isBool := v.(bool)
+		if !isBool {
+			return nil, `"hasValue" must be a boolean`
+		}
+		ev.HasValue = b
+	}
+	return ev, ""
+}
+
+// parseTracking reads a tracking event of a batch item.
+func parseTracking(item map[string]any, when time.Time) (events.Event, string) {
+	ev := events.Tracking{Time: when, Origin: events.OriginInProcess}
+	var reason string
+	if ev.EventName, reason = optString(item, "name"); reason != "" {
+		return nil, reason
+	}
+	if ev.EventName == "" {
+		return nil, `a tracking event needs a "name"`
+	}
+	if ev.TargetingKey, reason = optString(item, "targetingKey"); reason != "" {
+		return nil, reason
+	}
+	if ev.Value, reason = trackingValue(item["value"]); reason != "" {
+		return nil, reason
+	}
+	if ev.Details, reason = trackingDetails(item["details"]); reason != "" {
+		return nil, reason
+	}
+	return ev, ""
+}
+
+// trackingValue reads the optional number of a tracking event; absent and null are zero.
+func trackingValue(v any) (float64, string) {
+	if v == nil {
+		return 0, ""
+	}
+	number, isNumber := v.(json.Number)
+	if !isNumber {
+		return 0, `"value" of a tracking event must be a number`
+	}
+	n, err := number.Float64()
+	if err != nil {
+		return 0, `"value" of a tracking event must be a number`
+	}
+	return n, ""
+}
+
+// trackingDetails reads the optional details object of a tracking event; absent and null are nil.
+func trackingDetails(v any) (map[string]any, string) {
+	if v == nil {
+		return nil, ""
+	}
+	details, isObject := v.(map[string]any)
+	if !isObject {
+		return nil, `"details" must be an object`
+	}
+	return floats(details).(map[string]any), ""
 }
 
 // topLevelNumber turns the number of a value into an integer when it is one and into a float otherwise, and every
