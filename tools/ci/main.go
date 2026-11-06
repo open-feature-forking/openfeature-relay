@@ -7,13 +7,16 @@ import (
 	"os"
 
 	"github.com/open-feature-forking/openfeature-relay/tools/ci/internal/allocs"
+	"github.com/open-feature-forking/openfeature-relay/tools/ci/internal/modules"
 	"github.com/open-feature-forking/openfeature-relay/tools/ci/internal/passsets"
 	"github.com/open-feature-forking/openfeature-relay/tools/ci/internal/testfailures"
 )
 
 const usage = `usage: relay-ci <subcommand> [arguments]
 
-The subcommands are added one per helper; there are none yet.
+  modules changes   the flags of the gated jobs of build.yaml
+
+The other subcommands are added one per helper.
 `
 
 func main() {
@@ -34,6 +37,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return allocs.Run(args[1:], stdout, stderr)
 	case "compare-pass-sets":
 		return passsets.Run(args[1:], stdout, stderr)
+	case "modules":
+		return modules.Run(args[1:], stdout, stderr)
 	case "test-failures":
 		return testfailures.Run(args[1:], stdout, stderr)
 	default:
