@@ -145,43 +145,17 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 			_ = inputs.close()
 		}
 	}()
-	rt.Evaluator = inputs.evaluator()
-	wrapHTTP, err := httpMiddleware(logger, tp, components.Middleware)
-	if err != nil {
-		return nil, err
-	}
 
 	// an endpoint may hold a resource from its Create on, such as the listener of flag sync: a build that fails after it
 	// releases it, since the endpoint is never served
 	var created []service.Endpoint
 	defer func() {
-		if rt != nil {
-			return
-		}
-		for _, e := range created {
-			if closer, ok := e.(io.Closer); ok {
-				_ = closer.Close()
-			}
+		if rt == nil {
+			closeEndpoints(created)
 		}
 	}()
-	for _, factory := range components.Endpoints {
-		if err := service.ValidateDeclarations(factory); err != nil {
-			return nil, fmt.Errorf("the service endpoint %q declares: %w", factory.Type(), err)
-		}
-		settings := inputs.settings(factory)
-		settings.Initialized = rt.Initialized()
-		settings.Telemetry = tp
-		settings.Config = endpointSettings(config, factory.Type())
-		settings.Formats = append([]string{configformat.DefaultType}, formatTypes...)
-		settings.Sources = sources
-		settings.HTTPMiddleware = wrapHTTP
-		settings.Listen = components.Listen
-		endpoint, err := factory.Create(settings)
-		if err != nil {
-			return nil, fmt.Errorf("error creating the service endpoint %q: %w", factory.Type(), err)
-		}
-		created = append(created, endpoint)
-		rt.Endpoints = append(rt.Endpoints, NamedEndpoint{Type: factory.Type(), Endpoint: endpoint})
+	if err := rt.createEndpoints(logger, config, components, tp, inputs, formatTypes, sources, &created); err != nil {
+		return nil, err
 	}
 
 	// build sync providers with a shared source-agnostic sync-metrics recorder so every
@@ -223,6 +197,50 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		rt.onShutdown("telemetry", shutdownTelemetry)
 	}
 	return rt, nil
+}
+
+// createEndpoints creates the service endpoints of the components, in list order, on the runtime. It sets the
+// evaluator of the runtime and creates the middleware first. Every endpoint created is appended to created at once, so
+// a failure leaves the endpoints before it there for the caller to close.
+func (rt *Runtime) createEndpoints(
+	logger *logger.Logger, config Config, components Components, tp telemetry.Provider, inputs *endpointInputs,
+	formatTypes, sources []string, created *[]service.Endpoint,
+) error {
+	rt.Evaluator = inputs.evaluator()
+	wrapHTTP, err := httpMiddleware(logger, tp, components.Middleware)
+	if err != nil {
+		return err
+	}
+
+	for _, factory := range components.Endpoints {
+		if err := service.ValidateDeclarations(factory); err != nil {
+			return fmt.Errorf("the service endpoint %q declares: %w", factory.Type(), err)
+		}
+		settings := inputs.settings(factory)
+		settings.Initialized = rt.Initialized()
+		settings.Telemetry = tp
+		settings.Config = endpointSettings(config, factory.Type())
+		settings.Formats = append([]string{configformat.DefaultType}, formatTypes...)
+		settings.Sources = sources
+		settings.HTTPMiddleware = wrapHTTP
+		settings.Listen = components.Listen
+		endpoint, err := factory.Create(settings)
+		if err != nil {
+			return fmt.Errorf("error creating the service endpoint %q: %w", factory.Type(), err)
+		}
+		*created = append(*created, endpoint)
+		rt.Endpoints = append(rt.Endpoints, NamedEndpoint{Type: factory.Type(), Endpoint: endpoint})
+	}
+	return nil
+}
+
+// closeEndpoints closes the endpoints that hold a resource, in list order.
+func closeEndpoints(endpoints []service.Endpoint) {
+	for _, e := range endpoints {
+		if closer, ok := e.(io.Closer); ok {
+			_ = closer.Close()
+		}
+	}
 }
 
 // sourcesOf returns the sources of the configuration whose format the distribution has, their URIs, and a readiness
