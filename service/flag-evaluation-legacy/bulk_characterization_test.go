@@ -1,12 +1,12 @@
-package service
+package flagevallegacy
 
 import (
 	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -105,8 +105,7 @@ func TestBulkResponseCharacterization(t *testing.T) {
 			require.NoError(t, ev.SetState(p))
 		}
 
-		svc := NewConnectService(log, ev, st, nil)
-		svc.setupHandler(iservice.Configuration{ServiceName: "characterization"})
+		base := serveComposed(t, ev, st, nil, iservice.Configuration{ServiceName: "characterization"})
 
 		for _, endpoint := range []struct{ name, path string }{
 			{"legacy", "/schema.v1.Service/ResolveAll"},
@@ -116,21 +115,25 @@ func TestBulkResponseCharacterization(t *testing.T) {
 				for _, body := range []string{`{}`, `{"context": {"email": "a@b.c"}}`} {
 					fmt.Fprintf(&out, "## %s %s selector=%q body=%s\n", setup.name, endpoint.name, selector, body)
 
-					req := httptest.NewRequest(http.MethodPost, endpoint.path, bytes.NewReader([]byte(body)))
+					req, err := http.NewRequest(http.MethodPost, base+endpoint.path, bytes.NewReader([]byte(body)))
+					require.NoError(t, err)
 					req.Header.Set("Content-Type", "application/json")
 					if selector != "" {
 						req.Header.Set("Flagd-Selector", selector)
 					}
-					res := httptest.NewRecorder()
-					svc.server.Handler.ServeHTTP(res, req)
+					res, err := http.DefaultClient.Do(req)
+					require.NoError(t, err)
+					resBody, err := io.ReadAll(res.Body)
+					res.Body.Close()
+					require.NoError(t, err)
 
 					var decoded any
-					if err := json.Unmarshal(res.Body.Bytes(), &decoded); err != nil {
-						t.Fatalf("%s %s: response is not JSON: %v: %s", setup.name, endpoint.name, err, res.Body.String())
+					if err := json.Unmarshal(resBody, &decoded); err != nil {
+						t.Fatalf("%s %s: response is not JSON: %v: %s", setup.name, endpoint.name, err, resBody)
 					}
 					pretty, err := json.MarshalIndent(decoded, "", "  ")
 					require.NoError(t, err)
-					fmt.Fprintf(&out, "status=%d\n%s\n", res.Code, pretty)
+					fmt.Fprintf(&out, "status=%d\n%s\n", res.StatusCode, pretty)
 				}
 			}
 		}

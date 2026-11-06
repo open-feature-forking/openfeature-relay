@@ -9,9 +9,7 @@ import (
 	"time"
 
 	evaluationV2 "buf.build/gen/go/open-feature/flagd/connectrpc/go/flagd/evaluation/v2/evaluationv2connect"
-	schemaConnectV1 "buf.build/gen/go/open-feature/flagd/connectrpc/go/schema/v1/schemav1connect"
 	evalV2 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/evaluation/v2"
-	schemaV1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/schema/v1"
 	"connectrpc.com/connect"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
@@ -26,7 +24,7 @@ type eventStreamClient struct {
 	close   func()
 }
 
-// TestEventStreamHandlers pins the deprecated schema.v1 and the evaluation.v2 event streams: the initial
+// TestEventStreamHandlers pins the evaluation.v2 event stream: the initial
 // provider_ready, a configuration_change after a store update, and the end of the stream when the client cancels.
 func TestEventStreamHandlers(t *testing.T) {
 	const source = "source1"
@@ -37,35 +35,6 @@ func TestEventStreamHandlers(t *testing.T) {
 		// serve mounts the handler on a mux over the given eventing configuration and returns a function that opens a stream
 		serve func(mux *http.ServeMux, events IEvents) func(ctx context.Context, url string) (*eventStreamClient, error)
 	}{
-		{
-			name: "schema.v1",
-			serve: func(mux *http.ServeMux, events IEvents) func(context.Context, string) (*eventStreamClient, error) {
-				path, h := schemaConnectV1.NewServiceHandler(NewOldFlagEvaluationService(log, nil, events, nil, nil))
-				mux.Handle(path, h)
-				return func(ctx context.Context, url string) (*eventStreamClient, error) {
-					stream, err := schemaConnectV1.NewServiceClient(http.DefaultClient, url).
-						EventStream(ctx, connect.NewRequest(&schemaV1.EventStreamRequest{}))
-					if err != nil {
-						return nil, err
-					}
-					return &eventStreamClient{
-						receive: func() (string, map[string]any, bool) {
-							if !stream.Receive() {
-								return "", nil, false
-							}
-							msg := stream.Msg()
-							var data map[string]any
-							if msg.Data != nil {
-								data = msg.Data.AsMap()
-							}
-							return msg.Type, data, true
-						},
-						err:   stream.Err,
-						close: func() { _ = stream.Close() },
-					}, nil
-				}
-			},
-		},
 		{
 			name: "evaluation.v2",
 			serve: func(mux *http.ServeMux, events IEvents) func(context.Context, string) (*eventStreamClient, error) {

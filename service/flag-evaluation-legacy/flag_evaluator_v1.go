@@ -1,4 +1,4 @@
-package service
+package flagevallegacy
 
 import (
 	"context"
@@ -22,7 +22,7 @@ type FlagEvaluationService struct {
 	logger                     *logger.Logger
 	eval                       evaluator.IResolver
 	metrics                    *flagdService.Metrics
-	eventingConfiguration      IEvents
+	eventingConfiguration      flagdService.Events
 	flagEvalTracer             telemetry.Tracer
 	contextValues              map[string]any
 	headerToContextKeyMappings map[string]string
@@ -32,7 +32,7 @@ type FlagEvaluationService struct {
 // NewFlagEvaluationService creates a FlagEvaluationService with provided parameters
 func NewFlagEvaluationService(log *logger.Logger,
 	eval evaluator.IResolver,
-	eventingCfg IEvents,
+	eventingCfg flagdService.Events,
 	tp telemetry.Provider,
 	contextValues map[string]any,
 	headerToContextKeyMappings map[string]string,

@@ -248,7 +248,7 @@ func TestLoopingTargets(t *testing.T) {
 	root := repoRoot(t)
 	lib := []string{"core", "sync/file", "sync/flagd-grpc", "sync/http", "sync/openfeature-operator", "sync/gcs", "sync/azblob",
 		"sync/s3", "sync/sse", "sync/builder", "telemetry/otel", "eventsink/webhook", "evaluator/flagd", "configformat/flagd"}
-	flagd := []string{"flagd", "runtime", "service/transport", "service/flag-evaluation", "service/ofrep", "service/flag-sync",
+	flagd := []string{"flagd", "runtime", "service/transport", "service/flag-evaluation", "service/flag-evaluation-legacy", "service/ofrep", "service/flag-sync",
 		"service/event-collector"}
 	contrib := []string{"contrib/flagsmith/engine", "contrib/flagsmith/middleware", "contrib/flagsmith/sync", "testbed/control",
 		"testbed/source", "testbed/cmd"}

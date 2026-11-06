@@ -29,6 +29,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	evaluator "github.com/open-feature-forking/openfeature-relay/evaluator/flagd"
 	flagevaluation "github.com/open-feature-forking/openfeature-relay/service/flag-evaluation"
+	flagevallegacy "github.com/open-feature-forking/openfeature-relay/service/flag-evaluation-legacy"
 	flagsync "github.com/open-feature-forking/openfeature-relay/service/flag-sync"
 	syncfile "github.com/open-feature-forking/openfeature-relay/sync/file"
 	"github.com/open-feature-forking/openfeature-relay/testbed/control"
@@ -144,7 +145,7 @@ func newBed(t *testing.T, startTimeout time.Duration, extra map[string]string) *
 	components.Sync = append(syncfile.NewFactories(), src.Factory())
 	components.ConfigurationFormats = append(components.ConfigurationFormats, flagd.NewFactory())
 	components.Evaluators = append(components.Evaluators, evaluator.NewFactory())
-	components.Endpoints = append(components.Endpoints, flagevaluation.NewFactory(), flagsync.NewFactory())
+	components.Endpoints = append(components.Endpoints, flagevaluation.NewFactory(), flagevallegacy.NewFactory(), flagsync.NewFactory())
 
 	cfg := control.Config{
 		Address: "127.0.0.1:0", Configs: filepath.Join(b.dir, "configs"), RawFlags: filepath.Join(b.dir, "rawflags"),

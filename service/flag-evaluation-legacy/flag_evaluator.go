@@ -1,0 +1,446 @@
+package flagevallegacy
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"time"
+
+	schemaV1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/schema/v1"
+	"connectrpc.com/connect"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/service"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
+	flagdService "github.com/open-feature-forking/openfeature-relay/service/transport"
+	"github.com/rs/xid"
+	"go.uber.org/zap"
+	"google.golang.org/protobuf/types/known/structpb"
+)
+
+// evaluationRecorder records an evaluation in the evaluation metrics.
+type evaluationRecorder interface {
+	RecordEvaluation(ctx context.Context, err error, reason, variant, key string, metadata model.Metadata)
+}
+
+type resolverSignature[T constraints] func(context context.Context, reqID, flagKey string, ctx map[string]any) (
+	T, string, string, map[string]interface{}, error)
+
+// OldFlagEvaluationService implements the methods required for the soon-to-be deprecated flag evaluation schema
+// this can be removed as a part of https://github.com/open-feature/flagd/issues/1088
+type OldFlagEvaluationService struct {
+	logger                *logger.Logger
+	eval                  evaluator.IResolver
+	metrics               *flagdService.Metrics
+	eventingConfiguration flagdService.Events
+	flagEvalTracer        telemetry.Tracer
+	contextValues         map[string]any
+}
+
+// NewOldFlagEvaluationService creates a OldFlagEvaluationService with provided parameters
+func NewOldFlagEvaluationService(
+	log *logger.Logger,
+	eval evaluator.IResolver,
+	eventingCfg flagdService.Events,
+	tp telemetry.Provider,
+	contextValues map[string]any,
+) *OldFlagEvaluationService {
+	svc := &OldFlagEvaluationService{
+		logger:                log,
+		eval:                  eval,
+		metrics:               flagdService.NewMetrics(telemetry.OrNoop(tp).Meter(flagdService.MetricsScope)),
+		eventingConfiguration: eventingCfg,
+		flagEvalTracer:        telemetry.OrNoop(tp).Tracer("flagEvaluationService"),
+		contextValues:         contextValues,
+	}
+
+	return svc
+}
+
+// nolint:dupl,funlen,staticcheck
+func (s *OldFlagEvaluationService) ResolveAll(
+	ctx context.Context,
+	req *connect.Request[schemaV1.ResolveAllRequest],
+) (*connect.Response[schemaV1.ResolveAllResponse], error) {
+	reqID := xid.New().String()
+	defer s.logger.ClearFields(reqID)
+	ctx, span := s.flagEvalTracer.Start(ctx, "resolveAll", telemetry.WithSpanKind(telemetry.SpanKindServer))
+	defer span.End()
+	res := &schemaV1.ResolveAllResponse{
+		Flags: make(map[string]*schemaV1.AnyFlag),
+	}
+
+	selector, err := selectorFromHeader(ctx, s.logger, req.Header())
+	if err != nil {
+		return nil, recordSpanError(span, err)
+	}
+	ctx = context.WithValue(ctx, store.SelectorContextKey{}, selector)
+
+	values, _, err := s.eval.ResolveAllValues(ctx, reqID, mergeContexts(req.Msg.GetContext().AsMap(), s.contextValues, req.Header(), make(map[string]string)))
+	if err != nil {
+		s.logger.WarnWithID(reqID, fmt.Sprintf("error resolving all flags: %v", err))
+		return nil, fmt.Errorf("error resolving flags. Tracking ID: %s", reqID)
+	}
+
+	span.SetAttributes(telemetry.Int("feature_flag.count", len(values)))
+	for _, value := range values {
+		// register the impression and reason for each flag evaluated
+		s.metrics.RecordEvaluation(
+			ctx, value.Error, value.Reason, value.Variant, value.FlagKey,
+			value.Metadata,
+		)
+
+		switch v := value.Value.(type) {
+		case bool:
+			res.Flags[value.FlagKey] = &schemaV1.AnyFlag{
+				Reason:  value.Reason,
+				Variant: value.Variant,
+				Value: &schemaV1.AnyFlag_BoolValue{
+					BoolValue: v,
+				},
+			}
+		case string:
+			res.Flags[value.FlagKey] = &schemaV1.AnyFlag{
+				Reason:  value.Reason,
+				Variant: value.Variant,
+				Value: &schemaV1.AnyFlag_StringValue{
+					StringValue: v,
+				},
+			}
+		case float64:
+			res.Flags[value.FlagKey] = &schemaV1.AnyFlag{
+				Reason:  value.Reason,
+				Variant: value.Variant,
+				Value: &schemaV1.AnyFlag_DoubleValue{
+					DoubleValue: v,
+				},
+			}
+		case map[string]any:
+			val, err := structpb.NewStruct(v)
+			if err != nil {
+				s.logger.ErrorWithID(reqID, fmt.Sprintf("struct response construction: %v", err))
+				continue
+			}
+			res.Flags[value.FlagKey] = &schemaV1.AnyFlag{
+				Reason:  value.Reason,
+				Variant: value.Variant,
+				Value: &schemaV1.AnyFlag_ObjectValue{
+					ObjectValue: val,
+				},
+			}
+		}
+	}
+	return connect.NewResponse(res), nil
+}
+
+// nolint:dupl,staticcheck
+func (s *OldFlagEvaluationService) EventStream(
+	ctx context.Context,
+	req *connect.Request[schemaV1.EventStreamRequest],
+	stream *connect.ServerStream[schemaV1.EventStreamResponse],
+) error {
+	s.logger.Debug(fmt.Sprintf("starting event stream for request"))
+
+	requestNotificationChan := make(chan service.Notification, 1)
+	selector, err := selectorFromHeader(ctx, s.logger, req.Header())
+	if err != nil {
+		return err
+	}
+	s.eventingConfiguration.Subscribe(ctx, req, &selector, requestNotificationChan)
+	defer s.eventingConfiguration.Unsubscribe(req)
+
+	// send initial ready to the stream; the notifier channel may be closed by cleanup and this avoids racing with it
+	if err := stream.Send(&schemaV1.EventStreamResponse{Type: string(service.ProviderReady)}); err != nil {
+		s.logger.Error(err.Error())
+	}
+	for {
+		select {
+		case <-time.After(20 * time.Second):
+			err := stream.Send(&schemaV1.EventStreamResponse{
+				Type: string(service.KeepAlive),
+			})
+			if err != nil {
+				s.logger.Error(err.Error())
+			}
+		case notification, open := <-requestNotificationChan:
+			if !open {
+				// the subscription ended with the store watch
+				return nil
+			}
+			d, err := structpb.NewStruct(notification.Data)
+			if err != nil {
+				s.logger.Error(err.Error())
+			}
+			err = stream.Send(&schemaV1.EventStreamResponse{
+				Type: string(notification.Type),
+				Data: d,
+			})
+			if err != nil {
+				s.logger.Error(err.Error())
+			}
+		case <-ctx.Done():
+			// a notification queued before the context ended, provider_shutdown for one, is still sent
+			select {
+			case notification, open := <-requestNotificationChan:
+				if open {
+					d, _ := structpb.NewStruct(notification.Data)
+					_ = stream.Send(&schemaV1.EventStreamResponse{Type: string(notification.Type), Data: d})
+				}
+			default:
+			}
+			return nil
+		}
+	}
+}
+
+//nolint:staticcheck
+func (s *OldFlagEvaluationService) ResolveBoolean(
+	ctx context.Context,
+	req *connect.Request[schemaV1.ResolveBooleanRequest],
+) (*connect.Response[schemaV1.ResolveBooleanResponse], error) {
+	ctx, span := s.flagEvalTracer.Start(ctx, "resolveBoolean", telemetry.WithSpanKind(telemetry.SpanKindServer))
+	defer span.End()
+	res := connect.NewResponse(&schemaV1.ResolveBooleanResponse{})
+	selector, err := selectorFromHeader(ctx, s.logger, req.Header())
+	if err != nil {
+		return nil, recordSpanError(span, err)
+	}
+	ctx = context.WithValue(ctx, store.SelectorContextKey{}, selector)
+
+	err = resolve[bool](
+		ctx,
+		span,
+		s.logger,
+		s.eval.ResolveBooleanValue,
+		req.Header(),
+		req.Msg.GetFlagKey(),
+		req.Msg.GetContext(),
+		&booleanResponse{schemaV1Resp: res},
+		s.metrics,
+		s.contextValues,
+		make(map[string]string),
+	)
+	if err != nil {
+		span.RecordError(err)
+		span.SetError(fmt.Sprintf("error evaluating flag with key %s", req.Msg.GetFlagKey()))
+	}
+
+	return res, err
+}
+
+//nolint:staticcheck
+func (s *OldFlagEvaluationService) ResolveString(
+	ctx context.Context,
+	req *connect.Request[schemaV1.ResolveStringRequest],
+) (*connect.Response[schemaV1.ResolveStringResponse], error) {
+	ctx, span := s.flagEvalTracer.Start(ctx, "resolveString", telemetry.WithSpanKind(telemetry.SpanKindServer))
+	defer span.End()
+
+	selector, err := selectorFromHeader(ctx, s.logger, req.Header())
+	if err != nil {
+		return nil, recordSpanError(span, err)
+	}
+	ctx = context.WithValue(ctx, store.SelectorContextKey{}, selector)
+
+	res := connect.NewResponse(&schemaV1.ResolveStringResponse{})
+	err = resolve[string](
+		ctx,
+		span,
+		s.logger,
+		s.eval.ResolveStringValue,
+		req.Header(),
+		req.Msg.GetFlagKey(),
+		req.Msg.GetContext(),
+		&stringResponse{schemaV1Resp: res},
+		s.metrics,
+		s.contextValues,
+		make(map[string]string),
+	)
+	if err != nil {
+		span.RecordError(err)
+		span.SetError(fmt.Sprintf("error evaluating flag with key %s", req.Msg.GetFlagKey()))
+	}
+
+	return res, err
+}
+
+//nolint:staticcheck
+func (s *OldFlagEvaluationService) ResolveInt(
+	ctx context.Context,
+	req *connect.Request[schemaV1.ResolveIntRequest],
+) (*connect.Response[schemaV1.ResolveIntResponse], error) {
+	ctx, span := s.flagEvalTracer.Start(ctx, "resolveInt", telemetry.WithSpanKind(telemetry.SpanKindServer))
+	defer span.End()
+
+	selector, err := selectorFromHeader(ctx, s.logger, req.Header())
+	if err != nil {
+		return nil, recordSpanError(span, err)
+	}
+	ctx = context.WithValue(ctx, store.SelectorContextKey{}, selector)
+
+	res := connect.NewResponse(&schemaV1.ResolveIntResponse{})
+	err = resolve[int64](
+		ctx,
+		span,
+		s.logger,
+		s.eval.ResolveIntValue,
+		req.Header(),
+		req.Msg.GetFlagKey(),
+		req.Msg.GetContext(),
+		&intResponse{schemaV1Resp: res},
+		s.metrics,
+		s.contextValues,
+		make(map[string]string),
+	)
+	if err != nil {
+		span.RecordError(err)
+		span.SetError(fmt.Sprintf("error evaluating flag with key %s", req.Msg.GetFlagKey()))
+	}
+
+	return res, err
+}
+
+//nolint:staticcheck
+func (s *OldFlagEvaluationService) ResolveFloat(
+	ctx context.Context,
+	req *connect.Request[schemaV1.ResolveFloatRequest],
+) (*connect.Response[schemaV1.ResolveFloatResponse], error) {
+	ctx, span := s.flagEvalTracer.Start(ctx, "resolveFloat", telemetry.WithSpanKind(telemetry.SpanKindServer))
+	defer span.End()
+
+	selector, err := selectorFromHeader(ctx, s.logger, req.Header())
+	if err != nil {
+		return nil, recordSpanError(span, err)
+	}
+	ctx = context.WithValue(ctx, store.SelectorContextKey{}, selector)
+
+	res := connect.NewResponse(&schemaV1.ResolveFloatResponse{})
+	err = resolve[float64](
+		ctx,
+		span,
+		s.logger,
+		s.eval.ResolveFloatValue,
+		req.Header(),
+		req.Msg.GetFlagKey(),
+		req.Msg.GetContext(),
+		&floatResponse{schemaV1Resp: res},
+		s.metrics,
+		s.contextValues,
+		make(map[string]string),
+	)
+	if err != nil {
+		span.RecordError(err)
+		span.SetError(fmt.Sprintf("error evaluating flag with key %s", req.Msg.GetFlagKey()))
+	}
+
+	return res, err
+}
+
+//nolint:staticcheck
+func (s *OldFlagEvaluationService) ResolveObject(
+	ctx context.Context,
+	req *connect.Request[schemaV1.ResolveObjectRequest],
+) (*connect.Response[schemaV1.ResolveObjectResponse], error) {
+	ctx, span := s.flagEvalTracer.Start(ctx, "resolveObject", telemetry.WithSpanKind(telemetry.SpanKindServer))
+	defer span.End()
+
+	selector, err := selectorFromHeader(ctx, s.logger, req.Header())
+	if err != nil {
+		return nil, recordSpanError(span, err)
+	}
+	ctx = context.WithValue(ctx, store.SelectorContextKey{}, selector)
+
+	res := connect.NewResponse(&schemaV1.ResolveObjectResponse{})
+	err = resolve[map[string]any](
+		ctx,
+		span,
+		s.logger,
+		s.eval.ResolveObjectValue,
+		req.Header(),
+		req.Msg.GetFlagKey(),
+		req.Msg.GetContext(),
+		&objectResponse{schemaV1Resp: res},
+		s.metrics,
+		s.contextValues,
+		make(map[string]string),
+	)
+	if err != nil {
+		span.RecordError(err)
+		span.SetError(fmt.Sprintf("error evaluating flag with key %s", req.Msg.GetFlagKey()))
+	}
+
+	return res, err
+}
+
+// mergeContexts, resolve, formatContextKeys, errFormat and the helpers of context_utils.go are copied from service/flag-evaluation
+// and frozen with schema.v1.
+func mergeContexts(reqCtx, configFlagsCtx map[string]any, headers http.Header, headerToContextKeyMappings map[string]string) map[string]any {
+	return flagdService.MergeContextsAndHeaders(reqCtx, configFlagsCtx, headers, headerToContextKeyMappings)
+}
+
+// resolve is a generic flag resolver
+func resolve[T constraints](ctx context.Context, span telemetry.Span, logger *logger.Logger, resolver resolverSignature[T], header http.Header, flagKey string,
+	evaluationContext *structpb.Struct, resp response[T], metrics evaluationRecorder,
+	configContextValues map[string]any, configHeaderToContextKeyMappings map[string]string,
+) error {
+	reqID := xid.New().String()
+	defer logger.ClearFields(reqID)
+
+	mergedContext := mergeContexts(evaluationContext.AsMap(), configContextValues, header, configHeaderToContextKeyMappings)
+
+	logger.WriteFields(
+		reqID,
+		zap.String("flag-key", flagKey),
+		zap.Strings("context-keys", formatContextKeys(mergedContext)),
+	)
+
+	var evalErrFormatted error
+	if selector, _ := ctx.Value(store.SelectorContextKey{}).(store.Selector); flagdService.MatchesNoFlags(selector) {
+		resolver = flagNotFound[T]
+	}
+	result, variant, reason, metadata, evalErr := resolver(ctx, reqID, flagKey, mergedContext)
+	if evalErr != nil {
+		logger.WarnWithID(reqID, fmt.Sprintf("returning error response, reason: %v", evalErr))
+		reason = model.ErrorReason
+		evalErrFormatted = errFormat(evalErr)
+	}
+
+	if metrics != nil {
+		metrics.RecordEvaluation(ctx, evalErr, reason, variant, flagKey, metadata)
+	}
+
+	span.SetAttributes(flagdService.SemConvFeatureFlagAttributes(flagKey, variant)...)
+
+	if err := resp.SetResult(result, variant, reason, metadata); err != nil && evalErr == nil {
+		logger.ErrorWithID(reqID, err.Error())
+		return fmt.Errorf("error setting response result: %w", err)
+	}
+
+	return evalErrFormatted
+}
+
+func formatContextKeys(context map[string]any) []string {
+	res := []string{}
+	for k := range context {
+		res = append(res, k)
+	}
+	return res
+}
+
+func errFormat(err error) error {
+	ReadableErrorMsg := model.GetErrorMessage(err.Error())
+	switch err.Error() {
+	case model.FlagNotFoundErrorCode, model.FlagDisabledErrorCode:
+		return connect.NewError(connect.CodeNotFound, fmt.Errorf("%s", ReadableErrorMsg))
+	case model.TypeMismatchErrorCode:
+		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("%s", ReadableErrorMsg))
+	case model.ParseErrorCode:
+		return connect.NewError(connect.CodeDataLoss, fmt.Errorf("%s", ReadableErrorMsg))
+	case model.GeneralErrorCode:
+		return connect.NewError(connect.CodeUnknown, fmt.Errorf("%s", ReadableErrorMsg))
+	}
+
+	return err
+}

@@ -137,6 +137,14 @@ func scenarioResolve(t *testing.T, image string) Transcript {
 	post("ofrep/missing", portOFREP, "/ofrep/v1/evaluate/flags/missing", `{"context":{}}`, nil)
 	post("connect-v1/bulk", portEvaluation, "/flagd.evaluation.v1.Service/ResolveAll", `{`+requestContext+`}`, nil)
 
+	// the deprecated services over gRPC, as the generated clients of old providers call them
+	for _, service := range []string{"schema.v1.Service", "flagd.evaluation.v1.Service"} {
+		g, err := r.grpcCallOn(portEvaluation, "/"+service+"/ResolveBoolean", stringField(1, "bool-flag"), 10*time.Second)
+		require.NoError(t, err, service)
+		tr.add("grpc-"+service+"/status", g.status)
+		tr.add("grpc-"+service+"/messages", fmt.Sprintf("%x", g.messages))
+	}
+
 	h, _ := post("ofrep/bulk", portOFREP, "/ofrep/v1/evaluate/flags", `{`+requestContext+`}`, nil)
 	if tag := h.Get("ETag"); tag != "" {
 		status, _, _, err := r.do(http.MethodPost, portOFREP, "/ofrep/v1/evaluate/flags", `{`+requestContext+`}`, map[string]string{"If-None-Match": tag})

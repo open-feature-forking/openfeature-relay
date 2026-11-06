@@ -60,16 +60,17 @@ test/eventsink-example:./...:opentelemetry|google.golang.org/grpc|connectrpc|k8s
 # distribution's components package passes them in.
 # The packages are listed, not ./..., to leave out internal/officialset, which holds components for the runtime's tests: a new
 # package of the runtime has to be added here.
-runtime:. ./cmd:go.opentelemetry.io|prometheus|openfeature-relay/(sync/(file|http|flagd-grpc|openfeature-operator|gcs|azblob|s3)|evaluator/|configformat/|telemetry/|service/(flag-evaluation|ofrep|flag-sync|event-collector))
+runtime:. ./cmd:go.opentelemetry.io|prometheus|openfeature-relay/(sync/(file|http|flagd-grpc|openfeature-operator|gcs|azblob|s3)|evaluator/|configformat/|telemetry/|service/(flag-evaluation|flag-evaluation-legacy|ofrep|flag-sync|event-collector))
 # UC-001 Q7: the service endpoints share their helpers through the transport module and know neither the runtime
 # nor one another.
-service/transport:./...:go.opentelemetry.io|prometheus/client_golang|otelconnect|openfeature-relay/telemetry/|openfeature-relay/(runtime|service/(flag-evaluation|ofrep|flag-sync))
-service/flag-evaluation:./...:go.opentelemetry.io|prometheus/client_golang|otelconnect|openfeature-relay/telemetry/|openfeature-relay/(runtime|service/(ofrep|flag-sync))
-service/ofrep:./...:go.opentelemetry.io|prometheus/client_golang|otelconnect|openfeature-relay/telemetry/|openfeature-relay/(runtime|service/(flag-evaluation|flag-sync))
-service/flag-sync:./...:go.opentelemetry.io|prometheus/client_golang|otelconnect|openfeature-relay/telemetry/|openfeature-relay/(runtime|service/(flag-evaluation|ofrep))
+service/transport:./...:go.opentelemetry.io|prometheus/client_golang|otelconnect|openfeature-relay/telemetry/|openfeature-relay/(runtime|service/(flag-evaluation|flag-evaluation-legacy|ofrep|flag-sync))
+service/flag-evaluation:./...:go.opentelemetry.io|prometheus/client_golang|otelconnect|openfeature-relay/telemetry/|openfeature-relay/(runtime|service/(flag-evaluation-legacy|ofrep|flag-sync))
+service/flag-evaluation-legacy:./...:go.opentelemetry.io|prometheus/client_golang|otelconnect|openfeature-relay/telemetry/|openfeature-relay/(runtime|service/(ofrep|flag-sync))
+service/ofrep:./...:go.opentelemetry.io|prometheus/client_golang|otelconnect|openfeature-relay/telemetry/|openfeature-relay/(runtime|service/(flag-evaluation|flag-evaluation-legacy|flag-sync))
+service/flag-sync:./...:go.opentelemetry.io|prometheus/client_golang|otelconnect|openfeature-relay/telemetry/|openfeature-relay/(runtime|service/(flag-evaluation|flag-evaluation-legacy|ofrep))
 # The event collector accepts the events of in-process providers and puts them on the event bus: no telemetry SDK, and it
 # knows neither the runtime nor another endpoint.
-service/event-collector:./...:go.opentelemetry.io|prometheus/client_golang|otelconnect|openfeature-relay/telemetry/|openfeature-relay/(runtime|service/(flag-evaluation|ofrep|flag-sync))
+service/event-collector:./...:go.opentelemetry.io|prometheus/client_golang|otelconnect|openfeature-relay/telemetry/|openfeature-relay/(runtime|service/(flag-evaluation|flag-evaluation-legacy|ofrep|flag-sync))
 # The Builder (UC-001 Q1) depends on no relay module: it only reads manifests and runs the go binary.
 builder:./...:open-feature/flagd/|openfeature-relay/(core|runtime|sync|evaluator|configformat|telemetry|service|distribution)
 # The webhook event sink requires the core and the standard library only: no vendor client, transport, telemetry SDK or other relay module.
@@ -84,6 +85,7 @@ testbed/control:./...:openfeature-relay/(runtime|core|service|sync|evaluator|con
 flagd:./...:openfeature-relay/testbed
 runtime:./...:openfeature-relay/testbed
 service/flag-evaluation:./...:openfeature-relay/testbed
+service/flag-evaluation-legacy:./...:openfeature-relay/testbed
 service/flag-sync:./...:openfeature-relay/testbed
 # The testbed command links the components the pinned suites use and no other: no telemetry, event sink, vendor module, OFREP, event collector or other sync provider (BR-005).
 testbed/cmd:./...:openfeature-relay/(telemetry|eventsink|contrib|service/(ofrep|event-collector)|sync/(http|flagd-grpc|openfeature-operator|gcs|azblob|s3|sse))

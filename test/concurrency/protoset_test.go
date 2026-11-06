@@ -21,7 +21,7 @@ func TestProtosetClosed(t *testing.T) {
 	require.NoError(t, err)
 	_, err = files.FindFileByPath("google/protobuf/struct.proto")
 	require.NoError(t, err)
-	for _, service := range []string{"flagd.evaluation.v1.Service", "flagd.evaluation.v2.Service", "schema.v1.Service", "flagd.sync.v1.FlagSyncService"} {
+	for _, service := range []string{"flagd.evaluation.v2.Service", "flagd.sync.v1.FlagSyncService"} {
 		_, err := files.FindDescriptorByName(protoFullName(service))
 		require.NoError(t, err, service)
 	}

@@ -8,12 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	evaluationV1 "buf.build/gen/go/open-feature/flagd/connectrpc/go/flagd/evaluation/v1/evaluationv1connect"
 	evaluationV2 "buf.build/gen/go/open-feature/flagd/connectrpc/go/flagd/evaluation/v2/evaluationv2connect"
-	schemaConnectV1 "buf.build/gen/go/open-feature/flagd/connectrpc/go/schema/v1/schemav1connect"
-	evalV1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/evaluation/v1"
 	evalV2 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/evaluation/v2"
-	schemaV1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/schema/v1"
 	"connectrpc.com/connect"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	iservice "github.com/open-feature-forking/openfeature-relay/core/pkg/service"
@@ -99,9 +95,7 @@ func renderSpan(s sdktrace.ReadOnlySpan) string {
 }
 
 type evaluationSpanClients struct {
-	legacy schemaConnectV1.ServiceClient
-	v1     evaluationV1.ServiceClient
-	v2     evaluationV2.ServiceClient
+	v2 evaluationV2.ServiceClient
 }
 
 func newEvaluationSpanClients(t *testing.T) evaluationSpanClients {
@@ -119,9 +113,7 @@ func newEvaluationSpanClients(t *testing.T) evaluationSpanClients {
 	t.Cleanup(server.Close)
 
 	return evaluationSpanClients{
-		legacy: schemaConnectV1.NewServiceClient(server.Client(), server.URL),
-		v1:     evaluationV1.NewServiceClient(server.Client(), server.URL),
-		v2:     evaluationV2.NewServiceClient(server.Client(), server.URL),
+		v2: evaluationV2.NewServiceClient(server.Client(), server.URL),
 	}
 }
 
@@ -135,56 +127,7 @@ func withSelector[T any](msg *T, selector string) *connect.Request[T] {
 
 type evaluationCall func(ctx context.Context, c evaluationSpanClients, key, selector string) error
 
-//nolint:staticcheck // the legacy schema is deprecated but still served
 var evaluationCalls = map[string]evaluationCall{
-	"legacy/Boolean": func(ctx context.Context, c evaluationSpanClients, key, sel string) error {
-		_, err := c.legacy.ResolveBoolean(ctx, withSelector(&schemaV1.ResolveBooleanRequest{FlagKey: key}, sel))
-		return err
-	},
-	"legacy/String": func(ctx context.Context, c evaluationSpanClients, key, sel string) error {
-		_, err := c.legacy.ResolveString(ctx, withSelector(&schemaV1.ResolveStringRequest{FlagKey: key}, sel))
-		return err
-	},
-	"legacy/Int": func(ctx context.Context, c evaluationSpanClients, key, sel string) error {
-		_, err := c.legacy.ResolveInt(ctx, withSelector(&schemaV1.ResolveIntRequest{FlagKey: key}, sel))
-		return err
-	},
-	"legacy/Float": func(ctx context.Context, c evaluationSpanClients, key, sel string) error {
-		_, err := c.legacy.ResolveFloat(ctx, withSelector(&schemaV1.ResolveFloatRequest{FlagKey: key}, sel))
-		return err
-	},
-	"legacy/Object": func(ctx context.Context, c evaluationSpanClients, key, sel string) error {
-		_, err := c.legacy.ResolveObject(ctx, withSelector(&schemaV1.ResolveObjectRequest{FlagKey: key}, sel))
-		return err
-	},
-	"legacy/All": func(ctx context.Context, c evaluationSpanClients, _, sel string) error {
-		_, err := c.legacy.ResolveAll(ctx, withSelector(&schemaV1.ResolveAllRequest{}, sel))
-		return err
-	},
-	"v1/Boolean": func(ctx context.Context, c evaluationSpanClients, key, sel string) error {
-		_, err := c.v1.ResolveBoolean(ctx, withSelector(&evalV1.ResolveBooleanRequest{FlagKey: key}, sel))
-		return err
-	},
-	"v1/String": func(ctx context.Context, c evaluationSpanClients, key, sel string) error {
-		_, err := c.v1.ResolveString(ctx, withSelector(&evalV1.ResolveStringRequest{FlagKey: key}, sel))
-		return err
-	},
-	"v1/Int": func(ctx context.Context, c evaluationSpanClients, key, sel string) error {
-		_, err := c.v1.ResolveInt(ctx, withSelector(&evalV1.ResolveIntRequest{FlagKey: key}, sel))
-		return err
-	},
-	"v1/Float": func(ctx context.Context, c evaluationSpanClients, key, sel string) error {
-		_, err := c.v1.ResolveFloat(ctx, withSelector(&evalV1.ResolveFloatRequest{FlagKey: key}, sel))
-		return err
-	},
-	"v1/Object": func(ctx context.Context, c evaluationSpanClients, key, sel string) error {
-		_, err := c.v1.ResolveObject(ctx, withSelector(&evalV1.ResolveObjectRequest{FlagKey: key}, sel))
-		return err
-	},
-	"v1/All": func(ctx context.Context, c evaluationSpanClients, _, sel string) error {
-		_, err := c.v1.ResolveAll(ctx, withSelector(&evalV1.ResolveAllRequest{}, sel))
-		return err
-	},
 	"v2/Boolean": func(ctx context.Context, c evaluationSpanClients, key, sel string) error {
 		_, err := c.v2.ResolveBoolean(ctx, withSelector(&evalV2.ResolveBooleanRequest{FlagKey: key}, sel))
 		return err
@@ -219,32 +162,6 @@ func TestEvaluationSpans(t *testing.T) {
 		wantErr  bool
 		want     string
 	}{
-		{call: "legacy/Boolean", key: "bool-flag", selector: "", wantErr: false, want: "flagEvaluationService/resolveBoolean[server]{feature_flag.key=bool-flag,feature_flag.provider.name=flagd,feature_flag.result.variant=on}\n  jsonEvaluator/resolveBoolean[internal]{}\n"},
-		{call: "legacy/Boolean", key: "missing", selector: "", wantErr: true, want: "flagEvaluationService/resolveBoolean[server]{feature_flag.key=missing,feature_flag.provider.name=flagd,feature_flag.result.variant=} status=Error(\"error evaluating flag with key missing\") event=exception\n  jsonEvaluator/resolveBoolean[internal]{}\n"},
-		{call: "legacy/String", key: "string-flag", selector: "", wantErr: false, want: "flagEvaluationService/resolveString[server]{feature_flag.key=string-flag,feature_flag.provider.name=flagd,feature_flag.result.variant=a}\n  jsonEvaluator/resolveString[internal]{}\n"},
-		{call: "legacy/String", key: "missing", selector: "", wantErr: true, want: "flagEvaluationService/resolveString[server]{feature_flag.key=missing,feature_flag.provider.name=flagd,feature_flag.result.variant=} status=Error(\"error evaluating flag with key missing\") event=exception\n  jsonEvaluator/resolveString[internal]{}\n"},
-		{call: "legacy/Int", key: "int-flag", selector: "", wantErr: false, want: "flagEvaluationService/resolveInt[server]{feature_flag.key=int-flag,feature_flag.provider.name=flagd,feature_flag.result.variant=one}\n  jsonEvaluator/resolveInt[internal]{}\n"},
-		{call: "legacy/Int", key: "missing", selector: "", wantErr: true, want: "flagEvaluationService/resolveInt[server]{feature_flag.key=missing,feature_flag.provider.name=flagd,feature_flag.result.variant=} status=Error(\"error evaluating flag with key missing\") event=exception\n  jsonEvaluator/resolveInt[internal]{}\n"},
-		{call: "legacy/Float", key: "float-flag", selector: "", wantErr: false, want: "flagEvaluationService/resolveFloat[server]{feature_flag.key=float-flag,feature_flag.provider.name=flagd,feature_flag.result.variant=a}\n  jsonEvaluator/resolveFloat[internal]{}\n"},
-		{call: "legacy/Float", key: "missing", selector: "", wantErr: true, want: "flagEvaluationService/resolveFloat[server]{feature_flag.key=missing,feature_flag.provider.name=flagd,feature_flag.result.variant=} status=Error(\"error evaluating flag with key missing\") event=exception\n  jsonEvaluator/resolveFloat[internal]{}\n"},
-		{call: "legacy/Object", key: "object-flag", selector: "", wantErr: false, want: "flagEvaluationService/resolveObject[server]{feature_flag.key=object-flag,feature_flag.provider.name=flagd,feature_flag.result.variant=a}\n  jsonEvaluator/resolveObject[internal]{}\n"},
-		{call: "legacy/Object", key: "missing", selector: "", wantErr: true, want: "flagEvaluationService/resolveObject[server]{feature_flag.key=missing,feature_flag.provider.name=flagd,feature_flag.result.variant=} status=Error(\"error evaluating flag with key missing\") event=exception\n  jsonEvaluator/resolveObject[internal]{}\n"},
-		{call: "legacy/All", key: "", selector: "", wantErr: false, want: "flagEvaluationService/resolveAll[server]{feature_flag.count=5}\n  jsonEvaluator/resolveAll[internal]{}\n"},
-		{call: "legacy/Boolean", key: "bool-flag", selector: invalidSelector, wantErr: true, want: "flagEvaluationService/resolveBoolean[server]{} status=Error(\"invalid_argument: invalid selector key \\\"invalid\\\", valid keys: \\\"flagSetId\\\", \\\"source\\\"\") event=exception\n"},
-		{call: "legacy/All", key: "", selector: invalidSelector, wantErr: true, want: "flagEvaluationService/resolveAll[server]{} status=Error(\"invalid_argument: invalid selector key \\\"invalid\\\", valid keys: \\\"flagSetId\\\", \\\"source\\\"\") event=exception\n"},
-		{call: "v1/Boolean", key: "bool-flag", selector: "", wantErr: false, want: "flagd.evaluation.v1/resolveBoolean[server]{feature_flag.key=bool-flag,feature_flag.provider.name=flagd,feature_flag.result.variant=on}\n  jsonEvaluator/resolveBoolean[internal]{}\n"},
-		{call: "v1/Boolean", key: "missing", selector: "", wantErr: true, want: "flagd.evaluation.v1/resolveBoolean[server]{feature_flag.key=missing,feature_flag.provider.name=flagd,feature_flag.result.variant=} status=Error(\"error evaluating flag with key missing\") event=exception\n  jsonEvaluator/resolveBoolean[internal]{}\n"},
-		{call: "v1/String", key: "string-flag", selector: "", wantErr: false, want: "flagd.evaluation.v1/resolveString[server]{feature_flag.key=string-flag,feature_flag.provider.name=flagd,feature_flag.result.variant=a}\n  jsonEvaluator/resolveString[internal]{}\n"},
-		{call: "v1/String", key: "missing", selector: "", wantErr: true, want: "flagd.evaluation.v1/resolveString[server]{feature_flag.key=missing,feature_flag.provider.name=flagd,feature_flag.result.variant=} status=Error(\"error evaluating flag with key missing\") event=exception\n  jsonEvaluator/resolveString[internal]{}\n"},
-		{call: "v1/Int", key: "int-flag", selector: "", wantErr: false, want: "flagd.evaluation.v1/resolveInt[server]{feature_flag.key=int-flag,feature_flag.provider.name=flagd,feature_flag.result.variant=one}\n  jsonEvaluator/resolveInt[internal]{}\n"},
-		{call: "v1/Int", key: "missing", selector: "", wantErr: true, want: "flagd.evaluation.v1/resolveInt[server]{feature_flag.key=missing,feature_flag.provider.name=flagd,feature_flag.result.variant=} status=Error(\"error evaluating flag with key missing\") event=exception\n  jsonEvaluator/resolveInt[internal]{}\n"},
-		{call: "v1/Float", key: "float-flag", selector: "", wantErr: false, want: "flagd.evaluation.v1/resolveFloat[server]{feature_flag.key=float-flag,feature_flag.provider.name=flagd,feature_flag.result.variant=a}\n  jsonEvaluator/resolveFloat[internal]{}\n"},
-		{call: "v1/Float", key: "missing", selector: "", wantErr: true, want: "flagd.evaluation.v1/resolveFloat[server]{feature_flag.key=missing,feature_flag.provider.name=flagd,feature_flag.result.variant=} status=Error(\"error evaluating flag with key missing\") event=exception\n  jsonEvaluator/resolveFloat[internal]{}\n"},
-		{call: "v1/Object", key: "object-flag", selector: "", wantErr: false, want: "flagd.evaluation.v1/resolveObject[server]{feature_flag.key=object-flag,feature_flag.provider.name=flagd,feature_flag.result.variant=a}\n  jsonEvaluator/resolveObject[internal]{}\n"},
-		{call: "v1/Object", key: "missing", selector: "", wantErr: true, want: "flagd.evaluation.v1/resolveObject[server]{feature_flag.key=missing,feature_flag.provider.name=flagd,feature_flag.result.variant=} status=Error(\"error evaluating flag with key missing\") event=exception\n  jsonEvaluator/resolveObject[internal]{}\n"},
-		{call: "v1/All", key: "", selector: "", wantErr: false, want: "flagd.evaluation.v1/resolveAll[server]{feature_flag.count=5}\n  jsonEvaluator/resolveAll[internal]{}\n"},
-		{call: "v1/Boolean", key: "bool-flag", selector: invalidSelector, wantErr: true, want: "flagd.evaluation.v1/resolveBoolean[server]{} status=Error(\"invalid_argument: invalid selector key \\\"invalid\\\", valid keys: \\\"flagSetId\\\", \\\"source\\\"\") event=exception\n"},
-		{call: "v1/All", key: "", selector: invalidSelector, wantErr: true, want: "flagd.evaluation.v1/resolveAll[server]{} status=Error(\"invalid_argument: invalid selector key \\\"invalid\\\", valid keys: \\\"flagSetId\\\", \\\"source\\\"\") event=exception\n"},
 		{call: "v2/Boolean", key: "bool-flag", selector: "", wantErr: false, want: "flagd.evaluation.v2/resolveBoolean[server]{feature_flag.key=bool-flag,feature_flag.provider.name=flagd,feature_flag.result.variant=on}\n  jsonEvaluator/resolveBoolean[internal]{}\n"},
 		{call: "v2/Boolean", key: "missing", selector: "", wantErr: true, want: "flagd.evaluation.v2/resolveBoolean[server]{feature_flag.key=missing,feature_flag.provider.name=flagd,feature_flag.result.variant=} status=Error(\"error evaluating flag with key missing\") event=exception\n  jsonEvaluator/resolveBoolean[internal]{}\n"},
 		{call: "v2/String", key: "string-flag", selector: "", wantErr: false, want: "flagd.evaluation.v2/resolveString[server]{feature_flag.key=string-flag,feature_flag.provider.name=flagd,feature_flag.result.variant=a}\n  jsonEvaluator/resolveString[internal]{}\n"},

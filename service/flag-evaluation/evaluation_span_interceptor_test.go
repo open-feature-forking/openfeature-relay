@@ -8,9 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	evaluationV1 "buf.build/gen/go/open-feature/flagd/connectrpc/go/flagd/evaluation/v1/evaluationv1connect"
 	evaluationV2 "buf.build/gen/go/open-feature/flagd/connectrpc/go/flagd/evaluation/v2/evaluationv2connect"
-	schemaConnectV1 "buf.build/gen/go/open-feature/flagd/connectrpc/go/schema/v1/schemav1connect"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	iservice "github.com/open-feature-forking/openfeature-relay/core/pkg/service"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
@@ -35,22 +33,13 @@ func TestEvaluationSpansWithInterceptor(t *testing.T) {
 	server := httptest.NewServer(svc.server.Handler)
 	t.Cleanup(server.Close)
 	clients := evaluationSpanClients{
-		legacy: schemaConnectV1.NewServiceClient(server.Client(), server.URL),
-		v1:     evaluationV1.NewServiceClient(server.Client(), server.URL),
-		v2:     evaluationV2.NewServiceClient(server.Client(), server.URL),
+		v2: evaluationV2.NewServiceClient(server.Client(), server.URL),
 	}
 
 	tests := []struct {
 		call, key, selector string
 		wantErr             bool
 	}{
-		{call: "legacy/Boolean", key: "bool-flag"},
-		{call: "legacy/All"},
-		{call: "v1/Boolean", key: "bool-flag"},
-		{call: "v1/Boolean", key: "missing", wantErr: true},
-		{call: "v1/Object", key: "object-flag"},
-		{call: "v1/All"},
-		{call: "v1/All", selector: invalidSelector, wantErr: true},
 		{call: "v2/Boolean", key: "bool-flag"},
 		{call: "v2/String", key: "missing", wantErr: true},
 	}

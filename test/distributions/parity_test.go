@@ -30,7 +30,8 @@ const parityFlags = `{"flags":{
 // validators are the opaque values that differ between two runs of the same flagd.
 var validators = regexp.MustCompile(`"?(flagConfigEtag|etag)"?\s*:\s*"[0-9a-f]{16,}"`)
 
-// evaluationTranscript sends the same single and bulk evaluation requests over ConnectRPC and OFREP and renders the
+// evaluationTranscript sends the same single evaluation requests over ConnectRPC (evaluation v2, which has no bulk call)
+// and single and bulk requests over OFREP, and renders the
 // status and the body of each answer, field by field.
 func evaluationTranscript(t *testing.T, ports map[string]int) string {
 	t.Helper()
@@ -58,10 +59,9 @@ func evaluationTranscript(t *testing.T, ports map[string]int) string {
 		if kind == "" {
 			kind = "Boolean"
 		}
-		do("connect "+flag, "port", "/flagd.evaluation.v1.Service/Resolve"+kind, fmt.Sprintf(`{"flagKey":%q,%s}`, flag, gold))
+		do("connect "+flag, "port", "/flagd.evaluation.v2.Service/Resolve"+kind, fmt.Sprintf(`{"flagKey":%q,%s}`, flag, gold))
 		do("ofrep "+flag, "ofrep-port", "/ofrep/v1/evaluate/flags/"+flag, `{`+gold+`}`)
 	}
-	do("connect bulk", "port", "/flagd.evaluation.v1.Service/ResolveAll", `{`+gold+`}`)
 	do("ofrep bulk", "ofrep-port", "/ofrep/v1/evaluate/flags", `{`+gold+`}`)
 	return out.String()
 }
