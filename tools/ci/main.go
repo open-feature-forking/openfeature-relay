@@ -8,7 +8,9 @@ import (
 
 	"github.com/open-feature-forking/openfeature-relay/tools/ci/internal/allocs"
 	"github.com/open-feature-forking/openfeature-relay/tools/ci/internal/modules"
+	"github.com/open-feature-forking/openfeature-relay/tools/ci/internal/oci"
 	"github.com/open-feature-forking/openfeature-relay/tools/ci/internal/passsets"
+	"github.com/open-feature-forking/openfeature-relay/tools/ci/internal/publish"
 	"github.com/open-feature-forking/openfeature-relay/tools/ci/internal/testfailures"
 )
 
@@ -41,6 +43,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return modules.Run(args[1:], stdout, stderr)
 	case "test-failures":
 		return testfailures.Run(args[1:], stdout, stderr)
+	case "oci":
+		return oci.Run(args[1:], stdout, stderr)
+	case "publish":
+		return publish.Run(args[1:], stdout, stderr)
 	default:
 		_, _ = fmt.Fprintf(stderr, "relay-ci: unknown subcommand %q\n\n%s", args[0], usage)
 		return 2
