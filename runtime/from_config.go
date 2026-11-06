@@ -100,7 +100,6 @@ func warnOnNoOpConfig(logger *logger.Logger, config Config) {
 }
 
 // FromConfig builds a runtime from startup configurations
-// nolint: funlen
 func FromConfig(logger *logger.Logger, version string, config Config, components Components) (rt *Runtime, err error) {
 	config = withComponents(config, components)
 	warnOnNoOpConfig(logger, config)
@@ -130,9 +129,8 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 	}
 
 	rt = newRuntime(logger, tp, config, components, store, formats, defaultFormat, sourceReadiness)
-	bus := rt.Bus
 
-	inputs, err := newEndpointInputs(logger, store, bus, components.Endpoints, formatTypes, config.Evaluators,
+	inputs, err := newEndpointInputs(logger, store, rt.Bus, components.Endpoints, formatTypes, config.Evaluators,
 		func(evaluatorType string) map[string]any { return maps.Clone(config.EvaluatorSettings[evaluatorType]) },
 		config.StrictNumericRange)
 	if err != nil {
@@ -168,18 +166,8 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 	if err != nil {
 		return nil, err
 	}
-	sinks, err := startEventSinks(logger, bus, tp, components.EventSinks)
-	if err != nil {
+	if err := rt.startSinks(logger, tp, components, inputs, shutdownTelemetry); err != nil {
 		return nil, err
-	}
-	if len(sinks) > 0 {
-		rt.onShutdown("event sinks", flushEventSinks(sinks))
-	}
-	if inputs.router != nil {
-		rt.onShutdown("evaluator", func(context.Context) error { return inputs.close() })
-	}
-	if shutdownTelemetry != nil {
-		rt.onShutdown("telemetry", shutdownTelemetry)
 	}
 	return rt, nil
 }
@@ -257,6 +245,28 @@ func closeSyncs(syncs []sync.ISync) {
 			_ = closer.Close()
 		}
 	}
+}
+
+// startSinks starts the event sinks of the components and registers what the runtime shuts down: the event sinks, then
+// the evaluators, then the telemetry provider.
+func (rt *Runtime) startSinks(
+	logger *logger.Logger, tp telemetry.Provider, components Components, inputs *endpointInputs,
+	shutdownTelemetry func(context.Context) error,
+) error {
+	sinks, err := startEventSinks(logger, rt.Bus, tp, components.EventSinks)
+	if err != nil {
+		return err
+	}
+	if len(sinks) > 0 {
+		rt.onShutdown("event sinks", flushEventSinks(sinks))
+	}
+	if inputs.router != nil {
+		rt.onShutdown("evaluator", func(context.Context) error { return inputs.close() })
+	}
+	if shutdownTelemetry != nil {
+		rt.onShutdown("telemetry", shutdownTelemetry)
+	}
+	return nil
 }
 
 // sourcesOf returns the sources of the configuration whose format the distribution has, their URIs, and a readiness
