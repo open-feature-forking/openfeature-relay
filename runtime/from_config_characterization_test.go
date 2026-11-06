@@ -185,6 +185,8 @@ func (e recEndpoint) Close() error {
 type recSyncFactory struct {
 	log *callLog
 	err error
+	// failOn is the URI whose create fails; empty fails every one.
+	failOn string
 }
 
 func (recSyncFactory) Type() string      { return "rec" }
@@ -197,7 +199,7 @@ func (recSyncFactory) ParseURI(uri string) (coresync.SourceConfig, bool) {
 func (f recSyncFactory) CreateStreaming(s coresync.Settings) (coresync.StreamingSyncProvider, error) {
 	f.log.add("sync " + s.Source.URI + " create")
 	s.Logger.Info("sync " + s.Source.URI)
-	if f.err != nil {
+	if f.err != nil && (f.failOn == "" || f.failOn == s.Source.URI) {
 		return nil, f.err
 	}
 	return recSync{uri: s.Source.URI, log: f.log}, nil
@@ -458,7 +460,7 @@ func TestFromConfigCallOrder(t *testing.T) {
 		for _, h := range rt.hooks {
 			hooks = append(hooks, h.name)
 		}
-		require.Equal(t, []string{"event sinks", "telemetry"}, hooks)
+		require.Equal(t, []string{"event sinks", "evaluator", "telemetry"}, hooks)
 	})
 
 	t.Run("no endpoint needs the router", func(t *testing.T) {
@@ -482,18 +484,20 @@ func TestFromConfigCallOrder(t *testing.T) {
 				"middleware mw create", "evaluator ev close", "telemetry shutdown",
 			},
 		},
-		"staleAfter fails: the sync providers close, then the endpoints": {
+		"staleAfter fails: the sync providers close, then the endpoints and the evaluator": {
 			func(b *recBuild) { b.config.SyncProviders[1].StaleAfter = 5 },
 			append(append([]string(nil), built[:9]...),
-				"sync rec://a close", "sync rec://b close", "endpoint e1 close", "endpoint e2 close", "telemetry shutdown"),
+				"sync rec://a close", "sync rec://b close", "endpoint e1 close", "endpoint e2 close", "evaluator ev close",
+				"telemetry shutdown"),
 		},
-		"an event sink fails: the earlier one closes": {
+		"an event sink fails: the earlier one closes, then the syncs, the endpoints and the evaluator": {
 			func(b *recBuild) {
 				b.components.EventSinks = append(b.components.EventSinks,
 					eventsink.Configured{Factory: recSinkFactory{name: "sink2", log: b.log, err: errBoom}})
 			},
 			append(append([]string(nil), built...),
-				"sink sink2 create", "sink sink close", "endpoint e1 close", "endpoint e2 close", "telemetry shutdown"),
+				"sink sink2 create", "sink sink close", "sync rec://a close", "sync rec://b close",
+				"endpoint e1 close", "endpoint e2 close", "evaluator ev close", "telemetry shutdown"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -514,13 +518,13 @@ func TestFailedFromConfigCleanupOrder(t *testing.T) {
 		change func(b *recBuild)
 		want   []string
 	}{
-		"after an endpoint: the endpoint closes, then telemetry shuts down": {
+		"after an endpoint: the endpoint and the evaluator close, then telemetry shuts down": {
 			func(b *recBuild) {
 				b.components.Endpoints[1] = recEndpointFactory{name: "e2", log: b.log, err: errBoom}
 			},
 			[]string{
 				"telemetry create", "format other create", "format flagd create", "evaluator ev create",
-				"middleware mw create", "endpoint e1 create", "endpoint e2 create", "endpoint e1 close", "telemetry shutdown",
+				"middleware mw create", "endpoint e1 create", "endpoint e2 create", "endpoint e1 close", "evaluator ev close", "telemetry shutdown",
 			},
 		},
 		"before any endpoint: telemetry shuts down, nothing closes": {
@@ -629,4 +633,86 @@ func TestEndpointSettingsAreNotShared(t *testing.T) {
 	require.NotNil(t, first.Resolver, "e1 needs the router")
 	require.Nil(t, second.Resolver)
 	require.Empty(t, listened, "a build opens no listener")
+}
+
+// TestFromConfigReleasesPartialBuilds pins that a step that fails halfway closes what it had built itself, and that the
+// build then closes the rest.
+func TestFromConfigReleasesPartialBuilds(t *testing.T) {
+	for name, tt := range map[string]struct {
+		change func(b *recBuild)
+		want   []string
+	}{
+		"the second evaluator fails: the first closes": {
+			func(b *recBuild) {
+				b.components.Evaluators = []evaluator.Factory{
+					recEvaluatorFactory{name: "ev", format: configformat.DefaultType, log: b.log},
+					recEvaluatorFactory{name: "ev2", format: "other", log: b.log, err: errBoom},
+				}
+			},
+			[]string{
+				"telemetry create", "format other create", "format flagd create", "evaluator ev create",
+				"evaluator ev2 create", "evaluator ev close", "telemetry shutdown",
+			},
+		},
+		"the second evaluator lacks its format: the first closes": {
+			func(b *recBuild) {
+				b.components.Evaluators = []evaluator.Factory{
+					recEvaluatorFactory{name: "ev", format: configformat.DefaultType, log: b.log},
+					recEvaluatorFactory{name: "ev2", format: "nope", log: b.log},
+				}
+			},
+			[]string{
+				"telemetry create", "format other create", "format flagd create", "evaluator ev create",
+				"evaluator ev close", "telemetry shutdown",
+			},
+		},
+		"an endpoint needs a missing format: the evaluator closes": {
+			func(b *recBuild) {
+				b.components.Endpoints[1] = recEndpointFactory{name: "e2", needs: service.Needs{Format: "other"}, log: b.log}
+			},
+			[]string{
+				"telemetry create", "format other create", "format flagd create", "evaluator ev create",
+				"evaluator ev close", "telemetry shutdown",
+			},
+		},
+		"the second sync fails: the first closes, then the endpoints and the evaluator": {
+			func(b *recBuild) {
+				b.components.Sync = []coresync.Factory{recSyncFactory{log: b.log, err: errBoom, failOn: "rec://b"}}
+			},
+			[]string{
+				"telemetry create", "format other create", "format flagd create", "evaluator ev create",
+				"middleware mw create", "endpoint e1 create", "endpoint e2 create", "sync rec://a create",
+				"sync rec://b create", "sync rec://a close", "endpoint e1 close", "endpoint e2 close",
+				"evaluator ev close", "telemetry shutdown",
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			b := newRecBuild()
+			tt.change(b)
+			_, err := b.run(t)
+			require.Error(t, err)
+			require.Equal(t, tt.want, b.log.all())
+		})
+	}
+}
+
+// TestRunClosesTheEvaluatorOnShutdown pins that a built runtime closes its evaluator once when it stops, after the
+// event sinks flush and before telemetry shuts down.
+func TestRunClosesTheEvaluatorOnShutdown(t *testing.T) {
+	b := newRecBuild()
+	b.components.Listen = func(string, string) (net.Listener, error) { return nil, errBoom }
+	rt, err := b.run(t)
+	require.NoError(t, err)
+
+	require.Error(t, rt.start(context.Background()), "the management port fails to open")
+	calls := b.log.all()
+	require.Equal(t, []string{"evaluator ev close", "telemetry shutdown"}, calls[len(calls)-2:])
+	n := 0
+	for _, c := range calls {
+		if c == "evaluator ev close" {
+			n++
+		}
+	}
+	require.Equal(t, 1, n, "closed once")
 }
