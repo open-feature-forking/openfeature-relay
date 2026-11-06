@@ -320,3 +320,7 @@ The seam costs four core names (NFR-006 holds) and a contract-only transport sur
   **Recommended: (a).**
 - **Q8, `flagd.sync.v1` `GetMetadata`.** (a) out of scope, since `disable-sync-metadata` already turns it off; (b) a hosted
   endpoint of flag sync. **Recommended: (a).**
+
+## Decisions of the project lead
+
+2026-11-06: approved with every recommended answer, Q1 (b) to Q8. flagd-web is deprecated too, so the slim distributions serve only evaluation v2.
