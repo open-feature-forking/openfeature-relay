@@ -10,7 +10,7 @@
 **Trigger:** Distribution Builder needs a flagd with a set of components that no standard distribution offers  
 **Status:** Tested  
 
-**Requirements:** [FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007, FR-008, FR-017, FR-018, FR-034, NFR-008, NFR-010, C-001](../requirements.md)
+**Requirements:** [FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007, FR-008, FR-017, FR-018, FR-034, FR-063, NFR-008, NFR-010, C-001](../requirements.md)
 
 ## Preconditions
 
@@ -144,6 +144,16 @@
 2. Builder produces no binary.
 3. Use case ends.
 
+### A13: Hosted Endpoint Without a Host That Hosts It
+
+**Trigger:** A selected hosted endpoint names a service endpoint type that no selected component of that type hosts (step 8)
+**Flow:**
+
+1. Builder reports the hosted endpoint, the type it names and whether that type is absent or does not host.
+2. Builder produces no binary.
+3. Distribution Builder selects the hosting endpoint, or removes the hosted endpoint from the manifest.
+4. Use case continues at step 3.
+
 ## Postconditions
 
 ### Success Postconditions
@@ -216,7 +226,7 @@ Any non-empty combination of service endpoints is valid, official or extension: 
 
 ### BR-014: Component Needs Are Met
 
-Each component states which component types or components it needs; a distribution is built only when every need of every selected component is met by another selected component. OFREP and flag evaluation need an evaluator; an evaluator needs the configuration format it evaluates; flag sync needs a configuration format but no evaluator.
+Each component states which component types or components it needs; a distribution is built only when every need of every selected component is met by another selected component. OFREP and flag evaluation need an evaluator; an evaluator needs the configuration format it evaluates; flag sync needs a configuration format but no evaluator. A hosted endpoint needs the service endpoint type that hosts it, and that type must host (UC-004 BR-013).
 
 ### BR-015: One Sync Provider per Scheme
 
@@ -233,4 +243,5 @@ This use case is `Implemented`: the manifest and its validation, the generated s
 | flagd-full released from the generated source | UC-009 |
 | `flagd components` (the inventory and the identity exist) | UC-011 |
 | Reference Dockerfile (FR-009) | UC-002 |
+| A13, BR-014 for hosted endpoints, FR-063: the builder's check of a hosted endpoint's host | Step 19 (#266) |
 | Compiling a distribution with middleware: no repository manifest lists one yet; the Flagsmith distribution will list `contrib/flagsmith/middleware` | UC-019 (#94) |

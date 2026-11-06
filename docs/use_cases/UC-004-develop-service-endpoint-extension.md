@@ -9,7 +9,7 @@
 **Trigger:** Extension Author decides to make flagd serve flags over a protocol that no official service endpoint supports  
 **Status:** Tested  
 
-**Requirements:** [FR-011, FR-015, FR-016, FR-017, FR-018, FR-025, FR-029, FR-035, FR-037, FR-038, FR-039, FR-044, FR-046, FR-047, FR-003, FR-008, NFR-013, C-001](../requirements.md)
+**Requirements:** [FR-011, FR-015, FR-016, FR-017, FR-018, FR-025, FR-029, FR-035, FR-037, FR-038, FR-039, FR-044, FR-046, FR-047, FR-063, FR-003, FR-008, NFR-013, C-001](../requirements.md)
 
 ## Preconditions
 
@@ -109,6 +109,15 @@
 1. Extension Author leaves the component module unpublished.
 2. Use case ends.
 
+### A10: Endpoint Served by Another Endpoint
+
+**Trigger:** The service endpoint answers a protocol that an existing service endpoint already serves on its own port, such as the deprecated flag evaluation services on the flag evaluation port (step 2)
+**Flow:**
+
+1. Extension Author declares the service endpoint type that hosts it, instead of opening a listener of its own.
+2. Extension Author implements the service endpoint so that it hands the hosting endpoint its routes, built from what the hosting endpoint injects (logger, evaluation router, event subscriptions, configuration and handler options), instead of serving.
+3. Use case continues at step 5.
+
 ## Postconditions
 
 ### Success Postconditions
@@ -127,7 +136,7 @@
 
 ### BR-001: Core Module Is the Only flagd Dependency
 
-A service endpoint component module depends on the core module and on no other flagd module: not on the runtime, another service endpoint, a sync provider or a standard distribution. A vendor client API endpoint may in addition depend on that vendor's engine module. Its own third-party dependencies are compiled only into distributions that select it.
+A service endpoint component module depends on the core module and on no other flagd module: not on the runtime, another service endpoint, a sync provider or a standard distribution. A vendor client API endpoint may in addition depend on that vendor's engine module, and a hosted endpoint (BR-013) on `service/transport`, the contract module of its hosting endpoint, which official endpoints already share. Its own third-party dependencies are compiled only into distributions that select it.
 
 ### BR-002: Events Travel Only Over the Event Bus
 
@@ -173,6 +182,10 @@ An extension is referenced in a manifest by Go module path and version in the sa
 
 A service endpoint opens every listener it serves on through `Settings.Listen`, never by calling `net.Listen` itself. The testbed's listener gate (UC-022) decides when and whether an address is bound, and an embedder may hand over a listener it opened earlier, so an endpoint that binds its port itself cannot be used in either. The contract tests fail such an endpoint with this rule, not with a port in use.
 
+### BR-013: A Hosted Endpoint Serves on Its Host's Listener
+
+A hosted endpoint opens no listener and is never served by the runtime: the hosting endpoint of the type it declares mounts its routes on its own listener. The hosting endpoint opts in; a hosted endpoint whose host type is absent, or whose host does not host, stops the start and names both types. The hosted endpoint's requests run with the host's settings, middleware, telemetry and metric attribution, and its evaluation events keep naming the host's type. Without the hosted endpoint, its paths answer as an unknown path.
+
 ## Delivered by Later Use Cases
 
 This use case is `Implemented` for the service endpoint side: the factory, settings and declared needs, the event bus, the runtime registry that serves any set of endpoints, the contract tests, the OFREP event stream and validators from document versions, and `test/service-example` with a test endpoint for a vendor client API. These parts are delivered by the use cases named here, and are accepted gaps of this one:
@@ -184,4 +197,5 @@ This use case is `Implemented` for the service endpoint side: the factory, setti
 | Middleware factories, the chain, the official endpoints honouring a bound selector, FR-047 | UC-005 |
 | Event sinks and their flush | UC-020 |
 | Vendor flags on the flag evaluation event stream | UC-019 |
+| A10, BR-013, FR-063: the hosted endpoint seam in the runtime, the contract harness, the builder check and the flag evaluation endpoint's mount | Step 19 (#266) |
 | A webhook fetch trigger | UC-019 |

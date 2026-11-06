@@ -21,7 +21,7 @@
 2. System identifies the distribution by its name and manifest version.
 3. System lists the components compiled into the binary, grouped by component type: sync providers, configuration formats, evaluators, service endpoints, event sinks, telemetry providers and middleware.
 4. System shows, for every sync provider, the schemes it handles.
-5. System shows, for every component, the component module and version it comes from.
+5. System shows, for every component, the component module and version it comes from, and, for a hosted endpoint, the service endpoint type that hosts it.
 6. Operator compares the list with the schemes of the deployment's sources, the configuration format of its flag configurations, the service endpoints its clients use and its telemetry needs, and knows whether the distribution supports the deployment.
 
 ## Alternative Flows
@@ -94,4 +94,5 @@ This use case is `Implemented`: the hidden `flagd components` command lists the 
 
 | Gap | Delivered by |
 |-----|--------------|
+| Step 5: the host of a hosted endpoint, in the text and as an `omitempty` `host` field of the JSON listing (FR-063) | Step 19 (#266) |
 | A2: the startup errors for an unsupported scheme or a setting of an absent component name `flagd components` (flagd-full keeps today's error text) | UC-010 |

@@ -35,6 +35,12 @@ A use case counts as done when its **Status** line reads `Implemented`, or `Test
 - **Faster CI**: the release dry run in parallel parts, a per-job cache, cancelled superseded runs and a light run for markdown-only changes ([#176](https://github.com/open-feature-forking/openfeature-relay/issues/176)).
 - **A load test**: flagd-minimal, built with `-race`, answers every OFREP, RPC and flag sync client from the current flags while they change, and every stream sees every change (NFR-017, [the load test](load-test.md)).
 
+## In progress
+
+Step 19, the deprecated evaluation services as their own component ([#266](https://github.com/open-feature-forking/openfeature-relay/issues/266), [`flag-evaluation-legacy`](flag-evaluation-legacy.md)): the spec and these pages are written, the code follows in slices.
+When it lands, flagd-full keeps serving `schema.v1` and `flagd.evaluation.v1`, and the slim distributions, the slim `:main` images included, serve only `flagd.evaluation.v2` and OFREP.
+A client of the deprecated flagd-web provider needs flagd-full, or OFREP.
+
 ## How a change is verified
 
 [UC-013](../use_cases/UC-013-verify-change-against-distributions.md) maps to these checks of the `build` workflow.
