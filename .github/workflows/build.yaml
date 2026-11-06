@@ -437,7 +437,7 @@ jobs:
         run: |
           # image inputs: Go code, modules, Dockerfiles, the distributions and the Builder, the testbed and its data, the
           # scripts that build and check the images, and this workflow
-          pattern='\.go$|(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^testbed/|^test-harness|^\.github/scripts/(image-|oci-layout|publish-|release-)|^\.github/workflows/build\.yaml$'
+          pattern='\.go$|(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^testbed/|^test-harness|^\.github/scripts/(image-|oci-layout|publish-|release-)|^\.github/workflows/build\.yaml$|^tools/ci/internal/(oci|publish)/'
           changed=false
           if [ "$EVENT" = schedule ]; then
             # The nightly run publishes when image inputs changed since the commit :main was built from. flagd-minimal is
@@ -446,7 +446,7 @@ jobs:
               | jq -r '.annotations["org.opencontainers.image.revision"] // empty' 2>/dev/null || true)
             if [ -z "$built" ] || ! git cat-file -e "$built^{commit}" 2>/dev/null; then
               changed=true
-            elif git diff --name-only "$built" "$HEAD" | grep -Eq "$pattern"; then
+            elif { git diff --name-only "$built" "$HEAD" | grep -Ev '^tools/ci/'; git diff --name-only "$built" "$HEAD" | grep -E '^tools/ci/internal/(oci|publish)/' || true; } | grep -Eq "$pattern"; then
               changed=true
             fi
           fi

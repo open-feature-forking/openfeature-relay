@@ -31,6 +31,7 @@ benchmark.txt
 /.flagd-generated/
 /.flagd-full-build/
 /.flagsmith-build/
+/.relay-ci/
 /distributions/*/build/
 
 __pycache__/

@@ -234,6 +234,26 @@ class BuildWorkflow(unittest.TestCase):
         self.assertTrue(on("benchmark", "core/pkg/evaluator/x.go"))
         self.assertFalse(on("benchmark", "docs/guides/x.md"))
 
+    def test_tools_ci_sets_only_the_flags_that_name_its_package(self):
+        """tools/ci is the repository's CI tooling: its Go files and module files call for no gated job, except the
+        flag of the package that a job runs (S0 of step 18)."""
+        own = {"allocs": "benchmark", "passsets": "testbed"}
+        for path in ("tools/ci/main.go", "tools/ci/go.mod", "tools/ci/go.sum", "tools/ci/internal/textio/x.go",
+                     "tools/ci/internal/modules/deeper/x.go", "tools/ci/internal/oci/x.go",
+                     "tools/ci/internal/publish/x.go", "tools/ci/Dockerfile"):
+            with self.subTest(path=path):
+                self.assertEqual([], [n for n, v in cm.flags([path]).items() if v])
+        for package, flag in own.items():
+            with self.subTest(package=package):
+                self.assertEqual([flag], [n for n, v in cm.flags([f"tools/ci/internal/{package}/x.go"]).items() if v])
+        for flag in FLAGS:
+            with self.subTest(flag=flag):
+                self.assertIn(flag, cm.FLAG_EXCLUDES)
+                self.assertEqual(r"^tools/ci/", cm.FLAG_EXCLUDES[flag])
+        # the exclusion does not reach a path outside tools/ci
+        self.assertTrue(cm.flags(["core/tools/ci/x.go"])["go"])
+        self.assertTrue(cm.flags(["go.mod"])["deps"])
+
     def test_every_flag_is_true_without_a_diff_and_none_is_true_for_a_change_that_touches_nothing(self):
         self.assertEqual({n: True for n in FLAGS}, cm.flags(None))
         self.assertFalse(any(cm.flags([]).values()))
@@ -459,6 +479,12 @@ class BuildWorkflow(unittest.TestCase):
         gate = self.job("publish-gate")
         self.assertNotIn("permissions:", gate)
         self.assertIn(".github/scripts/publish-gate.sh", gate)
+        # tools/ci is CI tooling: its files do not count as image inputs, except the packages that publish (step 18, plan 4)
+        self.assertIn("grep -Ev '^tools/ci/'", gate)
+        self.assertLess(gate.index("grep -Ev '^tools/ci/'"), gate.index('grep -Eq "$pattern"'))
+        self.assertIn("|^tools/ci/internal/(oci|publish)/'", gate)
+        # the group must exit 0 when nothing matches, or a diff of core/x.go alone reads as "not changed" under pipefail
+        self.assertIn("grep -E '^tools/ci/internal/(oci|publish)/' || true; } | grep -Eq", gate)
         self.assertIn("build: ${{ steps.gate.outputs.build }}", gate)
         self.assertIn("publish: ${{ steps.gate.outputs.publish }}", gate)
         for name in ("release-dry-run", "image-build"):

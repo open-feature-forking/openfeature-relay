@@ -219,6 +219,10 @@
     "testbed/source": {
       "test": "make test-module MODULE=testbed/source",
       "coverage": true
+    },
+    "tools/ci": {
+      "test": "make test-module MODULE=tools/ci",
+      "coverage": true
     }
   },
   "pseudo": {
