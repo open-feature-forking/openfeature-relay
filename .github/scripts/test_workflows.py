@@ -283,7 +283,7 @@ class BuildWorkflow(unittest.TestCase):
     def test_the_benchmark_compares_with_the_commit_a_day_older_and_skips_without_one(self):
         job = self.job("benchmark")
         self.assertIn("fetch-depth: 0", job)
-        self.assertIn("git rev-list -1 --before='24 hours ago' \"$GITHUB_SHA\"", job)
+        self.assertIn("git rev-list -1 --first-parent --before='24 hours ago' \"$GITHUB_SHA\"", job)
         self.assertIn('[ "$base" = "$GITHUB_SHA" ]', job)
         self.assertIn("compare-allocs.py", job)
         self.assertEqual(4, job.count("if: steps.base.outputs.run == 'true'"))
