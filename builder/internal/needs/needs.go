@@ -1,5 +1,5 @@
 // Package needs checks the components of a distribution against each other from what its probe reports, before the
-// distribution is compiled (BR-014, BR-015): every need is met, no two sync providers claim a scheme, and an
+// distribution is compiled (BR-014, BR-015): every need is met, every hosted endpoint has a host that hosts it, no two sync providers claim a scheme, and an
 // evaluator that nothing needs is reported.
 package needs
 
@@ -33,6 +33,9 @@ type Item struct {
 	// Format is the configuration format an evaluator resolves.
 	Format string `json:"format,omitempty"`
 	Needs  *Needs `json:"needs,omitempty"`
+	// Host is the type of the endpoint that serves a hosted endpoint; Hosts reports that an endpoint mounts hosted endpoints.
+	Host  string `json:"host,omitempty"`
+	Hosts bool   `json:"hosts,omitempty"`
 }
 
 func (i Item) String() string { return fmt.Sprintf("%s %q (%s)", singular(i.Group), i.Type, i.Module) }
@@ -107,6 +110,28 @@ func Check(items []Item) (warnings []string, err error) {
 			if len(evaluatorsOf[f]) == 0 {
 				problems = append(problems, fmt.Sprintf("%s needs the evaluator of the configuration format %q, which no selected evaluator resolves", ep, f))
 			}
+		}
+	}
+	// a hosted endpoint opens no listener, so it is only served when an endpoint of its host type mounts it
+	for _, ep := range endpoints {
+		if ep.Host == "" {
+			continue
+		}
+		var sameType []Item
+		for _, h := range endpoints {
+			if h.Type == ep.Host {
+				sameType = append(sameType, h)
+			}
+		}
+		switch {
+		case len(sameType) == 0:
+			problems = append(problems, fmt.Sprintf("%s is hosted by the service endpoint %q, but no selected service endpoint has that type", ep, ep.Host))
+		case len(sameType) > 1:
+			problems = append(problems, fmt.Sprintf("%s is hosted by the service endpoint %q, but %d selected service endpoints have that type", ep, ep.Host, len(sameType)))
+		case sameType[0].Host != "":
+			problems = append(problems, fmt.Sprintf("%s is hosted by the service endpoint %q, which is itself a hosted endpoint", ep, ep.Host))
+		case !sameType[0].Hosts:
+			problems = append(problems, fmt.Sprintf("%s is hosted by the service endpoint %q, which does not host other endpoints", ep, ep.Host))
 		}
 	}
 	for _, ev := range evaluators {

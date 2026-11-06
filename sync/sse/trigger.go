@@ -174,61 +174,82 @@ func parseHeaders(raw any) (map[string]string, error) {
 }
 
 func parseHeadersFrom(raw any) (map[string]secret.Ref, error) {
-	var out map[string]secret.Ref
-	set := func(name string, ref secret.Ref) {
-		if out == nil {
-			out = map[string]secret.Ref{}
-		}
-		out[name] = ref
-	}
 	switch h := raw.(type) {
 	case nil:
 		return nil, nil
 	case map[string]secret.Ref:
-		for name, ref := range h {
-			set(name, ref)
-		}
+		return refsFromRefs(h), nil
 	case map[string]map[string]string:
-		for name, m := range h {
-			ref, err := refFromStrings(name, m)
-			if err != nil {
-				return nil, err
-			}
-			set(name, ref)
-		}
+		return refsFromStringMaps(h)
 	case map[string]any:
-		for name, v := range h {
-			var ref secret.Ref
-			switch entry := v.(type) {
-			case secret.Ref:
-				ref = entry
-			case map[string]string:
-				var err error
-				if ref, err = refFromStrings(name, entry); err != nil {
-					return nil, err
-				}
-			case map[string]any:
-				strs := make(map[string]string, len(entry))
-				for key, value := range entry {
-					text, ok := value.(string)
-					if !ok && (key == "env" || key == "file") {
-						return nil, fmt.Errorf("the header %q in %q: %q must be text", name, settingHeadersFrom, key)
-					}
-					strs[key] = text
-				}
-				var err error
-				if ref, err = refFromStrings(name, strs); err != nil {
-					return nil, err
-				}
-			default:
-				return nil, fmt.Errorf("the header %q in %q must be a mapping with env or file", name, settingHeadersFrom)
-			}
-			set(name, ref)
+		return refsFromAny(h)
+	}
+	return nil, fmt.Errorf("the setting %q must be a mapping of header names to {\"env\": NAME} or {\"file\": PATH}", settingHeadersFrom)
+}
+
+// refsFromRefs copies the headers; no headers is nil, not an empty map.
+func refsFromRefs(h map[string]secret.Ref) map[string]secret.Ref {
+	if len(h) == 0 {
+		return nil
+	}
+	out := make(map[string]secret.Ref, len(h))
+	for name, ref := range h {
+		out[name] = ref
+	}
+	return out
+}
+
+// refsFromStringMaps reads {"env": NAME} or {"file": PATH} per header; no headers is nil.
+func refsFromStringMaps(h map[string]map[string]string) (map[string]secret.Ref, error) {
+	if len(h) == 0 {
+		return nil, nil
+	}
+	out := make(map[string]secret.Ref, len(h))
+	for name, m := range h {
+		ref, err := refFromStrings(name, m)
+		if err != nil {
+			return nil, err
 		}
-	default:
-		return nil, fmt.Errorf("the setting %q must be a mapping of header names to {\"env\": NAME} or {\"file\": PATH}", settingHeadersFrom)
+		out[name] = ref
 	}
 	return out, nil
+}
+
+// refsFromAny reads headers of mixed entry types; no headers is nil.
+func refsFromAny(h map[string]any) (map[string]secret.Ref, error) {
+	if len(h) == 0 {
+		return nil, nil
+	}
+	out := make(map[string]secret.Ref, len(h))
+	for name, v := range h {
+		ref, err := refFromAny(name, v)
+		if err != nil {
+			return nil, err
+		}
+		out[name] = ref
+	}
+	return out, nil
+}
+
+// refFromAny reads one header entry: a secret.Ref, or a mapping with env or file.
+func refFromAny(name string, v any) (secret.Ref, error) {
+	switch entry := v.(type) {
+	case secret.Ref:
+		return entry, nil
+	case map[string]string:
+		return refFromStrings(name, entry)
+	case map[string]any:
+		strs := make(map[string]string, len(entry))
+		for key, value := range entry {
+			text, ok := value.(string)
+			if !ok && (key == "env" || key == "file") {
+				return secret.Ref{}, fmt.Errorf("the header %q in %q: %q must be text", name, settingHeadersFrom, key)
+			}
+			strs[key] = text
+		}
+		return refFromStrings(name, strs)
+	}
+	return secret.Ref{}, fmt.Errorf("the header %q in %q must be a mapping with env or file", name, settingHeadersFrom)
 }
 
 // refFromStrings reads {"env": NAME} or {"file": PATH}; which of the two a secret names is checked when it is read.

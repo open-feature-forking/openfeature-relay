@@ -271,7 +271,7 @@ func TestTheOtherModulesKeepTheirFlags(t *testing.T) {
 		"flagd-proxy":        "go test -race -covermode=atomic -cover -short ./flagd-proxy/... -coverprofile=flagd-proxy-coverage.out",
 		"test/distributions": "cd test/distributions && go test -count=1 -timeout 30m ./...",
 		"test/upgrade":       "cd test/upgrade && go test -count=1 -run 'TestAcceptedMatchesIssue|TestSurfaces|TestGuideCoversAcceptedItems' ./...",
-		"test/image":         "cd test/image && go test -count=1 -run TestReferenceDockerfilePins ./...",
+		"test/image":         "cd test/image && go test -count=1 -run 'TestReferenceDockerfilePins|TestTestbedDockerfilePins' ./...",
 	}
 	for _, m := range []string{"builder", "test/release", "test/service-example", "test/sync-example", "test/evaluator-testkit",
 		"test/configformat-example", "test/configformat-example/distribution", "test/eventsink-example",

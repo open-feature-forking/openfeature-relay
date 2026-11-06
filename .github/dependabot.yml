@@ -1,0 +1,12 @@
+# The base images of the published images (step 17, Q2): the pinned digests move through pull requests, which follow the
+# loop like any other. Only the docker ecosystem; the Dockerfiles of flagd and flagd-proxy are K3-pinned and stay as they are.
+version: 2
+updates:
+  - package-ecosystem: docker
+    directory: /builder/reference
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /distributions/flagd-testbed
+    schedule:
+      interval: weekly

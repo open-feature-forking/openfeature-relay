@@ -106,20 +106,15 @@ func TestFlagsFollowTheDiff(t *testing.T) { // test_workflows.py: test_flags_fol
 		paths []string
 		want  bool
 	}{
+		{"upgrade", []string{"flagd/build.Dockerfile", "distributions/flagd-full/manifest.yaml", "builder/main.go",
+			"test/upgrade/x_test.go", ".github/workflows/build.yaml"}, true},
 		{"upgrade", []string{"core/pkg/evaluator/x.go", "service/ofrep/x.go", "sync/http/go.mod", "runtime/go.sum", "go.sum",
-			"flagd/build.Dockerfile", "distributions/flagd-full/manifest.yaml", "builder/main.go"}, true},
-		{"upgrade", []string{"README.md", "docs/vision.md", "Makefile"}, false},
+			"README.md", "docs/vision.md", "Makefile"}, false},
 		{"reference", []string{"builder/reference/Dockerfile", "test/image/x_test.go", "flagd/build.Dockerfile"}, true},
 		{"reference", []string{"core/pkg/x.go", "README.md", "test/upgrade/x_test.go"}, false},
 		{"image", []string{"go.sum", "core/go.mod", "flagd/build.Dockerfile", "distributions/flagd-full/Dockerfile",
 			".github/workflows/build.yaml"}, true},
 		{"image", []string{"core/pkg/x.go", "README.md"}, false},
-		{"testbed", []string{"testbed/cmd/main.go", "test/testbed/x.go", ".github/scripts/compare-pass-sets.py",
-			".github/scripts/testbed-suites.sh"}, true},
-		{"testbed", []string{"docs/vision.md"}, false},
-		{"benchmark", []string{"core/pkg/evaluator/x.go", ".github/scripts/run-benchmarks.sh",
-			".github/scripts/compare-allocs.py"}, true},
-		{"benchmark", []string{"docs/guides/x.md", "Makefile"}, false},
 		{"go", []string{"a.go", "go.mod", "x/go.sum"}, true},
 		{"go", []string{"a.go.txt", "mygo.mod", "agfo.sum"}, false},
 		{"deps", []string{"go.mod", "a/b/go.sum"}, true},
@@ -138,7 +133,7 @@ func TestFlagsFollowTheDiff(t *testing.T) { // test_workflows.py: test_flags_fol
 	}
 }
 
-func TestToolsCISetsOnlyTheFlagsThatNameItsPackage(t *testing.T) { // test_workflows.py: the S0 rows
+func TestToolsCISetsNoFlag(t *testing.T) { // test_workflows.py: the tools/ci rows
 	set := func(path string) []string {
 		var names []string
 		for i, v := range Values([]string{path}, false) {
@@ -154,9 +149,9 @@ func TestToolsCISetsOnlyTheFlagsThatNameItsPackage(t *testing.T) { // test_workf
 			t.Errorf("%s sets %v, want none", p, got)
 		}
 	}
-	for pkg, flag := range map[string]string{"allocs": "benchmark", "passsets": "testbed"} {
-		if got := set("tools/ci/internal/" + pkg + "/x.go"); !slices.Equal(got, []string{flag}) {
-			t.Errorf("tools/ci/internal/%s sets %v, want [%s]", pkg, got, flag)
+	for _, p := range []string{"tools/ci/internal/allocs/x.go", "tools/ci/internal/passsets/x.go"} {
+		if got := set(p); len(got) != 0 {
+			t.Errorf("%s sets %v, want none", p, got)
 		}
 	}
 	for _, f := range Flags {
@@ -174,12 +169,12 @@ func TestFlagOrderIsTheOutputOrder(t *testing.T) {
 	for _, f := range Flags {
 		names = append(names, f.Name)
 	}
-	want := []string{"go", "deps", "dockerfile", "benchmark", "image", "reference", "upgrade", "testbed"}
+	want := []string{"go", "deps", "dockerfile", "image", "reference", "upgrade"}
 	if !slices.Equal(names, want) {
 		t.Errorf("flags = %v, want %v", names, want)
 	}
 	if got, want := FlagLines(Values([]string{"core/a.go"}, false)),
-		"go=true\ndeps=false\ndockerfile=false\nbenchmark=true\nimage=false\nreference=false\nupgrade=true\ntestbed=true\n"; got != want {
+		"go=true\ndeps=false\ndockerfile=false\nimage=false\nreference=false\nupgrade=false\n"; got != want {
 		t.Errorf("FlagLines = %q, want %q", got, want)
 	}
 }
@@ -406,7 +401,7 @@ func TestChangesWritesTheFlagsAndTheSummary(t *testing.T) { // test_the_changes_
 	if code != 0 || output != allTrue() {
 		t.Errorf("code=%d output=%q", code, output)
 	}
-	if !strings.HasPrefix(summary, "## Jobs this change calls for\n\n- `go`: yes\n- `deps`: yes\n") || !strings.HasSuffix(summary, "- `testbed`: yes\n") {
+	if !strings.HasPrefix(summary, "## Jobs this change calls for\n\n- `go`: yes\n- `deps`: yes\n") || !strings.HasSuffix(summary, "- `upgrade`: yes\n") {
 		t.Errorf("summary = %q", summary)
 	}
 	if stdout != summary+"\n" {
@@ -422,7 +417,7 @@ func TestChangesOnAPullRequest(t *testing.T) {
 	gitIn(t, root, "merge", "-q", "--no-ff", "-m", "merge", "pr")
 	merge := gitIn(t, root, "rev-parse", "HEAD")
 	code, _, output, summary := runChanges(t, root, nil, "--event", "pull_request", "--sha", merge, "--ref", "refs/pull/1/merge")
-	want := "go=true\ndeps=false\ndockerfile=false\nbenchmark=true\nimage=false\nreference=false\nupgrade=true\ntestbed=true\n"
+	want := "go=true\ndeps=false\ndockerfile=false\nimage=false\nreference=false\nupgrade=false\n"
 	if code != 0 || output != want {
 		t.Errorf("code=%d output=%q, want %q", code, output, want)
 	}

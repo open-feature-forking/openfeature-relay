@@ -192,6 +192,7 @@ import (
 	"os"
 
 	"{{.CoreModule}}/pkg/distribution"
+	"{{.CoreModule}}/pkg/service"
 	"{{.CoreModule}}/pkg/sync"
 	"{{.Module}}/components"
 )
@@ -209,6 +210,9 @@ type item struct {
 	// Format is the configuration format an evaluator resolves.
 	Format string ` + "`json:\"format,omitempty\"`" + `
 	Needs  *needs ` + "`json:\"needs,omitempty\"`" + `
+	// Host is the type of the endpoint that serves a hosted endpoint; Hosts reports that an endpoint mounts hosted endpoints.
+	Host  string ` + "`json:\"host,omitempty\"`" + `
+	Hosts bool   ` + "`json:\"hosts,omitempty\"`" + `
 }
 
 func main() {
@@ -240,8 +244,15 @@ func main() {
 	}
 	for _, f := range c.Endpoints {
 		n := f.Needs()
-		items = append(items, item{Group: distribution.GroupServiceEndpoint, Type: f.Type(),
-			Module: moduleOf(distribution.GroupServiceEndpoint, f.Type()), Needs: &needs{Router: n.Router, Format: n.Format}})
+		it := item{Group: distribution.GroupServiceEndpoint, Type: f.Type(),
+			Module: moduleOf(distribution.GroupServiceEndpoint, f.Type()), Needs: &needs{Router: n.Router, Format: n.Format}}
+		if h, ok := f.(service.Hosted); ok {
+			it.Host = h.Host()
+		}
+		if h, ok := f.(service.Hosting); ok {
+			it.Hosts = h.Hosts()
+		}
+		items = append(items, it)
 	}
 	if c.Telemetry != nil {
 		items = append(items, item{Group: distribution.GroupTelemetry, Type: c.Telemetry.Type(),

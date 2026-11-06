@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -20,7 +21,7 @@ import (
 
 // eventStreamClient is the receiving side of one EventStream call, whatever the protocol version.
 type eventStreamClient struct {
-	receive func() (eventType string, ok bool)
+	receive func() (eventType string, data map[string]any, ok bool)
 	err     func() error
 	close   func()
 }
@@ -48,11 +49,16 @@ func TestEventStreamHandlers(t *testing.T) {
 						return nil, err
 					}
 					return &eventStreamClient{
-						receive: func() (string, bool) {
+						receive: func() (string, map[string]any, bool) {
 							if !stream.Receive() {
-								return "", false
+								return "", nil, false
 							}
-							return stream.Msg().Type, true
+							msg := stream.Msg()
+							var data map[string]any
+							if msg.Data != nil {
+								data = msg.Data.AsMap()
+							}
+							return msg.Type, data, true
 						},
 						err:   stream.Err,
 						close: func() { _ = stream.Close() },
@@ -72,11 +78,16 @@ func TestEventStreamHandlers(t *testing.T) {
 						return nil, err
 					}
 					return &eventStreamClient{
-						receive: func() (string, bool) {
+						receive: func() (string, map[string]any, bool) {
 							if !stream.Receive() {
-								return "", false
+								return "", nil, false
 							}
-							return stream.Msg().Type, true
+							msg := stream.Msg()
+							var data map[string]any
+							if msg.Data != nil {
+								data = msg.Data.AsMap()
+							}
+							return msg.Type, data, true
 						},
 						err:   stream.Err,
 						close: func() { _ = stream.Close() },
@@ -91,7 +102,11 @@ func TestEventStreamHandlers(t *testing.T) {
 			events, s := newTestEventingConfig(t, []string{source})
 			mux := http.NewServeMux()
 			open := tt.serve(mux, events)
-			srv := httptest.NewServer(mux)
+			handlerDone := make(chan struct{})
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				defer close(handlerDone)
+				mux.ServeHTTP(w, r)
+			}))
 			defer srv.Close()
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -100,43 +115,76 @@ func TestEventStreamHandlers(t *testing.T) {
 			require.NoError(t, err)
 			defer client.close()
 
-			next := func() string {
-				t.Helper()
-				got := make(chan string, 1)
-				go func() {
-					typ, ok := client.receive()
+			type event struct {
+				typ  string
+				data map[string]any
+			}
+			received := make(chan event, 64)
+			go func() {
+				for {
+					typ, data, ok := client.receive()
 					if !ok {
-						typ = "<end>"
+						received <- event{typ: "<end>"}
+						return
 					}
-					got <- typ
-				}()
+					received <- event{typ, data}
+				}
+			}()
+			next := func() event {
+				t.Helper()
 				select {
-				case typ := <-got:
-					return typ
+				case e := <-received:
+					return e
 				case <-time.After(5 * time.Second):
 					t.Fatal("timeout waiting for an event")
-					return ""
+					return event{}
 				}
 			}
 
-			require.Equal(t, string(iservice.ProviderReady), next(), "ready comes first")
+			ready := next()
+			require.Equal(t, string(iservice.ProviderReady), ready.typ, "ready comes first")
+			require.Empty(t, ready.data, "ready carries no data")
 
-			require.Eventually(t, func() bool { // the handler subscribes before it sends ready, so the watch is up soon
-				events.mu.RLock()
-				defer events.mu.RUnlock()
-				return len(events.subs) == 1
-			}, 2*time.Second, 5*time.Millisecond)
-			time.Sleep(100 * time.Millisecond) // let the subscription goroutine take its first store snapshot
+			// The subscription takes its first store snapshot on its own goroutine and ignores it, so an update that
+			// lands before the snapshot is never announced. Change a probe flag until one is announced.
+			for i := 0; ; i++ {
+				s.Update(source, []model.Flag{{Key: "probe", DefaultVariant: fmt.Sprint(i)}}, model.Metadata{}, false)
+				select {
+				case e := <-received:
+					require.Equal(t, string(iservice.ConfigurationChange), e.typ)
+				case <-time.After(20 * time.Millisecond):
+					continue
+				}
+				break
+			}
+
 			s.Update(source, []model.Flag{{Key: "flag1", DefaultVariant: "off"}}, model.Metadata{}, false)
-			require.Equal(t, string(iservice.ConfigurationChange), next(), "a store update is announced")
+			var change event
+			for { // an announcement of an earlier probe may still be queued ahead of the one under test
+				change = next()
+				if flags, _ := change.data["flags"].(map[string]any); flags["flag1"] != nil {
+					break
+				}
+			}
+			require.Equal(t, string(iservice.ConfigurationChange), change.typ, "a store update is announced")
+			require.Equal(t, map[string]any{"flags": map[string]any{
+				"flag1": map[string]any{"type": string(model.NotificationCreate)},
+				"probe": map[string]any{"type": string(model.NotificationDelete)},
+			}}, change.data)
 
 			cancel()
-			require.Equal(t, "<end>", next(), "the stream ends on cancel")
+			require.Equal(t, "<end>", next().typ, "the stream ends on cancel")
+			select {
+			case <-handlerDone:
+			case <-time.After(5 * time.Second):
+				t.Fatal("the handler did not return")
+			}
+			// the subscription's goroutine removes its entry as its last act
 			require.Eventually(t, func() bool {
 				events.mu.RLock()
 				defer events.mu.RUnlock()
 				return len(events.subs) == 0
-			}, 2*time.Second, 5*time.Millisecond, "the handler unsubscribes")
+			}, 2*time.Second, time.Millisecond, "the handler unsubscribes")
 		})
 	}
 }

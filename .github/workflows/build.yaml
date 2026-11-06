@@ -18,6 +18,11 @@ on:
       - ".claude/**"
   # Full run including the gated jobs below.
   workflow_dispatch:
+    inputs:
+      move-main-anyway:
+        description: "Move the :main images to this commit even if the commit :main holds is not its ancestor (after a force-push of main)"
+        type: boolean
+        default: false
   # Nightly, on the default branch, with every flag of the changes job true: the release dry run, the image tests, the
   # image scan, the load test and the outage and gRPC source suites run here, with FULL_CI and manually.
   schedule:
@@ -50,11 +55,9 @@ jobs:
       go: ${{ steps.affected.outputs.go }}
       deps: ${{ steps.affected.outputs.deps }}
       dockerfile: ${{ steps.affected.outputs.dockerfile }}
-      benchmark: ${{ steps.affected.outputs.benchmark }}
       image: ${{ steps.affected.outputs.image }}
       reference: ${{ steps.affected.outputs.reference }}
       upgrade: ${{ steps.affected.outputs.upgrade }}
-      testbed: ${{ steps.affected.outputs.testbed }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
@@ -120,6 +123,10 @@ jobs:
         run: python3 .github/scripts/test_ci_modules_affected.py
       - name: Test the comparison of the pass sets of the testbed suites
         run: python3 .github/scripts/test_compare_pass_sets.py
+      - name: Test the publish gate
+        run: python3 .github/scripts/test_publish_gate.py
+      - name: Rehearse publish-images against an in-process registry
+        run: python3 .github/scripts/test_publish_images.py
       - name: Test the summary of failed tests
         run: python3 .github/scripts/test_test_failures.py
       # The module boundary tables include the evaluator boundary (NFR-005), which check-evaluator-boundary names.
@@ -145,36 +152,49 @@ jobs:
           key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
 
-  # Allocations per operation (NFR-001) of the library benchmarks, on the pull request's merge commit and on its base.
-  # The merge commit carries the scripts below even when the branch was cut before they existed.
+  # Allocations per operation (NFR-001) of the library benchmarks: nightly on main and from a manual run, not on pull
+  # requests. The run compares the commit it tests with the newest commit that is at least 24 hours older, so a rise
+  # fails the nightly run and names the day's commits. With no such commit that differs, it skips.
   # ns/op is not compared: runners are too noisy for it.
   benchmark:
     name: Benchmarks (allocs/op)
-    needs: changes
-    if: github.event_name == 'pull_request' && needs.changes.outputs.benchmark == 'true'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout the merge commit
+      - name: Checkout the commit with its history
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
           path: head
-      - name: Checkout the base
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
-        with:
-          ref: ${{ github.event.pull_request.base.sha }}
-          path: base
+      - name: The commit to compare with
+        id: base
+        working-directory: head
+        run: |
+          base=$(git rev-list -1 --first-parent --before='24 hours ago' "$GITHUB_SHA")
+          if [ -z "$base" ] || [ "$base" = "$GITHUB_SHA" ]; then
+            echo "No earlier commit than $GITHUB_SHA in the history of this run: nothing to compare."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Comparing $GITHUB_SHA with $base."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            git worktree add ../base "$base"
+          fi
       - name: Setup go
+        if: steps.base.outputs.run == 'true'
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
         with:
           go-version-file: 'head/flagd/go.mod'
           cache-dependency-path: |
             head/**/go.sum
       - name: Benchmark the base
+        if: steps.base.outputs.run == 'true'
         run: bash head/.github/scripts/run-benchmarks.sh base "$RUNNER_TEMP/base.txt"
       - name: Benchmark the head
+        if: steps.base.outputs.run == 'true'
         run: bash head/.github/scripts/run-benchmarks.sh head "$RUNNER_TEMP/head.txt"
       - name: Compare allocs/op
+        if: steps.base.outputs.run == 'true'
         run: python3 head/.github/scripts/compare-allocs.py "$RUNNER_TEMP/base.txt" "$RUNNER_TEMP/head.txt"
 
   test:
@@ -271,7 +291,7 @@ jobs:
           output: "trivy-results.sarif"
           severity: "CRITICAL,HIGH"
         env:
-          # use an alternative trivvy db to avoid rate limits
+          # use an alternative trivy db to avoid rate limits
           TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2
 
       - name: Upload Trivy scan results to GitHub Security tab
@@ -325,9 +345,10 @@ jobs:
 
   upgrade-test:
     name: Upgrade differential
-    # The job builds two images (today's flagd and the flagd-full the Builder makes), so it follows the rule for images:
-    # it runs when the change touches Go code, a Dockerfile or the build (the `upgrade` flag of the changes job), or with
-    # FULL_CI=true, or when the workflow is run manually.
+    # The job builds two images (today's flagd and the flagd-full the Builder makes). It runs nightly, with FULL_CI=true
+    # and from a manual run (every flag is true there). A pull request runs it only when it touches what the job is built
+    # from: a Dockerfile, distributions/, builder/, flagd/, test/upgrade/ or this workflow (the `upgrade` flag of the
+    # changes job).
     needs: changes
     if: needs.changes.outputs.upgrade == 'true'
     runs-on: ubuntu-latest
@@ -403,8 +424,49 @@ jobs:
           key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
 
+  # Step 17: does this run build the images, and does it publish them? The gate reads :main anonymously, so it needs no
+  # permission beyond the default read.
+  publish-gate:
+    name: Publish gate
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.gate.outputs.build }}
+      publish: ${{ steps.gate.outputs.publish }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+        with:
+          # the full history is for the nightly's diff against the commit :main was built from; no other run reads it
+          fetch-depth: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 0 || 1 }}
+      - name: Build and publish the images?
+        id: gate
+        env:
+          FULL_CI: ${{ vars.FULL_CI }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          REPOSITORY: ${{ github.repository }}
+          HEAD: ${{ github.sha }}
+        run: |
+          # image inputs: Go code, modules, Dockerfiles, the distributions and the Builder, the testbed and its data, the
+          # scripts that build and check the images, and this workflow
+          pattern='\.go$|(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^testbed/|^test-harness|^\.github/scripts/(image-|oci-layout|publish-|release-)|^\.github/workflows/build\.yaml$|^tools/ci/internal/(oci|publish)/'
+          changed=false
+          if [ "$EVENT" = schedule ]; then
+            # The nightly run publishes when image inputs changed since the commit :main was built from. flagd-minimal is
+            # the canary: every image is published together. No package yet, or a commit this clone lacks, is a change.
+            built=$(docker buildx imagetools inspect --raw ghcr.io/open-feature-forking/flagd-minimal:main 2>/dev/null \
+              | jq -r '.annotations["org.opencontainers.image.revision"] // empty' 2>/dev/null || true)
+            if [ -z "$built" ] || ! git cat-file -e "$built^{commit}" 2>/dev/null; then
+              changed=true
+            elif { git diff --name-only "$built" "$HEAD" | grep -Ev '^tools/ci/'; git diff --name-only "$built" "$HEAD" | grep -E '^tools/ci/internal/(oci|publish)/' || true; } | grep -Eq "$pattern"; then
+              changed=true
+            fi
+          fi
+          INPUTS_CHANGED="$changed" .github/scripts/publish-gate.sh | tee -a "$GITHUB_OUTPUT"
+
   release-dry-run:
     name: Release dry run (${{ matrix.part }})
+    needs: publish-gate
     # Runs the full set nightly, with FULL_CI=true and when the workflow is run manually. A pull request opts into the
     # reduced set with the release-check label (release-check.yaml). One job per part, in parallel.
     if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
@@ -443,7 +505,23 @@ jobs:
       - name: The release's build steps, without publishing or signing anything (UC-009, UC-012)
         env:
           DRY_RUN_PART: ${{ matrix.part }}
-        run: .github/scripts/release-dry-run.sh
+          DRY_RUN_LAYOUTS: ${{ runner.temp }}/layouts
+          IMAGE_BUILD: ${{ needs.publish-gate.outputs.build }}
+        run: |
+          # On a build run the images of flagd-minimal are the published ones: stamped as Q4 says, built once.
+          if [ "$IMAGE_BUILD" = true ] && [ "$DRY_RUN_PART" = distributions ]; then
+            .github/scripts/release-dry-run.sh "0.0.0-main.${GITHUB_SHA::7}" "$GITHUB_SHA" "$(date -u +%FT%TZ)"
+          else
+            .github/scripts/release-dry-run.sh
+          fi
+      - name: Keep the layouts for the push
+        if: needs.publish-gate.outputs.publish == 'true' && matrix.part == 'distributions'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: layouts-flagd-minimal
+          path: ${{ runner.temp }}/layouts/*.tar
+          retention-days: 1
+          if-no-files-found: error
       - name: Save the Go caches
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.go-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
@@ -454,13 +532,69 @@ jobs:
           key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
 
+  # Step 17: the images of the other standard distributions as two-platform layouts, built once and
+  # checked as layouts and run from the layout. flagd-minimal is built by the distributions part above, the testbed by its job.
+  image-build:
+    name: Images (${{ matrix.part }})
+    needs: publish-gate
+    if: needs.publish-gate.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {part: A, distributions: "flagd-full flagd-sync", scan_first: flagd-full.tar}
+          - {part: B, distributions: "flagd-cloud flagd-kubernetes flagd-minimal-otel", scan_first: flagd-cloud.tar}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - name: Setup go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
+        with:
+          go-version-file: 'flagd/go.mod'
+          cache: false
+      - name: Build the layouts and check them
+        env:
+          DISTRIBUTIONS: ${{ matrix.distributions }}
+          DRY_RUN_LAYOUTS: ${{ runner.temp }}/layouts
+        run: |
+          # stamped as Q4 says: a pre-release that sorts below every release
+          # shellcheck disable=SC2086
+          .github/scripts/image-build.sh "0.0.0-main.${GITHUB_SHA::7}" "$GITHUB_SHA" "$(date -u +%FT%TZ)" "$RUNNER_TEMP/image-build" $DISTRIBUTIONS
+      - name: Scan the first layout (report only)
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          input: ${{ runner.temp }}/layouts/${{ matrix.scan_first }}
+          format: table
+          severity: "CRITICAL,HIGH"
+          exit-code: "0"
+        env:
+          TRIVY_PLATFORM: linux/amd64
+          # use an alternative trivy db to avoid rate limits
+          TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2
+      - name: Scan the other layouts (report only)
+        continue-on-error: true
+        env:
+          FIRST: ${{ matrix.scan_first }}
+        run: .github/scripts/image-scan.sh "$RUNNER_TEMP/layouts" "$FIRST"
+      - name: Keep the layouts for the push
+        if: needs.publish-gate.outputs.publish == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: layouts-${{ matrix.part }}
+          path: ${{ runner.temp }}/layouts/*.tar
+          retention-days: 1
+          if-no-files-found: error
+
   testbed:
     name: Relay testbed
     # The relay testbed (UC-022) takes the place of the launchpad in the provider test suites, so it is built and compared
-    # with the upstream launchpad image whenever Go code, the upgrade differential's inputs or the testbed itself change
-    # (the `testbed` flag of the changes job). It also runs with FULL_CI=true or a manual run.
-    needs: changes
-    if: needs.changes.outputs.testbed == 'true'
+    # with the upstream launchpad image nightly on main, with FULL_CI=true and from a manual run; not on pull requests,
+    # where integration-test runs the released Go provider. A run that builds the images tests the layout that is published.
+    needs: publish-gate
+    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -473,9 +607,164 @@ jobs:
         with:
           go-version-file: 'flagd/go.mod'
       - name: The launchpad contract against both images (the launchpad quirks on the launchpad only)
+        if: needs.publish-gate.outputs.build != 'true'
         run: make testbed-contract-both
       - name: TestRPC and TestInProcess against both images, with the same scenarios passed
+        if: needs.publish-gate.outputs.build != 'true'
         run: make testbed-suites
+      # A run that builds the images builds the testbed once, as the layout that is published; the tests run on its amd64 image.
+      - name: Build the testbed layout and check it
+        if: needs.publish-gate.outputs.build == 'true'
+        env:
+          DRY_RUN_LAYOUTS: ${{ runner.temp }}/layouts
+        run: .github/scripts/image-testbed.sh "0.0.0-main.${GITHUB_SHA::7}" "$GITHUB_SHA" "$(date -u +%FT%TZ)" "$RUNNER_TEMP/image-testbed"
+      - name: The launchpad contract, on the testbed image of the layout
+        if: needs.publish-gate.outputs.build == 'true'
+        run: make testbed-contract-both TESTBED_RELAY_IMAGE=flagd-testbed:layout
+      - name: TestRPC and TestInProcess, on the testbed image of the layout
+        if: needs.publish-gate.outputs.build == 'true'
+        run: make testbed-suites TESTBED_RELAY_IMAGE=flagd-testbed:layout
+      - name: Scan the testbed layout (report only)
+        if: needs.publish-gate.outputs.build == 'true'
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          input: ${{ runner.temp }}/layouts/flagd-testbed.tar
+          format: table
+          severity: "CRITICAL,HIGH"
+          exit-code: "0"
+        env:
+          TRIVY_PLATFORM: linux/amd64
+          TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2
+      - name: Keep the layout for the push
+        if: needs.publish-gate.outputs.publish == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: layouts-flagd-testbed
+          path: ${{ runner.temp }}/layouts/flagd-testbed.tar
+          retention-days: 1
+          if-no-files-found: error
+
+  # Step 17: the only job that pushes. It builds nothing: it takes the layouts the build jobs checked and pushes them by
+  # digest under their sha- tags, then attests each digest. Only the nightly run or a manual run on the main branch of this
+  # repository gets here, and only after publish-gate said so and every build job passed (a skipped testbed does not hold the rest back).
+  # The script holds the destinations: the seven images of #216 under ghcr.io/open-feature-forking/ and no other.
+  publish-images:
+    name: Publish images
+    needs: [publish-gate, release-dry-run, image-build, testbed]
+    if: >-
+      ${{ always() && needs.publish-gate.outputs.publish == 'true'
+      && github.ref == 'refs/heads/main' && github.repository == 'open-feature-forking/openfeature-relay'
+      && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+      && needs.release-dry-run.result == 'success' && needs.image-build.result == 'success'
+      && (needs.testbed.result == 'success' || needs.testbed.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - name: Download the layouts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: layouts-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/layouts
+      - name: Log in to ghcr.io
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push the layouts by digest, under their sha- tags
+        id: push
+        env:
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          .github/scripts/publish-images.sh push "$RUNNER_TEMP/layouts" --short "${GITHUB_SHA::7}" --outputs "$GITHUB_OUTPUT" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Attest flagd-full
+        if: steps.push.outputs.flagd_full != ''
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ghcr.io/open-feature-forking/flagd-full
+          subject-digest: ${{ steps.push.outputs.flagd_full }}
+          push-to-registry: true
+      - name: Attest flagd-minimal
+        if: steps.push.outputs.flagd_minimal != ''
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ghcr.io/open-feature-forking/flagd-minimal
+          subject-digest: ${{ steps.push.outputs.flagd_minimal }}
+          push-to-registry: true
+      - name: Attest flagd-minimal-otel
+        if: steps.push.outputs.flagd_minimal_otel != ''
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ghcr.io/open-feature-forking/flagd-minimal-otel
+          subject-digest: ${{ steps.push.outputs.flagd_minimal_otel }}
+          push-to-registry: true
+      - name: Attest flagd-cloud
+        if: steps.push.outputs.flagd_cloud != ''
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ghcr.io/open-feature-forking/flagd-cloud
+          subject-digest: ${{ steps.push.outputs.flagd_cloud }}
+          push-to-registry: true
+      - name: Attest flagd-kubernetes
+        if: steps.push.outputs.flagd_kubernetes != ''
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ghcr.io/open-feature-forking/flagd-kubernetes
+          subject-digest: ${{ steps.push.outputs.flagd_kubernetes }}
+          push-to-registry: true
+      - name: Attest flagd-sync
+        if: steps.push.outputs.flagd_sync != ''
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ghcr.io/open-feature-forking/flagd-sync
+          subject-digest: ${{ steps.push.outputs.flagd_sync }}
+          push-to-registry: true
+      - name: Attest flagd-testbed
+        if: steps.push.outputs.flagd_testbed != ''
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ghcr.io/open-feature-forking/flagd-testbed
+          subject-digest: ${{ steps.push.outputs.flagd_testbed }}
+          push-to-registry: true
+
+  # :main moves by compare-and-set: only forward. A move-main that was cancelled while pending is harmless, because the
+  # next one makes the same check against the commit :main points at.
+  move-main:
+    name: Move :main
+    needs: publish-images
+    concurrency:
+      group: move-main
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+        with:
+          fetch-depth: 0
+      - name: Move the main tags forward
+        env:
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANYWAY: ${{ inputs.move-main-anyway }}
+        run: |
+          force=()
+          if [ "$ANYWAY" = true ]; then force=(--force); fi
+          .github/scripts/publish-images.sh move-main --short "${GITHUB_SHA::7}" --sha "$GITHUB_SHA" "${force[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
 
   testbed-rpc-outages:
     name: Testbed RPC outages

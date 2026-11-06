@@ -29,55 +29,40 @@ import (
 const Zero = "0000000000000000000000000000000000000000"
 
 // Flag says which changed paths call for a gated job of build.yaml; the job runs when its flag is true. A path counts
-// when Include matches it and Exclude does not, or when Extra matches it. RE2 has no lookahead, so the exclusion is a
+// when Include matches it and Exclude does not. RE2 has no lookahead, so the exclusion is a
 // second expression. The patterns are ASCII: \s, \d and \S do not match Unicode, as they do in Python.
 type Flag struct {
 	Name    string
 	Include *regexp.Regexp
 	Exclude *regexp.Regexp
-	Extra   *regexp.Regexp
 }
 
 // toolsCI is the repository's own CI tooling: its sources and module files do not call for a gated job.
 const toolsCI = `^tools/ci/`
 
-func newFlag(name, include, extra string) Flag {
-	f := Flag{Name: name, Include: regexp.MustCompile(include), Exclude: regexp.MustCompile(toolsCI)}
-	if extra != "" {
-		f.Extra = regexp.MustCompile(extra)
-	}
-	return f
+func newFlag(name, include string) Flag {
+	return Flag{Name: name, Include: regexp.MustCompile(include), Exclude: regexp.MustCompile(toolsCI)}
 }
 
 // Flags is in the order of the GITHUB_OUTPUT lines and of the summary.
 var Flags = []Flag{
-	newFlag("go", `\.go$|(^|/)go\.(mod|sum)$`, ""),
-	newFlag("deps", `(^|/)go\.(mod|sum)$`, ""),
-	newFlag("dockerfile", `(^|/)[^/]*Dockerfile$`, ""),
-	newFlag("benchmark", `\.go$|(^|/)go\.(mod|sum)$|^\.github/scripts/(run-benchmarks|compare-allocs)`,
-		`^tools/ci/internal/allocs/|^\.github/scripts/run-benchmarks`),
-	newFlag("image", `(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^\.github/workflows/build\.yaml$`, ""),
+	newFlag("go", `\.go$|(^|/)go\.(mod|sum)$`),
+	newFlag("deps", `(^|/)go\.(mod|sum)$`),
+	newFlag("dockerfile", `(^|/)[^/]*Dockerfile$`),
+	newFlag("image", `(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^\.github/workflows/build\.yaml$`),
 	// the reference Dockerfile of the Builder and the tests that build images from it
-	newFlag("reference", `^builder/reference/|^test/image/|(^|/)[^/]*Dockerfile$|^\.github/workflows/build\.yaml$`, ""),
-	// Dockerfiles; the manifest of flagd-full and the Builder that builds it; flagd, which holds flagd-full's main and
-	// its list of components; the differential's own test; any Go source or module file, because a change under core/,
-	// service/, sync/, runtime/ or evaluator/ changes flagd-full.
-	newFlag("upgrade", `\.go$|(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^flagd/|^test/upgrade/|`+
-		`^\.github/workflows/build\.yaml$`, ""),
-	// the same, and the testbed, its distribution and the suites
-	newFlag("testbed", `\.go$|(^|/)go\.(mod|sum)$|(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^flagd/|^testbed/|`+
-		`^test/(testbed|integration|upgrade)/|^\.github/scripts/(testbed|compare-pass)|^\.github/workflows/build\.yaml$`,
-		`^tools/ci/internal/passsets/|^\.github/scripts/testbed`),
+	newFlag("reference", `^builder/reference/|^test/image/|(^|/)[^/]*Dockerfile$|^\.github/workflows/build\.yaml$`),
+	// What the differential is built from: Dockerfiles; the manifest of flagd-full and the Builder that builds it; flagd,
+	// which holds flagd-full's main and its list of components; the differential's own test; this workflow. Go code
+	// elsewhere is not a term: a pull request that changes it gets the differential from the nightly run.
+	newFlag("upgrade", `(^|/)[^/]*Dockerfile$|^distributions/|^builder/|^flagd/|^test/upgrade/|^\.github/workflows/build\.yaml$`),
 }
 
 // counts reports whether a changed path sets the flag. Python's `$` also matches before a final newline, so one is
 // dropped first.
 func (f Flag) counts(path string) bool {
 	path = strings.TrimSuffix(path, "\n")
-	if f.Include.MatchString(path) && !f.Exclude.MatchString(path) {
-		return true
-	}
-	return f.Extra != nil && f.Extra.MatchString(path)
+	return f.Include.MatchString(path) && !f.Exclude.MatchString(path)
 }
 
 // Values is the value of each flag, in the order of Flags. With all set, every flag is true.
