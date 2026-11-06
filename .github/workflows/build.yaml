@@ -617,6 +617,14 @@ jobs:
       - name: TestRPC and TestInProcess, on the testbed image of the layout
         if: needs.publish-gate.outputs.build == 'true'
         run: make testbed-suites TESTBED_RELAY_IMAGE=flagd-testbed:layout
+      - name: Keep the testbed suite output
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: testbed-suite-output
+          path: testbed-out/
+          retention-days: 7
+          if-no-files-found: ignore
       - name: Scan the testbed layout (report only)
         if: needs.publish-gate.outputs.build == 'true'
         continue-on-error: true
@@ -655,6 +663,14 @@ jobs:
           go-version-file: 'flagd/go.mod'
       - name: TestRPC with the @reconnect, @events and @grace scenarios, against both images
         run: make testbed-rpc-outages
+      - name: Keep the testbed outages output
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: testbed-outages-output
+          path: testbed-out/
+          retention-days: 7
+          if-no-files-found: ignore
 
   testbed-grpc-sync:
     name: Testbed gRPC source
@@ -672,7 +688,23 @@ jobs:
         with:
           go-version-file: 'flagd/go.mod'
       - name: A grpc source against the relay testbed - reconnects, a fatal status code and a stream deadline (UC-023)
-        run: make testbed-grpc-sync
+        # shell: bash makes the pipe fail with make; the log is what the failure summary reads
+        shell: bash
+        run: |
+          mkdir -p testbed-out
+          make testbed-grpc-sync 2>&1 | tee testbed-out/grpc-sync.log
+      # Report-only (#190): each failed test with its package, time and first error.
+      - name: Summarize the failed tests
+        if: failure()
+        run: python3 .github/scripts/test-failures.py --log testbed-out/grpc-sync.log --job testbed-grpc-sync --summary "$GITHUB_STEP_SUMMARY"
+      - name: Keep the testbed grpc source output
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: testbed-grpc-source-output
+          path: testbed-out/
+          retention-days: 7
+          if-no-files-found: ignore
 
   # The concurrency load against the race build of flagd-minimal (NFR-017, #183): OFREP, flag evaluation and flag sync
   # clients at once while the flags change. The smoke is about 60 seconds of load and runs on every build.
