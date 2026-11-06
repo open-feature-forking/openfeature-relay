@@ -122,19 +122,7 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		return nil, err
 	}
 
-	syncProviders := sourcesWithKnownFormat(logger, config.SyncProviders, config.ConfigurationFormats)
-	sources := []string{}
-
-	// URIs are registered verbatim (including any blob query string like
-	// s3://bucket/key?use_path_style=true); the sync implementation must
-	// emit DataSync.Source matching this exact string. See flagd#1973.
-	for _, provider := range syncProviders {
-		sources = append(sources, provider.URI)
-	}
-	sourceReadiness := make(map[string]bool, len(sources))
-	for _, source := range sources {
-		sourceReadiness[source] = false
-	}
+	syncProviders, sources, sourceReadiness := sourcesOf(logger, config)
 
 	// build flag store, collect flag sources & fill sources details
 	store, err := store.NewStore(logger, sources)
@@ -275,6 +263,25 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		rt.onShutdown("telemetry", shutdownTelemetry)
 	}
 	return rt, nil
+}
+
+// sourcesOf returns the sources of the configuration whose format the distribution has, their URIs, and a readiness
+// entry per URI, all false.
+func sourcesOf(logger *logger.Logger, config Config) ([]sync.SourceConfig, []string, map[string]bool) {
+	syncProviders := sourcesWithKnownFormat(logger, config.SyncProviders, config.ConfigurationFormats)
+	sources := []string{}
+
+	// URIs are registered verbatim (including any blob query string like
+	// s3://bucket/key?use_path_style=true); the sync implementation must
+	// emit DataSync.Source matching this exact string. See flagd#1973.
+	for _, provider := range syncProviders {
+		sources = append(sources, provider.URI)
+	}
+	sourceReadiness := make(map[string]bool, len(sources))
+	for _, source := range sources {
+		sourceReadiness[source] = false
+	}
+	return syncProviders, sources, sourceReadiness
 }
 
 // checkSinkMetrics refuses event sinks when the setting event-sinks needs /metrics and the telemetry provider serves
