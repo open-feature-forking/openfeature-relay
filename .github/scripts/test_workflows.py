@@ -88,16 +88,77 @@ class BuildWorkflow(unittest.TestCase):
             "concurrency:\n  group: build-${{ github.event_name == 'pull_request' && github.ref || github.sha }}\n"
             "  cancel-in-progress: ${{ github.event_name == 'pull_request' }}\n", head)
 
-    def test_nothing_is_pushed_or_logged_in(self):
-        self.assertNotRegex(self.text, r"push:\s*true")
-        self.assertNotIn("docker/login-action", self.text)
+    # Every way a workflow can push an image, log in to a registry or ask for the right to. They may appear in the
+    # publish-images and move-main jobs of build.yaml and nowhere else; release-please.yaml (gated to open-feature/flagd,
+    # never enabled here) is allowlisted by the hash that ReleaseConfiguration pins.
+    PUSH_SURFACE = ("docker/login-action", "--push", "push: true", "push:true", "push=true", "type=registry", "docker push",
+                    "docker login", "crane", "skopeo", "oras", "push-to-registry", "packages: write", "publish-images.sh",
+                    "publish-images.py", "REGISTRY_TOKEN", "attest-build-provenance", "imagetools create")
+
+    def test_only_publish_images_pushes_or_logs_in(self):
+        """Step 17: the push surface is two jobs of build.yaml, on the main branch of this repository, from the nightly run or a manual run."""
+        publishing = (self.job("publish-images"), self.job("move-main"))
+        everything = {f.name: f.read_text(encoding="utf-8") for f in (ROOT / ".github" / "workflows").glob("*.y*ml")}
+        for name, text in everything.items():
+            if name == "release-please.yaml":
+                continue
+            outside = text
+            if name == "build.yaml":
+                for job in publishing:
+                    outside = outside.replace(job, "")
+            for needle in self.PUSH_SURFACE:
+                with self.subTest(workflow=name, needle=needle):
+                    self.assertNotIn(needle, outside)
+        for needle in ("docker/login-action", "push-to-registry", "attest-build-provenance"):
+            self.assertIn(needle, self.job("publish-images"))
+        # a pull request, a fork, FULL_CI and a branch never publish
+        gate = self.job("publish-images").split("steps:", 1)[0]
+        for condition in ("needs.publish-gate.outputs.publish == 'true'", "github.ref == 'refs/heads/main'",
+                          "github.repository == 'open-feature-forking/openfeature-relay'",
+                          "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'"):
+            self.assertIn(condition, gate)
+
+    def test_publish_jobs(self):
+        """Step 17: publish-images needs the builds and builds nothing; move-main moves :main by compare-and-set."""
+        job = self.job("publish-images")
+        self.assertIn("needs: [publish-gate, release-dry-run, image-build, testbed]", job)
+        for build in ("docker build", "buildx build", "go build", "make "):
+            self.assertNotIn(build, job)
+        self.assertEqual(7, job.count("uses: actions/attest-build-provenance@"))
+        self.assertEqual(1, job.count("uses: docker/login-action@"))
+        self.assertRegex(job, r"permissions:\n      contents: read\n      packages: write\n      id-token: write\n      attestations: write\n")
+        move = self.job("move-main")
+        self.assertIn("needs: publish-images", move)
+        self.assertIn("concurrency:\n      group: move-main\n      cancel-in-progress: false\n", move)
+        self.assertIn("fetch-depth: 0", move)
+        self.assertRegex(move, r"permissions:\n      contents: read\n      packages: write\n")
+        # packages: write is granted at job level in these two jobs and nowhere else
+        self.assertEqual(2, self.text.count("packages: write"))
+        self.assertNotRegex(self.text.split("\njobs:\n", 1)[0], r"packages:")
+
+    def test_move_main_anyway_input(self):
+        """Step 17: the dispatch input that lets move-main pass --force is a boolean off by default, read only in the
+        move-main job through the environment, and --force is passed only when it is true."""
+        head = self.text.split("\njobs:\n", 1)[0]
+        self.assertRegex(head, r"workflow_dispatch:\n    inputs:\n      move-main-anyway:\n(?:        description: .*\n)?"
+                               r"        type: boolean\n        default: false\n")
+        self.assertEqual(1, head.count("move-main-anyway"))
+        jobs = self.text.split("\njobs:\n", 1)[1]
+        self.assertEqual(1, jobs.count("move-main-anyway"))
+        move = self.job("move-main")
+        self.assertRegex(move, r"env:\n(?:          .*\n)*?          ANYWAY: \$\{\{ inputs\.move-main-anyway \}\}\n")
+        run = move.split("run: |\n", 1)[1]
+        self.assertNotIn("inputs.", run)
+        self.assertEqual(1, self.text.count("--force"))
+        self.assertIn('if [ "$ANYWAY" = true ]; then force=(--force); fi', run)
+        self.assertIn('"${force[@]}"', run)
 
     def test_jobs(self):
         names = re.findall(r"^  ([a-z][a-z0-9-]*):[ \t]*(?:#.*)?\n", self.text.split("\njobs:\n", 1)[1], re.M)
         self.assertEqual(
             ["changes", "lint", "benchmark", "test", "docker-local", "integration-test", "upgrade-test", "image-test",
-             "publish-gate", "release-dry-run", "image-build", "testbed", "testbed-rpc-outages", "testbed-grpc-sync",
-             "load-smoke", "load-test"], names)
+             "publish-gate", "release-dry-run", "image-build", "testbed", "publish-images", "move-main",
+             "testbed-rpc-outages", "testbed-grpc-sync", "load-smoke", "load-test"], names)
 
     GATED = {
         "benchmark": "github.event_name == 'pull_request' && needs.changes.outputs.benchmark == 'true'",
@@ -494,16 +555,18 @@ class WorkflowPermissions(unittest.TestCase):
                 want = {"lint-pr.yaml": {"pull-requests": "write"}}.get(name) or deploy.get(name) or {"contents": "read"}
                 self.assertEqual(want, doc["permissions"])
 
-    def test_nothing_grants_packages_write(self):
+    def test_packages_write_is_granted_in_two_jobs_of_build_yaml_only(self):
         for f in self.files:
             with self.subTest(workflow=f.name):
-                self.assertNotRegex(f.read_text(encoding="utf-8"), r"packages:\s*write")
+                want = 2 if f.name == "build.yaml" else 0
+                self.assertEqual(want, len(re.findall(r"packages:\s*write", f.read_text(encoding="utf-8"))))
 
-    def test_the_only_registry_login_is_the_pinned_release_workflow(self):
-        """docker/login-action appears in release-please.yaml only (gated to open-feature/flagd, never enabled here); the
-        hash in ReleaseConfiguration pins that file, so a second login or a change to this one fails a test."""
+    def test_the_registry_logins_are_publish_images_and_the_pinned_release_workflow(self):
+        """docker/login-action appears in build.yaml's publish-images and in release-please.yaml (gated to
+        open-feature/flagd, never enabled here); the hash in ReleaseConfiguration pins that file, so a second login or a
+        change to this one fails a test."""
         with_login = [f.name for f in self.files if "docker/login-action" in f.read_text(encoding="utf-8")]
-        self.assertEqual(["release-please.yaml"], with_login)
+        self.assertEqual(["build.yaml", "release-please.yaml"], with_login)
         self.assertIn(".github/workflows/release-please.yaml", ReleaseConfiguration.PINNED)
 
     def test_lint_pr_runs_on_pull_request_target_without_the_pull_requests_code(self):
