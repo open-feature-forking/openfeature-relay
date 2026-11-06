@@ -164,7 +164,7 @@ jobs:
         id: base
         working-directory: head
         run: |
-          base=$(git rev-list -1 --before='24 hours ago' "$GITHUB_SHA")
+          base=$(git rev-list -1 --first-parent --before='24 hours ago' "$GITHUB_SHA")
           if [ -z "$base" ] || [ "$base" = "$GITHUB_SHA" ]; then
             echo "No earlier commit than $GITHUB_SHA in the history of this run: nothing to compare."
             echo "run=false" >> "$GITHUB_OUTPUT"
