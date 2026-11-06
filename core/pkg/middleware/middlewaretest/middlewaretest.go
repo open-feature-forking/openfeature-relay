@@ -494,16 +494,9 @@ func (r runner) concurrent() (string, string) {
 			}
 		}()
 	}
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-time.After(r.limit):
-		return expected, fmt.Sprintf("the requests did not finish within %v", r.limit)
-	}
+	// Every request has its own time limit and a goroutine stops at its first problem, so a hanging middleware ends the
+	// case within one limit. A limit on the whole case would measure how fast the machine serves 640 requests.
+	wg.Wait()
 	if len(problems) > 0 {
 		return expected, problems[0]
 	}

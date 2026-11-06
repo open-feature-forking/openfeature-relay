@@ -6,7 +6,9 @@ import (
 	"io"
 	"os"
 
+	"github.com/open-feature-forking/openfeature-relay/tools/ci/internal/allocs"
 	"github.com/open-feature-forking/openfeature-relay/tools/ci/internal/modules"
+	"github.com/open-feature-forking/openfeature-relay/tools/ci/internal/passsets"
 	"github.com/open-feature-forking/openfeature-relay/tools/ci/internal/testfailures"
 )
 
@@ -31,6 +33,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case "help", "-h", "--help":
 		_, _ = io.WriteString(stdout, usage)
 		return 0
+	case "compare-allocs":
+		return allocs.Run(args[1:], stdout, stderr)
+	case "compare-pass-sets":
+		return passsets.Run(args[1:], stdout, stderr)
 	case "modules":
 		return modules.Run(args[1:], stdout, stderr)
 	case "test-failures":
