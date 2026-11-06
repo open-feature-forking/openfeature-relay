@@ -103,7 +103,6 @@ func warnOnNoOpConfig(logger *logger.Logger, config Config) {
 func FromConfig(logger *logger.Logger, version string, config Config, components Components) (rt *Runtime, err error) {
 	config = withComponents(config, components)
 	warnOnNoOpConfig(logger, config)
-
 	tp, shutdownTelemetry, err := telemetryProvider(logger, version, components)
 	if err != nil {
 		return nil, err
@@ -116,23 +115,16 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 			_ = shutdownTelemetry(ctx)
 		}
 	}()
-
 	if err := checkSinkMetrics(config, tp, components); err != nil {
 		return nil, err
 	}
-
 	syncProviders, sources, sourceReadiness := sourcesOf(logger, config)
-
 	store, formats, defaultFormat, formatTypes, err := formatsOf(logger, syncProviders, sources, config)
 	if err != nil {
 		return nil, err
 	}
-
 	rt = newRuntime(logger, tp, config, components, store, formats, defaultFormat, sourceReadiness)
-
-	inputs, err := newEndpointInputs(logger, store, rt.Bus, components.Endpoints, formatTypes, config.Evaluators,
-		func(evaluatorType string) map[string]any { return maps.Clone(config.EvaluatorSettings[evaluatorType]) },
-		config.StrictNumericRange)
+	inputs, err := endpointInputsOf(logger, store, rt.Bus, config, components, formatTypes)
 	if err != nil {
 		return nil, err
 	}
@@ -143,9 +135,7 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 			_ = inputs.close()
 		}
 	}()
-
-	// an endpoint may hold a resource from its Create on, such as the listener of flag sync: a build that fails after it
-	// releases it, since the endpoint is never served
+	// endpoints hold resources from their Create on (the flag sync listener): a failed build releases them
 	var created []service.Endpoint
 	defer func() {
 		if rt == nil {
@@ -155,7 +145,6 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 	if err := rt.createEndpoints(logger, config, components, tp, inputs, formatTypes, sources, &created); err != nil {
 		return nil, err
 	}
-
 	syncs, err := rt.startSyncs(logger, config, syncProviders, tp)
 	// the sync providers close before the endpoints; those created before a failure of startSyncs are released too
 	defer func() {
@@ -358,6 +347,16 @@ func formatsOf(
 		formatTypes = append(formatTypes, f.Type())
 	}
 	return st, formats, defaultFormat, formatTypes, nil
+}
+
+// endpointInputsOf builds what the service endpoints are created from, with each evaluator getting a copy of its own
+// settings.
+func endpointInputsOf(
+	logger *logger.Logger, st *store.Store, bus *events.Bus, config Config, components Components, formatTypes []string,
+) (*endpointInputs, error) {
+	return newEndpointInputs(logger, st, bus, components.Endpoints, formatTypes, config.Evaluators,
+		func(evaluatorType string) map[string]any { return maps.Clone(config.EvaluatorSettings[evaluatorType]) },
+		config.StrictNumericRange)
 }
 
 // newRuntime returns the runtime without endpoints, evaluator and sync providers, which the build adds.
