@@ -100,7 +100,6 @@ class BuildWorkflow(unittest.TestCase):
              "load-smoke", "load-test"], names)
 
     GATED = {
-        "benchmark": "github.event_name == 'pull_request' && needs.changes.outputs.benchmark == 'true'",
         "docker-local": "needs.changes.outputs.image == 'true'",
         "upgrade-test": "needs.changes.outputs.upgrade == 'true'",
         "image-test": "needs.changes.outputs.reference == 'true'",
@@ -154,10 +153,13 @@ class BuildWorkflow(unittest.TestCase):
         def on(flag, path):
             return bool(cm.flags([path])[flag])
 
-        for path in ("core/pkg/evaluator/x.go", "service/ofrep/x.go", "sync/http/go.mod", "runtime/go.sum", "go.sum",
-                     "flagd/build.Dockerfile", "distributions/flagd-full/manifest.yaml", "builder/main.go"):
+        # the differential runs on a pull request that touches what it is built from, and Go code elsewhere reaches it
+        # through the nightly run
+        for path in ("flagd/build.Dockerfile", "distributions/flagd-full/manifest.yaml", "builder/main.go",
+                     "flagd/cmd/main.go", "test/upgrade/x_test.go", ".github/workflows/build.yaml", "x/Dockerfile"):
             self.assertTrue(on("upgrade", path), path)
-        for path in ("README.md", "docs/vision.md", "Makefile"):
+        for path in ("README.md", "docs/vision.md", "Makefile", "core/pkg/evaluator/x.go", "service/ofrep/x.go",
+                     "sync/http/go.mod", "runtime/go.sum", "go.sum", "testbed/cmd/main.go"):
             self.assertFalse(on("upgrade", path), path)
         for path in ("builder/reference/Dockerfile", "test/image/x_test.go", "flagd/build.Dockerfile"):
             self.assertTrue(on("reference", path), path)
@@ -167,24 +169,18 @@ class BuildWorkflow(unittest.TestCase):
             self.assertTrue(on("image", path), path)
         for path in ("core/pkg/x.go", "README.md"):
             self.assertFalse(on("image", path), path)
-        for path in ("testbed/cmd/main.go", "test/testbed/x.go", ".github/scripts/compare-pass-sets.py"):
-            self.assertTrue(on("testbed", path), path)
-        self.assertFalse(on("testbed", "docs/vision.md"))
-        self.assertTrue(on("benchmark", "core/pkg/evaluator/x.go"))
-        self.assertFalse(on("benchmark", "docs/guides/x.md"))
+        # the testbed and the benchmarks are not on pull requests, so no flag of the diff gates them
+        self.assertNotIn("testbed", FLAGS)
+        self.assertNotIn("benchmark", FLAGS)
 
-    def test_tools_ci_sets_only_the_flags_that_name_its_package(self):
-        """tools/ci is the repository's CI tooling: its Go files and module files call for no gated job, except the
-        flag of the package that a job runs (S0 of step 18)."""
-        own = {"allocs": "benchmark", "passsets": "testbed"}
+    def test_tools_ci_sets_no_flag(self):
+        """tools/ci is the repository's CI tooling: its Go files and module files call for no gated job."""
         for path in ("tools/ci/main.go", "tools/ci/go.mod", "tools/ci/go.sum", "tools/ci/internal/textio/x.go",
                      "tools/ci/internal/modules/deeper/x.go", "tools/ci/internal/oci/x.go",
-                     "tools/ci/internal/publish/x.go", "tools/ci/Dockerfile"):
+                     "tools/ci/internal/publish/x.go", "tools/ci/internal/allocs/x.go",
+                     "tools/ci/internal/passsets/x.go", "tools/ci/Dockerfile"):
             with self.subTest(path=path):
                 self.assertEqual([], [n for n, v in cm.flags([path]).items() if v])
-        for package, flag in own.items():
-            with self.subTest(package=package):
-                self.assertEqual([flag], [n for n, v in cm.flags([f"tools/ci/internal/{package}/x.go"]).items() if v])
         for flag in FLAGS:
             with self.subTest(flag=flag):
                 self.assertIn(flag, cm.FLAG_EXCLUDES)
@@ -227,12 +223,18 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIn("run: python3 .github/scripts/test_ci_modules.py\n", self.job("lint"))
         self.assertIn("run: python3 .github/scripts/test_ci_modules_affected.py\n", self.job("lint"))
 
+    NIGHTLY_ONLY = "if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'"
+
     def test_gated_jobs(self):
         gate = "if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'"
         for name in ("testbed-rpc-outages", "testbed-grpc-sync"):
             with self.subTest(job=name):
                 self.assertIn(gate, self.job(name))
-        self.assertIn("if: github.event_name == 'pull_request'", self.job("benchmark"))
+        self.assertIn(self.NIGHTLY_ONLY, self.job("benchmark"))
+        self.assertIn(self.NIGHTLY, self.job("testbed"))
+        for name in ("benchmark", "testbed"):
+            with self.subTest(job=name):
+                self.assertNotIn("pull_request", self.job(name).split("steps:", 1)[0].replace("not on pull requests", ""))
 
     def test_load_smoke_runs_on_every_build_and_load_test_runs_nightly(self):
         """W: the 60 s race-build smoke is on every build, the 10 min run is nightly, and both keep their logs on failure."""
@@ -278,12 +280,21 @@ class BuildWorkflow(unittest.TestCase):
         for gone in ("steps.gate", "git diff", "BASE", "DRY_RUN_SCOPE", "DRY_RUN_DISTS"):
             self.assertNotIn(gone, job)
 
+    def test_the_benchmark_compares_with_the_commit_a_day_older_and_skips_without_one(self):
+        job = self.job("benchmark")
+        self.assertIn("fetch-depth: 0", job)
+        self.assertIn("git rev-list -1 --before='24 hours ago' \"$GITHUB_SHA\"", job)
+        self.assertIn('[ "$base" = "$GITHUB_SHA" ]', job)
+        self.assertIn("compare-allocs.py", job)
+        self.assertEqual(4, job.count("if: steps.base.outputs.run == 'true'"))
+
     def test_every_job_that_moved_to_the_nightly_run_accepts_the_schedule_event(self):
         """A job whose condition lacks `schedule` silently skips there. The jobs behind a flag run because every flag is
         true without a diff, and the cache of the nightly run is saved."""
-        for name in ("release-dry-run", "load-test", "testbed-rpc-outages", "testbed-grpc-sync"):
+        for name in ("release-dry-run", "load-test", "testbed-rpc-outages", "testbed-grpc-sync", "testbed"):
             with self.subTest(job=name):
                 self.assertIn(self.NIGHTLY, self.job(name))
+        self.assertIn(self.NIGHTLY_ONLY, self.job("benchmark"))
         for name in self.GATED:
             with self.subTest(job=name):
                 self.assertNotIn("schedule", self.all_jobs()[name].split("steps:", 1)[0].replace("on the schedule", ""))
@@ -347,8 +358,7 @@ class BuildWorkflow(unittest.TestCase):
             with self.subTest(job=name):
                 job = self.all_jobs()[name]
                 self.assertNotIn("git diff --name-only", job)
-                if name != "benchmark":  # the benchmark checks the base out to measure it
-                    self.assertNotIn("base.sha", job)
+                self.assertNotIn("base.sha", job)
         check = RELEASE_CHECK.read_text(encoding="utf-8")
         self.assertIn('BASE=$(git rev-parse "$HEAD^1")', check)
         self.assertNotIn("base.sha", check)
@@ -368,8 +378,8 @@ class BuildWorkflow(unittest.TestCase):
         for name in ("testbed-rpc-outages", "testbed-grpc-sync"):
             with self.subTest(job=name):
                 self.assertIn("github.event_name == 'schedule'", self.job(name))
-        # nothing else is gated on the schedule: the pull-request-only and push-only jobs skip it
-        self.assertIn("if: github.event_name == 'pull_request'", self.job("benchmark"))
+        # the benchmark comparison runs nightly as well, against the newest commit that is a day older
+        self.assertIn(self.NIGHTLY_ONLY, self.job("benchmark"))
 
     def test_coverage_profiles_are_kept(self):
         """#208: the profiles are an artifact for a coverage tracker; the comparison with the base was dropped by the
@@ -429,10 +439,10 @@ class BuildWorkflow(unittest.TestCase):
         for name in ("release-dry-run", "image-build"):
             with self.subTest(job=name):
                 self.assertIn("needs: publish-gate\n", self.job(name))
-        # the testbed runs for a change to it, and for a run that builds the images, whose layout it tests
+        # the testbed runs nightly, with FULL_CI and manually, and tests the layout of a run that builds the images
         testbed = self.job("testbed")
-        self.assertIn("    needs: [changes, publish-gate]\n", testbed)
-        self.assertIn("    if: needs.changes.outputs.testbed == 'true' || needs.publish-gate.outputs.build == 'true'\n", testbed)
+        self.assertIn("    needs: publish-gate\n", testbed)
+        self.assertIn(self.NIGHTLY, testbed)
         self.assertIn("if: needs.publish-gate.outputs.build == 'true'", self.job("image-build"))
 
     def test_image_build_parts_cover_the_other_five_distributions(self):

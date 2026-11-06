@@ -50,11 +50,9 @@ jobs:
       go: ${{ steps.affected.outputs.go }}
       deps: ${{ steps.affected.outputs.deps }}
       dockerfile: ${{ steps.affected.outputs.dockerfile }}
-      benchmark: ${{ steps.affected.outputs.benchmark }}
       image: ${{ steps.affected.outputs.image }}
       reference: ${{ steps.affected.outputs.reference }}
       upgrade: ${{ steps.affected.outputs.upgrade }}
-      testbed: ${{ steps.affected.outputs.testbed }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
@@ -147,36 +145,49 @@ jobs:
           key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
 
-  # Allocations per operation (NFR-001) of the library benchmarks, on the pull request's merge commit and on its base.
-  # The merge commit carries the scripts below even when the branch was cut before they existed.
+  # Allocations per operation (NFR-001) of the library benchmarks: nightly on main and from a manual run, not on pull
+  # requests. The run compares the commit it tests with the newest commit that is at least 24 hours older, so a rise
+  # fails the nightly run and names the day's commits. With no such commit that differs, it skips.
   # ns/op is not compared: runners are too noisy for it.
   benchmark:
     name: Benchmarks (allocs/op)
-    needs: changes
-    if: github.event_name == 'pull_request' && needs.changes.outputs.benchmark == 'true'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout the merge commit
+      - name: Checkout the commit with its history
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
           path: head
-      - name: Checkout the base
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
-        with:
-          ref: ${{ github.event.pull_request.base.sha }}
-          path: base
+      - name: The commit to compare with
+        id: base
+        working-directory: head
+        run: |
+          base=$(git rev-list -1 --before='24 hours ago' "$GITHUB_SHA")
+          if [ -z "$base" ] || [ "$base" = "$GITHUB_SHA" ]; then
+            echo "No earlier commit than $GITHUB_SHA in the history of this run: nothing to compare."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Comparing $GITHUB_SHA with $base."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            git worktree add ../base "$base"
+          fi
       - name: Setup go
+        if: steps.base.outputs.run == 'true'
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
         with:
           go-version-file: 'head/flagd/go.mod'
           cache-dependency-path: |
             head/**/go.sum
       - name: Benchmark the base
+        if: steps.base.outputs.run == 'true'
         run: bash head/.github/scripts/run-benchmarks.sh base "$RUNNER_TEMP/base.txt"
       - name: Benchmark the head
+        if: steps.base.outputs.run == 'true'
         run: bash head/.github/scripts/run-benchmarks.sh head "$RUNNER_TEMP/head.txt"
       - name: Compare allocs/op
+        if: steps.base.outputs.run == 'true'
         run: python3 head/.github/scripts/compare-allocs.py "$RUNNER_TEMP/base.txt" "$RUNNER_TEMP/head.txt"
 
   test:
@@ -327,9 +338,10 @@ jobs:
 
   upgrade-test:
     name: Upgrade differential
-    # The job builds two images (today's flagd and the flagd-full the Builder makes), so it follows the rule for images:
-    # it runs when the change touches Go code, a Dockerfile or the build (the `upgrade` flag of the changes job), or with
-    # FULL_CI=true, or when the workflow is run manually.
+    # The job builds two images (today's flagd and the flagd-full the Builder makes). It runs nightly, with FULL_CI=true
+    # and from a manual run (every flag is true there). A pull request runs it only when it touches what the job is built
+    # from: a Dockerfile, distributions/, builder/, flagd/, test/upgrade/ or this workflow (the `upgrade` flag of the
+    # changes job).
     needs: changes
     if: needs.changes.outputs.upgrade == 'true'
     runs-on: ubuntu-latest
@@ -572,11 +584,10 @@ jobs:
   testbed:
     name: Relay testbed
     # The relay testbed (UC-022) takes the place of the launchpad in the provider test suites, so it is built and compared
-    # with the upstream launchpad image whenever Go code, the upgrade differential's inputs or the testbed itself change
-    # (the `testbed` flag of the changes job). It also runs with FULL_CI=true or a manual run.
-    # A run that builds the images runs it as well: the layout that is published is tested here.
-    needs: [changes, publish-gate]
-    if: needs.changes.outputs.testbed == 'true' || needs.publish-gate.outputs.build == 'true'
+    # with the upstream launchpad image nightly on main, with FULL_CI=true and from a manual run; not on pull requests,
+    # where integration-test runs the released Go provider. A run that builds the images tests the layout that is published.
+    needs: publish-gate
+    if: vars.FULL_CI == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
