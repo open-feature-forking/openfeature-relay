@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -265,9 +266,12 @@ func TestBindingASelectorThatWasNotExpectedFailsOnlyTheBindings(t *testing.T) {
 	}
 }
 
-// deadlocks blocks every request that overlaps another one, until released.
+// deadlocks blocks every request that overlaps another one, until released. A request that arrives alone waits a
+// short while for a second one, so that two requests overlap even when the scheduler runs one goroutine at a time.
 type deadlocks struct {
 	inflight atomic.Int64
+	overlap  sync.Once
+	overlaps chan struct{}
 	release  chan struct{}
 }
 
@@ -279,14 +283,20 @@ func (d *deadlocks) Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer d.inflight.Add(-1)
 		if d.inflight.Add(1) > 1 {
+			d.overlap.Do(func() { close(d.overlaps) })
 			<-d.release
+		}
+		select {
+		case <-d.overlaps:
+			<-d.release
+		case <-time.After(50 * time.Millisecond):
 		}
 		next.ServeHTTP(w, r)
 	})
 }
 
 func TestDeadlockingMiddlewareFailsInsteadOfHanging(t *testing.T) {
-	d := &deadlocks{release: make(chan struct{})}
+	d := &deadlocks{overlaps: make(chan struct{}), release: make(chan struct{})}
 	t.Cleanup(func() { close(d.release) })
 	in := middlewaretest.Inputs{Passed: request(""), NeverAnswers: true, NoConfig: true, Timeout: 200 * time.Millisecond}
 
