@@ -35,3 +35,6 @@ benchmark.txt
 /distributions/*/build/
 
 __pycache__/
+
+# testbed suite output
+testbed-out/
