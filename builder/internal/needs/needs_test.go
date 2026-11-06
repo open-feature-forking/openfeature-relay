@@ -114,3 +114,56 @@ func TestParseProbe(t *testing.T) {
 	_, err = ParseProbe([]byte("not json"))
 	require.Error(t, err)
 }
+
+func hosted(typeName, host string) Item {
+	return Item{Group: groupEndpoint, Type: typeName, Module: "m/" + typeName, Needs: &Needs{}, Host: host}
+}
+func hosting(typeName string, hosts bool) Item {
+	return Item{Group: groupEndpoint, Type: typeName, Module: "m/" + typeName, Needs: &Needs{}, Hosts: hosts}
+}
+
+func TestHostedEndpoint(t *testing.T) {
+	tests := []struct {
+		name    string
+		items   []Item
+		problem string
+	}{
+		{name: "hosted with its host", items: []Item{hosting("flag-evaluation", true), hosted("flag-evaluation-legacy", "flag-evaluation")}},
+		{name: "no hosted endpoint", items: []Item{hosting("flag-evaluation", true)}},
+		{
+			name:    "host absent",
+			items:   []Item{hosting("ofrep", true), hosted("flag-evaluation-legacy", "flag-evaluation")},
+			problem: `service endpoint "flag-evaluation-legacy" (m/flag-evaluation-legacy) is hosted by the service endpoint "flag-evaluation", but no selected service endpoint has that type`,
+		},
+		{
+			name:    "host without Hosts",
+			items:   []Item{hosting("flag-evaluation", false), hosted("flag-evaluation-legacy", "flag-evaluation")},
+			problem: `service endpoint "flag-evaluation-legacy" (m/flag-evaluation-legacy) is hosted by the service endpoint "flag-evaluation", which does not host other endpoints`,
+		},
+		{
+			name:    "a hosted endpoint does not host itself",
+			items:   []Item{hosted("a", "a")},
+			problem: `service endpoint "a" (m/a) is hosted by the service endpoint "a", but no selected service endpoint has that type`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Check(tt.items)
+			if tt.problem == "" {
+				require.NoError(t, err)
+				return
+			}
+			var nerr *Error
+			require.ErrorAs(t, err, &nerr)
+			require.Equal(t, []string{tt.problem}, nerr.Problems)
+		})
+	}
+}
+
+func TestParseProbeHost(t *testing.T) {
+	items, err := ParseProbe([]byte(`[{"group":"service_endpoints","type":"flag-evaluation","module":"m/h","needs":{},"hosts":true},` +
+		`{"group":"service_endpoints","type":"legacy","module":"m/l","needs":{},"host":"flag-evaluation"}]`))
+	require.NoError(t, err)
+	require.True(t, items[0].Hosts)
+	require.Equal(t, "flag-evaluation", items[1].Host)
+}
