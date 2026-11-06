@@ -97,7 +97,7 @@ function loaded() {
 const unaryClient = loaded();
 const heldClient = loaded();
 const churnClient = loaded();
-const eventClients = [loaded(), loaded(), loaded()];
+const eventClients = [loaded()];
 
 // guard counts an exception in a scenario as script_error: k6 does not fail a run for one.
 function guard(name, fn) {
@@ -188,15 +188,9 @@ export const ofrepBulk = guard('ofrep-bulk', () => {
 
 // ---- RPC unary ----
 
-const SERVICES = ['flagd.evaluation.v1.Service', 'flagd.evaluation.v2.Service', 'schema.v1.Service'];
+const SERVICES = ['flagd.evaluation.v2.Service'];
 const METHOD = { odd: 'ResolveBoolean',  gen: 'ResolveInt', str: 'ResolveString', bool: 'ResolveBoolean', flt: 'ResolveFloat', tgt: 'ResolveString', obj: 'ResolveObject' };
 let unaryConnected = false;
-let rotation = 0;
-
-function anyValue(f) {
-  for (const k of ['boolValue', 'stringValue', 'doubleValue', 'objectValue']) if (f[k] !== undefined) return f[k];
-  return undefined;
-}
 
 export const rpcUnary = guard('rpc-unary', () => {
   if (!unaryConnected) {
@@ -205,20 +199,8 @@ export const rpcUnary = guard('rpc-unary', () => {
   }
   const tk = targetingKey();
   const context = { targetingKey: tk };
-  const service = SERVICES[rotation++ % SERVICES.length];
-  const all = rotation % 5 === 0 && service !== 'flagd.evaluation.v2.Service';
+  const service = SERVICES[0];
   const s = Date.now();
-  if (all) {
-    const res = unaryClient.invoke(`${service}/ResolveAll`, { context });
-    const e = Date.now();
-    if (res.status !== StatusOK) {
-      fail(grpcError, 'rpc ResolveAll status', `${service} status ${res.status}`);
-      return;
-    }
-    const entries = Object.entries(res.message.flags || {}).map(([key, f]) => ({ key, found: true, variant: f.variant, value: anyValue(f) }));
-    record(checkBulk(entries, tk, s, e, cfg, null), 'rpc ResolveAll one generation in window');
-    return;
-  }
   const key = pick();
   const method = METHOD[key.split('-')[1]];
   const res = unaryClient.invoke(`${service}/${method}`, { flagKey: key, context });

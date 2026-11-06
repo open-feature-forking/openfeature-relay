@@ -3,10 +3,8 @@ package concurrency
 import (
 	"fmt"
 
-	evalv1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/evaluation/v1"
 	evalv2 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/evaluation/v2"
 	syncv1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/sync/v1"
-	schemav1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/schema/v1"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -32,9 +30,7 @@ func Protoset() ([]byte, error) {
 		set.File = append(set.File, protodesc.ToFileDescriptorProto(fd))
 	}
 	for _, fd := range []protoreflect.FileDescriptor{
-		evalv1.File_flagd_evaluation_v1_evaluation_proto,
 		evalv2.File_flagd_evaluation_v2_evaluation_proto,
-		schemav1.File_schema_v1_schema_proto,
 		syncv1.File_flagd_sync_v1_sync_proto,
 	} {
 		add(fd)

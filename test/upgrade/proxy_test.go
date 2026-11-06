@@ -54,11 +54,16 @@ func stringField(number int, value string) []byte {
 
 // grpcCall sends a request message and collects the messages the server sends for the time given.
 func (r *run) grpcCall(path string, message []byte, within time.Duration) (grpcResponse, error) {
+	return r.grpcCallOn(proxyPortSync, path, message, within)
+}
+
+// grpcCallOn is grpcCall to the port of a flagd.
+func (r *run) grpcCallOn(port, path string, message []byte, within time.Duration) (grpcResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), within)
 	defer cancel()
 	body := append([]byte{0, 0, 0, 0, 0}, message...)
 	binary.BigEndian.PutUint32(body[1:5], uint32(len(message)))
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+r.ports[proxyPortSync]+path, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+r.ports[port]+path, bytes.NewReader(body))
 	if err != nil {
 		return grpcResponse{}, err
 	}
