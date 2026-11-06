@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/open-feature-forking/openfeature-relay/core/pkg/contracttest"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/middleware"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/middleware/middlewaretest"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
@@ -261,5 +262,49 @@ func TestBindingASelectorThatWasNotExpectedFailsOnlyTheBindings(t *testing.T) {
 	}
 	if got, want := report.FailedCases(), []string{middlewaretest.CaseBindings}; !slices.Equal(got, want) {
 		t.Errorf("failed cases %q, want %q", got, want)
+	}
+}
+
+// deadlocks blocks every request that overlaps another one, until released.
+type deadlocks struct {
+	inflight atomic.Int64
+	release  chan struct{}
+}
+
+func (d *deadlocks) Type() string { return "deadlocks" }
+func (d *deadlocks) Create(middleware.Settings) (middleware.Middleware, error) {
+	return d, nil
+}
+func (d *deadlocks) Handler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer d.inflight.Add(-1)
+		if d.inflight.Add(1) > 1 {
+			<-d.release
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func TestDeadlockingMiddlewareFailsInsteadOfHanging(t *testing.T) {
+	d := &deadlocks{release: make(chan struct{})}
+	t.Cleanup(func() { close(d.release) })
+	in := middlewaretest.Inputs{Passed: request(""), NeverAnswers: true, NoConfig: true, Timeout: 200 * time.Millisecond}
+
+	done := make(chan contracttest.Report, 1)
+	start := time.Now()
+	go func() { done <- middlewaretest.Check(t, d, in) }()
+	select {
+	case report := <-done:
+		if !slices.Equal(report.FailedCases(), []string{middlewaretest.CaseConcurrent}) {
+			t.Fatalf("failed cases %q, want only %q", report.FailedCases(), middlewaretest.CaseConcurrent)
+		}
+		for _, c := range report.Cases {
+			if c.Name == middlewaretest.CaseConcurrent && (!strings.Contains(c.Observed, middlewaretest.CaseConcurrent) || !strings.Contains(c.Observed, "did not return")) {
+				t.Errorf("observed %q does not name the case and say a handler did not return", c.Observed)
+			}
+		}
+		t.Logf("the contract failed after %v", time.Since(start))
+	case <-time.After(10 * time.Second):
+		t.Fatal("the contract hangs on a deadlocking middleware")
 	}
 }
