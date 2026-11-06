@@ -13,11 +13,9 @@ import (
 	"testing"
 	"time"
 
-	evaluationV1 "buf.build/gen/go/open-feature/flagd/connectrpc/go/flagd/evaluation/v1/evaluationv1connect"
 	evaluationV2 "buf.build/gen/go/open-feature/flagd/connectrpc/go/flagd/evaluation/v2/evaluationv2connect"
-	schemaConnectV1 "buf.build/gen/go/open-feature/flagd/connectrpc/go/schema/v1/schemav1connect"
-	schemaGrpcV1 "buf.build/gen/go/open-feature/flagd/grpc/go/schema/v1/schemav1grpc"
-	schemaV1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/schema/v1"
+	evaluationGrpcV2 "buf.build/gen/go/open-feature/flagd/grpc/go/flagd/evaluation/v2/evaluationv2grpc"
+	evalV2 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/evaluation/v2"
 	mock "github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator/mock"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
@@ -33,10 +31,11 @@ import (
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-const resolveAllURLFmt = "http://localhost:%d/flagd.evaluation.v1.Service/ResolveAll"
+const resolveURLFmt = "http://localhost:%d" + evaluationV2.ServiceResolveBooleanProcedure
 
 // Verifies bounded (route, method) labels on HTTP server metrics.
 func TestConnectServiceHTTPMetricLabels(t *testing.T) {
@@ -50,11 +49,13 @@ func TestConnectServiceHTTPMetricLabels(t *testing.T) {
 		path   string
 		status int
 	}{
-		{method: http.MethodGet, path: schemaConnectV1.ServiceResolveAllProcedure},
-		{method: http.MethodGet, path: evaluationV1.ServiceResolveBooleanProcedure},
+		{method: http.MethodGet, path: evaluationV2.ServiceResolveBooleanProcedure},
+		// the deprecated services are served by a hosted endpoint, and answer 404 without one
+		{method: http.MethodGet, path: "/schema.v1.Service/ResolveAll", status: http.StatusNotFound},
+		{method: http.MethodGet, path: "/flagd.evaluation.v1.Service/ResolveBoolean", status: http.StatusNotFound},
 		{method: "PROPFIND", path: evaluationV2.ServiceResolveStringProcedure},
 		{method: http.MethodGet, path: "/unregistered/first", status: http.StatusNotFound},
-		{method: http.MethodGet, path: evaluationV1.ServiceResolveBooleanProcedure + "/extra", status: http.StatusNotFound},
+		{method: http.MethodGet, path: evaluationV2.ServiceResolveBooleanProcedure + "/extra", status: http.StatusNotFound},
 		{method: "PROPFIND", path: "/unregistered/second", status: http.StatusNotFound},
 		{method: "CUSTOM", path: "/unregistered/third", status: http.StatusNotFound},
 	}
@@ -69,8 +70,7 @@ func TestConnectServiceHTTPMetricLabels(t *testing.T) {
 	var data metricdata.ResourceMetrics
 	require.NoError(t, reader.Collect(t.Context(), &data))
 	want := map[[2]string]bool{
-		{schemaConnectV1.ServiceResolveAllProcedure, http.MethodGet}:  true,
-		{evaluationV1.ServiceResolveBooleanProcedure, http.MethodGet}: true,
+		{evaluationV2.ServiceResolveBooleanProcedure, http.MethodGet}: true,
 		{evaluationV2.ServiceResolveStringProcedure, "_OTHER"}:        true,
 		{"/", http.MethodGet}: true,
 		{"/", "_OTHER"}:       true,
@@ -141,8 +141,8 @@ func TestConnectServiceUnixConnection(t *testing.T) {
 		name       string
 		socketPath string
 		evalFields evalFields
-		req        *schemaV1.ResolveBooleanRequest
-		want       *schemaV1.ResolveBooleanResponse
+		req        *evalV2.ResolveBooleanRequest
+		want       *evalV2.ResolveBooleanResponse
 		wantErr    error
 	}{
 		{
@@ -154,14 +154,14 @@ func TestConnectServiceUnixConnection(t *testing.T) {
 				reason:  model.DefaultReason,
 				err:     nil,
 			},
-			req: &schemaV1.ResolveBooleanRequest{
+			req: &evalV2.ResolveBooleanRequest{
 				FlagKey: "myBoolFlag",
 				Context: &structpb.Struct{},
 			},
-			want: &schemaV1.ResolveBooleanResponse{
-				Value:   true,
+			want: &evalV2.ResolveBooleanResponse{
+				Value:   proto.Bool(true),
 				Reason:  model.DefaultReason,
-				Variant: "on",
+				Variant: proto.String("on"),
 			},
 			wantErr: nil,
 		},
@@ -207,7 +207,7 @@ func TestConnectServiceUnixConnection(t *testing.T) {
 				t.Errorf("grpc - fail to dial: %v", err)
 				return
 			}
-			client := schemaGrpcV1.NewServiceClient(
+			client := evaluationGrpcV2.NewServiceClient(
 				conn,
 			)
 
@@ -254,7 +254,7 @@ func TestAddMiddleware(t *testing.T) {
 	}()
 
 	require.Eventually(t, func() bool {
-		resp, err := http.Get(fmt.Sprintf(resolveAllURLFmt, port))
+		resp, err := http.Get(fmt.Sprintf(resolveURLFmt, port))
 		if err == nil && resp != nil {
 			resp.Body.Close()
 		}
@@ -265,7 +265,7 @@ func TestAddMiddleware(t *testing.T) {
 	svc.AddMiddleware(mwMock)
 
 	// with the injected middleware, the GET method should work
-	resp, err := http.Get(fmt.Sprintf(resolveAllURLFmt, port))
+	resp, err := http.Get(fmt.Sprintf(resolveURLFmt, port))
 
 	require.Nil(t, err)
 	defer resp.Body.Close()
@@ -433,7 +433,7 @@ func startConnectService(t *testing.T, port uint16, conf iservice.Configuration)
 	}()
 
 	require.Eventually(t, func() bool {
-		resp, err := http.Get(fmt.Sprintf(resolveAllURLFmt, port))
+		resp, err := http.Get(fmt.Sprintf(resolveURLFmt, port))
 		if err == nil && resp != nil {
 			resp.Body.Close()
 		}
@@ -451,7 +451,7 @@ func TestConnectServiceRequestBodySizeLimit(t *testing.T) {
 	// Valid JSON that exceeds the 10-byte body limit, so MaxBytesReader fires mid-parse.
 	largeBody := []byte(`{"flagKey":"` + strings.Repeat("a", 100) + `"}`)
 	req, err := http.NewRequest(http.MethodPost,
-		fmt.Sprintf("http://localhost:%d/flagd.evaluation.v1.Service/ResolveBoolean", port),
+		fmt.Sprintf("http://localhost:%d/flagd.evaluation.v2.Service/ResolveBoolean", port),
 		bytes.NewReader(largeBody))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
@@ -471,7 +471,7 @@ func TestConnectServiceRequestHeaderSizeLimit(t *testing.T) {
 	})
 
 	req, err := http.NewRequest(http.MethodPost,
-		fmt.Sprintf("http://localhost:%d/flagd.evaluation.v1.Service/ResolveBoolean", port),
+		fmt.Sprintf("http://localhost:%d/flagd.evaluation.v2.Service/ResolveBoolean", port),
 		bytes.NewReader([]byte("{}")))
 	require.NoError(t, err)
 	// Use valid ASCII to avoid client-side rejection; value exceeds MaxHeaderBytes + slop.

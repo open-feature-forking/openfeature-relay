@@ -54,6 +54,8 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=bind,source=./service/transport/go.sum,target=./service/transport/go.sum \
     --mount=type=bind,source=./service/flag-evaluation/go.mod,target=./service/flag-evaluation/go.mod \
     --mount=type=bind,source=./service/flag-evaluation/go.sum,target=./service/flag-evaluation/go.sum \
+    --mount=type=bind,source=./service/flag-evaluation-legacy/go.mod,target=./service/flag-evaluation-legacy/go.mod \
+    --mount=type=bind,source=./service/flag-evaluation-legacy/go.sum,target=./service/flag-evaluation-legacy/go.sum \
     --mount=type=bind,source=./service/ofrep/go.mod,target=./service/ofrep/go.mod \
     --mount=type=bind,source=./service/ofrep/go.sum,target=./service/ofrep/go.sum \
     --mount=type=bind,source=./service/flag-sync/go.mod,target=./service/flag-sync/go.mod \
@@ -62,7 +64,7 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=bind,source=./service/event-collector/go.sum,target=./service/event-collector/go.sum \
     --mount=type=bind,source=./flagd-proxy/go.mod,target=./flagd-proxy/go.mod \
     --mount=type=bind,source=./flagd-proxy/go.sum,target=./flagd-proxy/go.sum \
-    go work init ./core ./sync/file ./sync/flagd-grpc ./sync/http ./sync/openfeature-operator ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel ./eventsink/webhook ./evaluator/flagd ./configformat/flagd ./runtime ./service/transport ./service/flag-evaluation ./service/ofrep ./service/flag-sync ./service/event-collector ./flagd ./flagd-proxy && go mod download
+    go work init ./core ./sync/file ./sync/flagd-grpc ./sync/http ./sync/openfeature-operator ./sync/gcs ./sync/azblob ./sync/s3 ./sync/builder ./telemetry/otel ./eventsink/webhook ./evaluator/flagd ./configformat/flagd ./runtime ./service/transport ./service/flag-evaluation ./service/flag-evaluation-legacy ./service/ofrep ./service/flag-sync ./service/event-collector ./flagd ./flagd-proxy && go mod download
 
 # Build the application.
 # Leverage a cache mount to /go/pkg/mod/ to speed up subsequent builds.

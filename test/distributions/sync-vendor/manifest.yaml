@@ -28,6 +28,7 @@ replaces:
   - {module: github.com/open-feature-forking/openfeature-relay/runtime, path: ../../../runtime}
   - {module: github.com/open-feature-forking/openfeature-relay/service/event-collector, path: ../../../service/event-collector}
   - {module: github.com/open-feature-forking/openfeature-relay/service/flag-evaluation, path: ../../../service/flag-evaluation}
+  - {module: github.com/open-feature-forking/openfeature-relay/service/flag-evaluation-legacy, path: ../../../service/flag-evaluation-legacy}
   - {module: github.com/open-feature-forking/openfeature-relay/service/flag-sync, path: ../../../service/flag-sync}
   - {module: github.com/open-feature-forking/openfeature-relay/service/ofrep, path: ../../../service/ofrep}
   - {module: github.com/open-feature-forking/openfeature-relay/service/transport, path: ../../../service/transport}

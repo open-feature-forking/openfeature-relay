@@ -99,6 +99,7 @@ github.com/open-feature-forking/openfeature-relay/eventsink/webhook
 github.com/open-feature-forking/openfeature-relay/runtime
 github.com/open-feature-forking/openfeature-relay/service/event-collector
 github.com/open-feature-forking/openfeature-relay/service/flag-evaluation
+github.com/open-feature-forking/openfeature-relay/service/flag-evaluation-legacy
 github.com/open-feature-forking/openfeature-relay/service/flag-sync
 github.com/open-feature-forking/openfeature-relay/service/ofrep
 github.com/open-feature-forking/openfeature-relay/service/transport

@@ -13,12 +13,8 @@ import (
 	"sync"
 	"time"
 
-	evaluationV1 "buf.build/gen/go/open-feature/flagd/connectrpc/go/flagd/evaluation/v1/evaluationv1connect"
 	evaluationV2 "buf.build/gen/go/open-feature/flagd/connectrpc/go/flagd/evaluation/v2/evaluationv2connect"
-	schemaConnectV1 "buf.build/gen/go/open-feature/flagd/connectrpc/go/schema/v1/schemav1connect"
-	evalV1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/evaluation/v1"
 	evalV2 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/flagd/evaluation/v2"
-	schemaV1 "buf.build/gen/go/open-feature/flagd/protocolbuffers/go/schema/v1"
 	"connectrpc.com/connect"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/evaluator"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
@@ -38,37 +34,34 @@ import (
 const (
 	ErrorPrefix = "FlagdError:"
 
-	flagdSchemaPrefix   = "/flagd"
-	flagdV2SchemaPrefix = "/flagd.evaluation.v2"
+	// flagdV2ServicePrefix is the path prefix of the evaluation v2 service, the one service the endpoint serves itself.
+	flagdV2ServicePrefix = "/flagd.evaluation.v2.Service/"
 )
 
-// bufSwitchHandler combines the handlers of the old and new evaluation schemas
-// this way we support both the new (v2) and the old (v1 and deprecated) schemas
-// NOTE: this will not be required anymore when it is time to work on https://github.com/open-feature/flagd/issues/1088
-type bufSwitchHandler struct {
-	old http.Handler
-	v1  http.Handler
-	v2  http.Handler
+// dispatchHandler serves the evaluation v2 service and the routes the hosted endpoints mounted. A path that none
+// of them serves gets http.NotFound, the answer of every generated handler for a path it does not know.
+type dispatchHandler struct {
+	v2     http.Handler
+	routes []flagdService.Route
 }
 
-func (b bufSwitchHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	if strings.HasPrefix(request.URL.Path, flagdV2SchemaPrefix) {
-		b.v2.ServeHTTP(writer, request)
-	} else if strings.HasPrefix(request.URL.Path, flagdSchemaPrefix) {
-		b.v1.ServeHTTP(writer, request)
-	} else {
-		b.old.ServeHTTP(writer, request)
+func (d dispatchHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	path := request.URL.Path
+	if strings.HasPrefix(path, flagdV2ServicePrefix) {
+		d.v2.ServeHTTP(writer, request)
+		return
 	}
+	for _, route := range d.routes {
+		if strings.HasPrefix(path, route.Prefix) {
+			route.Handler.ServeHTTP(writer, request)
+			return
+		}
+	}
+	http.NotFound(writer, request)
 }
 
-// evaluationMetricRoutes holds every RPC procedure path of the served evaluation schemas.
-var evaluationMetricRoutes = buildEvaluationMetricRoutes(
-	schemaV1.File_schema_v1_schema_proto,
-	evalV1.File_flagd_evaluation_v1_evaluation_proto,
-	evalV2.File_flagd_evaluation_v2_evaluation_proto,
-)
-
-func buildEvaluationMetricRoutes(files ...protoreflect.FileDescriptor) map[string]struct{} {
+// buildEvaluationMetricRoutes holds every RPC procedure path of the services the endpoint serves.
+func buildEvaluationMetricRoutes(files []protoreflect.FileDescriptor, mounted []flagdService.Route) map[string]struct{} {
 	routes := make(map[string]struct{})
 	for _, fd := range files {
 		services := fd.Services()
@@ -80,15 +73,34 @@ func buildEvaluationMetricRoutes(files ...protoreflect.FileDescriptor) map[strin
 			}
 		}
 	}
+	for _, route := range mounted {
+		for _, procedure := range route.Procedures {
+			routes[procedure] = struct{}{}
+		}
+	}
 	return routes
 }
 
-// evaluationMetricRoute keeps the route attribute bounded to registered RPC procedures.
-func evaluationMetricRoute(request *http.Request) string {
-	if _, ok := evaluationMetricRoutes[request.URL.Path]; ok {
-		return request.URL.Path
+// validateRoutes refuses a route whose prefix is not a path prefix of whole services, one that overlaps the evaluation
+// v2 service or another route, and one without a handler.
+func validateRoutes(routes []flagdService.Route) error {
+	taken := []string{flagdV2ServicePrefix}
+	for _, route := range routes {
+		p := route.Prefix
+		if len(p) < 2 || !strings.HasPrefix(p, "/") || !strings.HasSuffix(p, "/") {
+			return fmt.Errorf("the route prefix %q must start and end with a slash", p)
+		}
+		if route.Handler == nil {
+			return fmt.Errorf("the route %q has no handler", p)
+		}
+		for _, other := range taken {
+			if strings.HasPrefix(p, other) || strings.HasPrefix(other, p) {
+				return fmt.Errorf("the route prefix %q overlaps %q", p, other)
+			}
+		}
+		taken = append(taken, p)
 	}
-	return "/"
+	return nil
 }
 
 type ConnectService struct {
@@ -96,7 +108,11 @@ type ConnectService struct {
 	eval                  evaluator.IResolver
 	telemetry             telemetry.Provider
 	eventingConfiguration IEvents
-	handlerOptions        []connect.HandlerOption
+	// routes are the routes of the mounted hosted endpoints.
+	routes []flagdService.Route
+	// metricRoutes holds every RPC procedure path the endpoint serves.
+	metricRoutes   map[string]struct{}
+	handlerOptions []connect.HandlerOption
 
 	server        *http.Server
 	metricsServer *http.Server
@@ -178,40 +194,56 @@ func (s *ConnectService) setupServer(svcConf service.Configuration) (net.Listene
 	return lis, nil
 }
 
-// Registers the legacy, v1, and v2 RPC handlers and middleware.
+// marshalOptions is the JSON configuration of every handler: falsy fields are emitted, unknown fields are discarded.
+var marshalOptions = flagdService.WithJSON(
+	protojson.MarshalOptions{EmitUnpopulated: true},
+	protojson.UnmarshalOptions{DiscardUnknown: true},
+)
+
+// allHandlerOptions is every option the endpoint applies to its own handlers and hands to the extensions it mounts.
+func (s *ConnectService) allHandlerOptions() []connect.HandlerOption {
+	return append(slices.Clone(s.handlerOptions), marshalOptions)
+}
+
+// Mount mounts the hosted endpoints, which must be flagdService.EvaluationExtensions, with the configuration of the
+// endpoint. A route that is refused fails the call. It has to be called before the endpoint serves.
+func (s *ConnectService) Mount(cfg service.Configuration, extensions ...service.Endpoint) error {
+	for _, extension := range extensions {
+		ext, ok := extension.(flagdService.EvaluationExtension)
+		if !ok {
+			return fmt.Errorf("the hosted endpoint %T cannot be mounted: it does not implement the flag evaluation extension (Mount)", extension)
+		}
+		routes, err := ext.Mount(flagdService.EvaluationHost{
+			Logger:         s.logger,
+			Resolver:       s.eval,
+			Events:         s.eventingConfiguration,
+			Telemetry:      s.telemetry,
+			Configuration:  cfg,
+			HandlerOptions: s.allHandlerOptions(),
+		})
+		if err != nil {
+			return fmt.Errorf("mounting %T: %w", extension, err)
+		}
+		next := append(slices.Clone(s.routes), routes...)
+		if err := validateRoutes(next); err != nil {
+			return fmt.Errorf("mounting %T: %w", extension, err)
+		}
+		s.routes = next
+	}
+	return nil
+}
+
+// metricRoute keeps the route attribute bounded to registered RPC procedures.
+func (s *ConnectService) metricRoute(request *http.Request) string {
+	if _, ok := s.metricRoutes[request.URL.Path]; ok {
+		return request.URL.Path
+	}
+	return "/"
+}
+
+// Registers the v2 RPC handlers, the mounted routes and middleware.
 // nolint: funlen
 func (s *ConnectService) setupHandler(svcConf service.Configuration) {
-	// register handler for old flag evaluation schema
-	// can be removed as a part of https://github.com/open-feature/flagd/issues/1088
-	fes := NewOldFlagEvaluationService(
-		s.logger.WithFields(zap.String("component", "flagservice")),
-		s.eval,
-		s.eventingConfiguration,
-		s.telemetry,
-		svcConf.ContextValues,
-	)
-
-	marshalOpts := flagdService.WithJSON(
-		// json parsing configuration - we emit "unpopulated" fields (falsy fields are not dropped)
-		protojson.MarshalOptions{EmitUnpopulated: true},
-		protojson.UnmarshalOptions{DiscardUnknown: true},
-	)
-
-	_, oldHandler := schemaConnectV1.NewServiceHandler(fes, append(slices.Clone(s.handlerOptions), marshalOpts)...)
-
-	// register handler for new flag evaluation schema (v1)
-
-	v1Fes := NewFlagEvaluationService(s.logger.WithFields(zap.String("component", "flagd.evaluation.v1")),
-		s.eval,
-		s.eventingConfiguration,
-		s.telemetry,
-		svcConf.ContextValues,
-		svcConf.HeaderToContextKeyMappings,
-		svcConf.StreamDeadline,
-	)
-
-	_, v1Handler := evaluationV1.NewServiceHandler(v1Fes, append(slices.Clone(s.handlerOptions), marshalOpts)...)
-
 	// register handler for evaluation v2 schema (with optional value and variant)
 
 	v2Fes := NewFlagEvaluationServiceV2(s.logger.WithFields(zap.String("component", "flagd.evaluation.v2")),
@@ -223,15 +255,11 @@ func (s *ConnectService) setupHandler(svcConf service.Configuration) {
 		svcConf.StreamDeadline,
 	)
 
-	_, v2Handler := evaluationV2.NewServiceHandler(v2Fes, append(slices.Clone(s.handlerOptions), marshalOpts)...)
+	_, v2Handler := evaluationV2.NewServiceHandler(v2Fes, s.allHandlerOptions()...)
 
-	bs := bufSwitchHandler{
-		old: oldHandler,
-		v1:  v1Handler,
-		v2:  v2Handler,
-	}
+	s.metricRoutes = buildEvaluationMetricRoutes([]protoreflect.FileDescriptor{evalV2.File_flagd_evaluation_v2_evaluation_proto}, s.routes)
 
-	var svcHandler http.Handler = bs
+	var svcHandler http.Handler = dispatchHandler{v2: v2Handler, routes: s.routes}
 	if svcConf.MaxRequestBodyBytes > 0 {
 		svcHandler = http.MaxBytesHandler(svcHandler, svcConf.MaxRequestBodyBytes)
 	}
@@ -249,7 +277,7 @@ func (s *ConnectService) setupHandler(svcConf service.Configuration) {
 	// Add middlewares
 	s.server.Handler = s.telemetry.HTTPServerMetrics(s.server.Handler, telemetry.HTTPMetricsOptions{
 		Service:          svcConf.ServiceName,
-		RouteFromRequest: evaluationMetricRoute,
+		RouteFromRequest: s.metricRoute,
 	})
 	if s.httpMiddleware != nil {
 		s.server.Handler = s.httpMiddleware(s.server.Handler)

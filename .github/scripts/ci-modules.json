@@ -53,6 +53,10 @@
       "test": "make test-module MODULE=service/event-collector",
       "coverage": true
     },
+    "service/flag-evaluation-legacy": {
+      "test": "make test-module MODULE=service/flag-evaluation-legacy",
+      "coverage": true
+    },
     "service/flag-evaluation": {
       "test": "make test-module MODULE=service/flag-evaluation",
       "coverage": true

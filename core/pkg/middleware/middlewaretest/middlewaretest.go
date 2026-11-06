@@ -36,6 +36,10 @@ import (
 // DefaultTimeout is the time limit of a case that has none of its own.
 const DefaultTimeout = 5 * time.Second
 
+// closeLimits is the number of request limits a case waits for its server to close. A handler that does not return
+// then fails the case.
+const closeLimits = 3
+
 // Goroutines is the number of goroutines of the concurrency case.
 const Goroutines = 64
 
@@ -95,7 +99,7 @@ func Check(_ testing.TB, f middleware.Factory, in Inputs) contracttest.Report {
 	if err := middleware.ValidateDeclarations(f); err != nil {
 		return contracttest.Report{Aborted: fmt.Sprintf("invalid declaration: %v", err)}
 	}
-	r := runner{f: f, in: in, limit: in.Timeout}
+	r := runner{f: f, in: in, limit: in.Timeout, hung: new(atomic.Bool)}
 	if r.limit <= 0 {
 		r.limit = DefaultTimeout
 	}
@@ -118,7 +122,11 @@ func Check(_ testing.TB, f middleware.Factory, in Inputs) contracttest.Report {
 	}
 	report := contracttest.Report{}
 	for _, c := range cases {
+		r.hung.Store(false)
 		expected, observed := guarded(c.run)
+		if r.hung.Load() {
+			observed = joinObserved(observed, fmt.Sprintf("case %q: a handler did not return within %v after the client connections were closed; the middleware blocks a request", c.name, closeLimits*r.limit))
+		}
 		report.Cases = append(report.Cases, contracttest.Check(c.name, stating(in, c.name, expected), observed))
 	}
 	return report
@@ -147,6 +155,15 @@ type runner struct {
 	f     middleware.Factory
 	in    Inputs
 	limit time.Duration
+	// hung is set when a server of the running case could not be closed because a handler did not return
+	hung *atomic.Bool
+}
+
+func joinObserved(observed, more string) string {
+	if observed == "" {
+		return more
+	}
+	return observed + "; " + more
 }
 
 func (r runner) create(config map[string]any, p telemetry.Provider) (middleware.Middleware, error) {
@@ -224,6 +241,8 @@ type response struct {
 type server struct {
 	srv   *httptest.Server
 	inner *recordingHandler
+	wait  time.Duration
+	hung  *atomic.Bool
 }
 
 func (r runner) serve(p telemetry.Provider) (*server, string) {
@@ -232,10 +251,27 @@ func (r runner) serve(p telemetry.Provider) (*server, string) {
 		return nil, fmt.Sprintf("the factory failed on the valid configuration (middleware %v, error %v)", mw, err)
 	}
 	inner := &recordingHandler{}
-	return &server{srv: httptest.NewServer(middleware.Chain([]middleware.Middleware{mw}, inner)), inner: inner}, ""
+	return &server{srv: httptest.NewServer(middleware.Chain([]middleware.Middleware{mw}, inner)), inner: inner, wait: closeLimits * r.limit, hung: r.hung}, ""
 }
 
-func (s *server) close() { s.srv.Close() }
+// close stops the server. httptest.Server.Close waits for running handlers, so a handler that never returns would
+// block it for ever: the client connections are closed first and the wait is bounded. On timeout the goroutine that
+// waits is leaked and the case fails.
+func (s *server) close() {
+	s.srv.CloseClientConnections()
+	done := make(chan struct{})
+	go func() {
+		s.srv.Close()
+		close(done)
+	}()
+	timer := time.NewTimer(s.wait)
+	defer timer.Stop()
+	select {
+	case <-done:
+	case <-timer.C:
+		s.hung.Store(true)
+	}
+}
 
 func (s *server) send(limit time.Duration, req *http.Request) (response, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), limit)
@@ -494,8 +530,9 @@ func (r runner) concurrent() (string, string) {
 			}
 		}()
 	}
-	// Every request has its own time limit and a goroutine stops at its first problem, so a hanging middleware ends the
-	// case within one limit. A limit on the whole case would measure how fast the machine serves 640 requests.
+	// Every request has its own time limit and a goroutine stops at its first problem, so a middleware that hangs a
+	// request ends the requests within one limit, and the server's close, bounded by closeLimits limits, ends the case.
+	// A limit on the whole case would measure how fast the machine serves 640 requests.
 	wg.Wait()
 	if len(problems) > 0 {
 		return expected, problems[0]

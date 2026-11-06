@@ -9,7 +9,6 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/logger"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/model"
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/store"
-	"github.com/open-feature-forking/openfeature-relay/core/pkg/telemetry"
 	flagdService "github.com/open-feature-forking/openfeature-relay/service/transport"
 	"go.uber.org/zap"
 )
@@ -27,13 +26,6 @@ func selectorFromHeader(ctx context.Context, log *logger.Logger, header http.Hea
 		return store.Selector{}, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 	return s, nil
-}
-
-// recordSpanError marks the span as errored and returns the error for convenient inline returns.
-func recordSpanError(span telemetry.Span, err error) error {
-	span.RecordError(err)
-	span.SetError(err.Error())
-	return err
 }
 
 // flagNotFound is the resolver for a request whose bound and client's selectors conflict: no flag matches both.

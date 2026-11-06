@@ -81,15 +81,9 @@ func TestEngineServesBothFormats(t *testing.T) {
 
 	waitReady(t, fmt.Sprintf("http://127.0.0.1:%d/readyz", managementPort), done)
 
-	connect := fmt.Sprintf("http://127.0.0.1:%d/flagd.evaluation.v1.Service/", servicePort)
+	connect := fmt.Sprintf("http://127.0.0.1:%d/flagd.evaluation.v2.Service/", servicePort)
 	ofrep := fmt.Sprintf("http://127.0.0.1:%d/ofrep/v1/evaluate/flags", ofrepPort)
 
-	all := post(t, connect+"ResolveAll", `{}`)["flags"].(map[string]any)
-	require.Len(t, all, 4)
-	require.Contains(t, all, "f1")
-	require.Contains(t, all, "a")
-	require.Contains(t, all, "b")
-	require.Contains(t, all, "server.secret")
 
 	bulk := post(t, ofrep, `{}`)["flags"].([]any)
 	values := map[string]any{}

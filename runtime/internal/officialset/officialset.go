@@ -9,6 +9,7 @@ import (
 	"github.com/open-feature-forking/openfeature-relay/core/pkg/distribution"
 	flagdeval "github.com/open-feature-forking/openfeature-relay/evaluator/flagd"
 	flageval "github.com/open-feature-forking/openfeature-relay/service/flag-evaluation"
+	flagevallegacy "github.com/open-feature-forking/openfeature-relay/service/flag-evaluation-legacy"
 	flagsync "github.com/open-feature-forking/openfeature-relay/service/flag-sync"
 	ofrep "github.com/open-feature-forking/openfeature-relay/service/ofrep"
 	"github.com/open-feature-forking/openfeature-relay/sync/builder/official"
@@ -21,7 +22,7 @@ func Components() distribution.Components {
 	c.Sync = official.Factories()
 	c.ConfigurationFormats = append(c.ConfigurationFormats, flagdformat.NewFactory())
 	c.Evaluators = append(c.Evaluators, flagdeval.NewFactory())
-	c.Endpoints = append(c.Endpoints, flageval.NewFactory(), ofrep.NewFactory(), flagsync.NewFactory())
+	c.Endpoints = append(c.Endpoints, flageval.NewFactory(), flagevallegacy.NewFactory(), ofrep.NewFactory(), flagsync.NewFactory())
 	c.Telemetry = otel.NewFactory()
 	return c
 }

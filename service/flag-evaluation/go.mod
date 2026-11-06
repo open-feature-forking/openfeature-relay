@@ -86,6 +86,7 @@ replace (
 	github.com/open-feature-forking/openfeature-relay/core => ../../core
 	github.com/open-feature-forking/openfeature-relay/evaluator/flagd => ../../evaluator/flagd
 	github.com/open-feature-forking/openfeature-relay/runtime => ../../runtime
+	github.com/open-feature-forking/openfeature-relay/service/flag-evaluation-legacy => ../flag-evaluation-legacy
 	github.com/open-feature-forking/openfeature-relay/service/flag-sync => ../flag-sync
 	github.com/open-feature-forking/openfeature-relay/service/ofrep => ../ofrep
 	github.com/open-feature-forking/openfeature-relay/service/transport => ../transport
