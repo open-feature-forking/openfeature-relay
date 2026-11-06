@@ -439,7 +439,7 @@ jobs:
               | jq -r '.annotations["org.opencontainers.image.revision"] // empty' 2>/dev/null || true)
             if [ -z "$built" ] || ! git cat-file -e "$built^{commit}" 2>/dev/null; then
               changed=true
-            elif { git diff --name-only "$built" "$HEAD" | grep -Ev '^tools/ci/'; git diff --name-only "$built" "$HEAD" | grep -E '^tools/ci/internal/(oci|publish)/'; } | grep -Eq "$pattern"; then
+            elif { git diff --name-only "$built" "$HEAD" | grep -Ev '^tools/ci/'; git diff --name-only "$built" "$HEAD" | grep -E '^tools/ci/internal/(oci|publish)/' || true; } | grep -Eq "$pattern"; then
               changed=true
             fi
           fi

@@ -422,7 +422,8 @@ class BuildWorkflow(unittest.TestCase):
         self.assertIn("grep -Ev '^tools/ci/'", gate)
         self.assertLess(gate.index("grep -Ev '^tools/ci/'"), gate.index('grep -Eq "$pattern"'))
         self.assertIn("|^tools/ci/internal/(oci|publish)/'", gate)
-        self.assertIn("grep -E '^tools/ci/internal/(oci|publish)/'", gate)
+        # the group must exit 0 when nothing matches, or a diff of core/x.go alone reads as "not changed" under pipefail
+        self.assertIn("grep -E '^tools/ci/internal/(oci|publish)/' || true; } | grep -Eq", gate)
         self.assertIn("build: ${{ steps.gate.outputs.build }}", gate)
         self.assertIn("publish: ${{ steps.gate.outputs.publish }}", gate)
         for name in ("release-dry-run", "image-build"):
