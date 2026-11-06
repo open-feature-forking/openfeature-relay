@@ -129,32 +129,8 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		return nil, err
 	}
 
-	bus := events.NewBus()
-	rt = &Runtime{
-		Logger:         logger.WithFields(zap.String("component", "runtime")),
-		Bus:            bus,
-		Telemetry:      tp,
-		MetricsHandler: metricsHandler(tp, components),
-		Listen:         components.Listen,
-		ServiceConfig: service.Configuration{
-			Port:                       config.ServicePort,
-			ManagementPort:             config.ManagementPort,
-			ServiceName:                svcName,
-			KeyPath:                    config.ServiceKeyPath,
-			CertPath:                   config.ServiceCertPath,
-			SocketPath:                 config.ServiceSocketPath,
-			CORS:                       config.CORS,
-			ContextValues:              config.ContextValues,
-			HeaderToContextKeyMappings: config.HeaderToContextKeyMappings,
-			StreamDeadline:             config.StreamDeadline,
-			MaxRequestBodyBytes:        config.MaxRequestBodyBytes,
-			MaxRequestHeaderBytes:      config.MaxRequestHeaderBytes,
-		},
-		Formats:         formats,
-		DefaultFormat:   defaultFormat,
-		sourceReadiness: sourceReadiness,
-		store:           store,
-	}
+	rt = newRuntime(logger, tp, config, components, store, formats, defaultFormat, sourceReadiness)
+	bus := rt.Bus
 
 	inputs, err := newEndpointInputs(logger, store, bus, components.Endpoints, formatTypes, config.Evaluators,
 		func(evaluatorType string) map[string]any { return maps.Clone(config.EvaluatorSettings[evaluatorType]) },
@@ -294,6 +270,39 @@ func formatsOf(
 		formatTypes = append(formatTypes, f.Type())
 	}
 	return st, formats, defaultFormat, formatTypes, nil
+}
+
+// newRuntime returns the runtime without endpoints, evaluator and sync providers, which the build adds.
+func newRuntime(
+	logger *logger.Logger, tp telemetry.Provider, config Config, components Components, st *store.Store,
+	formats map[string]configformat.ConfigurationFormat, defaultFormat configformat.ConfigurationFormat,
+	sourceReadiness map[string]bool,
+) *Runtime {
+	return &Runtime{
+		Logger:         logger.WithFields(zap.String("component", "runtime")),
+		Bus:            events.NewBus(),
+		Telemetry:      tp,
+		MetricsHandler: metricsHandler(tp, components),
+		Listen:         components.Listen,
+		ServiceConfig: service.Configuration{
+			Port:                       config.ServicePort,
+			ManagementPort:             config.ManagementPort,
+			ServiceName:                svcName,
+			KeyPath:                    config.ServiceKeyPath,
+			CertPath:                   config.ServiceCertPath,
+			SocketPath:                 config.ServiceSocketPath,
+			CORS:                       config.CORS,
+			ContextValues:              config.ContextValues,
+			HeaderToContextKeyMappings: config.HeaderToContextKeyMappings,
+			StreamDeadline:             config.StreamDeadline,
+			MaxRequestBodyBytes:        config.MaxRequestBodyBytes,
+			MaxRequestHeaderBytes:      config.MaxRequestHeaderBytes,
+		},
+		Formats:         formats,
+		DefaultFormat:   defaultFormat,
+		sourceReadiness: sourceReadiness,
+		store:           st,
+	}
 }
 
 // checkSinkMetrics refuses event sinks when the setting event-sinks needs /metrics and the telemetry provider serves
