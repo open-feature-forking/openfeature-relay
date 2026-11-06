@@ -141,9 +141,19 @@ func TestHostedEndpoint(t *testing.T) {
 			problem: `service endpoint "flag-evaluation-legacy" (m/flag-evaluation-legacy) is hosted by the service endpoint "flag-evaluation", which does not host other endpoints`,
 		},
 		{
+			name:    "two endpoints of the host type",
+			items:   []Item{hosting("flag-evaluation", true), hosting("flag-evaluation", true), hosted("flag-evaluation-legacy", "flag-evaluation")},
+			problem: `service endpoint "flag-evaluation-legacy" (m/flag-evaluation-legacy) is hosted by the service endpoint "flag-evaluation", but 2 selected service endpoints have that type`,
+		},
+		{
+			name:    "the host is itself hosted",
+			items:   []Item{hosting("flag-evaluation", true), hosted("mid", "flag-evaluation"), hosted("flag-evaluation-legacy", "mid")},
+			problem: `service endpoint "flag-evaluation-legacy" (m/flag-evaluation-legacy) is hosted by the service endpoint "mid", which is itself a hosted endpoint`,
+		},
+		{
 			name:    "a hosted endpoint does not host itself",
 			items:   []Item{hosted("a", "a")},
-			problem: `service endpoint "a" (m/a) is hosted by the service endpoint "a", but no selected service endpoint has that type`,
+			problem: `service endpoint "a" (m/a) is hosted by the service endpoint "a", which is itself a hosted endpoint`,
 		},
 	}
 	for _, tt := range tests {

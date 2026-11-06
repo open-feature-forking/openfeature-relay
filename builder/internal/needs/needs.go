@@ -117,19 +117,20 @@ func Check(items []Item) (warnings []string, err error) {
 		if ep.Host == "" {
 			continue
 		}
-		var typed, hosting int
+		var sameType []Item
 		for _, h := range endpoints {
-			if h.Type == ep.Host && h.Host == "" {
-				typed++
-				if h.Hosts {
-					hosting++
-				}
+			if h.Type == ep.Host {
+				sameType = append(sameType, h)
 			}
 		}
 		switch {
-		case typed == 0:
+		case len(sameType) == 0:
 			problems = append(problems, fmt.Sprintf("%s is hosted by the service endpoint %q, but no selected service endpoint has that type", ep, ep.Host))
-		case hosting == 0:
+		case len(sameType) > 1:
+			problems = append(problems, fmt.Sprintf("%s is hosted by the service endpoint %q, but %d selected service endpoints have that type", ep, ep.Host, len(sameType)))
+		case sameType[0].Host != "":
+			problems = append(problems, fmt.Sprintf("%s is hosted by the service endpoint %q, which is itself a hosted endpoint", ep, ep.Host))
+		case !sameType[0].Hosts:
 			problems = append(problems, fmt.Sprintf("%s is hosted by the service endpoint %q, which does not host other endpoints", ep, ep.Host))
 		}
 	}
