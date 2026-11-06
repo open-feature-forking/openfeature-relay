@@ -158,31 +158,16 @@ func FromConfig(logger *logger.Logger, version string, config Config, components
 		return nil, err
 	}
 
-	// build sync providers with a shared source-agnostic sync-metrics recorder so every
-	// provider (grpc, http, file, kubernetes, blob) emits the universal client-side sync
-	// metrics into the same reader as the rest of flagd's telemetry.
-	syncLogger := logger.WithFields(zap.String("component", "sync"))
-	iSyncs, err := syncProvidersFromConfig(syncLogger, syncProviders, tp, config.SyncFactories)
-	if err != nil {
-		return nil, err
-	}
-	rt.Syncs = iSyncs
-	// the sync providers close before the endpoints
+	syncs, err := rt.startSyncs(logger, config, syncProviders, tp)
+	// the sync providers close before the endpoints; those created before a failure of startSyncs are released too
 	defer func() {
-		if rt != nil {
-			return
-		}
-		for _, s := range iSyncs {
-			if closer, ok := s.(io.Closer); ok {
-				_ = closer.Close()
-			}
+		if rt == nil {
+			closeSyncs(syncs)
 		}
 	}()
-	staleLimits, err := staleLimitsOf(syncProviders, iSyncs)
 	if err != nil {
 		return nil, err
 	}
-	rt.staleLimits = staleLimits
 	sinks, err := startEventSinks(logger, bus, tp, components.EventSinks)
 	if err != nil {
 		return nil, err
@@ -238,6 +223,37 @@ func (rt *Runtime) createEndpoints(
 func closeEndpoints(endpoints []service.Endpoint) {
 	for _, e := range endpoints {
 		if closer, ok := e.(io.Closer); ok {
+			_ = closer.Close()
+		}
+	}
+}
+
+// startSyncs builds the sync providers of the sources on the runtime, with the stale limits of the sources that set
+// staleAfter. It returns the sync providers created even when it fails on a stale limit, for the caller to close.
+func (rt *Runtime) startSyncs(
+	logger *logger.Logger, config Config, syncProviders []sync.SourceConfig, tp telemetry.Provider,
+) ([]sync.ISync, error) {
+	// build sync providers with a shared source-agnostic sync-metrics recorder so every
+	// provider (grpc, http, file, kubernetes, blob) emits the universal client-side sync
+	// metrics into the same reader as the rest of flagd's telemetry.
+	syncLogger := logger.WithFields(zap.String("component", "sync"))
+	iSyncs, err := syncProvidersFromConfig(syncLogger, syncProviders, tp, config.SyncFactories)
+	if err != nil {
+		return nil, err
+	}
+	rt.Syncs = iSyncs
+	staleLimits, err := staleLimitsOf(syncProviders, iSyncs)
+	if err != nil {
+		return iSyncs, err
+	}
+	rt.staleLimits = staleLimits
+	return iSyncs, nil
+}
+
+// closeSyncs closes the sync providers that hold a resource, in list order.
+func closeSyncs(syncs []sync.ISync) {
+	for _, s := range syncs {
+		if closer, ok := s.(io.Closer); ok {
 			_ = closer.Close()
 		}
 	}
