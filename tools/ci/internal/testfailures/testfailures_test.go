@@ -108,6 +108,20 @@ func TestFailures(t *testing.T) {
 		{"a failure after a package's failure is a new one", fixture(
 			"--- FAIL: TestA (0.10s)\nFAIL\\t{RELAY}/p\\t1s\n--- FAIL: TestA (0.20s)\nFAIL\\t{RELAY}/q\\t1s\n"), []Failure{
 			{"TestA", relay + "/p", "0.10", ""}, {"TestA", relay + "/q", "0.20", ""}}},
+		{"a timeout with two running tests names the first", fixture("panic: test timed out after 1m0s\n\\trunning tests:\n\\t\\tTestA (59s)\n\\t\\tTestB (58s)\nFAIL\\t{RELAY}/p\\t60s\n"), []Failure{
+			{"TestA", relay + "/p", "", "timed out after 1m0s"}}},
+		{"the timeout is reset at the package line", fixture("panic: test timed out after 1m0s\n\\t\\tTestA (59s)\nFAIL\\t{RELAY}/p\\t60s\n--- FAIL: TestC (0.10s)\nFAIL\\t{RELAY}/q\\t1s\n"), []Failure{
+			{"TestA", relay + "/p", "", "timed out after 1m0s"}, {"TestC", relay + "/q", "0.10", ""}}},
+		{"leftover output is not carried into the next package", fixture("=== RUN   TestOld\n    a_test.go:1: leftover\n    \\tError:      \\tboom\nFAIL\\t{RELAY}/p\\t1s\n--- FAIL: TestX (0.10s)\nFAIL\\t{RELAY}/q\\t1s\n"), []Failure{
+			{"-", relay + "/p", "", "1s"}, {"TestX", relay + "/q", "0.10", ""}}},
+		{"an empty location message keeps the earlier line", "--- FAIL: TestA (0.10s)\n    a_test.go:1: earlier\n    a_test.go:2:\nFAIL\tp\t1s\n", []Failure{
+			{"TestA", "p", "0.10", "a_test.go:1: earlier"}}},
+		{"trailing whitespace on Error and FAIL lines", fixture("--- FAIL: TestA (0.10s)  \n    \\tError:      \\tNot equal:   \nFAIL\\tp\\t1s   \nFAIL\\tq [build failed]  \n"), []Failure{
+			{"TestA", "p", "0.10", "Not equal:"}, {"-", "q", "", "[build failed]"}}},
+		{"SKIP, PAUSE, CONT and NAME lines", "=== PAUSE TestA\n=== CONT  TestA\n=== NAME  TestB\n--- SKIP: TestA (0.00s)\n--- FAIL: TestB (0.10s)\nFAIL\tp\t1s\n", []Failure{
+			{"TestB", "p", "0.10", ""}}},
+		{"U+2029, FS, GS and RS break lines", "--- FAIL: TestA (0.10s)\u2029    a_test.go:1: x\x1dFAIL\tp\t1s\x1e--- FAIL: TestB (0.20s)\x1cFAIL\tq\t1s", []Failure{
+			{"TestA", "p", "0.10", "a_test.go:1: x"}, {"TestB", "q", "0.20", ""}}},
 	}
 	tests[5].want = Failures(plain)
 	for _, tc := range tests {
@@ -279,6 +293,13 @@ func TestParityWithPython(t *testing.T) {
 		"timeout no running":  "panic: test timed out after 1m0s\nFAIL\tp\t60s\n",
 		"timestamps":          "2026-11-05T10:00:00.0000000Z --- FAIL: TestA (0.10s)\n2026-11-05T10:00:00.0000000Z FAIL\tp\t1s\n",
 		"unterminated":        "--- FAIL: TestA (0.10s)\n",
+		"two running tests":   fixture("panic: test timed out after 1m0s\n\\trunning tests:\n\\t\\tTestA (59s)\n\\t\\tTestB (58s)\nFAIL\\tp\\t60s\n"),
+		"timeout reset":       fixture("panic: test timed out after 1m0s\n\\t\\tTestA (59s)\nFAIL\\tp\\t60s\n--- FAIL: TestC (0.10s)\nFAIL\\tq\\t1s\n"),
+		"leftover output":     fixture("=== RUN   TestOld\n    a_test.go:1: leftover\n    \\tError:      \\tboom\nFAIL\\tp\\t1s\n--- FAIL: TestX (0.10s)\nFAIL\\tq\\t1s\n"),
+		"empty location":      "--- FAIL: TestA (0.10s)\n    a_test.go:1: earlier\n    a_test.go:2:\nFAIL\tp\t1s\n",
+		"trailing whitespace": fixture("--- FAIL: TestA (0.10s)  \n    \\tError:      \\tNot equal:   \nFAIL\\tp\\t1s   \nFAIL\\tq [build failed]  \n"),
+		"skip and pause":      "=== PAUSE TestA\n=== CONT  TestA\n=== NAME  TestB\n--- SKIP: TestA (0.00s)\n--- FAIL: TestB (0.10s)\nFAIL\tp\t1s\n",
+		"other line breaks":   "--- FAIL: TestA (0.10s)\u2029    a_test.go:1: x\x1dFAIL\tp\t1s\x1e--- FAIL: TestB (0.20s)\x1cFAIL\tq\t1s",
 		"no trailing newline": "--- FAIL: TestA (0.10s)\nFAIL\tp\t1s",
 	}
 	for name, log := range logs {
