@@ -38,9 +38,9 @@ for side in launchpad relay; do
     >"${out}/${side}.json" || {
       echo "::notice::the ${side} run reported failures; the pass sets decide"
       echo "::group::Failed tests of the ${side} run"
-      python3 .github/scripts/testbed-failures.py "${out}/${side}.json" "${out}/${side}.log"
+      python3 .github/scripts/testbed-failures.py "${out}/${side}.json" "${out}/${side}.log" || true
       echo "::endgroup::"
-      python3 .github/scripts/test-failures.py --log "${out}/${side}.log" --job "testbed ${mode} ${side}" ${GITHUB_STEP_SUMMARY:+--summary "${GITHUB_STEP_SUMMARY}"}
+      python3 .github/scripts/test-failures.py --log "${out}/${side}.log" --job "testbed ${mode} ${side}" ${GITHUB_STEP_SUMMARY:+--summary "${GITHUB_STEP_SUMMARY}"} || true
     }
 done
 

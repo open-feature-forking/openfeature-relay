@@ -22,8 +22,12 @@ def main(argv):
             except ValueError:
                 text.append(line if line.endswith("\n") else line + "\n")
                 continue
+            if not isinstance(event, dict):  # a scalar line, such as a bare number
+                continue
             key = (event.get("Package", ""), event.get("Test", ""))
-            if event.get("Action") == "output":
+            if event.get("Action") == "build-output":  # the compile errors of Go 1.27, which have no Package or Test
+                text.append(event.get("Output", ""))
+            elif event.get("Action") == "output":
                 text.append(event.get("Output", ""))
                 outputs.setdefault(key, []).append(event.get("Output", ""))
             elif event.get("Action") == "fail" and key not in failed:
