@@ -28,21 +28,47 @@ import (
 // cycles is how many times a test builds or resets a runtime.
 const cycles = 200
 
-// readyFloor and readyFactor bound how long a rebuilt or reset runtime may take to be ready: the larger of the floor
-// and readyFactor times the median of the cycles, so that a loaded machine that slows every cycle does not fail the
-// test, while one cycle that stalls (a backoff, a lost wake-up) still does.
+// How long a rebuilt or reset runtime may take to be ready is judged on three counts, so that a loaded machine that
+// slows every cycle passes while a regression does not. The numbers come from 200-cycle runs on a 16-core machine with
+// 32 busy loops: medians of 130 to 380 ms, slowest cycles up to 1.2 s (1.75 s in an earlier run), quarter medians
+// that drift by a factor of four between the start and the end of one run.
+//   - the median cycle stays within readyMedianCap, a fixed cap: a cost on every cycle fails however slow the machine;
+//   - the quickest cycle of the last quarter stays within readyTrendFactor times the first quarter's plus
+//     readyTrendSlack: a cost that grows with each cycle (a leak) fails. The quickest, not the median, because load
+//     comes and goes during a run while a leak does not leave;
+//   - no cycle takes more than the larger of readyFloor and readyOutlierFactor times the median: a stall (a backoff,
+//     a lost wake-up) fails.
 const (
-	readyFloor  = time.Second
-	readyFactor = 20
+	readyMedianCap     = 750 * time.Millisecond
+	readyTrendFactor   = 2
+	readyTrendSlack    = 300 * time.Millisecond
+	readyFloor         = time.Second
+	readyOutlierFactor = 8
 )
 
-// requireReadyInTime fails if the slowest cycle took more than readyFloor or readyFactor times the median.
+func median(d []time.Duration) time.Duration {
+	sorted := slices.Sorted(slices.Values(d))
+	return sorted[len(sorted)/2]
+}
+
+// requireReadyInTime fails if the cycles are slow on any of the three counts, and names the slowest cycle.
 func requireReadyInTime(t *testing.T, what string, elapsed []time.Duration) {
 	t.Helper()
-	sorted := slices.Sorted(slices.Values(elapsed))
-	median, slowest := sorted[len(sorted)/2], sorted[len(sorted)-1]
-	bound := max(readyFloor, readyFactor*median)
-	require.LessOrEqual(t, slowest, bound, "the slowest %s took %s, the median %s", what, slowest, median)
+	quarter := len(elapsed) / 4
+	all := median(elapsed)
+	first, last := slices.Min(elapsed[:quarter]), slices.Min(elapsed[len(elapsed)-quarter:])
+	slowest := slices.Index(elapsed, slices.Max(elapsed))
+	t.Logf("%s: median %s, quickest of the first quarter %s and of the last %s, slowest %s (cycle %d)",
+		what, all, first, last, elapsed[slowest], slowest)
+
+	require.LessOrEqual(t, all, readyMedianCap, "the median %s is slow on every cycle (slowest: cycle %d, %s)",
+		what, slowest, elapsed[slowest])
+	require.LessOrEqual(t, last, readyTrendFactor*first+readyTrendSlack,
+		"the %s gets slower: quickest of the first quarter %s, of the last %s (slowest: cycle %d, %s)",
+		what, first, last, slowest, elapsed[slowest])
+	bound := max(readyFloor, readyOutlierFactor*all)
+	require.LessOrEqual(t, elapsed[slowest], bound, "%s %d took %s, more than %s (median %s)",
+		what, slowest, elapsed[slowest], bound, all)
 }
 
 func openFDs(t *testing.T) int {
@@ -104,7 +130,7 @@ func (p probe) ready() bool {
 }
 
 // requireReadyNow fails unless /readyz answers 200. A request that gets no answer (a client timeout on a loaded
-// machine) is asked again for a few seconds: only an answer other than 200 means the runtime is not ready.
+// machine) is asked again, every 20 ms for up to 10 s: only an answer other than 200 means the runtime is not ready.
 func (p probe) requireReadyNow(t *testing.T, msg string) {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
@@ -116,6 +142,7 @@ func (p probe) requireReadyNow(t *testing.T, msg string) {
 			return
 		}
 		require.True(t, time.Now().Before(deadline), "%s: no answer from /readyz: %v", msg, err)
+		time.Sleep(20 * time.Millisecond)
 	}
 }
 
@@ -253,8 +280,7 @@ func TestFromConfigRepeatedly(t *testing.T) {
 	for i := range cycles {
 		elapsed = append(elapsed, cycle(i))
 	}
-	t.Logf("%d cycles, slowest ready after %s", cycles, slices.Max(elapsed))
-	requireReadyInTime(t, "cycle to become ready", elapsed)
+	requireReadyInTime(t, "cycle", elapsed)
 
 	check.client.CloseIdleConnections()
 	goleak.VerifyNone(t, ignore)
@@ -292,7 +318,6 @@ func TestResetRepeatedly(t *testing.T) {
 	for range cycles {
 		elapsed = append(elapsed, reset())
 	}
-	t.Logf("%d resets, slowest %s", cycles, slices.Max(elapsed))
 	requireReadyInTime(t, "reset", elapsed)
 
 	check.client.CloseIdleConnections()
