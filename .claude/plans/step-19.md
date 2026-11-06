@@ -1,6 +1,7 @@
 # Step 19 plan: deprecated flag evaluation services as their own component (issue #266)
 
-**Status: revision 1, waiting for the project lead (Q1–Q8, section 0).** Base: `main` @ c6e0f77f.
+**Status: revision 2, waiting for the project lead (Q1–Q8, section 0).** It answers `step-19-opposer.md`: 2 blockers, 6 majors,
+9 minors. Base: `main` @ 6e222eb5.
 
 **Decided by the project lead (#266):**
 - the deprecated evaluation services become their own component;
@@ -8,275 +9,314 @@
 - flagd-minimal, flagd-minimal-otel, flagd-cloud, flagd-kubernetes and flagd-sync leave it out;
 - custom manifests opt in.
 
+## Revision 2: what changed
+
+| Finding | Resolution |
+|---|---|
+| B1 v1 is deprecated upstream | Section 1 is rewritten against `4824facda674`, where the whole v1 file is deprecated. The project lead adds that **the flagd-web provider is deprecated too**, so its use of v1 `ResolveAll` no longer argues for keeping v1. Q1 now recommends **(b): schema.v1 and flagd.evaluation.v1 both move into the legacy component; flagd-full keeps both; the slim distributions serve only v2.** The other options stay listed. Sections 2–6 follow (b): two mounted routes, the v1 test split, and the v1 consumers C must move. The note on bumping the pin (SA1019 hits) is in section 1. |
+| B2 C is red alone | C now carries everything that keeps the observable state unchanged: the flagd-full and flagd-testbed manifests with their regeneration, `officialset`, `load.js` / `protoset.go`, and the runtime composition test (M6). C stacks on A, which brings the runtime's two-pass creation. E keeps only the slim-distribution tests and `/spec-review`. Rule: C never merges without A below it, and the stack merges bottom-up. |
+| M3 marshal options | `EvaluationHost.HandlerOptions` is defined as every option the host applies to its own handlers, marshal options included. The host builds the slice once and uses it for v1, v2 and the mounted routes. T10 asserts `"value":false` on a schema.v1 `ResolveBoolean` over Connect JSON. |
+| M4 silent drop | Hosting is opt-in: core adds `Hosting interface{ Hosts() bool }`. The runtime (T1) and the builder's needs check (T7) refuse a hosted endpoint whose host type is absent **or does not declare `Hosts()`**. |
+| M5 host coverage | Section 4, "Test split", names each test: what stays on the host (rewritten on v2) and what moves to the legacy module. |
+| M6 shutdown, change events, gRPC | New T11 in C. On the `officialset` plus legacy composition, a schema.v1 `EventStream` gets `configuration_change` after a store update and `provider_shutdown` on stop, and the runtime returns within the budget. T5 gains one grpc-go schema.v1 call. |
+| M7 transport surface | `service/transport` exports only the contract: `EvaluationHost`, `EvaluationExtension`, `Route` and a two-method `Events` interface. The legacy module **copies** the frozen helpers and its own response wrappers. `flag_evaluator_types.go` only drops its `schemaV1Resp` fields. |
+| M8 orphan files | Section 6 assigns each file to a slice: the boundary and module testdata, `go-packages.txt`, `FLAGD_MODULE_DIRS`, `.golangci.yml`, `officialset` and `contract-external.txt`. The release dry run derives its modules from the manifests; nothing lists flag-evaluation (`grep` of `.github/scripts/release*.sh` and the workflows), so it needs no change. |
+| m1 R1 | Solved: every generated handler's `default` is `http.NotFound`. One T4 assertion pins status, body `404 page not found\n` and headers. |
+| m2 route validation | The host refuses a mounted prefix that does not start and end with `/`, or that overlaps `/flagd.evaluation.v2.Service/` or another route. T4 pins `/flagdX` and the service paths without a slash (today's 404). |
+| m3 when Mount runs | The host mounts in `Create` with `cfg.Configuration`, so a mount error fails `Create`. |
+| m4 logger fields | `Mount` uses `EvaluationHost.Logger`, the host's `component=service` logger, and adds `component=flagservice`. T10 asserts both keys. |
+| m5 Serve of a hosted endpoint | It returns `the endpoint "<type>" is served by "<host>", not on its own`. `servicetest.Run` on a hosted factory without `Inputs.Host` fails with that message. |
+| m6 metric routes per instance | `evaluationMetricRoutes` becomes per instance, and `RouteFromRequest` is a closure over the instance's set (C). |
+| m7 UC-011 JSON | `host` is `omitempty`. The golden has a row with it and one without. |
+| m8 R9 | Nothing enforces unique endpoint types; only modules are unique (UC-001 BR-004). The runtime refuses two factories of one type when a hosted endpoint names that type. T1 has the case. |
+| m9 alternatives | Section 7, "Considered": a config switch inside flag-evaluation, a build tag, a new manifest group. |
+
 ## 1. What is deprecated: evidence
 
 The flag evaluation endpoint (`service/flag-evaluation`, `setupHandler` in `connect_service.go`) serves three services on one
-port, split by `bufSwitchHandler` on the path prefix:
+port. Markers are from the generated `buf.build/gen/go/open-feature/flagd/protocolbuffers/go` modules: the pin `1388a552fc3c`
+(2026-02-17, every relay module) and `4824facda674` (2026-08-24, flagd-schemas' current state, already resolved indirectly by
+`test/integration/go.mod`).
 
-| Service | Proto marker (pinned `buf.build/gen/go/open-feature/flagd` @ 1388a552fc3c, and flagd-schemas `1daf5ff`) | Who calls it today | Verdict |
-|---|---|---|---|
-| `schema.v1.Service` (`OldFlagEvaluationService`, `flag_evaluator.go`) | `option deprecated = true;` on the file, header `DEPRECATED; use flagd.evaluation.v1`. The generated Go marks every type `Deprecated: The entire proto file schema/v1/schema.proto is marked as deprecated.` The code says "can be removed as a part of open-feature/flagd#1088". | No current provider (the Go, Java, JS and Python flagd providers use `flagd.evaluation.v2`). | **Deprecated** |
-| `flagd.evaluation.v1.Service` (`flag_evaluator_v1.go`) | **None.** No file, service, method or message option; the header has no DEPRECATED line. Upstream flagd docs mark nothing either. | The **flagd-web provider** (`js-sdk-contrib/libs/providers/flagd-web`, its `flagd-web-provider.ts` imports `flagd/evaluation/v1/evaluation_connect`) for `ResolveAll` and `EventStream`. Older releases of every flagd provider. | **Not deprecated.** v2 has **no `ResolveAll`**: v1 is still the only RPC bulk evaluation. |
-| `flagd.evaluation.v2.Service` (`flag_evaluator_v2.go`) | none | current providers | current |
+| Service | `1388a552fc3c` (pin) | `4824facda674` (current) | Who calls it | Has a replacement |
+|---|---|---|---|---|
+| `schema.v1.Service` (`OldFlagEvaluationService`) | file deprecated | file deprecated | no current provider | yes (v1, v2) |
+| `flagd.evaluation.v1.Service` | no marker | **file deprecated** (`Deprecated: The entire proto file flagd/evaluation/v1/evaluation.proto is marked as deprecated.`) | the **flagd-web provider, itself deprecated** (project lead; `flagd-web-provider.ts:21`: `ResolveAll`, `EventStream`), older releases of every flagd provider, any RPC bulk client | singles and stream: v2. Bulk: none, since v2 has no `ResolveAll` at either version; OFREP bulk is the live alternative |
+| `flagd.evaluation.v2.Service` | none | none | current Go, Java, JS, Python providers | — |
 
-The sync side:
-- `sync.v1` (`sync/v1/sync_service.proto`) is deprecated as a whole file, but only `flagd-proxy` serves it. flagd-proxy is not a
-  relay distribution (UC-010 BR-007), so it is out of scope.
-- `flagd.sync.v1.FlagSyncService/GetMetadata` is a deprecated **method** (`option deprecated = true`), plus the deprecated
-  `selector` field. The method lives inside the current flag sync service (`service/flag-sync/handler.go:183`), and the
-  `disable-sync-metadata` setting already switches it off. A component cannot carry one method of another component's service
-  without a second dispatch layer. Q8 keeps it where it is.
+The sync side is out of scope (Q8):
+- the deprecated `sync.v1` is served only by flagd-proxy, which is not a relay distribution;
+- `flagd.sync.v1/GetMetadata` is one deprecated method of the current flag sync service, and `disable-sync-metadata` turns it
+  off.
 
-**So the evidence supports schema.v1 only.** The issue text ("and the v1 services where a v2 exists") would also move
-`flagd.evaluation.v1`. That breaks the flagd-web provider and every `ResolveAll` client on the slim distributions, because v2
-has no replacement. This is Q1.
+**Both schema.v1 and v1 are deprecated upstream, and so is v1's last current consumer, flagd-web.** The rest of this plan follows
+the recommended Q1 (b): both move into the legacy component. Section 0 says what changes under the other options.
 
-The rest of this plan assumes Q1 (a), schema.v1 only. Section 6 lists what changes under (b).
+**The pin.** Bumping to `4824facda674` turns every v1 symbol into an SA1019 hit:
+- `flag_evaluator_v1.go`;
+- the host's contract test and benchmarks;
+- `test/distributions/parity_test.go`;
+- about a dozen `runtime/*_test.go`.
 
-## 2. The seam: a hosted endpoint that the host mounts on its own server
+That cost belongs to whichever step bumps the pin, not this one. This plan keeps the pin. Under (b), most of those hits land
+in the legacy module, where a single `//nolint:staticcheck` covers frozen code.
 
-flagd-full must answer schema.v1 on the flag evaluation port (8013), with the same TLS, socket path, CORS, h2c, body and header
-limits, middleware, metrics route attribute, spans, readiness and shutdown. A second listener cannot do that. So the component
-opens no listener: **the flag evaluation endpoint, its host, mounts its handlers.**
+## 2. The seam: a hosted endpoint, mounted by an opted-in host
+
+flagd-full must answer schema.v1 on the flag evaluation port (8013), with the same TLS, socket path, CORS, h2c, limits,
+middleware, metric route attribute, spans, readiness and shutdown. A second listener cannot do that. So the component opens no
+listener: **the flag evaluation endpoint, its host, mounts its handlers.**
 
 ### Core (generic, no ConnectRPC: NFR-006)
 
-`core/pkg/service`:
-- `type Hosted interface { Host() string }`: an optional interface of a `service.Factory`. `Host` names the endpoint type whose
-  server serves this endpoint's services.
-- `Settings.Extensions []Endpoint`: the runtime fills it for a factory with the endpoints of every hosted factory whose
-  `Host()` equals that factory's `Type()`. The host type-asserts each one to its own contract. An endpoint the host does not
-  understand fails the host's `Create`, naming both types.
-- `ValidateDeclarations`: for a hosted factory, `Host()` is non-empty, has no surrounding whitespace, and is not its own type.
+`core/pkg/service`, four names:
+- `Hosted interface{ Host() string }`, on a factory: the endpoint type whose server serves this endpoint.
+- `Hosting interface{ Hosts() bool }`, on a factory: this endpoint's type mounts hosted endpoints (M4).
+- `Settings.Extensions []Endpoint`: the hosted endpoints of this factory's type.
+- `ValidateDeclarations` checks `Host()`: it is non-empty, has no surrounding whitespace, and is not the factory's own type.
 
-A hosted endpoint still implements `Endpoint`, but the runtime never calls its `Serve`. It is created like every other endpoint
-(same `Settings`, `Config` from `endpointSettings`) and closed through `io.Closer` when a build fails (`from_config.go`).
+A hosted endpoint implements `Endpoint`, and its `Serve` returns an error naming its host (m5). The runtime never calls it. It
+is closed through `io.Closer` when a build fails.
 
-### Runtime
+### Runtime (`runtime/from_config.go`)
 
-`runtime/from_config.go`, in two passes over `components.Endpoints`:
-1. Create every hosted factory first.
-2. Create the others, each with `Settings.Extensions` set to the hosted endpoints of its type.
+The runtime creates every hosted factory first, then the others, handing each `Hosting` factory its `Settings.Extensions`. Hosted
+endpoints are not served. The start fails, naming both types, when:
+- the host type is absent;
+- the host does not declare `Hosts()` (M4);
+- two factories share the host's type (m8).
 
-Hosted endpoints are not added to `rt.Endpoints`, so they are not served. A hosted factory whose host is not in the distribution
-fails the start: `the service endpoint "flag-evaluation-legacy" is served by the endpoint "flag-evaluation", which the
-distribution lacks` (Q4). The listing of `flagd components` (`core/pkg/distribution/inventory.go`) names the host of a hosted
-endpoint, in text and JSON (UC-011).
+`flagd components` (`core/pkg/distribution/inventory.go`) shows the host in text and as an `omitempty` JSON `host` field (m7).
 
-### The flag evaluation host contract (ConnectRPC-specific, in `service/transport`)
+### The flag evaluation contract (`service/transport`, contract only: M7)
 
-UC-004 BR-001 forbids an endpoint module to depend on another endpoint module, so the legacy module cannot import
-`service/flag-evaluation`. The contract and the helpers both sides share move to `service/transport`. That module is already a
-dependency of flag-evaluation, OFREP and flag sync, and it adds no new dependency.
-
-- `transport.EvaluationHost{Logger, Resolver, Events, Telemetry, Configuration service.Configuration, HandlerOptions
+- `EvaluationHost{Logger, Resolver, Events, Telemetry, Configuration service.Configuration, HandlerOptions
   []connect.HandlerOption}`:
-  - `Resolver` is the host's traced resolver, so evaluation events keep naming `flag-evaluation` (`events.EvaluationObserver(bus,
-    f.Type())`);
-  - `Events` is the host's subscriptions, so a schema.v1 `EventStream` gets the host's `provider_shutdown` and ends with the host;
-  - `HandlerOptions` already holds the JSON marshal options and the telemetry's ConnectRPC instrumentation.
-- `transport.EvaluationExtension interface { Mount(EvaluationHost) ([]Route, error) }`, with `Route{Prefix string; Handler
-  http.Handler; Procedures []string}`.
-- The move: `IEvents` and `eventingConfiguration` (`eventing.go`), plus from `flag_evaluator.go` and `context_utils.go` the
-  generic `resolve`, `mergeContexts`, `formatContextKeys`, `errFormat`, `selectorFromHeader` and `recordSpanError`. They are
-  exported with the smallest names that work. `flag_evaluator_types.go` is split: each response wrapper carries one schema's
-  response, so the host no longer imports `schema/v1`.
+  - `Logger` is the host's `component=service` logger (m4);
+  - `Resolver` is the host's traced resolver, so evaluation events keep naming `flag-evaluation` (R4);
+  - `Events` is the host's subscriptions, so `provider_shutdown` and `configuration_change` reach schema.v1 streams;
+  - `HandlerOptions` is **every option the host applies to its own handlers**: the telemetry's ConnectRPC instrumentation **and**
+    the JSON marshal options (`EmitUnpopulated`, `DiscardUnknown`). The host builds it once and uses it for v1, v2 and every
+    route (M3).
+- `Events interface{ Subscribe(ctx, id, *store.Selector, chan service.Notification); Unsubscribe(id) }`. Today's `IEvents`
+  satisfies it.
+- `EvaluationExtension interface{ Mount(EvaluationHost) ([]Route, error) }` and `Route{Prefix string; Handler http.Handler;
+  Procedures []string}`.
 
-The host's dispatch replaces `bufSwitchHandler`. The prefix `/flagd.evaluation.v2` goes to v2, then each mounted route's prefix,
-then `/flagd` to v1, then the fallback. **The fallback must answer exactly what today's fallback answers.** Today an unknown
-path falls through to the schema.v1 ConnectRPC handler, which answers 404. The new fallback is the v1 handler's 404, or a plain
-`http.NotFound` proven byte-identical (R1).
+Nothing else moves to transport. The legacy module copies what it needs of `resolve`, `mergeContexts`, `formatContextKeys`,
+`errFormat`, `selectorFromHeader`, `recordSpanError` and the schema.v1 response wrappers (about 150 lines). A one-line comment
+marks them as frozen with schema.v1.
 
-`evaluationMetricRoutes` is built from v1, v2 and every mounted route's `Procedures`. On a slim distribution, a schema.v1 path is
-then labelled `/` like any unregistered path.
+### The host (`service/flag-evaluation`)
 
-A ConnectRPC client and a grpc-go client both map HTTP 404 to `Unimplemented`. Test T4 proves it with real clients rather than
-assuming it.
+- `Factory` implements `Hosting`.
+- `Create` type-asserts each `Settings.Extensions` entry to `EvaluationExtension`, failing with both types otherwise, and calls
+  `Mount` there (m3).
+- The host validates each route (m2).
+- The dispatch replaces `bufSwitchHandler`, in this order: `/flagd.evaluation.v2.Service/` → v2, then the mounted routes, then
+  `http.NotFound`. That is the bytes today's generated `default` writes (m1). Today's `/flagd` prefix rule goes, because v1 is
+  now a mounted route. `/flagdX`, `/flagd.evaluation.v2` and `/flagd.evaluation.v1.Service` without the slash still reach a 404
+  with the same bytes; T4 pins them.
+- `evaluationMetricRoutes` is built per instance from v2 and the mounted `Procedures`; `RouteFromRequest` closes over it (m6).
+- `flag_evaluator_types.go` keeps only the v2 wrappers; `flag_evaluator.go`, `flag_evaluator_v1.go` and their tests leave the
+  host.
 
-### The component
+### The component (`service/flag-evaluation-legacy`, type `flag-evaluation-legacy`, Q2)
 
-- New module `service/flag-evaluation-legacy`, type `flag-evaluation-legacy` (Q2). It is a separate module because UC-001
-  BR-004 rejects a module listed twice, so a sub-package of `service/flag-evaluation` cannot be selected beside it.
-- It holds `OldFlagEvaluationService` (moved unchanged: logger field `component=flagservice`, tracer `flagEvaluationService`,
-  span names, metrics) and its tests.
-- `Factory`: `Type()` is `flag-evaluation-legacy`, `Host()` is `flag-evaluation`, `Needs()` is `{}` because it resolves
-  through the host's resolver.
-- `Create` decodes `Settings.Config` with **no keys** (Q5): any key is `unknown setting`. The endpoint implements
-  `transport.EvaluationExtension` and mounts one route, `/schema.v1.Service/`.
-- Its module depends on core and service/transport only. A depguard rule (or the boundary check of the per-component CI) pins
-  that.
+- It is a separate module, because UC-001 BR-004 rejects a module listed twice. It depends on core and `service/transport`
+  only.
+- It holds `OldFlagEvaluationService` (schema.v1: logger field `component=flagservice`, tracer `flagEvaluationService`) and
+  `FlagEvaluationService` (v1: logger field `component=flagd.evaluation.v1`), with their span names and metrics unchanged.
+- `Host()` is `flag-evaluation`, and `Needs()` is `{}`.
+- `Create` takes no keys (Q5) and allocates no subscriptions.
+- `Mount` returns two routes, `/schema.v1.Service/` and `/flagd.evaluation.v1.Service/`, with their procedures. v1 uses the
+  host's `context-values`, `header-to-context-key-mappings` and `stream-deadline` from `EvaluationHost.Configuration`.
 
 ## 3. What each distribution's users observe
 
 | Distribution | Lists the component | Observable change | #78? |
 |---|---|---|---|
-| flagd-full (and `flagd`) | yes | none; the upgrade differential proves it (T5) | no |
+| flagd-full (and `flagd`) | yes | none (T5, T11) | no |
 | flagd-testbed | Q3, recommended yes | none | no |
-| flagd-minimal, flagd-minimal-otel, flagd-cloud, flagd-kubernetes | no | `schema.v1.Service/*` answers `Unimplemented` (gRPC, ConnectRPC) or 404 (plain HTTP). `flagd.evaluation.v1` and v2 are unchanged. | **no**: these distributions are new in this repository, not today's flagd. Each distribution's section in `docs/relay/distributions.md` and the new UC-010 alternative flow carry it (Q7). |
-| flagd-sync | no | **none**: it has no flag evaluation endpoint, and already answers `Unimplemented` on every evaluation path (`test/distributions/flagdsync_test.go:310`) | no |
-| Flagsmith | no | none (OFREP only) | no |
+| flagd-minimal, -minimal-otel, -cloud, -kubernetes | no | `schema.v1.Service/*` and `flagd.evaluation.v1.Service/*` answer `Unimplemented` (gRPC, ConnectRPC) or 404 (HTTP); v2 is unchanged. **A user of the deprecated flagd-web provider** gets `Unimplemented` on `ResolveAll` and `EventStream`, so the provider does not become ready. The remedy is flagd-full, a custom distribution that lists the component, or OFREP with the ofrep-web provider. Old releases of the RPC providers that still call v1 see the same thing. | no, these are new distributions. Each one's section in `docs/relay/distributions.md` and UC-010 A7 carry it (Q7). |
+| flagd-sync | no | none: it has no evaluation endpoint (`flagdsync_test.go:310` already pins `Unimplemented`) | no |
+| Flagsmith | no | none | no |
 
-A user of a published `:main` image of a slim distribution (step 17) sees the change. It gets a line in the step's PR text and
-in `docs/relay/status.md`.
+Users of the slim `:main` images (step 17) get a line in the PR text and in `docs/relay/status.md`.
 
 ## 4. Tests
 
-| # | Test | Where | Proves |
+| # | Test | Where | Slice |
 |---|---|---|---|
-| T1 | Hosted factories are created first, never served, handed only to their host, closed on a failed build. A missing host fails the start with the message above. | `runtime/hosted_test.go` (new) | runtime seam, Q4 |
-| T2 | `ValidateDeclarations` for `Hosted`: empty, whitespace, self-host | `core/pkg/service/factory_test.go` | core |
-| T3 | Contract: `servicetest.Inputs.Extensions []service.Factory`. The harness creates them and passes `Settings.Extensions`. New case "hosted endpoint: served by its host" in the contract inventory golden. The legacy module runs `servicetest.Run(flagevaluation.Factory{}, Inputs{Extensions: legacy, Resolve and Connect over schema.v1})`. The host's own `TestConnectContract` stays on v1, unchanged. | `core/pkg/service/servicetest`, `service/flag-evaluation-legacy/contract_test.go` | UC-004 / UC-008 |
-| T4 | **Unimplemented without the component:** the host alone answers `connect.CodeUnimplemented` to a connect-go schema.v1 client, `codes.Unimplemented` to a grpc-go client, and 404 to a plain POST. An unknown path answers today's 404 bytes in both setups. | `service/flag-evaluation/unmounted_test.go` (new) | Q-3 behaviour, R1 |
-| T5 | **Upgrade differential unchanged:** `test/upgrade` keeps `connect-legacy/*`, `evaluation-schema-v1`, v1 and v2 green against flagd-full, with **no new `accepted.yaml` entry**. Add one unknown-path probe and one schema.v1 span probe (`otlp_test.go`). | `test/upgrade` | drop-in |
-| T6 | Every slim distribution answers `Unimplemented` on `schema.v1.Service/ResolveBoolean` and `EventStream`, and still serves v1 `ResolveAll` and v2. flagd-full serves all three. | `test/distributions/standard_test.go` | per-distribution change |
-| T7 | The builder refuses a manifest that lists `flag-evaluation-legacy` without `flag-evaluation`, naming both (probe `host` field, `needs` check) | `builder/internal/needs/needs_test.go`, builder fixture | UC-001 new alt flow |
-| T8 | `flagd components` lists `flag-evaluation-legacy` with its host in text and JSON for flagd-full, and not for flagd-minimal | `core/pkg/distribution/inventory_test.go`, `test/distributions` | UC-011 |
-| T9 | Load: `test/concurrency/k6/load.js` `SERVICES` and `protoset.go` drop schema.v1 for flagd-minimal. `make test-load-smoke` stays green. | `test/concurrency` | NFR-017 |
-| T10 | The moved schema.v1 tests (`flag_evaluator_test.go`, the schema.v1 cases of `evaluation_span_test.go`, `evaluation_metrics_test.go`, `eventstream_handlers_test.go`, `bulk_characterization_test.go`, `connect_service_test.go`) pass in the new module, composed with the host. | `service/flag-evaluation-legacy` | no behaviour lost in the move |
+| T1 | Hosted endpoints are created first, never served, given only to their host, and closed on a failed build. The start fails for a missing host, a host without `Hosts()`, or a duplicate host type. | `runtime/hosted_test.go` | A |
+| T2 | `ValidateDeclarations` of `Host()` | `core/pkg/service/factory_test.go` | S0 |
+| T3 | `servicetest.Inputs.Host service.Factory`: the hosted factory is run composed with its host. The new inventory kind "hosted" goes in the golden and in `testdata/contract-external.txt`. A hosted factory without `Inputs.Host` fails with m5's message. The legacy contract test is `servicetest.Run(legacy.Factory{}, Inputs{Host: flagevaluation.Factory{}, …schema.v1 clients})`. | `core/pkg/service/servicetest`, `service/flag-evaluation-legacy/contract_test.go` | A (harness), C (legacy test) |
+| T4 | Host alone: schema.v1 and v1 get `CodeUnimplemented` (connect-go), `codes.Unimplemented` (grpc-go) and 404 (HTTP). An unknown path, `/flagdX`, `/schema.v1.Service` and `/flagd.evaluation.v1.Service` get status `404`, body `404 page not found\n` and today's headers. Route validation refuses a bad prefix. | `service/flag-evaluation/dispatch_test.go` | C |
+| T5 | The upgrade differential stays green with `accepted.yaml` unchanged, and gains one grpc-go call each on schema.v1 and v1 `ResolveBoolean`. | `test/upgrade` | C |
+| T6 | Every slim distribution answers `Unimplemented` on schema.v1 and v1 `ResolveBoolean`, v1 `ResolveAll` and both `EventStream`s, and serves v2. | `test/distributions/standard_test.go` | E |
+| T7 | The builder refuses `flag-evaluation-legacy` without `flag-evaluation`, and a fixture whose host has no `Hosts()`. The probe reports `host` and `hosts`. | `builder/internal/needs`, the probe template, a fixture | B |
+| T8 | `flagd components`: flagd-full lists the host. flagd-minimal does not list the component. The JSON golden has rows with and without `host`. | `core/pkg/distribution` (A), `test/distributions` (E) | A, E |
+| T9 | `load.js` `SERVICES` keeps only v2, and its `ResolveAll` rotation goes. `protoset.go` drops schema.v1 and v1. `load-smoke` is green. | `test/concurrency` | C |
+| T10 | The schema.v1 and v1 tests moved into the legacy module, composed with the host: a false flag returns `"value":false` over Connect JSON on both (M3); the log lines carry `component=service` plus `component=flagservice` or `flagd.evaluation.v1` (m4); events name `flag-evaluation` (R4); v1 honours the host's header mappings and stream deadline. | `service/flag-evaluation-legacy` | C |
+| T11 | Runtime composition test (`officialset` plus legacy): a schema.v1 and a v1 `EventStream` each get `configuration_change` after a store update and `provider_shutdown` on stop, and the runtime returns within the endpoint budget (M6). | `runtime/legacy_composition_test.go` | C |
 
-`make flagd-integration-test` (the test-harness suites, the released Go provider in RPC and in-process mode) runs unchanged
-against flagd-full.
+### Test split (M5)
+
+| Today in `service/flag-evaluation` | Host keeps | Legacy module gets |
+|---|---|---|
+| `connect_service_test.go` `TestConnectServiceUnixConnection` (schema.v1 grpc client) | yes, rewritten on a v2 grpc client | a schema.v1 grpc copy over a socket |
+| `connect_service_test.go` `TestConnectServiceHTTPMetricLabels` | yes, on v2 routes, plus `/schema.v1.Service/ResolveAll` and `/flagd.evaluation.v1.Service/ResolveAll` labelled `/` when unmounted | a copy asserting their procedure labels when mounted |
+| `contract_test.go` `TestConnectContract` (v1 client) | yes, rewritten on a v2 client | the composed contract (T3) on schema.v1 and v1 |
+| `bench_test.go` `BenchmarkConnect*` (v1) | rewritten on v2 as `BenchmarkConnectV2*` (no v2 `ResolveAll`) | the v1 benchmarks under **unchanged names**, so `compare-allocs.py` keeps comparing them (R5) |
+| `evaluation_span_interceptor_test.go`, `evaluation_span_test.go` | v2 cases | the `legacy` and v1 cases |
+| `bulk_characterization_test.go` | v2 rows | the schema.v1 and v1 rows (bulk is legacy-only) |
+| `eventstream_handlers_test.go`, `evaluation_metrics_test.go`, `connect_service_test.go` (the rest) | v2 cases | schema.v1 and v1 cases |
+| `flag_evaluator_test.go`, `flag_evaluator_v1_test.go` | — | all of it |
+
+**v1 consumers outside the endpoint (moved in C, so that C is green):**
+- runtime tests that build on `officialset` keep working, because `officialset` gains the legacy factory;
+- `bound_selector_test.go`, `middleware_characterization_test.go`, `endpoint_settings_characterization_test.go` and
+  `managementport/inventory_test.go` build their own components: each one moves to v2, or adds the legacy factory when v1 is
+  what it pins;
+- `test/distributions/parity_test.go:61-64` moves to v2, and its bulk row moves to OFREP bulk;
+- `test/configformat-example` (a custom distribution) moves to v2.
+
+The testbed's tests (`test/testbed`, `testbed/cmd/target_test.go`) stay on v1 under Q3 (a).
+
+`make flagd-integration-test` runs unchanged against flagd-full. The released Go provider v0.8.0 already calls v2.
 
 ## 5. Spec changes (slice D)
 
 - **requirements.md:** FR-063 "Select Deprecated Flag Evaluation Services": "As a Distribution Author, I want the deprecated
-  `schema.v1` flag evaluation service as its own component that the flag evaluation endpoint serves on its port, so that a
-  distribution serves it only when its manifest lists it." Priority Medium, status Planned. Add it to UC-004, UC-010 and UC-001.
+  `schema.v1` and `flagd.evaluation.v1` flag evaluation services as their own component that the flag evaluation endpoint serves on its port, so that a
+  distribution serves it only when its manifest lists it." Priority Medium, status Planned. It is linked from UC-001, UC-004 and
+  UC-010.
 - **glossary.md:**
-  - **Hosted Endpoint**: "A service endpoint that opens no listener; the endpoint of its host type serves its services on its own
-    server." Avoid: service extension. "Extension" already means a third-party component.
-  - **Deprecated Evaluation Service**: "`schema.v1.Service`, served only by distributions that select `flag-evaluation-legacy`."
-  - The entry **Service Endpoint** gets "…or a hosted endpoint".
+  - **Hosted Endpoint**: "A service endpoint that opens no listener; an endpoint of its host type that hosts endpoints serves
+    its services on its own server." Avoid: service extension.
+  - **Deprecated Evaluation Service**.
+  - **Service Endpoint** gets "…or a hosted endpoint".
 - **UC-004:**
-  - A10 "Endpoint Served by Another Endpoint" (declare `Host`, receive `EvaluationHost`, mount routes);
-  - BR-013 "A Hosted Endpoint Serves on Its Host's Listener" (no listener of its own, the host's settings, events attributed to
-    the host, the start fails without the host).
-- **UC-001:** A13 "Hosted Endpoint Without Its Host" (the builder refuses, naming both). BR-014 adds "a hosted endpoint needs
-  its host".
+  - A10 "Endpoint Served by Another Endpoint";
+  - BR-013 "A Hosted Endpoint Serves on Its Host's Listener": no listener, the host opts in, the host's settings and attribution,
+    the start fails without the host;
+  - BR-001 names `service/transport` as the shared module official endpoints already use (R7).
+- **UC-001:** A13 "Hosted Endpoint Without a Host That Hosts It"; BR-014 adds the need.
 - **UC-010:**
-  - A7 "Client Uses a Deprecated Evaluation Service" (`Unimplemented`; select flagd-full or a custom distribution);
+  - A7 "Client Uses a Deprecated Evaluation Service";
   - BR-008 "Deprecated Evaluation Services Only in flagd-full" (and flagd-testbed under Q3);
   - step 1 adds "the evaluation services its clients call".
-- **UC-011:** BR-001 and the listing show a hosted endpoint's host.
-- **UC-009:** nothing changes; the differential covers it. `docs/guides/upgrade-to-flagd-full.md:10` stays true.
-- **Docs, not spec:**
-  - `docs/relay/distributions.md`: the component table and a line per slim distribution;
-  - `docs/relay/load-test.md:16`;
-  - `docs/relay/status.md`;
-  - `docs/relay/how-its-built.md` if it lists the endpoints.
-- `/spec-review` runs in the closing PR (E). A known risk is UC-004 BR-001 against the official endpoints' existing
-  `service/transport` dependency (R7).
+- **UC-011:** the listing shows a hosted endpoint's host.
+- **Docs:** `docs/relay/distributions.md`, `load-test.md:16`, `status.md`.
 
 ## 6. Slices
 
-S0 lands first, because every other slice compiles against its two names. After S0, **A, B, C and D run in parallel, with no
-shared file.** E closes the step.
+| Slice | Role | Files (exclusive) | Base |
+|---|---|---|---|
+| **S0** core seam | mechanic | `core/pkg/service/endpoint.go`, `factory.go`, `factory_test.go` (T2) | main |
+| **A** runtime and contract harness | implementer | `runtime/from_config.go`, `runtime/hosted_test.go`, `core/pkg/service/servicetest/**`, `testdata/contract-external.txt`, `core/pkg/distribution/inventory.go` and its test (T1, T3 harness, T8 unit) | S0 |
+| **B** builder | implementer | `builder/internal/needs/**`, the probe template in `builder/internal/generate/`, builder fixtures (T7) | S0 |
+| **D** spec and docs | implementer | section 5 files; spec lint | main |
+| **C** legacy component, wired in | implementer, with a mechanic for regeneration and testdata | see the list below (T3 legacy, T4, T5, T9, T10, T11) | A (stacked) |
+| **E** slim distributions and closing | implementer | `test/distributions/**` (T6, T8 end-to-end), `/spec-review` fixes | C |
 
-| Slice | Role | Files (exclusive) | Content | Base |
-|---|---|---|---|---|
-| **S0** core seam | mechanic | `core/pkg/service/endpoint.go`, `factory.go`, `factory_test.go` | `Hosted`, `Settings.Extensions`, `ValidateDeclarations`, T2 | main |
-| **A** runtime and contract | implementer | `runtime/from_config.go`, `runtime/hosted_test.go`, `core/pkg/service/servicetest/**`, `core/pkg/distribution/inventory.go` and its test | two-pass creation, missing-host error, `Inputs.Extensions`, contract case and golden, listing (T1, T3 harness, T8 unit) | S0 |
-| **B** builder | implementer | `builder/internal/needs/**`, the probe template in `builder/internal/generate/`, builder fixtures | probe reports `host`, needs check refuses a missing host (T7) | S0 |
-| **C** host refactor and legacy module | implementer | `service/flag-evaluation/**`, new files in `service/transport/`, `service/flag-evaluation-legacy/**` (new), `go.work` setup in `Makefile`, `.github/scripts/ci-modules.json`, `test_ci_modules.py`, `.golangci` depguard entry | contract in transport, move, new dispatch and fallback, metric routes, legacy factory (T4, T10). Its last commit adds the T3 contract test after merging A's head. | S0 (then A) |
-| **D** spec and docs | implementer | `docs/requirements.md`, `docs/glossary.md`, `docs/use_cases/UC-001,004,010,011*`, `docs/relay/*.md` | section 5; spec lint | main (spec goes straight to main) |
-| **E** wiring | implementer, with a mechanic for regeneration | `distributions/flagd-full/manifest.yaml`, `distributions/flagd-testbed/manifest.yaml`, regenerated `flagd/` (`components/`, `go.mod`, `go.sum`), testbed regen, `test/distributions/**`, `test/concurrency/**`, `test/upgrade/**` | select the component, regenerate, T5, T6, T8 end-to-end, T9; `/spec-review` | A + C (stack: S0 → A → C → E) |
+Slice C's files:
+- `service/flag-evaluation/**` (including `Makefile:328`'s mockgen source if the mock moves);
+- the v1 consumers listed under the test split: the four runtime tests, `test/distributions/parity_test.go` and
+  `test/configformat-example/**`;
+- the contract files in `service/transport/`;
+- `service/flag-evaluation-legacy/**`;
+- `runtime/internal/officialset/officialset.go`;
+- `runtime/legacy_composition_test.go`;
+- `distributions/flagd-full/manifest.yaml` and `distributions/flagd-testbed/manifest.yaml` (entry plus `replaces`);
+- the regenerated `flagd/` (`components/`, `go.mod`, `go.sum`) and the testbed regeneration;
+- `test/concurrency/k6/load.js` and `protoset.go`;
+- `test/upgrade/upgrade_test.go`;
+- `testdata/module-boundaries.txt`: a new line for the module, and the module added to the forbidden sets of `runtime:. ./cmd`,
+  `service/transport` and the sibling endpoints;
+- `testdata/module-graph-boundaries.txt`, likewise;
+- `testdata/flagd-full-modules.txt` and `testdata/go-packages.txt`;
+- `Makefile` (`FLAGD_MODULE_DIRS`, `workspace-init`);
+- `.github/scripts/ci-modules.json` and `test_ci_modules.py`;
+- `.golangci.yml` (the new module beside the entries at `:89` and `:140`).
 
-The PRs are `phase-19/pr-<x>-<topic>`; every description starts with `Part of #266`. Every slice lands as its own PR against
-`main`, or stacked as in the table.
+**Order and parallelism.** S0 lands first. A, B and D then run in parallel. C's implementer starts at the same time on S0, with
+the module, the host refactor and the copies, and merges A's head before the wiring commits. The PR stacks S0 → A → C → E.
 
-**Under Q1 (b)**, C also moves `flag_evaluator_v1.go` and the module carries both services. E also changes:
-- the host's contract test and benchmarks (they call v1; the allocs/op names change, R5);
-- the parity test (`test/distributions/parity_test.go:61`);
-- about a dozen runtime tests (`runtime/*_test.go` call v1);
-- `test/configformat-example`, the testbed tests, `testbed/cmd/target_test.go`;
-- `test/concurrency` `ResolveAll`.
+**Every PR is green on its own (B2):**
+- S0, A and B change no served behaviour;
+- C adds the component and selects it in flagd-full and flagd-testbed in the same PR, so schema.v1 never leaves them;
+- C drops schema.v1 and v1 from the flagd-minimal load, and moves the parity test to v2, in the same PR that removes them
+  there.
 
-## 7. Gates
+That makes E own `test/distributions/**` except `parity_test.go`, which C owns.
 
-| Gate | Who | Pass condition |
-|---|---|---|
-| Unit, `-race`, touched packages | each implementer | green |
-| `make lint` with depguard; the boundary check | CI | green; core gains no import |
-| Upgrade differential (T5) | CI (`FLAG_PATTERNS` covers `service/**`, `distributions/**`) | green with `accepted.yaml` unchanged (the key gate of the step) |
-| `make flagd-integration-test` | CI | green, unchanged |
-| allocs/op, library and flagd endpoint benchmarks | CI | no regression; the `BenchmarkConnect*` names stay in `service/flag-evaluation` (v1) |
-| `make test-load-smoke` on flagd-minimal | CI | green without schema.v1 |
-| Builder regeneration check (generated `flagd/` equals committed) | CI | green |
-| Spec lint and `/spec-review` | D, E | no finding left unfixed or unfiled |
-| Binary size of flagd-minimal | reviewer | reported. The schema.v1 code leaves the binary, and its descriptors leave with it once nothing imports `schema/v1`, so it should shrink slightly. NFR-003 is not at risk. |
+C must not merge without A below it. The stack merges bottom-up, as CLAUDE.md describes. Branches are
+`phase-19/pr-<x>-<topic>`; each PR starts with `Part of #266`.
 
-## 8. Risks
+## 7. Considered (m9)
 
-- **R1, fallback bytes.** Today an unknown path on 8013 is answered by the schema.v1 handler. A different 404 (headers,
-  body) is an observable change in flagd-full. T4 and the T5 probe pin it.
-- **R2, metric route attribute.** flagd-full must keep the schema.v1 procedures as route values. The route set is built from the
-  mounted routes; the T5 metrics comparison covers it.
-- **R3, shutdown of schema.v1 streams.** The legacy `EventStream` must sit on the host's `Events`, or it misses
-  `provider_shutdown` and keeps the shutdown budget waiting. T10 keeps `eventstream_handlers_test.go`'s shutdown case.
-- **R4, evaluation event attribution.** If the legacy endpoint resolved through its own `Settings.Resolver`, events would name
-  `flag-evaluation-legacy`. `Needs{}` plus the host's resolver prevents that. Pin it with one assertion in T10.
-- **R5, benchmark names.** Moving code renames benchmarks that `compare-allocs.py` compares by name. Under Q1 (a), none of
-  the existing ones move.
-- **R6, public surface.** `transport.EvaluationHost` and the exported helpers become API of `service/transport`. Keep the set
-  minimal and document it as "for endpoints hosted by flag evaluation".
-- **R7, UC-004 BR-001.** It already reads stricter than the official endpoints behave (they depend on `service/transport`). The
-  spec review may flag it. The fix is to name `service/transport` in BR-001; that is a spec change in D, not a design change.
-- **R8, CI plumbing.** The new module needs its entries in `ci-modules.json` (#176 per-component jobs), the workspace init,
-  coverage and the release dry run's module list, or CI quietly skips it. The reviewer checks that the module's job ran.
-- **R9, two hosts of one type.** The runtime assumes endpoint types are unique in a distribution. If that is not enforced, T1
-  adds the case.
+- **A switch inside flag-evaluation** (on for flagd-full through `officialEndpointSettings`, off in slim manifests). About 20
+  lines, but the code stays linked, it is not "its own component" (#266), and custom manifests could not opt in through the
+  manifest.
+- **A build tag.** It fights the builder model of one manifest, one binary, and the components command could not show it.
+- **A new manifest group `service_extensions`.** It changes the builder, the component types, the components groups and the
+  contract runner for one component.
+
+The seam costs four core names (NFR-006 holds) and a contract-only transport surface.
+
+## 8. Gates
+
+| Gate | Pass condition |
+|---|---|
+| Unit `-race`, touched packages | green per slice |
+| `make lint` with depguard; the module boundaries | green; core gains no import; the legacy module imports only core and transport |
+| Upgrade differential | green on C with `accepted.yaml` unchanged |
+| `make flagd-integration-test` | unchanged |
+| allocs/op | no regression. The v1 `BenchmarkConnect*` keep their names in the legacy module; `run-benchmarks.sh` must include that package (C), or the comparison drops them silently. |
+| `load-smoke` | green on C |
+| Builder regeneration check | green on C |
+| Spec lint, `/spec-review` | D, E: no finding left unfixed or unfiled |
+| The legacy module's CI job ran | reviewer, on C |
+
+## 9. Risks
+
+- **R2, metric route attribute:** per-instance routes (m6); covered by the test split and T5.
+- **R3, schema.v1 streams on the host's `Events`:** gated by T11, no longer by T5 alone.
+- **R4, attribution:** `Needs{}` plus the host's resolver; asserted in T10.
+- **R6, public surface:** contract only (M7).
+- **R7, UC-004 BR-001:** already stricter than the official endpoints behave; D amends it.
+- **R10, copied helpers drift from the host's:** intended. schema.v1 is frozen, and T5 pins its bytes.
+- **R5, benchmark names:** the v1 benchmarks move module, so CI's comparison must still find them (gate above).
+- **R11, C's size:** the largest slice. Under Q1 (b) it moves two services and their tests, but no public API. A mechanic
+  regenerates and edits the testdata. It cannot be split without a red PR, because the host stops serving v1 the moment it moves.
 
 ## 0. Questions for the project lead
 
-- **Q1, which services move.** The evidence is in section 1.
-  - (a) `schema.v1` only. It is the only service the protos mark deprecated, v2 has no `ResolveAll`, and the flagd-web provider
-    calls v1.
-  - (b) `schema.v1` and `flagd.evaluation.v1`, as the issue reads. The slim distributions then break flagd-web and RPC bulk
-    evaluation.
-  - (c) Two components, one per service.
+- **Q1, which services move.** schema.v1, flagd.evaluation.v1 and the flagd-web provider are all deprecated (section 1). v2 has
+  no `ResolveAll`.
 
-  **Recommended: (a).** v1 can follow once flagd-schemas marks it deprecated, and the seam takes it without design change.
-- **Q2, name.**
-  - (a) `flag-evaluation-legacy`, module `service/flag-evaluation-legacy`. It matches "the legacy service" in the upgrade guide
-    and the code, and stays right if v1 joins later.
-  - (b) `flag-evaluation-schema-v1`.
-  - (c) `flag-evaluation-deprecated`.
+  | Option | Slim distributions serve | A (deprecated) flagd-web user on a slim distribution |
+  |---|---|---|
+  | (a) schema.v1 only now; v1 later | v1, v2 | works |
+  | **(b) schema.v1 and v1 in the legacy component; flagd-full keeps both; slim serves only v2** | v2 | `Unimplemented` on `ResolveAll` and `EventStream`, so the provider never becomes ready. Remedy: flagd-full, a custom manifest that lists the component, or OFREP (ofrep-web). |
+  | (c) both in one component, slim keeps it until v2 has `ResolveAll` | schema.v1, v1, v2 | works, but slim keeps schema.v1, against #266 |
+  | (d) two components (schema.v1; v1), slim lists v1 until v2 has `ResolveAll` | v1, v2 | works; dropping v1 later is a manifest change |
+  | (e) split v1: single RPCs move, `ResolveAll` and `EventStream` stay | v1 bulk and stream, v2 | works, but one service spans two components; rejected |
 
+  **Recommended: (b)** (project lead's input). Every deprecated service leaves the slim distributions in one step, and flagd-full
+  stays a drop-in replacement. The cost is a larger slice C (R11).
+- **Q2, name.** (a) `flag-evaluation-legacy`, module `service/flag-evaluation-legacy`; (b) `flag-evaluation-schema-v1`; (c)
+  `flag-evaluation-deprecated`. **Recommended: (a).**
+- **Q3, flagd-testbed.** (a) include it, since it stands in for flagd in provider suites; (b) leave it out. **Recommended:
+  (a).**
+- **Q4, the component without a host that hosts it.** (a) the builder refuses the manifest and the runtime refuses to start, both
+  naming the types; (b) it is ignored with a warning. **Recommended: (a).**
+- **Q5, configuration keys.** (a) none, it rides the host's settings; (b) a `services` list. **Recommended: (a).**
+- **Q6, the shape of the seam.** (a) optional `Hosted` / `Hosting` interfaces under `service_endpoints`, with a contract-only
+  transport surface; (b) a new manifest group; (c) a legacy module that wraps the flag evaluation factory. **Recommended: (a)**
+  (section 7).
+- **Q7, documenting the slim change.** (a) in `docs/relay/distributions.md` and UC-010 A7, not #78; (b) in #78 as well.
   **Recommended: (a).**
-- **Q3, flagd-testbed.**
-  - (a) Include it. The testbed stands in for flagd in provider suites (UC-022), and it costs nothing more to link.
-  - (b) Leave it out. No current provider suite calls schema.v1.
-
-  **Recommended: (a).**
-- **Q4, the component without the flag evaluation endpoint.**
-  - (a) The builder refuses the manifest (T7), and the runtime refuses to start (embedders), both naming the host.
-  - (b) It is ignored with a warning.
-
-  **Recommended: (a).** It matches BR-014 and the missing-evaluator stop.
-- **Q5, configuration keys.**
-  - (a) None. It rides the host's port, TLS, CORS, limits and `context-values`, and any key under `endpoint-settings:
-    flag-evaluation-legacy` is an unknown setting.
-  - (b) A `services` list.
-
-  **Recommended: (a).**
-- **Q6, the shape of the seam.**
-  - (a) An optional `Hosted` interface on `service.Factory`, listed under `service_endpoints`, with the ConnectRPC contract in
-    `service/transport`. There is no new manifest group, component type or codegen.
-  - (b) A new component type and manifest group `service_extensions`. That changes the builder, the glossary's component types,
-    the components command groups and the contract runner.
-  - (c) No seam: the legacy module wraps the flag evaluation factory. Two modules would then produce the type
-    `flag-evaluation`, and a custom extension could not reuse it.
-
-  **Recommended: (a).**
-- **Q7, documenting the slim distributions' change.**
-  - (a) In `docs/relay/distributions.md` and UC-010 A7, not #78, because #78 covers today's flagd / flagd-full, which do not
-    change.
-  - (b) In #78 as well.
-
-  **Recommended: (a).**
-- **Q8, `flagd.sync.v1` `GetMetadata`.**
-  - (a) Out of scope. It is one deprecated method of the current flag sync service, and `disable-sync-metadata` already turns it
-    off.
-  - (b) Move it into a hosted endpoint of flag sync.
-
-  **Recommended: (a).**
+- **Q8, `flagd.sync.v1` `GetMetadata`.** (a) out of scope, since `disable-sync-metadata` already turns it off; (b) a hosted
+  endpoint of flag sync. **Recommended: (a).**
