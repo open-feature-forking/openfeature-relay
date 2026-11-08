@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -27,8 +28,48 @@ import (
 // cycles is how many times a test builds or resets a runtime.
 const cycles = 200
 
-// readyWithin is the longest a rebuilt or reset runtime may take to be ready.
-const readyWithin = time.Second
+// How long a rebuilt or reset runtime may take to be ready is judged on three counts, so that a loaded machine that
+// slows every cycle passes while a regression does not. The numbers come from 200-cycle runs on a 16-core machine with
+// 32 busy loops: medians of 130 to 380 ms, slowest cycles up to 1.2 s (1.75 s in an earlier run), quarter medians
+// that drift by a factor of four between the start and the end of one run.
+//   - the median cycle stays within readyMedianCap, a fixed cap: a cost on every cycle fails however slow the machine;
+//   - the quickest cycle of the last quarter stays within readyTrendFactor times the first quarter's plus
+//     readyTrendSlack: a cost that grows with each cycle (a leak) fails. The quickest, not the median, because load
+//     comes and goes during a run while a leak does not leave;
+//   - no cycle takes more than the larger of readyFloor and readyOutlierFactor times the median: a stall (a backoff,
+//     a lost wake-up) fails.
+const (
+	readyMedianCap     = 750 * time.Millisecond
+	readyTrendFactor   = 2
+	readyTrendSlack    = 300 * time.Millisecond
+	readyFloor         = time.Second
+	readyOutlierFactor = 8
+)
+
+func median(d []time.Duration) time.Duration {
+	sorted := slices.Sorted(slices.Values(d))
+	return sorted[len(sorted)/2]
+}
+
+// requireReadyInTime fails if the cycles are slow on any of the three counts, and names the slowest cycle.
+func requireReadyInTime(t *testing.T, what string, elapsed []time.Duration) {
+	t.Helper()
+	quarter := len(elapsed) / 4
+	all := median(elapsed)
+	first, last := slices.Min(elapsed[:quarter]), slices.Min(elapsed[len(elapsed)-quarter:])
+	slowest := slices.Index(elapsed, slices.Max(elapsed))
+	t.Logf("%s: median %s, quickest of the first quarter %s and of the last %s, slowest %s (cycle %d)",
+		what, all, first, last, elapsed[slowest], slowest)
+
+	require.LessOrEqual(t, all, readyMedianCap, "the median %s is slow on every cycle (slowest: cycle %d, %s)",
+		what, slowest, elapsed[slowest])
+	require.LessOrEqual(t, last, readyTrendFactor*first+readyTrendSlack,
+		"the %s gets slower: quickest of the first quarter %s, of the last %s (slowest: cycle %d, %s)",
+		what, first, last, slowest, elapsed[slowest])
+	bound := max(readyFloor, readyOutlierFactor*all)
+	require.LessOrEqual(t, elapsed[slowest], bound, "%s %d took %s, more than %s (median %s)",
+		what, slowest, elapsed[slowest], bound, all)
+}
 
 func openFDs(t *testing.T) int {
 	t.Helper()
@@ -86,6 +127,23 @@ func (p probe) ready() bool {
 	}
 	_ = resp.Body.Close()
 	return resp.StatusCode == http.StatusOK
+}
+
+// requireReadyNow fails unless /readyz answers 200. A request that gets no answer (a client timeout on a loaded
+// machine) is asked again, every 20 ms for up to 10 s: only an answer other than 200 means the runtime is not ready.
+func (p probe) requireReadyNow(t *testing.T, msg string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		resp, err := p.client.Get(p.url) //nolint:noctx // local test endpoint
+		if err == nil {
+			_ = resp.Body.Close()
+			require.Equal(t, http.StatusOK, resp.StatusCode, msg)
+			return
+		}
+		require.True(t, time.Now().Before(deadline), "%s: no answer from /readyz: %v", msg, err)
+		time.Sleep(20 * time.Millisecond)
+	}
 }
 
 // waitReady polls until the runtime is ready and returns how long that took. When it gives up it prints what report
@@ -218,20 +276,18 @@ func TestFromConfigRepeatedly(t *testing.T) {
 	ignore := goleak.IgnoreCurrent()
 	fds := settledFDs(t)
 
-	var slowest time.Duration
+	var elapsed []time.Duration
 	for i := range cycles {
-		elapsed := cycle(i)
-		slowest = max(slowest, elapsed)
-		require.Less(t, elapsed, readyWithin, "cycle %d took %s to become ready", i, elapsed)
+		elapsed = append(elapsed, cycle(i))
 	}
-	t.Logf("%d cycles, slowest ready after %s", cycles, slowest)
+	requireReadyInTime(t, "cycle", elapsed)
 
 	check.client.CloseIdleConnections()
 	goleak.VerifyNone(t, ignore)
 	requireNoFDLeak(t, fds)
 }
 
-// Resetting one runtime over and over is as clean, and each reset has the runtime ready again within the second.
+// Resetting one runtime over and over is as clean, and each reset has the runtime ready again within a bound that scales with the median reset.
 func TestResetRepeatedly(t *testing.T) {
 	p := newPorts(t)
 	rt, stop := build(t, twoSourceConfig(t, p))
@@ -244,7 +300,7 @@ func TestResetRepeatedly(t *testing.T) {
 		resetCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 		require.NoError(t, rt.Reset(resetCtx))
-		require.True(t, check.ready(), "not ready after Reset returned")
+		check.requireReadyNow(t, "not ready after Reset returned")
 		for _, key := range []string{"f1", "f2"} {
 			value, _, _, _, err := rt.Evaluator.ResolveBooleanValue(ctx, "id", key, nil)
 			require.NoError(t, err, key)
@@ -258,13 +314,11 @@ func TestResetRepeatedly(t *testing.T) {
 	ignore := ignoreServing(t, p.service, p.ofrep, p.sync)
 	fds := settledFDs(t)
 
-	var slowest time.Duration
-	for i := range cycles {
-		elapsed := reset()
-		slowest = max(slowest, elapsed)
-		require.Less(t, elapsed, readyWithin, "reset %d took %s", i, elapsed)
+	var elapsed []time.Duration
+	for range cycles {
+		elapsed = append(elapsed, reset())
 	}
-	t.Logf("%d resets, slowest %s", cycles, slowest)
+	requireReadyInTime(t, "reset", elapsed)
 
 	check.client.CloseIdleConnections()
 	requireNoFDLeak(t, fds)
