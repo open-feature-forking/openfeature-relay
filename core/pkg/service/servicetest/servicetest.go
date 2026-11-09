@@ -229,7 +229,12 @@ func Check(_ testing.TB, f service.Factory, in Inputs) contracttest.Report {
 				c.feature, c.feature)))
 			continue
 		}
-		if err := guarded(func() error { return c.run(newEnv(f, in)) }); err != nil {
+		env := newEnv(f, in)
+		err := guarded(func() error { return c.run(env) })
+		if closeErr := env.closeHosted(); err == nil && closeErr != nil {
+			err = fmt.Errorf("expected Close of the hosted endpoint to succeed\nobserved: %w", closeErr)
+		}
+		if err != nil {
 			report.Cases = append(report.Cases, failure(c.name, err))
 			continue
 		}
@@ -269,6 +274,8 @@ type env struct {
 	// tcpReady makes start wait for the port instead of a client connection, for a case in which every request
 	// fails by design
 	tcpReady bool
+	// hosted are the hosted endpoints this env created, closed once the case is over
+	hosted []service.Endpoint
 }
 
 func newEnv(f service.Factory, in Inputs) *env {
@@ -315,12 +322,16 @@ func (e *env) change(flagSetID, version string) {
 
 // settings builds what the runtime would inject for the declared needs.
 func (e *env) settings(mutate func(*service.Settings)) service.Settings {
+	return e.settingsOf(servedBy(e.f, e.in), e.in.Config, mutate)
+}
+
+// settingsOf builds what the runtime would inject for the needs of served, with config as its configuration.
+func (e *env) settingsOf(served service.Factory, config map[string]any, mutate func(*service.Settings)) service.Settings {
 	initialized := make(chan struct{})
 	close(initialized)
 	s := service.Settings{
-		Store: e.store, Bus: e.bus, Initialized: initialized, Logger: e.log, Config: maps(e.in.Config),
+		Store: e.store, Bus: e.bus, Initialized: initialized, Logger: e.log, Config: maps(config),
 	}
-	served := servedBy(e.f, e.in)
 	needs := served.Needs()
 	if needs.Router {
 		s.Resolver = typed.New(e.rec, typed.WithObserver(events.EvaluationObserver(e.bus, served.Type())))
@@ -428,32 +439,34 @@ func (e *env) create(port int, mutate func(*service.Settings)) (service.Endpoint
 	return endpoint, addr, err
 }
 
-// createHosted creates the hosted endpoint as the runtime does, with no settings of its own, and the host with it in
-// Settings.Extensions. s are the settings of the host.
+// hostedSettings are the settings of the hosted endpoint: what the runtime injects for its own needs, none of the
+// host's configuration, and the listen function of the host's settings.
+func (e *env) hostedSettings(host service.Settings) service.Settings {
+	return e.settingsOf(e.f, nil, func(s *service.Settings) { s.Listen = host.Listen })
+}
+
+// createHosted creates the hosted endpoint as the runtime does, before its host, and the host with it in
+// Settings.Extensions. s are the settings of the host. closeHosted closes the hosted endpoint.
 func (e *env) createHosted(s service.Settings) (service.Endpoint, error) {
-	initialized := make(chan struct{})
-	close(initialized)
-	hostedSettings := service.Settings{Store: e.store, Bus: e.bus, Initialized: initialized, Logger: e.log, Config: maps(nil)}
-	needs := e.f.Needs()
-	if needs.Router {
-		hostedSettings.Resolver = typed.New(e.rec, typed.WithObserver(events.EvaluationObserver(e.bus, e.f.Type())))
-	}
-	if needs.Format != "" {
-		hostedSettings.Evaluator = e.rec
-	}
-	hosted, err := e.f.Create(hostedSettings)
+	hosted, err := e.f.Create(e.hostedSettings(s))
 	if err != nil {
 		return nil, fmt.Errorf("expected the hosted endpoint to be created with what it declared\nobserved: %w", err)
 	}
+	e.hosted = append(e.hosted, hosted)
 	s.Extensions = []service.Endpoint{hosted}
-	endpoint, err := e.in.Host.Create(s)
-	if err != nil {
-		if closer, ok := hosted.(io.Closer); ok {
-			_ = closer.Close()
+	return e.in.Host.Create(s)
+}
+
+// closeHosted closes the hosted endpoints that hold a resource, as the runtime does once their host has stopped.
+func (e *env) closeHosted() error {
+	var errs []error
+	for _, h := range e.hosted {
+		if closer, ok := h.(io.Closer); ok {
+			errs = append(errs, closer.Close())
 		}
-		return nil, err
 	}
-	return endpoint, nil
+	e.hosted = nil
+	return errors.Join(errs...)
 }
 
 // start creates the endpoint, serves it and waits until a client can connect. The endpoint is handed an open listener
@@ -955,13 +968,11 @@ func caseHostHosts(e *env) error {
 
 // caseNotServedAlone: the runtime never serves a hosted endpoint, and one that is served says by whom.
 func caseNotServedAlone(e *env) error {
-	hosted, err := e.f.Create(service.Settings{Store: e.store, Bus: e.bus, Logger: e.log, Config: maps(nil)})
+	hosted, err := e.f.Create(e.hostedSettings(service.Settings{}))
 	if err != nil {
 		return fmt.Errorf("expected the hosted endpoint to be created\nobserved: %w", err)
 	}
-	if closer, ok := hosted.(io.Closer); ok {
-		defer closer.Close() //nolint:errcheck // the case is about Serve
-	}
+	e.hosted = append(e.hosted, hosted)
 	host := e.f.(service.Hosted).Host()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()

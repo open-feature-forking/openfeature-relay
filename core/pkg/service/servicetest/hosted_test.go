@@ -29,12 +29,20 @@ type hostedStub struct {
 	typeName, host string
 	serveErr       error
 	closed         *int
+	made           *int
+	got            *service.Settings
 }
 
 func (h hostedStub) Type() string         { return h.typeName }
 func (h hostedStub) Needs() service.Needs { return service.Needs{} }
 func (h hostedStub) Host() string         { return h.host }
-func (h hostedStub) Create(service.Settings) (service.Endpoint, error) {
+func (h hostedStub) Create(s service.Settings) (service.Endpoint, error) {
+	if h.made != nil {
+		*h.made++
+	}
+	if h.got != nil {
+		*h.got = s
+	}
 	return hostedEndpoint{h}, nil
 }
 
@@ -101,4 +109,35 @@ func TestHostedContractFailsWhenTheHostDoesNotHost(t *testing.T) {
 func TestHostedContractFailsWhenServeDoesNotNameTheHost(t *testing.T) {
 	results := Check(t, hostedStub{typeName: "legacy", host: "host", serveErr: fmt.Errorf("nope")}, hostedInputs(newHost(true)))
 	require.Equal(t, []string{"is never served on its own"}, failed(results))
+}
+
+func TestHostedContractFailsWhenServeNamesOnlyTheHost(t *testing.T) {
+	stub := hostedStub{typeName: "legacy", host: "host", serveErr: fmt.Errorf(`served by "host"`)}
+	results := Check(t, stub, hostedInputs(newHost(true)))
+	require.Equal(t, []string{"is never served on its own"}, failed(results))
+}
+
+// TestHostedEndpointIsClosedAfterEveryCase: every hosted endpoint the harness created is closed.
+func TestHostedEndpointIsClosedAfterEveryCase(t *testing.T) {
+	var made, closed int
+	results := Check(t, hostedStub{typeName: "legacy", host: "host", made: &made, closed: &closed}, hostedInputs(newHost(true)))
+	require.Empty(t, failed(results), "%+v", results)
+	require.Positive(t, made)
+	require.Equal(t, made, closed)
+}
+
+// TestHostedEndpointGetsTheSettingsOfItsNeeds: the hosted endpoint is created with what the runtime injects for its own
+// needs and none of its host's configuration.
+func TestHostedEndpointGetsTheSettingsOfItsNeeds(t *testing.T) {
+	var got service.Settings
+	in := hostedInputs(newHost(true))
+	in.Config = map[string]any{"host-only": true}
+	results := Check(t, hostedStub{typeName: "legacy", host: "host", got: &got}, in)
+	require.Empty(t, failed(results), "%+v", results)
+	require.NotNil(t, got.Store)
+	require.NotNil(t, got.Bus)
+	require.NotNil(t, got.Initialized)
+	require.NotNil(t, got.Logger)
+	require.NotContains(t, got.Config, "host-only")
+	require.Nil(t, got.Resolver, "the stub declares no needs")
 }

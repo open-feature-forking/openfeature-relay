@@ -243,6 +243,19 @@ func TestHostedEndpointRefusals(t *testing.T) {
 	}
 }
 
+// TestBadDeclarationOfAnotherEndpointCreatesNothing: with a hosted endpoint present, the declaration of any other
+// factory is checked before the hosted endpoint is created.
+func TestBadDeclarationOfAnotherEndpointCreatesNothing(t *testing.T) {
+	p := newHostLog()
+	rt, err := buildHosted(t,
+		hostedProbe{p: p, typeName: "legacy", host: "host"}, hostProbe{p: p, typeName: "host", hosts: true},
+		plainProbe{p, ""})
+	require.Nil(t, rt)
+	require.EqualError(t, err, `the service endpoint "" declares: the type name is empty`)
+	require.Empty(t, p.log, "nothing is created")
+	require.Empty(t, p.closed, "so nothing is closed")
+}
+
 // TestNoHostedEndpointChangesNothing: without a hosted endpoint every endpoint is created in list order, with no
 // extensions, and served.
 func TestNoHostedEndpointChangesNothing(t *testing.T) {

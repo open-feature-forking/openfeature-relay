@@ -28,8 +28,6 @@ type ComponentInfo struct {
 	Version string
 	// Replacement is the path the module is replaced by, or empty.
 	Replacement string
-	// Host is the type of the endpoint that serves this one, for a hosted service endpoint; empty otherwise.
-	Host string
 }
 
 // Inventory lists the components of a distribution. A distribution declares group, type and module; the versions
