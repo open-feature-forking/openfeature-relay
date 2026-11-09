@@ -13,7 +13,7 @@ flagd-minimal, built by the relay builder with `-race`, reads its flags from a f
 A conductor rewrites that file with a new flag generation on a fixed schedule, every change interval, by an atomic rename, while k6 runs these clients at once:
 
 - OFREP single and bulk evaluation;
-- RPC evaluation over `flagd.evaluation.v1`, `flagd.evaluation.v2` and `schema.v1`, and their `EventStream` calls;
+- RPC evaluation over `flagd.evaluation.v2`, and its `EventStream` calls; flagd-minimal does not serve the deprecated `schema.v1` and `flagd.evaluation.v1` ([deprecated evaluation services](flag-evaluation-legacy.md));
 - flag sync streams, held for the whole run or reopened every few seconds, with and without a selector, and `FetchAllFlags`.
 
 The run passes when:

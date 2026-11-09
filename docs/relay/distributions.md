@@ -11,15 +11,22 @@ The builder builds flagd-full and the five smaller standard distributions from t
 
 | Distribution | Contents | Purpose |
 |--------------|----------|---------|
-| **flagd-full** | every component maintained in this repository | today's flagd: same CLI, configuration, ports and endpoints |
-| flagd-minimal | file, http and gRPC sync providers, flagd's configuration format and evaluator, the flag evaluation, OFREP and flag sync endpoints, and the noop telemetry provider; no Kubernetes client, cloud SDK or OpenTelemetry SDK; at most half the size of flagd-full | a small flagd that records no telemetry |
+| **flagd-full** | every component maintained in this repository, the deprecated evaluation services included | today's flagd: same CLI, configuration, ports and endpoints |
+| flagd-minimal | file, http and gRPC sync providers, flagd's configuration format and evaluator, the flag evaluation (v2 only), OFREP and flag sync endpoints, and the noop telemetry provider; no Kubernetes client, cloud SDK or OpenTelemetry SDK; at most half the size of flagd-full | a small flagd that records no telemetry |
 | flagd-minimal-otel | flagd-minimal plus the OpenTelemetry telemetry provider; still no Kubernetes client or cloud SDK | a small flagd that exports metrics and traces |
-| flagd-cloud | the sync providers of flagd-minimal plus Google Cloud Storage, Azure Blob Storage and S3, all three endpoints, OpenTelemetry | flagd for cloud deployments |
-| flagd-kubernetes | the sync providers of flagd-minimal plus the OpenFeature Operator source, all three endpoints, OpenTelemetry | flagd for Kubernetes deployments |
+| flagd-cloud | the sync providers of flagd-minimal plus Google Cloud Storage, Azure Blob Storage and S3, all three endpoints (flag evaluation v2 only), OpenTelemetry | flagd for cloud deployments |
+| flagd-kubernetes | the sync providers of flagd-minimal plus the OpenFeature Operator source, all three endpoints (flag evaluation v2 only), OpenTelemetry | flagd for Kubernetes deployments |
 | **flagd-sync** | every sync provider of flagd-full, flagd's configuration format and the flag sync endpoint, OpenTelemetry; no evaluator | a **configuration proxy**: in-process providers get validated flag configurations from one place |
 
 Today's flagd-proxy stays a separate program.
 Each standard distribution's manifest is kept in this repository and accepts flagd-full's settings for the components it contains; see the use cases ([UC-010](../use_cases/UC-010-adopt-standard-distribution.md), [UC-012](../use_cases/UC-012-release-distributions-and-component-modules.md)).
+
+## Deprecated evaluation services
+
+Only flagd-full (and flagd-testbed) includes [`flag-evaluation-legacy`](flag-evaluation-legacy.md), which serves `schema.v1` and `flagd.evaluation.v1`.
+flagd-minimal, flagd-minimal-otel, flagd-cloud and flagd-kubernetes serve only `flagd.evaluation.v2` on their flag evaluation port (OFREP has its own, `--ofrep-port`, 8016): the server answers HTTP 404 for the paths of `schema.v1` and `flagd.evaluation.v1`, which gRPC and ConnectRPC clients report as `Unimplemented`.
+flagd-sync has no flag evaluation endpoint.
+A client that still calls the deprecated services, such as the deprecated flagd-web provider, needs flagd-full or a custom distribution that lists the component, or must move to `flagd.evaluation.v2` or OFREP.
 
 ## Sizes
 
@@ -62,7 +69,7 @@ The release dry run writes the size of each `linux_x86_64` binary it builds to t
 ## Custom distributions
 
 A Distribution Builder writes a manifest that lists official and third-party component modules, and the builder compiles it ([UC-001](../use_cases/UC-001-build-custom-distribution.md)).
-The builder rejects a manifest whose components need a component it does not select, such as OFREP without an evaluator.
+The builder rejects a manifest whose components need a component it does not select, such as OFREP without an evaluator, or `flag-evaluation-legacy` without `flag-evaluation`.
 
 Any distribution, standard or custom, can be built as a FIPS 140-3 binary or image: [Build a FIPS distribution](fips.md).
 

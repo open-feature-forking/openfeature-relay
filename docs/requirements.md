@@ -67,6 +67,7 @@ Derived from [vision.md](vision.md). Terms follow [glossary.md](glossary.md).
 | FR-060 | Recycle and Keep Alive Upstream Sync | As an Operator, I want a `grpc` source to opt into a stream deadline, HTTP/2 keepalive and readiness on its first payload so that long-lived streams survive intermediaries and the sync provider's readiness means a payload arrived. | Medium | Verified |
 | FR-061 | Send Selector as Header          | As an Operator, I want a `grpc` source to opt into sending its selector as the `flagd-selector` header so that an upstream that prefers the header sees the selector. | Medium | Verified |
 | FR-062 | Resolve Headers From Secrets     | As an Operator, I want a `grpc` source to resolve `headersFrom` like every other source so that its credentials come from the environment or a file. | Medium | Verified |
+| FR-063 | Select Deprecated Flag Evaluation Services | As a Distribution Builder, I want the deprecated `schema.v1` and `flagd.evaluation.v1` flag evaluation services as their own component that the flag evaluation endpoint serves on its port, so that a distribution serves them only when its manifest lists it. | Medium | Verified |
 
 ## Non-Functional Requirements
 

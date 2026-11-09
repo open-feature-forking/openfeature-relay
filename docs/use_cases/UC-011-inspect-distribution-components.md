@@ -21,7 +21,7 @@
 2. System identifies the distribution by its name and manifest version.
 3. System lists the components compiled into the binary, grouped by component type: sync providers, configuration formats, evaluators, service endpoints, event sinks, telemetry providers and middleware.
 4. System shows, for every sync provider, the schemes it handles.
-5. System shows, for every component, the component module and version it comes from.
+5. System shows, for every component, the component module and version it comes from, and, for a hosted endpoint, the service endpoint type that hosts it.
 6. Operator compares the list with the schemes of the deployment's sources, the configuration format of its flag configurations, the service endpoints its clients use and its telemetry needs, and knows whether the distribution supports the deployment.
 
 ## Alternative Flows

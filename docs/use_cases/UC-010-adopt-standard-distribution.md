@@ -9,7 +9,7 @@
 **Trigger:** Operator decides to replace flagd-full with a smaller standard distribution for a deployment  
 **Status:** Tested  
 
-**Requirements:** [FR-021, FR-022, FR-023, FR-024, FR-034, FR-052, NFR-003, NFR-004, NFR-011, C-009](../requirements.md)
+**Requirements:** [FR-021, FR-022, FR-023, FR-024, FR-034, FR-052, FR-063, NFR-003, NFR-004, NFR-011, C-009](../requirements.md)
 
 ## Preconditions
 
@@ -18,7 +18,7 @@
 
 ## Main Success Scenario
 
-1. Operator determines the schemes and configuration formats of the deployment's sources, the service endpoints its clients use, whether flagd evaluates flags or only forwards flag configurations to in-process providers, and whether it exports telemetry.
+1. Operator determines the schemes and configuration formats of the deployment's sources, the service endpoints its clients use and the evaluation services they call, whether flagd evaluates flags or only forwards flag configurations to in-process providers, and whether it exports telemetry.
 2. Operator compares these needs with the published manifests of flagd-minimal, flagd-minimal-otel, flagd-cloud, flagd-kubernetes, flagd-sync and flagd-full, or with the text or JSON listing of `flagd components` of each (UC-011).
 3. Operator selects the smallest standard distribution that covers every need, as a binary or as the image `ghcr.io/open-feature/flagd-<distribution>`.
 4. Operator starts the selected distribution with the unchanged start command, configuration file and environment variables.
@@ -82,6 +82,15 @@
 2. Operator reports the difference to the Maintainers as a defect of the standard distribution.
 3. Use case ends.
 
+### A7: Client Uses a Deprecated Evaluation Service
+
+**Trigger:** A client calls `schema.v1` or `flagd.evaluation.v1`, such as the deprecated flagd-web provider or an old release of an RPC provider, and the distribution is not flagd-full (step 9)
+**Flow:**
+
+1. System answers HTTP 404 for the paths of those services, which gRPC and ConnectRPC clients report as `Unimplemented`; `flagd.evaluation.v2` and OFREP are unchanged.
+2. Operator selects flagd-full or a custom distribution that lists `flag-evaluation-legacy` (UC-001), or moves the client to `flagd.evaluation.v2` or OFREP, the deprecated flagd-web provider to the ofrep-web provider.
+3. Use case continues at step 4.
+
 ## Postconditions
 
 ### Success Postconditions
@@ -125,6 +134,10 @@ A standard distribution evaluates with the same configuration format and evaluat
 
 flagd-sync contains sync providers, a configuration format and the flag sync endpoint but no evaluator, and its binary links no evaluator module and no `github.com/diegoholiveira/jsonlogic` module, and the packages of the distribution import none (NFR-011). It rejects invalid flag configurations the same way flagd-full does (FR-026). Today's flagd-proxy stays a separate program with its own CLI and image and is not affected by adopting a standard distribution.
 
+
+### BR-008: Deprecated Evaluation Services Only in flagd-full and flagd-testbed
+
+The deprecated evaluation services (`schema.v1`, `flagd.evaluation.v1`) are served by the component `flag-evaluation-legacy`, which flagd-full and flagd-testbed list. flagd-minimal, flagd-minimal-otel, flagd-cloud, flagd-kubernetes and flagd-sync do not (FR-063). The slim distributions serve `flagd.evaluation.v2` and OFREP, and BR-006 holds for the components they contain.
 
 ## Delivered by Later Use Cases
 

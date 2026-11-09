@@ -10,7 +10,7 @@
 **Trigger:** Distribution Builder needs a flagd with a set of components that no standard distribution offers  
 **Status:** Tested  
 
-**Requirements:** [FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007, FR-008, FR-017, FR-018, FR-034, NFR-008, NFR-010, C-001](../requirements.md)
+**Requirements:** [FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007, FR-008, FR-017, FR-018, FR-034, FR-063, NFR-008, NFR-010, C-001](../requirements.md)
 
 ## Preconditions
 
@@ -144,6 +144,16 @@
 2. Builder produces no binary.
 3. Use case ends.
 
+### A13: Host Present but Does Not Host
+
+**Trigger:** A selected hosted endpoint names a service endpoint type that is selected but does not host; a type that is not selected is an unmet need (A9) (step 8)
+**Flow:**
+
+1. Builder reports the hosted endpoint and the type it names, which does not host.
+2. Builder produces no binary.
+3. Distribution Builder selects a hosting endpoint of that type, or removes the hosted endpoint from the manifest.
+4. Use case continues at step 3.
+
 ## Postconditions
 
 ### Success Postconditions
@@ -216,7 +226,7 @@ Any non-empty combination of service endpoints is valid, official or extension: 
 
 ### BR-014: Component Needs Are Met
 
-Each component states which component types or components it needs; a distribution is built only when every need of every selected component is met by another selected component. OFREP and flag evaluation need an evaluator; an evaluator needs the configuration format it evaluates; flag sync needs a configuration format but no evaluator.
+Each component states which component types or components it needs; a distribution is built only when every need of every selected component is met by another selected component. OFREP and flag evaluation need an evaluator; an evaluator needs the configuration format it evaluates; flag sync needs a configuration format but no evaluator. A hosted endpoint needs the service endpoint type that hosts it, and that type must host (UC-004 BR-013).
 
 ### BR-015: One Sync Provider per Scheme
 
