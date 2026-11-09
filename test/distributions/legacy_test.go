@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -21,8 +22,33 @@ var deprecatedCalls = []string{
 // callAt sends a JSON request over HTTP/1.1, or a gRPC-framed one over cleartext HTTP/2, and returns the status.
 func callAt(t *testing.T, port int, path string, grpc bool) (int, string) {
 	t.Helper()
-	client := &http.Client{}
-	body, contentType := `{"flagKey":"bool-flag"}`, "application/json"
+	return callWith(t, port, path, grpc, `{"flagKey":"bool-flag"}`)
+}
+
+// callWith is callAt with the JSON body of the request. The client times out, so a call that regresses into one that
+// never answers fails the test instead of hanging it.
+func callWith(t *testing.T, port int, path string, grpc bool, jsonBody string) (int, string) {
+	t.Helper()
+	resp := postTo(t, port, path, grpc, jsonBody)
+	defer resp.Body.Close()
+	data, err := io.ReadAll(resp.Body)
+	require.NoError(t, err, path)
+	return resp.StatusCode, string(data)
+}
+
+// openStream opens a gRPC stream and returns the status and content type of its response headers, without reading the
+// stream, which does not end.
+func openStream(t *testing.T, port int, path string) (int, string) {
+	t.Helper()
+	resp := postTo(t, port, path, true, "")
+	defer resp.Body.Close()
+	return resp.StatusCode, resp.Header.Get("Content-Type")
+}
+
+func postTo(t *testing.T, port int, path string, grpc bool, jsonBody string) *http.Response {
+	t.Helper()
+	client := &http.Client{Timeout: 10 * time.Second}
+	body, contentType := jsonBody, "application/json"
 	if grpc {
 		var protocols http.Protocols
 		protocols.SetUnencryptedHTTP2(true)
@@ -34,10 +60,7 @@ func callAt(t *testing.T, port int, path string, grpc bool) (int, string) {
 	req.Header.Set("Content-Type", contentType)
 	resp, err := client.Do(req)
 	require.NoError(t, err, path)
-	defer resp.Body.Close()
-	data, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	return resp.StatusCode, string(data)
+	return resp
 }
 
 // TestSlimDistributionsDoNotServeDeprecatedServices pins UC-010 A7 and BR-008: the distributions that do not list the
@@ -65,18 +88,29 @@ func TestSlimDistributionsDoNotServeDeprecatedServices(t *testing.T) {
 	}
 }
 
-// TestFlagdFullServesDeprecatedServices is the other side: flagd-full lists the endpoint, so the single calls answer.
+// TestFlagdFullServesDeprecatedServices is the other side: flagd-full lists the endpoint, so ResolveBoolean and
+// ResolveAll answer on both deprecated services and their EventStream opens.
 func TestFlagdFullServesDeprecatedServices(t *testing.T) {
 	port := startDistribution(t, "flagd-full", allPortFlags, nil, writeParityFlags(t))["port"]
-	for _, path := range []string{"/schema.v1.Service/ResolveBoolean", "/flagd.evaluation.v1.Service/ResolveBoolean", "/flagd.evaluation.v2.Service/ResolveBoolean"} {
-		status, body := callAt(t, port, path, false)
-		require.Equal(t, http.StatusOK, status, path)
-		require.Contains(t, body, `"value":true`, path)
+	for _, service := range []string{"schema.v1", "flagd.evaluation.v1", "flagd.evaluation.v2"} {
+		prefix := "/" + service + ".Service/"
+		status, body := callAt(t, port, prefix+"ResolveBoolean", false)
+		require.Equal(t, http.StatusOK, status, prefix+"ResolveBoolean")
+		require.Contains(t, body, `"value":true`, prefix+"ResolveBoolean")
+		if service == "flagd.evaluation.v2" {
+			continue
+		}
+		status, body = callWith(t, port, prefix+"ResolveAll", false, `{}`)
+		require.Equal(t, http.StatusOK, status, prefix+"ResolveAll")
+		require.Contains(t, body, "bool-flag", prefix+"ResolveAll")
+		status, contentType := openStream(t, port, prefix+"EventStream")
+		require.Equal(t, http.StatusOK, status, prefix+"EventStream")
+		require.Contains(t, contentType, "application/grpc", prefix+"EventStream")
 	}
 }
 
 // TestComponentsListsTheHostOfTheLegacyEndpoint pins UC-011 and UC-010 BR-008: flagd components names the endpoint
-// that serves the deprecated services in flagd-full and flagd-testbed, and lists it in no other standard distribution.
+// that serves the deprecated services in flagd-full, and lists it in no other standard distribution.
 func TestComponentsListsTheHostOfTheLegacyEndpoint(t *testing.T) {
 	endpoints := func(name string) map[string]string {
 		path := manifestOf(t, name)

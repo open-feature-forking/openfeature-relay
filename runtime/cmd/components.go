@@ -107,8 +107,8 @@ func buildListing(id identity, runtimeVer string, components distribution.Compon
 		*l.section(g.group) = []listedComponent{}
 	}
 	for _, c := range inventory.Components {
-		entry := listedComponent{Type: c.Type, Module: c.Module, Version: c.Version, Host: c.Host}
-		if c.Group == distribution.GroupServiceEndpoint && entry.Host == "" {
+		entry := listedComponent{Type: c.Type, Module: c.Module, Version: c.Version}
+		if c.Group == distribution.GroupServiceEndpoint {
 			entry.Host = hosts[c.Type]
 		}
 		if c.Group == distribution.GroupSync {

@@ -125,13 +125,13 @@ func Check(items []Item) (warnings []string, err error) {
 		}
 		switch {
 		case len(sameType) == 0:
-			problems = append(problems, fmt.Sprintf("%s is hosted by the service endpoint %q, but no selected service endpoint has that type", ep, ep.Host))
+			problems = append(problems, fmt.Sprintf("%s is hosted by the service endpoint %q, which this manifest does not contain", ep, ep.Host))
 		case len(sameType) > 1:
-			problems = append(problems, fmt.Sprintf("%s is hosted by the service endpoint %q, but %d selected service endpoints have that type", ep, ep.Host, len(sameType)))
+			problems = append(problems, fmt.Sprintf("%s is hosted by the service endpoint %q, but the manifest has %d endpoints of that type", ep, ep.Host, len(sameType)))
 		case sameType[0].Host != "":
 			problems = append(problems, fmt.Sprintf("%s is hosted by the service endpoint %q, which is itself a hosted endpoint", ep, ep.Host))
 		case !sameType[0].Hosts:
-			problems = append(problems, fmt.Sprintf("%s is hosted by the service endpoint %q, which does not host other endpoints", ep, ep.Host))
+			problems = append(problems, fmt.Sprintf("%s is hosted by the service endpoint %q, which does not host endpoints", ep, ep.Host))
 		}
 	}
 	for _, ev := range evaluators {

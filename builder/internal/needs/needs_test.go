@@ -133,17 +133,17 @@ func TestHostedEndpoint(t *testing.T) {
 		{
 			name:    "host absent",
 			items:   []Item{hosting("ofrep", true), hosted("flag-evaluation-legacy", "flag-evaluation")},
-			problem: `service endpoint "flag-evaluation-legacy" (m/flag-evaluation-legacy) is hosted by the service endpoint "flag-evaluation", but no selected service endpoint has that type`,
+			problem: `service endpoint "flag-evaluation-legacy" (m/flag-evaluation-legacy) is hosted by the service endpoint "flag-evaluation", which this manifest does not contain`,
 		},
 		{
 			name:    "host without Hosts",
 			items:   []Item{hosting("flag-evaluation", false), hosted("flag-evaluation-legacy", "flag-evaluation")},
-			problem: `service endpoint "flag-evaluation-legacy" (m/flag-evaluation-legacy) is hosted by the service endpoint "flag-evaluation", which does not host other endpoints`,
+			problem: `service endpoint "flag-evaluation-legacy" (m/flag-evaluation-legacy) is hosted by the service endpoint "flag-evaluation", which does not host endpoints`,
 		},
 		{
 			name:    "two endpoints of the host type",
 			items:   []Item{hosting("flag-evaluation", true), hosting("flag-evaluation", true), hosted("flag-evaluation-legacy", "flag-evaluation")},
-			problem: `service endpoint "flag-evaluation-legacy" (m/flag-evaluation-legacy) is hosted by the service endpoint "flag-evaluation", but 2 selected service endpoints have that type`,
+			problem: `service endpoint "flag-evaluation-legacy" (m/flag-evaluation-legacy) is hosted by the service endpoint "flag-evaluation", but the manifest has 2 endpoints of that type`,
 		},
 		{
 			name:    "the host is itself hosted",

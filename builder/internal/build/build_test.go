@@ -447,8 +447,8 @@ func TestHostedEndpointNeedsAHostThatHosts(t *testing.T) {
 		selected []string
 		problem  string
 	}{
-		{"no host of that type", []string{"file", "flagdformat", "legacy"}, `is hosted by the service endpoint "flag-sync", but no selected service endpoint has that type`},
-		{"a host without Hosts", []string{"file", "flagdformat", "flagsync", "legacy"}, `which does not host other endpoints`},
+		{"no host of that type", []string{"file", "flagdformat", "legacy"}, `is hosted by the service endpoint "flag-sync", which this manifest does not contain`},
+		{"a host without Hosts", []string{"file", "flagdformat", "flagsync", "legacy"}, `which does not host endpoints`},
 		{"a host that hosts", []string{"file", "flagdformat", "flaghost", "legacy"}, ""},
 	}
 	for _, tt := range tests {

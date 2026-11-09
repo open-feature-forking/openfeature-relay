@@ -177,6 +177,15 @@ func (rt *Runtime) createEndpoints(
 	if err != nil {
 		return err
 	}
+	// every declaration is checked before anything is created, so a bad one never leaves a hosted endpoint to close
+	for i, factory := range components.Endpoints {
+		if plan.isHosted[i] {
+			continue
+		}
+		if err := service.ValidateDeclarations(factory); err != nil {
+			return fmt.Errorf("the service endpoint %q declares: %w", factory.Type(), err)
+		}
+	}
 	createEndpoint := func(factory service.Factory, extensions []service.Endpoint) (service.Endpoint, error) {
 		settings := inputs.settings(factory)
 		settings.Initialized = rt.Initialized()
@@ -202,9 +211,6 @@ func (rt *Runtime) createEndpoints(
 	for i, factory := range components.Endpoints {
 		if plan.isHosted[i] {
 			continue
-		}
-		if err := service.ValidateDeclarations(factory); err != nil {
-			return fmt.Errorf("the service endpoint %q declares: %w", factory.Type(), err)
 		}
 		endpoint, err := createEndpoint(factory, extensions[factory.Type()])
 		if err != nil {
