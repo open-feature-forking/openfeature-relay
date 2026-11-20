@@ -30,7 +30,7 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -a -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" -o /bin/flagd .
 
 # The server certificate is signed at build time with the test-harness CA, as upstream's image does.
-FROM --platform=$BUILDPLATFORM alpine/openssl@sha256:96e53bf9b9041fdc8a33ea61356688506bbddc368c70d6e8a9acdd28475e8537 AS certs
+FROM --platform=$BUILDPLATFORM alpine/openssl@sha256:c92fcbb1da06f6e22bf842833e4713df02a382116d8a40312546b599ec19ca30 AS certs
 
 COPY test-harness/ssl/* ./
 
