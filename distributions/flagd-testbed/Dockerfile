@@ -5,7 +5,7 @@
 # The build context is the repository root, with the test-harness submodule checked out:
 #
 #   docker build -f distributions/flagd-testbed/Dockerfile --build-arg VERSION=v1.2.3 -t flagd-testbed:local .
-FROM --platform=$BUILDPLATFORM golang:1.27-alpine@sha256:4c9fe60190a2a3350ddc51de80d0224b8a6698d12bdfc999fee45ea9d6c46dbc AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine@sha256:70bd7ddea8b6cbe5d6943cde279d6b67feb10cc924fb9100d1d8757c1575b280 AS builder
 ENV GOTOOLCHAIN=local
 # The distribution source is a module of its own; a go.work of the context must not capture it.
 ENV GOWORK=off
